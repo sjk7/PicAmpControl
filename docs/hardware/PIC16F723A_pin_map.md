@@ -49,7 +49,7 @@ This is the current approved signal map for the protection controller. The 1602 
 - pre-filter reflected power sense: RA1 / AN1, 0-5 V detector output; shares the pre-filter forward full-scale setting
 - post-filter forward power sense: RA2 / AN2, 0-5 V detector output; configurable full scale from 500 W to 2500 W, default 1500 W
 - post-filter reflected power sense: RA3 / AN3, 0-5 V detector output; shares the post-filter forward full-scale setting
-- temperature sense: RA5 / AN4, 10 kOhm NTC divider output; B3950 is the intended default configurable profile. The current linear display scale is provisional until the NTC conversion is implemented and calibrated.
+- temperature sense: RA5 / AN4, 10 kOhm NTC divider output; selectable B3435/B3950/B4250 profile, default B3950. The firmware uses 10 C lookup points from 0 C to 150 C.
 - overdrive sense: RB2 / AN7, conditioned peak-envelope detector input scaled so the regulated nominal 5.0 V ADC full scale represents 10.0 W into 50 ohms
 - drain-peak sense: RB3 / AN8, conditioned divider scaled so the regulated nominal 5.0 V ADC full scale represents 300 V drain voltage
 - each sensor is wired directly to its own ADC pin; no external analog multiplexer is used
@@ -112,7 +112,7 @@ The SWR protection channels are not required in hardware because each SWR pair i
 - When PTT is asserted, the controller should re-arm or clear its software latching state after a short settle time.
 - A comparator trip must remain active until the analog condition is restored.
 - Startup should hold the amplifier disabled for approximately 0.5 to 1.0 seconds after power-up.
-- Temperature monitoring uses the menu-configured linear ADC scale to display degrees C and drive warning/trip states; the transfer scale requires final bench calibration for the selected sensor.
+- Temperature monitoring uses the selected 10 kOhm NTC B-value profile to display degrees C and drive warning/trip states; the divider and lookup result require final bench calibration.
 
 ## Ownership rule
 

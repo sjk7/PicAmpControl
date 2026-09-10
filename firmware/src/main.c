@@ -29,7 +29,7 @@ typedef enum {
     MENU_PAGE_SWR2_TRIP,
     MENU_PAGE_SWR1_FWD_FULL_SCALE,
     MENU_PAGE_SWR2_FWD_FULL_SCALE,
-    MENU_PAGE_TEMP_FULL_SCALE,
+    MENU_PAGE_TEMP_B_VALUE,
     MENU_PAGE_TEMP_WARNING,
     MENU_PAGE_TEMP_TRIP,
     MENU_PAGE_OVERDRIVE_WARNING,
@@ -54,7 +54,7 @@ typedef struct {
     unsigned char swr2_trip_tenths;
     unsigned int swr1_fwd_full_scale_w;
     unsigned int swr2_fwd_full_scale_w;
-    unsigned int temp_full_scale_c;
+    unsigned char temp_b_profile;
     unsigned int temp_warning_c;
     unsigned int temp_trip_c;
     unsigned char overdrive_warning_tenths_w;
@@ -74,7 +74,7 @@ typedef struct {
 } protection_thresholds_t;
 
 #define SETTINGS_MAGIC 0xA5
-#define SETTINGS_VERSION 1
+#define SETTINGS_VERSION 2
 
 static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
@@ -89,20 +89,15 @@ static unsigned int g_post_fwd_pep_w = 0;
 static unsigned int g_pep_decay_elapsed_ms = 0;
 static unsigned char g_status_refresh_ticks = 0;
 static unsigned int g_temperature_raw = 0;
-static const protection_thresholds_t g_default_thresholds = {
-    30, 20,
-    1500, 1500,
-    150, 70, 100,
-    90, 100,
-    140, 150,
-    20, 20,
-    false, false, false, false, false, false,
-    true, 500
+static const unsigned char g_ntc_adc[3][16] = {
+    {190, 166, 141, 116, 94, 75, 59, 46, 37, 29, 23, 19, 15, 12, 10, 8},
+    {197, 171, 142, 114, 89, 68, 51, 38, 29, 22, 17, 13, 10, 8, 6, 5},
+    {201, 174, 143, 113, 86, 64, 47, 34, 25, 19, 14, 11, 8, 6, 5, 4}
 };
 static protection_thresholds_t g_thresholds = {
     30, 20,
     1500, 1500,
-    150, 70, 100,
+    1, 70, 100,
     90, 100,
     140, 150,
     20, 20,
@@ -137,6 +132,8 @@ void set_warning_output(bool active) {
 void set_trip_output(bool active) {
     OUTPUT_TRIP_STATUS = output_level(active, g_thresholds.trip_active_high);
 }
+
+unsigned int temperature_c(unsigned int raw);
 
 void lcd_write_fixed_unsigned(unsigned int value, unsigned char digits) {
     unsigned int divisor = 1;
@@ -196,11 +193,11 @@ void load_settings(void) {
         header[2] < MENU_PAGE_COUNT &&
         at24c256_read(sizeof(header), (unsigned char *)&stored_settings, sizeof(stored_settings)) &&
         at24c256_read(sizeof(header) + sizeof(stored_settings), &checksum, 1) &&
+        stored_settings.temp_b_profile < 3 &&
         checksum == settings_checksum((menu_page_t)header[2], &stored_settings)) {
         g_thresholds = stored_settings;
         g_menu_page = (menu_page_t)header[2];
     } else {
-        g_thresholds = g_default_thresholds;
         g_menu_page = MENU_PAGE_STATUS;
     }
 }
@@ -241,9 +238,9 @@ void show_menu_page(void) {
             label = "S2 FWD MAX";
             value = g_thresholds.swr2_fwd_full_scale_w;
             break;
-        case MENU_PAGE_TEMP_FULL_SCALE:
-            label = "TEMP SCALE";
-            value = g_thresholds.temp_full_scale_c;
+        case MENU_PAGE_TEMP_B_VALUE:
+            label = "NTC B VALUE";
+            value = g_thresholds.temp_b_profile == 0 ? 3435 : (g_thresholds.temp_b_profile == 1 ? 3950 : 4250);
             break;
         case MENU_PAGE_TEMP_WARNING:
             label = "TEMP WARNING";
@@ -330,7 +327,7 @@ void show_menu_page(void) {
         lcd_write_power_bar(g_post_fwd_pep_w, g_thresholds.swr2_fwd_full_scale_w, 10);
         lcd_set_cursor(1, 0);
         lcd_write_text("TEMP ");
-        lcd_write_fixed_unsigned((unsigned int)(((unsigned long)g_temperature_raw * g_thresholds.temp_full_scale_c) / 1023UL), 3);
+        lcd_write_fixed_unsigned(temperature_c(g_temperature_raw), 3);
         lcd_write_byte('C', true);
         lcd_write_spaces(7);
     } else if (g_menu_page == MENU_PAGE_SWR1_TRIP || g_menu_page == MENU_PAGE_SWR2_TRIP) {
@@ -347,7 +344,7 @@ void show_menu_page(void) {
         lcd_write_byte('.', true);
         lcd_write_unsigned((unsigned int)(value % 10));
         lcd_write_byte('W', true);
-    } else if (g_menu_page == MENU_PAGE_TEMP_FULL_SCALE ||
+    } else if (g_menu_page == MENU_PAGE_TEMP_B_VALUE ||
                g_menu_page == MENU_PAGE_TEMP_WARNING ||
                g_menu_page == MENU_PAGE_TEMP_TRIP) {
         lcd_write_unsigned(value);
@@ -459,7 +456,19 @@ unsigned int drain_voltage(unsigned int raw) {
 }
 
 unsigned int temperature_c(unsigned int raw) {
-    return (unsigned int)(((unsigned long)raw * g_thresholds.temp_full_scale_c) / 1023UL);
+    const unsigned char *table = g_ntc_adc[g_thresholds.temp_b_profile];
+    unsigned char index;
+
+    raw >>= 2;
+    if (raw >= table[0]) {
+        return 0;
+    }
+    for (index = 1; index < 16; index++) {
+        if (raw >= table[index]) {
+            return (unsigned int)(index * 10U);
+        }
+    }
+    return 150;
 }
 
 unsigned int overdrive_power_mw(unsigned int raw) {
@@ -471,6 +480,7 @@ void adjust_selected_threshold(bool increase) {
     unsigned int *selected_threshold = 0;
     unsigned char *selected_swr_threshold = 0;
     unsigned char *selected_power_threshold = 0;
+    unsigned char *selected_ntc_profile = 0;
     bool *selected_polarity = 0;
 
     switch (g_menu_page) {
@@ -486,8 +496,8 @@ void adjust_selected_threshold(bool increase) {
         case MENU_PAGE_SWR2_FWD_FULL_SCALE:
             selected_threshold = &g_thresholds.swr2_fwd_full_scale_w;
             break;
-        case MENU_PAGE_TEMP_FULL_SCALE:
-            selected_threshold = &g_thresholds.temp_full_scale_c;
+        case MENU_PAGE_TEMP_B_VALUE:
+            selected_ntc_profile = &g_thresholds.temp_b_profile;
             break;
         case MENU_PAGE_TEMP_WARNING:
             selected_threshold = &g_thresholds.temp_warning_c;
@@ -541,6 +551,15 @@ void adjust_selected_threshold(bool increase) {
             break;
     }
 
+    if (selected_ntc_profile != 0) {
+        if (increase && *selected_ntc_profile < 2) {
+            *selected_ntc_profile += 1;
+        } else if (!increase && *selected_ntc_profile > 0) {
+            *selected_ntc_profile -= 1;
+        }
+        return;
+    }
+
     if (selected_polarity != 0) {
         *selected_polarity = !*selected_polarity;
         set_tx_output(false);
@@ -574,10 +593,9 @@ void adjust_selected_threshold(bool increase) {
         return;
     }
 
-    if (g_menu_page == MENU_PAGE_TEMP_FULL_SCALE ||
-        g_menu_page == MENU_PAGE_TEMP_WARNING ||
+    if (g_menu_page == MENU_PAGE_TEMP_WARNING ||
         g_menu_page == MENU_PAGE_TEMP_TRIP) {
-        if (increase && *selected_threshold < 200) {
+        if (increase && *selected_threshold < 150) {
             *selected_threshold += 1;
         } else if (!increase && *selected_threshold > 0) {
             *selected_threshold -= 1;

@@ -185,9 +185,9 @@ The menu makes these firmware trip thresholds available to the operator:
 - post-filter SWR trip ratio, from 1.1:1 to 5.0:1 in 0.1:1 steps; default 2:1
 - SWR1 forward full-scale power, from 500 W to 2500 W in 100 W steps; default 1500 W and also used for SWR1 reflected-power conversion
 - SWR2 forward full-scale power, from 500 W to 2500 W in 100 W steps; default 1500 W and also used for SWR2 reflected-power conversion
-- temperature full-scale calibration, from 0 C to 200 C; default 150 C at ADC full scale
-- temperature warning, from 0 C to 200 C; default 70 C
-- temperature trip, from 0 C to 200 C; default 100 C
+- NTC B-value profile: B3435, B3950, or B4250; default B3950
+- temperature warning, from 0 C to 150 C; default 70 C
+- temperature trip, from 0 C to 150 C; default 100 C
 - input-power warning, from 0.0 W to 10.0 W in 0.1 W steps
 - input-power trip, from 0.0 W to 10.0 W in 0.1 W steps; default 10.0 W
 - drain-voltage warning, from 0 V to 300 V in 1 V steps
@@ -197,7 +197,7 @@ Each SWR ratio setting directly controls its local software trip: the controller
 
 The ADC reference is the regulated nominal 5.0 V VDD rail, so every analogue input is scaled from 0 to VDD, not to an independently guaranteed 5 V reference. With VDD regulated at 5.0 V, drain voltage uses a linear scale: ADC 0-1023 represents 0-300 V. Input power is calculated as peak-envelope power into 50 ohms, with ADC 0-1023 representing 0-10.0 W. This requires the input detector/divider to present 5 V at 31.62 V peak, a scale factor of approximately 6.325:1. Each SWR bridge detector also uses a 0-5 V range. Its bridge-specific 500-2500 W forward full-scale setting is shared by the associated reflected detector, so both readings use the same power range before SWR is calculated. All analogue paths require series resistance and clamps so the PIC pin remains between VSS and VDD under normal operation. The external overdrive, drain-peak, and overcurrent comparators remain independently calibrated hard protection and combine into INPUT_HARD_FAULT.
 
-The current firmware uses a provisional linear temperature scale: $T=T_{FS}r/1023$, where $T_{FS}$ is the menu-configured temperature at ADC full scale and $r$ is the ADC result. The default $T_{FS}$ is 150 C. The selected hardware direction is a 10 kOhm NTC thermistor with B3950 as the default configurable profile; the linear conversion must be replaced by the NTC lookup conversion before the warning and trip defaults are relied upon.
+Temperature uses a 10 kOhm NTC divider with a selectable B3435, B3950, or B4250 profile; B3950 is the default. The firmware uses compact lookup points every 10 C from 0 C to 150 C, so displayed temperatures and thermal thresholds have 10 C resolution. The divider must use a 10 kOhm fixed resistor to the regulated 5 V rail and the NTC to ground. Bench-calibrate the selected sensor and resistor tolerance before relying on the warning and trip defaults.
 
 ## Naming convention used in code
 
@@ -343,7 +343,7 @@ The following items remain to be finalized before the design is considered compl
 1. Bench-verify the TX sequencing order and set the exact delays for OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS.
 2. Confirm the comparator-board reference levels, latch behavior, and combined active-high INPUT_HARD_FAULT polarity for overdrive, drain peak, and overcurrent.
 3. Measure the overcurrent sensor transfer curve and verify the comparator threshold direction.
-4. Implement the 10 kOhm NTC lookup conversion with a configurable B-value profile, then bench-calibrate the sensor/divider and its ADC-to-degrees-C result.
+4. Bench-calibrate the selected 10 kOhm NTC, B-value profile, and 10 kOhm divider against the displayed 10 C lookup points.
 5. Select and validate the fan-drive scheme, including its temperature schedule and the actual PWM/analogue interface.
 6. Calibrate the two SWR bridges, 10 W input detector, and 300 V drain divider against traceable measurements at the regulated 5.0 V rail, including the RMS/PEP display and PEP-bar response.
 7. Verify that every conditioned ADC input stays between VSS and VDD, including fault/transient tests with the specified external clamps and series resistance.
