@@ -106,7 +106,6 @@ static volatile unsigned int g_adc_swr2_ref = 0;
 static volatile unsigned int g_adc_temp = 0;
 static volatile unsigned int g_adc_overdrive = 0;
 static volatile unsigned int g_adc_drain = 0;
-static unsigned int g_temperature_raw = 0;
 static const unsigned char g_ntc_adc[3][16] = {
     {190, 166, 141, 116, 94, 75, 59, 46, 37, 29, 23, 19, 15, 12, 10, 8},
     {197, 171, 142, 114, 89, 68, 51, 38, 29, 22, 17, 13, 10, 8, 6, 5},
@@ -353,7 +352,7 @@ void show_menu_page(void) {
         lcd_write_power_bar(g_post_fwd_pep_w, g_thresholds.swr2_fwd_full_scale_w, 12);
         lcd_set_cursor(1, 0);
         lcd_write_text("TEMP ");
-        lcd_write_unsigned(temperature_c(g_temperature_raw));
+        lcd_write_unsigned(temperature_c(g_adc_temp));
         lcd_write_byte('C', true);
         return;
     }
@@ -753,7 +752,6 @@ int main(void) {
         swr2_fwd_raw = g_adc_swr2_fwd;
         swr2_ref_raw = g_adc_swr2_ref;
         temp_raw = g_adc_temp;
-        g_temperature_raw = temp_raw;
         temp_c = temperature_c(temp_raw);
         overdrive_raw = g_adc_overdrive;
         drain_raw = g_adc_drain;
