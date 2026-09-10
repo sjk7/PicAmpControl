@@ -107,7 +107,7 @@ flowchart LR
 
 ## Approved hardware pin map
 
-This is the current approved signal map for the protection controller. The only I2C device in the design is the 1602 LCD backpack; its bus is driven in software on RC3/RC4.
+This is the current approved signal map for the protection controller. The 1602 LCD backpack and AT24C256 EEPROM share the software-I2C bus on RC3/RC4.
 
 | PIC pin | Port | Project name | Direction | Function |
 |---|---|---|---|---|
@@ -175,6 +175,8 @@ The 1602 display config menu is operated by three active-low, normally-open swit
 
 The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adjustable from 0 to 1000 ms in 5 ms steps, each defaulting to 20 ms. The active electrical level for OUTPUT_TX, OUTPUT_TX_VCC, OUTPUT_TX_BIAS, OUTPUT_FAN_PWM, OUTPUT_WARNING_STATUS, and OUTPUT_TRIP_STATUS is selectable as LOW or HIGH, with LOW as the default. LCD I2C polarity is not configurable because its open-drain signalling is defined by the I2C bus.
 
+All menu settings and the selected display page are saved to the AT24C256 at each operator change. The stored record includes a magic value, format version, and checksum. At power-up the record is restored only when valid; a missing, incompatible, or corrupted record loads the compiled safe defaults and the primary status page.
+
 The default status screen displays post-filter forward power. Its primary readout can be selected as RMS or PEP, and the second row is a full-width bracketed PEP bar referenced to the configured post-filter maximum power. A second status page shows `PEP [----------]` with the temperature in degrees C on the next row. PEP is held and decays by one watt at a configurable 50-2000 ms interval; the default is 500 ms.
 
 The menu makes these firmware trip thresholds available to the operator:
@@ -193,7 +195,7 @@ The menu makes these firmware trip thresholds available to the operator:
 
 Each SWR ratio setting directly controls its local software trip: the controller calculates the mismatch from that sensor's forward/reflected pair and trips when it reaches the displayed setting. There are no dedicated SWR comparator inputs in this design.
 
-The ADC reference is the regulated nominal 5.0 V VDD rail, so every analogue input is scaled from 0 to VDD, not to an independently guaranteed 5 V reference. With VDD regulated at 5.0 V, drain voltage uses a linear scale: ADC 0-1023 represents 0-300 V. Input power is calculated as peak-envelope power into 50 ohms, with ADC 0-1023 representing 0-10.0 W. This requires the input detector/divider to present 5 V at 31.62 V peak, a scale factor of approximately 6.325:1. Each SWR bridge detector also uses a 0-5 V range. Its bridge-specific 500-2500 W forward full-scale setting is shared by the associated reflected detector, so both readings use the same power range before SWR is calculated. All analogue paths require series resistance and clamps so the PIC pin remains between VSS and VDD under normal operation. The external overdrive, drain-peak, and overcurrent comparators remain independently calibrated hard protection and combine into INPUT_HARD_FAULT. The current PIC16F723A configuration has no EEPROM, so firmware menu settings return to their safe defaults after a power cycle.
+The ADC reference is the regulated nominal 5.0 V VDD rail, so every analogue input is scaled from 0 to VDD, not to an independently guaranteed 5 V reference. With VDD regulated at 5.0 V, drain voltage uses a linear scale: ADC 0-1023 represents 0-300 V. Input power is calculated as peak-envelope power into 50 ohms, with ADC 0-1023 representing 0-10.0 W. This requires the input detector/divider to present 5 V at 31.62 V peak, a scale factor of approximately 6.325:1. Each SWR bridge detector also uses a 0-5 V range. Its bridge-specific 500-2500 W forward full-scale setting is shared by the associated reflected detector, so both readings use the same power range before SWR is calculated. All analogue paths require series resistance and clamps so the PIC pin remains between VSS and VDD under normal operation. The external overdrive, drain-peak, and overcurrent comparators remain independently calibrated hard protection and combine into INPUT_HARD_FAULT.
 
 The current firmware uses a provisional linear temperature scale: $T=T_{FS}r/1023$, where $T_{FS}$ is the menu-configured temperature at ADC full scale and $r$ is the ADC result. The default $T_{FS}$ is 150 C. The selected hardware direction is a 10 kOhm NTC thermistor with B3950 as the default configurable profile; the linear conversion must be replaced by the NTC lookup conversion before the warning and trip defaults are relied upon.
 
@@ -345,7 +347,7 @@ The following items remain to be finalized before the design is considered compl
 5. Select and validate the fan-drive scheme, including its temperature schedule and the actual PWM/analogue interface.
 6. Calibrate the two SWR bridges, 10 W input detector, and 300 V drain divider against traceable measurements at the regulated 5.0 V rail, including the RMS/PEP display and PEP-bar response.
 7. Verify that every conditioned ADC input stays between VSS and VDD, including fault/transient tests with the specified external clamps and series resistance.
-8. Validate the software-I2C LCD interface, menu switches, and fault acknowledge behaviour on the final PCB.
+8. Validate the shared software-I2C LCD/AT24C256 interface, menu switches, fault acknowledge behaviour, settings restore, and interrupted-power recovery on the final PCB.
 9. Run the GitHub Actions build/release workflows with the intended XC8 toolchain and confirm the published artifacts.
 10. Review the final PCB against the pin map and update the design documentation for any wiring changes before fabrication.
 

@@ -73,6 +73,9 @@ typedef struct {
     unsigned int pep_decay_ms;
 } protection_thresholds_t;
 
+#define SETTINGS_MAGIC 0xA5
+#define SETTINGS_VERSION 1
+
 static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
 static volatile bool g_ptt_active = false;
@@ -86,6 +89,16 @@ static unsigned int g_post_fwd_pep_w = 0;
 static unsigned int g_pep_decay_elapsed_ms = 0;
 static unsigned char g_status_refresh_ticks = 0;
 static unsigned int g_temperature_raw = 0;
+static const protection_thresholds_t g_default_thresholds = {
+    30, 20,
+    1500, 1500,
+    150, 70, 100,
+    90, 100,
+    140, 150,
+    20, 20,
+    false, false, false, false, false, false,
+    true, 500
+};
 static protection_thresholds_t g_thresholds = {
     30, 20,
     1500, 1500,
@@ -159,6 +172,52 @@ void lcd_write_power_bar(unsigned int power_w, unsigned int full_scale_w, unsign
         lcd_write_byte(bar_segment < bar_segments ? '-' : ' ', true);
     }
     lcd_write_byte(']', true);
+}
+
+unsigned char settings_checksum(menu_page_t page, const protection_thresholds_t *settings) {
+    const unsigned char *bytes = (const unsigned char *)settings;
+    unsigned char checksum = (unsigned char)page;
+    unsigned char index;
+
+    for (index = 0; index < sizeof(protection_thresholds_t); index++) {
+        checksum ^= bytes[index];
+    }
+    return checksum;
+}
+
+void load_settings(void) {
+    unsigned char header[3];
+    unsigned char checksum;
+    protection_thresholds_t stored_settings;
+
+    if (at24c256_read(0, header, sizeof(header)) &&
+        header[0] == SETTINGS_MAGIC &&
+        header[1] == SETTINGS_VERSION &&
+        header[2] < MENU_PAGE_COUNT &&
+        at24c256_read(sizeof(header), (unsigned char *)&stored_settings, sizeof(stored_settings)) &&
+        at24c256_read(sizeof(header) + sizeof(stored_settings), &checksum, 1) &&
+        checksum == settings_checksum((menu_page_t)header[2], &stored_settings)) {
+        g_thresholds = stored_settings;
+        g_menu_page = (menu_page_t)header[2];
+    } else {
+        g_thresholds = g_default_thresholds;
+        g_menu_page = MENU_PAGE_STATUS;
+    }
+}
+
+void save_settings(void) {
+    unsigned char record[sizeof(protection_thresholds_t) + 4];
+    const unsigned char *settings_bytes = (const unsigned char *)&g_thresholds;
+    unsigned char index;
+
+    record[0] = SETTINGS_MAGIC;
+    record[1] = SETTINGS_VERSION;
+    record[2] = (unsigned char)g_menu_page;
+    for (index = 0; index < sizeof(protection_thresholds_t); index++) {
+        record[index + 3] = settings_bytes[index];
+    }
+    record[sizeof(protection_thresholds_t) + 3] = settings_checksum(g_menu_page, &g_thresholds);
+    at24c256_write(0, record, sizeof(record));
 }
 
 void show_menu_page(void) {
@@ -612,14 +671,17 @@ void poll_menu_inputs(void) {
         if (next_pressed && !next_was_pressed) {
             g_menu_page = (menu_page_t)((g_menu_page + 1) % MENU_PAGE_COUNT);
             g_menu_changed = true;
+            save_settings();
         }
         if (increase_pressed && !increase_was_pressed) {
             adjust_selected_threshold(true);
             g_menu_changed = true;
+            save_settings();
         }
         if (decrease_pressed && !decrease_was_pressed) {
             adjust_selected_threshold(false);
             g_menu_changed = true;
+            save_settings();
         }
     }
 
@@ -710,6 +772,7 @@ int main(void) {
     set_trip_output(false);
 
     adc_init();
+    load_settings();
     lcd_init();
     show_menu_page();
     apply_startup_inhibit();

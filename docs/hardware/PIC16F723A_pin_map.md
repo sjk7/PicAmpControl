@@ -10,7 +10,7 @@ This document captures the current hardware understanding for the PIC16F723A and
 
 ## Approved project signal map
 
-This is the current approved signal map for the protection controller. The only I2C device in the design is the 1602 LCD backpack; RC3/RC4 use software I2C.
+This is the current approved signal map for the protection controller. The 1602 LCD backpack and AT24C256 EEPROM share software I2C on RC3/RC4.
 
 | PIC pin | Port | Project name | Direction | Function |
 |---|---|---|---|---|
@@ -56,10 +56,12 @@ This is the current approved signal map for the protection controller. The only 
 
 ### LCD interface
 
-- I2C bus only for the 1602 LCD backpack
+- I2C bus for the 1602 LCD backpack and AT24C256 EEPROM module
 - SCL: RC3
 - SDA: RC4
-- No other I2C devices are planned in the design
+- LCD address: `0x27`
+- AT24C256 address: `0x50` when A0, A1, and A2 are grounded
+- Connect AT24C256 VCC to regulated 5 V, GND to common ground, and WP to ground to permit firmware writes
 
 ### Protection outputs
 
@@ -93,8 +95,8 @@ The SWR protection channels are not required in hardware because each SWR pair i
 ## Wiring notes
 
 - This map intentionally keeps the 1602 display on the PIC hardware I2C pins and does not use the LCD on a parallel bus.
-- The LCD backpack is assumed to be a common PCF8574-style I2C adapter board; I2C is implemented in firmware on RC3/RC4.
-- No other I2C devices are included in this design to keep the hardware simple and predictable.
+- The LCD backpack is assumed to be a common PCF8574-style I2C adapter board; I2C is implemented in firmware on RC3/RC4 and shared with the AT24C256 module.
+- The LCD and EEPROM modules may both have I2C pull-ups. Avoid overly strong parallel pull-ups; target a combined bus pull-up resistance of approximately 4.7-10 kOhm.
 - Overdrive and drain sense nodes are split after their scaling/protection networks: one branch feeds the external comparator and the other feeds the designated ADC input. Neither raw high voltage nor unconditioned RF detector output may reach the PIC.
 - The ADC uses VDD as its reference and accepts conversion inputs from 0 to VDD. VDD must be maintained at 5.0 V for the specified scales. The input-power detector/divider must map 31.62 V peak at the 50-ohm input to 5.0 V at RB2. The drain divider must map 300 V to 5.0 V at RB3. Every analogue path needs a series resistor and clamps so the PIC input stays between VSS and VDD under normal operation.
 - The comparator board is deliberately separate from the PIC so that the critical analog faults are hardware-protected before the MCU state machine can act.

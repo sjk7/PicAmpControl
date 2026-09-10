@@ -68,6 +68,34 @@ static bool i2c_write_byte(unsigned char value) {
     return acknowledged;
 }
 
+static unsigned char i2c_read_byte(bool acknowledge) {
+    unsigned char bit_mask;
+    unsigned char value = 0;
+
+    i2c_sda_release();
+    for (bit_mask = 0x80; bit_mask != 0; bit_mask >>= 1) {
+        i2c_delay();
+        i2c_scl_release();
+        i2c_delay();
+        if (OUTPUT_LCD_I2C_SDA != 0) {
+            value |= bit_mask;
+        }
+        i2c_scl_low();
+    }
+
+    if (acknowledge) {
+        i2c_sda_low();
+    } else {
+        i2c_sda_release();
+    }
+    i2c_delay();
+    i2c_scl_release();
+    i2c_delay();
+    i2c_scl_low();
+    i2c_sda_release();
+    return value;
+}
+
 static void lcd_write_nibble(unsigned char nibble, bool data_mode) {
     unsigned char expander_data = (unsigned char)((nibble << 4) | 0x08);
 
@@ -124,4 +152,50 @@ void lcd_init(void) {
     lcd_write_byte(0x06, false);
     lcd_write_byte(0x01, false);
     __delay_ms(2);
+}
+
+bool at24c256_read(unsigned int address, unsigned char *data, unsigned char length) {
+    unsigned char index;
+
+    i2c_start();
+    if (!i2c_write_byte(AT24C256_I2C_WRITE_ADDRESS) ||
+        !i2c_write_byte((unsigned char)(address >> 8)) ||
+        !i2c_write_byte((unsigned char)address)) {
+        i2c_stop();
+        return false;
+    }
+
+    i2c_start();
+    if (!i2c_write_byte(AT24C256_I2C_READ_ADDRESS)) {
+        i2c_stop();
+        return false;
+    }
+
+    for (index = 0; index < length; index++) {
+        data[index] = i2c_read_byte(index + 1 < length);
+    }
+    i2c_stop();
+    return true;
+}
+
+bool at24c256_write(unsigned int address, const unsigned char *data, unsigned char length) {
+    unsigned char index;
+
+    i2c_start();
+    if (!i2c_write_byte(AT24C256_I2C_WRITE_ADDRESS) ||
+        !i2c_write_byte((unsigned char)(address >> 8)) ||
+        !i2c_write_byte((unsigned char)address)) {
+        i2c_stop();
+        return false;
+    }
+
+    for (index = 0; index < length; index++) {
+        if (!i2c_write_byte(data[index])) {
+            i2c_stop();
+            return false;
+        }
+    }
+    i2c_stop();
+    __delay_ms(5);
+    return true;
 }
