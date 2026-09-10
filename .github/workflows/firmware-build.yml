@@ -1,0 +1,89 @@
+name: PIC firmware build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'firmware/**'
+      - 'cmake/**'
+      - 'CMakePresets.json'
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - 'firmware/**'
+      - 'cmake/**'
+      - 'CMakePresets.json'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      XC8_VERSION: "2.41"
+      XC8_ROOT: "/opt/microchip/xc8"
+      PACK_REPO_PATH: "/opt/microchip/packs"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install required Linux tools
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl tar xz-utils
+
+      - name: Install Microchip XC8 compiler
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$XC8_ROOT"
+          curl -L "https://ww1.microchip.com/downloads/en/DeviceDoc/xc8-v${XC8_VERSION}-linux.tar.gz" -o /tmp/xc8.tar.gz
+          tar -xzf /tmp/xc8.tar.gz -C "$XC8_ROOT"
+
+          XC8_BIN_DIR="$(find "$XC8_ROOT" -path '*/bin/xc8-cc' | head -n 1 | xargs dirname)"
+          if [ -z "$XC8_BIN_DIR" ]; then
+            echo "XC8 compiler not found after extraction."
+            exit 1
+          fi
+
+          echo "XC8_BIN_DIR=$XC8_BIN_DIR" >> "$GITHUB_ENV"
+          echo "XC8_AR=$XC8_BIN_DIR/xc8-ar" >> "$GITHUB_ENV"
+
+      - name: Install Microchip pack repository
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$PACK_REPO_PATH"
+          echo "Pack repo root: $PACK_REPO_PATH"
+          echo "The generated XC8 rules expect a structure like: $PACK_REPO_PATH/Microchip/PIC16Fxxx_DFP/..."
+          echo "If the upstream pack archive layout differs, adjust the pack extraction step here."
+
+      - name: Configure project with CMake
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake --preset PicAmpControl-release \
+            -DMP_CC="$XC8_BIN_DIR/xc8-cc" \
+            -DMP_AS="$XC8_BIN_DIR/xc8-cc" \
+            -DMP_LD="$XC8_BIN_DIR/xc8-cc" \
+            -DMP_AR="$XC8_BIN_DIR/xc8-ar" \
+            -DPACK_REPO_PATH="$PACK_REPO_PATH"
+
+      - name: Build firmware
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake --build --preset PicAmpControl-release
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: picampcontrol-firmware
+          path: |
+            out/**
+            _build/**
+
