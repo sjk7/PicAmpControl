@@ -30,7 +30,7 @@ Build a PIC16F723A-based linear amplifier protection controller that monitors RF
    - fan-speed control from temperature
    - warning and trip thresholds
    - PTT input for transmit-cycle arming
-   - three-switch LCD configuration menu
+   - two-switch LCD configuration menu
 
 ## Protection strategy
 
@@ -57,7 +57,7 @@ Seven planned measurements are wired directly to ADC-capable pins: RA0-RA3 for t
 
 ## User threshold configuration
 
-The LCD configuration menu uses three active-low switches: `INPUT_MENU_NEXT` on RC2, `INPUT_MENU_INCREASE` on RB0, and `INPUT_MENU_DECREASE` on RB1. The operator can select and adjust an independent SWR trip ratio for each detector pair, from 1.1:1 to 5.0:1 in 0.1:1 steps. The pre-filter default is 3:1 and the post-filter default is 2:1. Each bridge has one forward full-scale setting from 500 W to 2500 W in 100 W steps, defaulting to 1500 W; its paired reflected reading uses that same setting. Temperature uses selectable B3435, B3950, or B4250 10 kOhm NTC profiles, defaulting to B3950, with warning/trip settings from 0 C to 150 C. Input power is adjustable from 0.0 W to 10.0 W in 0.1 W steps and defaults to a 10.0 W trip. Drain voltage is adjustable from 0 V to 300 V in 1 V steps and defaults to a 150 V trip. Changes are locked out during transmit.
+The LCD configuration menu uses two active-low switches: `INPUT_MENU_NEXT` on RC2 and `INPUT_MENU_ADJUST` on RB0. A short adjust press increases the selected value; holding it for 500 ms then decreases the value repeatedly every 100 ms. The operator can select and adjust an independent SWR trip ratio for each detector pair, from 1.1:1 to 5.0:1 in 0.1:1 steps. The pre-filter default is 3:1 and the post-filter default is 2:1. Each bridge has one forward full-scale setting from 500 W to 2500 W in 100 W steps, defaulting to 1500 W; its paired reflected reading uses that same setting. Temperature uses selectable B3435, B3950, or B4250 10 kOhm NTC profiles, defaulting to B3950, with warning/trip settings from 0 C to 150 C. Input power is adjustable from 0.0 W to 10.0 W in 0.1 W steps and defaults to a 10.0 W trip. Drain voltage is adjustable from 0 V to 300 V in 1 V steps and defaults to a 150 V trip. Changes are locked out during transmit. RB1 remains a spare input.
 
 The operator can also configure the TX-to-VCC and VCC-to-bias sequencing delays from 0 to 1000 ms in 5 ms steps; both default to 20 ms. Each operational output can be configured active-low or active-high, with active-low as the default: TX, TX_VCC, TX_BIAS, fan, warning, and trip. LCD I2C signalling remains fixed as open-drain bus logic and is driven by the dedicated software-I2C module.
 

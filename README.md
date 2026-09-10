@@ -135,8 +135,8 @@ This is the current approved signal map for the protection controller. The 1602 
 | 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC |
 | 9,10 | OSC1, OSC2 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
-| 19 | RB0 | INPUT_MENU_INCREASE | Input | Config-menu value increase switch |
-| 20 | RB1 | INPUT_MENU_DECREASE | Input | Config-menu value decrease switch |
+| 19 | RB0 | INPUT_MENU_ADJUST | Input | Menu adjust switch: short press increase, hold decrease |
+| 20 | RB1 | INPUT_SPARE_1 | Input | Freed spare input |
 | 21 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC |
 | 22 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC |
 | 23 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
@@ -154,7 +154,7 @@ This is the current approved signal map for the protection controller. The 1602 
 - SWR measurement pairs: two ADC pairs are required, one before and one after the low-pass filter bank, each with forward and reflected inputs
 - ADC wiring: RA0-RA3, RA5, RB2, and RB3 directly sample the two SWR pairs, temperature, overdrive, and drain voltage; no external analog multiplexer is fitted
 - Operator control: INPUT_PTT
-- Configuration controls: INPUT_MENU_NEXT, INPUT_MENU_INCREASE, and INPUT_MENU_DECREASE; each switch is active-low and is available only while not transmitting
+- Configuration controls: INPUT_MENU_NEXT and INPUT_MENU_ADJUST; each switch is active-low and is available only while not transmitting
 - Sequencing outputs: OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS
 - Status outputs: OUTPUT_WARNING_STATUS and OUTPUT_TRIP_STATUS
 - Output rule: all operational outputs default to active-low and can be individually changed to active-high in the receive-only configuration menu
@@ -180,7 +180,7 @@ The same logic is used for each pair and each sensor trips independently. A sing
 
 ## User configuration
 
-The 1602 display config menu is operated by three active-low, normally-open switches wired from the menu input pins to ground. RC2 selects the displayed configuration page; RB0 increases and RB1 decreases the selected value. A button action is accepted only while PTT is inactive, so a threshold cannot change during transmit.
+The 1602 display config menu uses two active-low, normally-open switches wired from the menu input pins to ground. RC2 selects the displayed configuration page. RB0 is the adjust button: a short press increases the selected value; holding it for 500 ms then decreases the value repeatedly every 100 ms. A button action is accepted only while PTT is inactive, so a threshold cannot change during transmit. RB1 is freed as a spare input.
 
 The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adjustable from 0 to 1000 ms in 5 ms steps, each defaulting to 20 ms. The active electrical level for OUTPUT_TX, OUTPUT_TX_VCC, OUTPUT_TX_BIAS, OUTPUT_FAN_PWM, OUTPUT_WARNING_STATUS, and OUTPUT_TRIP_STATUS is selectable as LOW or HIGH, with LOW as the default. LCD I2C polarity is not configurable because its open-drain signalling is defined by the I2C bus.
 

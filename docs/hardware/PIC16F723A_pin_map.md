@@ -29,8 +29,8 @@ This is the current approved signal map for the protection controller. The 1602 
 | 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC |
 | 9,10 | OSC1, OSC2 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
-| 19 | RB0 | INPUT_MENU_INCREASE | Input | Config-menu value increase switch |
-| 20 | RB1 | INPUT_MENU_DECREASE | Input | Config-menu value decrease switch |
+| 19 | RB0 | INPUT_MENU_ADJUST | Input | Menu adjust: short press increase, hold decrease |
+| 20 | RB1 | INPUT_SPARE_1 | Input | Freed spare input |
 | 21 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC |
 | 22 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC |
 | 23 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
@@ -78,10 +78,9 @@ The selected fan topology is a 12 V two-wire fan with a low-side logic-level N-M
 - PTT_IN: RC0
 - COMP_RESET: RC1
 - MENU_NEXT: RC2
-- MENU_INCREASE: RB0
-- MENU_DECREASE: RB1
+- MENU_ADJUST: RB0
 
-The menu switches are normally open and active-low, wired from the input pin to ground. RB0 and RB1 use PORTB weak pull-ups; RC2 needs an external pull-up resistor. The firmware accepts menu input only while PTT is inactive.
+The menu switches are normally open and active-low, wired from the input pin to ground. RB0 uses a PORTB weak pull-up; RC2 needs an external pull-up resistor. The firmware accepts menu input only while PTT is inactive. RB1 is available as a spare input.
 
 ### Comparator board interface
 

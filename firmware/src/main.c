@@ -622,13 +622,13 @@ void update_tx_sequence(void) {
     }
 }
 
-void poll_menu_inputs(void) {
+void poll_menu_inputs(unsigned int elapsed_ms) {
     static bool next_was_pressed = false;
-    static bool increase_was_pressed = false;
-    static bool decrease_was_pressed = false;
+    static bool adjust_was_pressed = false;
+    static unsigned int adjust_hold_ms = 0;
+    static unsigned int adjust_repeat_ms = 0;
     bool next_pressed = (INPUT_MENU_NEXT == 0);
-    bool increase_pressed = (INPUT_MENU_INCREASE == 0);
-    bool decrease_pressed = (INPUT_MENU_DECREASE == 0);
+    bool adjust_pressed = (INPUT_MENU_ADJUST == 0);
 
     if (!g_ptt_active) {
         if (next_pressed && !next_was_pressed) {
@@ -636,21 +636,33 @@ void poll_menu_inputs(void) {
             g_menu_changed = true;
             mark_settings_dirty();
         }
-        if (increase_pressed && !increase_was_pressed) {
+        if (adjust_pressed && !adjust_was_pressed) {
             adjust_selected_threshold(true);
             g_menu_changed = true;
             mark_settings_dirty();
         }
-        if (decrease_pressed && !decrease_was_pressed) {
-            adjust_selected_threshold(false);
-            g_menu_changed = true;
-            mark_settings_dirty();
+        if (adjust_pressed && adjust_was_pressed) {
+            adjust_hold_ms += elapsed_ms;
+            if (adjust_hold_ms >= 500) {
+                adjust_repeat_ms += elapsed_ms;
+                while (adjust_repeat_ms >= 100) {
+                    adjust_selected_threshold(false);
+                    g_menu_changed = true;
+                    mark_settings_dirty();
+                    adjust_repeat_ms -= 100;
+                }
+            }
+        } else if (!adjust_pressed) {
+            adjust_hold_ms = 0;
+            adjust_repeat_ms = 0;
         }
+    } else {
+        adjust_hold_ms = 0;
+        adjust_repeat_ms = 0;
     }
 
     next_was_pressed = next_pressed;
-    increase_was_pressed = increase_pressed;
-    decrease_was_pressed = decrease_pressed;
+    adjust_was_pressed = adjust_pressed;
 }
 
 void update_protection_state(unsigned int temp_c,
@@ -769,8 +781,10 @@ int main(void) {
                                 swr2_fault,
                                 hard_fault);
 
+        unsigned int elapsed_ms = 0;
         while (g_timer_ticks_pending != 0) {
             g_timer_ticks_pending--;
+            elapsed_ms++;
             if (g_comparator_reset_active) {
                 g_comparator_reset_elapsed_ms++;
                 if (g_comparator_reset_elapsed_ms >= 10) {
@@ -793,7 +807,7 @@ int main(void) {
             g_status_refresh_ms++;
         }
 
-        poll_menu_inputs();
+        poll_menu_inputs(elapsed_ms);
 
         if (g_menu_page == MENU_PAGE_STATUS || g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
             if (g_status_refresh_ms >= 100 || g_menu_changed) {
