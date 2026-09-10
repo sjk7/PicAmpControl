@@ -25,8 +25,10 @@
 #define DIAG_ADC_CHANNEL 4
 
 // Comparator inputs and status lines (assigned to RBx as needed)
-#define INPUT_COMP_SWR_1 PORTBbits.RB0
-#define INPUT_COMP_SWR_2 PORTBbits.RB1
+#define INPUT_SPARE_1 PORTBbits.RB0
+#define INPUT_SPARE_2 PORTBbits.RB1
+#define INPUT_COMP_SWR_1 INPUT_SPARE_1
+#define INPUT_COMP_SWR_2 INPUT_SPARE_2
 #define INPUT_COMP_OVERDRIVE PORTBbits.RB2
 #define INPUT_COMP_DRAIN_PEAK PORTBbits.RB3
 #define INPUT_COMP_OVERCURRENT PORTBbits.RB4

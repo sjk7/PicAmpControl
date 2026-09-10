@@ -54,8 +54,6 @@ flowchart LR
     end
 
     subgraph ComparatorBoard["Comparator / protection board"]
-        SWR1["SWR comparator 1"]
-        SWR2["SWR comparator 2"]
         OVR["Overdrive comparator"]
         DRAIN["Drain peak comparator"]
         OC["Overcurrent comparator"]
@@ -65,6 +63,8 @@ flowchart LR
         PTT["INPUT_PTT\nTransmit request"]
         ACK["INPUT_FAULT_ACK\nFault clear"]
         STATE["State machine"]
+        SWR1["SWR pair 1\nsoftware trip logic"]
+        SWR2["SWR pair 2\nsoftware trip logic"]
         TX["OUTPUT_TX\nTX sequence 1"]
         TXVCC["OUTPUT_TX_VCC\nTX sequence 2"]
         TXBIAS["OUTPUT_TX_BIAS\nTX sequence 3"]
@@ -86,8 +86,8 @@ flowchart LR
     POST_REF --> STATE
     TEMP --> STATE
 
-    SWR1 -->|fault| STATE
-    SWR2 -->|fault| STATE
+    STATE --> SWR1
+    STATE --> SWR2
     OVR -->|fault| STATE
     DRAIN -->|fault| STATE
     OC -->|fault| STATE
@@ -125,8 +125,8 @@ This is the current approved signal map for the protection controller. The only 
 | 6 | RA4 | ADC_TEMP | Input | Temperature sensor input |
 | 9,10 | OSC1, OSC2 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
-| 19 | RB0 | INPUT_COMP_SWR_1 | Input | SWR comparator 1 |
-| 20 | RB1 | INPUT_COMP_SWR_2 | Input | SWR comparator 2 |
+| 19 | RB0 | INPUT_SPARE_1 | Input | Free spare input; no SWR comparator required |
+| 20 | RB1 | INPUT_SPARE_2 | Input | Free spare input; no SWR comparator required |
 | 21 | RB2 | INPUT_COMP_OVERDRIVE | Input | Overdrive comparator |
 | 22 | RB3 | INPUT_COMP_DRAIN_PEAK | Input | Drain peak comparator |
 | 23 | RB4 | INPUT_COMP_OVERCURRENT | Input | Overcurrent comparator |
@@ -140,7 +140,7 @@ This is the current approved signal map for the protection controller. The only 
 - MCU: PIC16F723A
 - Clock: 20 MHz crystal
 - Display: 1602 LCD with I2C backpack only
-- Protection faults: comparator-based SWR, overdrive, drain peak, and overcurrent detection
+- Protection faults: software-driven SWR trip logic plus hardware comparator protection for overdrive, drain peak, and overcurrent detection
 - SWR measurement pairs: two ADC pairs are required, one before and one after the low-pass filter bank, each with forward and reflected inputs
 - Operator controls: INPUT_PTT and INPUT_FAULT_ACK
 - Sequencing outputs: OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS
@@ -179,7 +179,7 @@ Polarity suffixes are not added to pin names unless a specific signal intentiona
 
 ## Firmware state model
 
-The protection controller uses a strict state machine with hardware-first fault handling. The PIC is not the primary protection layer; the comparator hardware is. The PIC acts as the logic controller and sequencing manager.
+The protection controller uses a strict state machine with a hybrid protection model. SWR is computed in firmware from the forward and reflected ADC samples at each RF point. The comparator hardware remains the primary protection layer for fast analog faults such as overdrive, drain peak, and overcurrent. The PIC acts as the logic controller and sequencing manager.
 
 ### State definitions
 
@@ -245,7 +245,11 @@ The firmware should implement these states:
 ### Critical behavior rules
 
 1. Hardware comparator faults take priority over software logic.
-   - If a comparator channel indicates a live fault, TX must not start.
+   - If an overdrive, drain peak, or overcurrent comparator indicates a live fault, TX must not start.
+
+2. SWR faults are computed in firmware from the local forward/reflected ADC pair.
+   - Each SWR sensor pair is evaluated independently.
+   - A sensor trips when its calculated SWR exceeds the configured threshold, default 2:1.
 
 2. PTT high means receive mode.
    - The transmitter is not active.
@@ -261,6 +265,9 @@ The firmware should implement these states:
 
 6. The reset action is shared between startup inhibit and TX entry.
    - In practice, startup and TX reset are the same hardware intent: clear latched comparator state and force safe idle before enable.
+
+7. SWR protection does not require dedicated SWR comparators once the MCU has forward and reflected samples for each RF point.
+   - The MCU computes the SWR and trips the channel in software.
 
 ### TX sequence ordering
 

@@ -38,18 +38,14 @@ Build a PIC16F723A-based linear amplifier protection controller that monitors RF
 
 ## Protection strategy
 
-The critical faults should be detected by analog comparator hardware, not only by PIC software.
+The critical faults should be detected by analog comparator hardware for the fast analog failure modes, while SWR is computed directly in firmware from ADC data.
 
 Recommended hardware protections:
 
-- SWR fault channel 1
-- SWR fault channel 2
 - overdrive fault
 - drain peak fault
 - overcurrent fault
 - temperature warning and final trip threshold
-
-The PIC should read these comparator outputs and set the controller state, but the analog stage should be the primary protection layer.
 
 SWR protection is computed locally for each sensing point:
 
@@ -60,6 +56,8 @@ SWR protection is computed locally for each sensing point:
 - repeat the same logic for the post-filter sensor
 
 This allows each SWR monitor to act independently and gives a clear, local protection decision at each stage.
+
+The earlier SWR comparator channels are no longer required in the active design. Their pins are released as spare inputs and can be used for future expansion if needed.
 
 ## LCD strategy
 

@@ -12,22 +12,31 @@ This document captures the current hardware understanding for the PIC16F723A and
 
 This is the current approved signal map for the protection controller. The only I2C peripheral in the design is the 1602 LCD backpack.
 
-| PIC pin | Port/Signal | Project function | Direction | Notes |
+| PIC pin | Port | Project name | Direction | Function |
 |---|---|---|---|---|
-| 11 | RC0 | MODE_SWITCH | Input | Mode / operator selection input |
-| 12 | RC1 | FAULT_ACK | Input | Fault acknowledge or reset trigger |
-| 13 | RC2 | PTT_IN | Input | PTT assertion for transmit start; re-arms protection on entry |
-| 14 | RC3 | I2C_SCL | Output | LCD backpack clock line |
-| 15 | RC4 | I2C_SDA | Bidirectional | LCD backpack data line |
-| 16 | RC5 | AMP_ENABLE | Output | Enable / disable drive to amplifier chain |
-| 17 | RC6 | WARNING_OUT | Output | Warning-level alarm output |
-| 18 | RC7 | TRIP_OUT | Output | Trip-level alarm output |
-| 2 | RA0 | FWD_ADC_INPUT | Input | Forward power ADC |
-| 3 | RA1 | REF_ADC_INPUT | Input | Reflected power ADC |
-| 5 | RA3 | TEMP_ADC_INPUT | Input | Temperature sensor input |
+| 11 | RC0 | INPUT_PTT | Input | Transmit request / key-down input |
+| 12 | RC1 | INPUT_FAULT_ACK | Input | Fault clear / reset trigger |
+| 13 | RC2 | spare | Input | Reserved if a separate hardware signal is needed later |
+| 14 | RC3 | OUTPUT_LCD_I2C_SCL | Output | LCD backpack clock line |
+| 15 | RC4 | OUTPUT_LCD_I2C_SDA | Output | LCD backpack data line |
+| 16 | RC5 | OUTPUT_TX | Output | First TX sequencing driver |
+| 17 | RC6 | OUTPUT_TX_VCC | Output | Second TX sequencing driver |
+| 18 | RC7 | OUTPUT_TX_BIAS | Output | Final TX sequencing driver |
+| 2 | RA0 | ADC_SWR1_FWD | Input | Pre-filter SWR forward power ADC |
+| 3 | RA1 | ADC_SWR1_REF | Input | Pre-filter SWR reflected power ADC |
+| 4 | RA2 | ADC_SWR2_FWD | Input | Post-filter SWR forward power ADC |
+| 5 | RA3 | ADC_SWR2_REF | Input | Post-filter SWR reflected power ADC |
+| 6 | RA4 | ADC_TEMP | Input | Temperature sensor input |
 | 9,10 | OSC1, OSC2 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
-| 19-26 | RB0-RB7 | Comparator fault + fan + status | IO | RB0..RB7 reserved for comparator trip status, fan PWM, or future fault inputs |
+| 19 | RB0 | INPUT_SPARE_1 | Input | Free spare input; no SWR comparator required |
+| 20 | RB1 | INPUT_SPARE_2 | Input | Free spare input; no SWR comparator required |
+| 21 | RB2 | INPUT_COMP_OVERDRIVE | Input | Overdrive comparator |
+| 22 | RB3 | INPUT_COMP_DRAIN_PEAK | Input | Drain peak comparator |
+| 23 | RB4 | INPUT_COMP_OVERCURRENT | Input | Overcurrent comparator |
+| 24 | RB5 | OUTPUT_FAN_PWM | Output | Fan speed control |
+| 25 | RB6 | OUTPUT_WARNING_STATUS | Output | Warning status output |
+| 26 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
 | 4,6,7,8,27,28 | VSS/VDD/NC | Power / support | Power | Follow datasheet decoupling rules |
 
 ## Functional grouping
@@ -62,21 +71,20 @@ This is the current approved signal map for the protection controller. The only 
 
 The comparator board should include the hardware protection channels for:
 
-- SWR protection 1: pre-filter or PA output
-- SWR protection 2: post-filter or antenna output
 - overdrive detection
 - drain peak voltage trip
 - overcurrent fault (inverse current sense)
 - optional spare comparator input for future fault expansion
 
-These comparator outputs are expected to be read by the PIC on selected RB pins or dedicated digital inputs.
+The SWR protection channels are not required in hardware because each SWR pair is measured in firmware from the forward and reflected ADC readings at each RF point.
 
 ## Wiring notes
 
 - This map intentionally keeps the 1602 display on the PIC hardware I2C pins and does not use the LCD on a parallel bus.
 - The LCD backpack is assumed to be a common PCF8574-style I2C adapter board.
 - No other I2C devices are included in this design to keep the hardware simple and predictable.
-- The comparator board is deliberately separate from the PIC so that the critical RF and power faults are hardware-protected before the MCU state machine can act.
+- The comparator board is deliberately separate from the PIC so that the critical analog faults are hardware-protected before the MCU state machine can act.
+- SWR is evaluated in firmware from the forward/reflected ADC pairs; no dedicated SWR comparator is required.
 - PTT is treated as a re-arm event for software fault latches, but it must never override a live hardware comparator fault.
 - Any future expansion should be planned before wiring, so the MCU I/O map does not become inconsistent.
 
