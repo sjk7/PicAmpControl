@@ -16,6 +16,7 @@ foreach(source_file ${My_Pic_Project_default_default_XC8_FILE_TYPE_assemblePrepr
 endforeach()
 
 set(My_Pic_Project_default_default_XC8_FILE_TYPE_compile
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/lcd_i2c.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/main.c")
 set_source_files_properties(${My_Pic_Project_default_default_XC8_FILE_TYPE_compile} PROPERTIES LANGUAGE C)
 set(My_Pic_Project_default_default_XC8_FILE_TYPE_link)

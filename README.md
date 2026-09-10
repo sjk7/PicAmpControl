@@ -25,7 +25,6 @@ The project is in a working design-and-firmware skeleton stage:
 - Project build presets: [CMakePresets.json](CMakePresets.json)
 - GitHub Actions build workflow: [.github/workflows/firmware-build.yml](.github/workflows/firmware-build.yml)
 - GitHub Actions release workflow: [.github/workflows/release-firmware.yml](.github/workflows/release-firmware.yml)
-- Historical prototype/reference code: [prototype_reference](prototype_reference)
 
 ## Design direction
 
@@ -349,10 +348,6 @@ The following items remain to be finalized before the design is considered compl
 8. Validate the software-I2C LCD interface, menu switches, and fault acknowledge behaviour on the final PCB.
 9. Run the GitHub Actions build/release workflows with the intended XC8 toolchain and confirm the published artifacts.
 10. Review the final PCB against the pin map and update the design documentation for any wiring changes before fabrication.
-
-## Reference / prototype note
-
-The original prototype code remains in [prototype_reference](prototype_reference) as historical reference only. It should not be treated as the final protection-controller implementation.
 
 ## Repository purpose
 
