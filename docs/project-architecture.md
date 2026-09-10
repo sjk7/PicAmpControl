@@ -64,7 +64,7 @@ Seven planned measurements are wired directly to ADC-capable pins: RA0-RA3 for t
 
 The LCD configuration menu uses three active-low switches: `INPUT_MENU_NEXT` on RC2, `INPUT_MENU_INCREASE` on RB0, and `INPUT_MENU_DECREASE` on RB1. The operator can select and adjust an independent SWR trip ratio for each detector pair, from 1.1:1 to 5.0:1 in 0.1:1 steps. The pre-filter default is 3:1 and the post-filter default is 2:1. Each bridge has one forward full-scale setting from 500 W to 2500 W in 100 W steps, defaulting to 1500 W; its paired reflected reading uses that same setting. Input power is adjustable from 0.0 W to 10.0 W in 0.1 W steps and defaults to a 10.0 W trip. Drain voltage is adjustable from 0 V to 300 V in 1 V steps and defaults to a 150 V trip. Changes are locked out during transmit.
 
-The operator can also configure the TX-to-VCC and VCC-to-bias sequencing delays from 0 to 1000 ms in 5 ms steps; both default to 20 ms. Each operational output can be configured active-low or active-high, with active-low as the default: TX, TX_VCC, TX_BIAS, fan, warning, and trip. LCD I2C signalling remains fixed as open-drain bus logic.
+The operator can also configure the TX-to-VCC and VCC-to-bias sequencing delays from 0 to 1000 ms in 5 ms steps; both default to 20 ms. Each operational output can be configured active-low or active-high, with active-low as the default: TX, TX_VCC, TX_BIAS, fan, warning, and trip. LCD I2C signalling remains fixed as open-drain bus logic and is driven by the dedicated software-I2C module.
 
 The software trip comparison follows the displayed ratio rather than a raw ADC limit. For a configured ratio $S$, it trips when the paired measurements satisfy $R(S+1)^2 \geq F(S-1)^2$, where $F$ is forward power and $R$ is reflected power. Each bridge's single forward full-scale setting converts both its forward and reflected ADC results to physical power before this comparison. This is the standard SWR relationship expressed without floating-point arithmetic. The forward sample must exceed a small noise floor before this comparison can trip.
 
@@ -73,6 +73,8 @@ Overdrive and drain voltage each have a separate, conditioned ADC path. The ADC 
 ## LCD strategy
 
 Use a standard low-cost 16x2 or 20x4 character LCD fitted with a PCF8574-based I2C backpack.
+
+The PIC16F723A implementation uses a dedicated `lcd_i2c.c` software-I2C module on RC3/RC4 because this device does not provide the MSSP I2C register interface expected by a hardware-I2C driver. The module owns the PCF8574 transfers and HD44780 character commands; protection and menu logic remain in `main.c`.
 
 Benefits:
 

@@ -20,6 +20,8 @@ The project is in a working design-and-firmware skeleton stage:
 - Hardware pin map: [docs/hardware/PIC16F723A_pin_map.md](docs/hardware/PIC16F723A_pin_map.md)
 - Firmware entry point: [firmware/src/main.c](firmware/src/main.c)
 - Pin definitions: [firmware/include/pin_map.h](firmware/include/pin_map.h)
+- LCD and software-I2C driver: [firmware/src/lcd_i2c.c](firmware/src/lcd_i2c.c)
+- LCD driver interface: [firmware/include/lcd_i2c.h](firmware/include/lcd_i2c.h)
 - Project build presets: [CMakePresets.json](CMakePresets.json)
 - GitHub Actions build workflow: [.github/workflows/firmware-build.yml](.github/workflows/firmware-build.yml)
 - GitHub Actions release workflow: [.github/workflows/release-firmware.yml](.github/workflows/release-firmware.yml)
@@ -106,7 +108,7 @@ flowchart LR
 
 ## Approved hardware pin map
 
-This is the current approved signal map for the protection controller. The only I2C peripheral in the design is the 1602 LCD backpack.
+This is the current approved signal map for the protection controller. The only I2C device in the design is the 1602 LCD backpack; its bus is driven in software on RC3/RC4.
 
 | PIC pin | Port | Project name | Direction | Function |
 |---|---|---|---|---|
@@ -147,7 +149,7 @@ This is the current approved signal map for the protection controller. The only 
 - Configuration controls: INPUT_MENU_NEXT, INPUT_MENU_INCREASE, and INPUT_MENU_DECREASE; each switch is active-low and is available only while not transmitting
 - Sequencing outputs: OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS
 - Status outputs: OUTPUT_WARNING_STATUS and OUTPUT_TRIP_STATUS
-- Output rule: all MCU output pins are active-low by default unless a specific hardware design requires otherwise
+- Output rule: all operational outputs default to active-low and can be individually changed to active-high in the receive-only configuration menu
 - Input rule: input pin names follow the actual hardware comparator/sensor polarity; no polarity suffix is added unless a signal deliberately breaks the default output rule
 
 ## SWR measurement logic
@@ -322,11 +324,11 @@ A fresh transmit cycle is allowed only when:
 
 When PTT returns high, the controller disables the TX sequence and returns to receive/idle operation. This is the reset point for the next cycle.
 
-See [firmware/src/main.c](firmware/src/main.c) for the current firmware skeleton implementing these concepts.
+See [firmware/src/main.c](firmware/src/main.c) for the protection and sequencer logic, and [firmware/src/lcd_i2c.c](firmware/src/lcd_i2c.c) for the LCD transport.
 
 ## Build status
 
-The local project build has been validated with the CMake/XC8 flow. The project is configured to build from the generated CMake preset structure and the workflow files are in place for GitHub-based automation.
+The local project build has been validated with the CMake/XC8 flow. [cmake/My_Pic_Project/default/user.cmake](cmake/My_Pic_Project/default/user.cmake) constrains the production build to `firmware/src/main.c` and `firmware/src/lcd_i2c.c`, excluding historical prototype sources that the generated file list may contain. The workflow files are in place for GitHub-based automation.
 
 ## TODOs
 

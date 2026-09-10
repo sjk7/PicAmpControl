@@ -10,7 +10,7 @@ This document captures the current hardware understanding for the PIC16F723A and
 
 ## Approved project signal map
 
-This is the current approved signal map for the protection controller. The only I2C peripheral in the design is the 1602 LCD backpack.
+This is the current approved signal map for the protection controller. The only I2C device in the design is the 1602 LCD backpack; RC3/RC4 use software I2C.
 
 | PIC pin | Port | Project name | Direction | Function |
 |---|---|---|---|---|
@@ -66,6 +66,8 @@ This is the current approved signal map for the protection controller. The only 
 - WARNING_OUT: RC6
 - TRIP_OUT: RC7
 - AMP_ENABLE: RC5
+
+The TX, fan, warning, and trip outputs each default active-low but are individually configurable active-low or active-high in the configuration menu. They are forced to their configured inactive levels for a fault, startup inhibit, or receive mode.
 
 ### Operator controls
 
