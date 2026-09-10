@@ -39,6 +39,20 @@ The controller is intended to use a layered protection model:
 
 ```mermaid
 flowchart LR
+    subgraph RF["RF path"]
+        PRE["SWR sensor 1\nPre-LPF"]
+        FILTER["Low-pass filter bank"]
+        POST["SWR sensor 2\nPost-LPF"]
+    end
+
+    subgraph ADC["ADC measurement inputs"]
+        PRE_FWD["ADC_SWR1_FWD"]
+        PRE_REF["ADC_SWR1_REF"]
+        POST_FWD["ADC_SWR2_FWD"]
+        POST_REF["ADC_SWR2_REF"]
+        TEMP["ADC_TEMP"]
+    end
+
     subgraph ComparatorBoard["Comparator / protection board"]
         SWR1["SWR comparator 1"]
         SWR2["SWR comparator 2"]
@@ -50,9 +64,6 @@ flowchart LR
     subgraph MCU["PIC16F723A controller"]
         PTT["INPUT_PTT\nTransmit request"]
         ACK["INPUT_FAULT_ACK\nFault clear"]
-        FWD["ADC_FWD\nForward power"]
-        REF["ADC_REF\nReflected power"]
-        TEMP["ADC_TEMP\nTemperature"]
         TX["OUTPUT_TX\nTX sequence 1"]
         TXVCC["OUTPUT_TX_VCC\nTX sequence 2"]
         TXBIAS["OUTPUT_TX_BIAS\nTX sequence 3"]
@@ -62,6 +73,18 @@ flowchart LR
         LCD["1602 LCD\nI2C backpack"]
     end
 
+    PRE --> PRE_FWD
+    PRE --> PRE_REF
+    FILTER --> POST
+    POST --> POST_FWD
+    POST --> POST_REF
+
+    PRE_FWD --> MCU
+    PRE_REF --> MCU
+    POST_FWD --> MCU
+    POST_REF --> MCU
+    TEMP --> MCU
+
     SWR1 -->|fault| PTT
     SWR2 -->|fault| PTT
     OVR -->|fault| PTT
@@ -69,15 +92,11 @@ flowchart LR
     OC -->|fault| PTT
 
     PTT --> ACK
-    PTT --> FWD
-    PTT --> REF
-    PTT --> TEMP
-
+    PTT --> TX
     TX --> TXVCC --> TXBIAS
     TXVCC --> FAN
     TXVCC --> WARN
     TXVCC --> TRIP
-    TXVCC --> LCD
     TX -->|I2C| LCD
     TX -->|PWM| FAN
 ```
@@ -96,9 +115,11 @@ This is the current approved signal map for the protection controller. The only 
 | 16 | RC5 | OUTPUT_TX | Output | First TX sequencing driver |
 | 17 | RC6 | OUTPUT_TX_VCC | Output | Second TX sequencing driver |
 | 18 | RC7 | OUTPUT_TX_BIAS | Output | Final TX sequencing driver |
-| 2 | RA0 | ADC_FWD | Input | Forward power ADC |
-| 3 | RA1 | ADC_REF | Input | Reflected power ADC |
-| 5 | RA3 | ADC_TEMP | Input | Temperature sensor input |
+| 2 | RA0 | ADC_SWR1_FWD | Input | Pre-filter SWR forward power ADC |
+| 3 | RA1 | ADC_SWR1_REF | Input | Pre-filter SWR reflected power ADC |
+| 4 | RA2 | ADC_SWR2_FWD | Input | Post-filter SWR forward power ADC |
+| 5 | RA3 | ADC_SWR2_REF | Input | Post-filter SWR reflected power ADC |
+| 6 | RA4 | ADC_TEMP | Input | Temperature sensor input |
 | 9,10 | OSC1, OSC2 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
 | 19 | RB0 | INPUT_COMP_SWR_1 | Input | SWR comparator 1 |
@@ -117,6 +138,7 @@ This is the current approved signal map for the protection controller. The only 
 - Clock: 20 MHz crystal
 - Display: 1602 LCD with I2C backpack only
 - Protection faults: comparator-based SWR, overdrive, drain peak, and overcurrent detection
+- SWR measurement pairs: two ADC pairs are required, one before and one after the low-pass filter bank, each with forward and reflected inputs
 - Operator controls: INPUT_PTT and INPUT_FAULT_ACK
 - Sequencing outputs: OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS
 - Status outputs: OUTPUT_WARNING_STATUS and OUTPUT_TRIP_STATUS
