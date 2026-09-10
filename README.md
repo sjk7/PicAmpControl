@@ -35,6 +35,54 @@ The controller is intended to use a layered protection model:
 - PTT-based re-arm behavior without bypassing live hardware faults
 - startup inhibit and fault-latch behavior for safe operation
 
+## Hardware overview
+
+```mermaid
+flowchart LR
+    subgraph ComparatorBoard["Comparator / protection board"]
+        SWR1["SWR comparator 1"]
+        SWR2["SWR comparator 2"]
+        OVR["Overdrive comparator"]
+        DRAIN["Drain peak comparator"]
+        OC["Overcurrent comparator"]
+    end
+
+    subgraph MCU["PIC16F723A controller"]
+        PTT["INPUT_PTT\nTransmit request"]
+        ACK["INPUT_FAULT_ACK\nFault clear"]
+        FWD["ADC_FWD\nForward power"]
+        REF["ADC_REF\nReflected power"]
+        TEMP["ADC_TEMP\nTemperature"]
+        TX["OUTPUT_TX\nTX sequence 1"]
+        TXVCC["OUTPUT_TX_VCC\nTX sequence 2"]
+        TXBIAS["OUTPUT_TX_BIAS\nTX sequence 3"]
+        FAN["OUTPUT_FAN_PWM\nFan speed"]
+        WARN["OUTPUT_WARNING_STATUS\nWarning"]
+        TRIP["OUTPUT_TRIP_STATUS\nTrip"]
+        LCD["1602 LCD\nI2C backpack"]
+    end
+
+    SWR1 -->|fault| MCU
+    SWR2 -->|fault| MCU
+    OVR -->|fault| MCU
+    DRAIN -->|fault| MCU
+    OC -->|fault| MCU
+
+    PTT --> MCU
+    ACK --> MCU
+    FWD --> MCU
+    REF --> MCU
+    TEMP --> MCU
+
+    MCU -->|I2C| LCD
+    MCU -->|PWM| FAN
+    MCU --> WARN
+    MCU --> TRIP
+    MCU --> TX
+    TX --> TXVCC
+    TXVCC --> TXBIAS
+```
+
 ## Approved hardware pin map
 
 This is the current approved signal map for the protection controller. The only I2C peripheral in the design is the 1602 LCD backpack.
