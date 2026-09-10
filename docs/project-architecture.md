@@ -31,7 +31,6 @@ Build a PIC16F723A-based linear amplifier protection controller that monitors RF
    - temperature sensing
    - fan-speed control from temperature
    - warning and trip thresholds
-   - fault acknowledge / reset input
    - PTT input for transmit-cycle arming
    - three-switch LCD configuration menu
 
@@ -105,15 +104,15 @@ PTT must act as a transmit-cycle re-arm event.
 
 Rules:
 
-- when PTT is asserted, the PIC should clear software-latched fault state after a short settle delay
+- on the PTT falling edge, the PIC must issue the 10 ms comparator reset pulse before it can clear software-latched fault state
 - a live comparator fault must not be bypassed by entering PTT
 - if a hardware condition is still outside limits, the amplifier must remain disabled
 - the startup power-up interval should keep the amplifier off for about 0.5 to 1.0 seconds after applying power
-- INPUT_FAULT_ACK clears only the software latch, only while PTT is inactive and INPUT_HARD_FAULT is clear; it must never clear a live hardware comparator fault
+- On the PTT falling edge, OUTPUT_COMP_RESET produces a 10 ms active-low pulse to clear comparator latches. INPUT_HARD_FAULT must then be clear before the controller re-arms software latches or begins sequencing.
 
 ## Temperature and fan strategy
 
-Temperature uses a 10 kOhm NTC thermistor divider on the ADC input, with a 10 kOhm fixed resistor to the regulated 5 V rail and the NTC to ground. The configuration menu selects B3435, B3950, or B4250; B3950 is the default. The firmware contains compact 10 C lookup points from 0 C to 150 C for each profile. The selected profile and physical divider must be bench-calibrated before the temperature warning/trip settings are relied upon.
+Temperature uses a 10 kOhm NTC thermistor divider on the ADC input, with a 10 kOhm fixed resistor to the regulated 5 V rail and the NTC to ground. The configuration menu selects B3435, B3950, or B4250; B3950 is the default. The firmware contains compact 10 C lookup points from 0 C to 150 C for each profile. A near-full-scale ADC result is treated as 150 C so an open NTC lead produces a conservative thermal lockout. The selected profile and physical divider must be bench-calibrated before the temperature warning/trip settings are relied upon.
 
 Recommended behavior:
 
@@ -121,7 +120,7 @@ Recommended behavior:
 - higher threshold: fan speed increases further
 - critical threshold: amplifier trips and disables output
 
-The fan can be controlled by simple threshold steps or by PWM if a smoother response is desired.
+The selected fan design is a 12 V fan driven by a low-side logic-level N-MOSFET from OUTPUT_FAN_PWM. The final PCB must confirm whether RB5 can provide the required hardware PWM alternate function; otherwise use an external PWM driver. The required circuit and test procedure are in [docs/hardware/bench-validation.md](hardware/bench-validation.md).
 
 ## Overcurrent sensor handling
 

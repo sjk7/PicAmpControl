@@ -15,7 +15,7 @@ This is the current approved signal map for the protection controller. The 1602 
 | PIC pin | Port | Project name | Direction | Function |
 |---|---|---|---|---|
 | 11 | RC0 | INPUT_PTT | Input | Transmit request / key-down input |
-| 12 | RC1 | INPUT_FAULT_ACK | Input | Fault clear / reset trigger |
+| 12 | RC1 | OUTPUT_COMP_RESET | Output | Active-low 10 ms comparator-latch reset pulse on PTT entry |
 | 13 | RC2 | INPUT_MENU_NEXT | Input | Config-menu page select switch |
 | 14 | RC3 | OUTPUT_LCD_I2C_SCL | Output | LCD backpack clock line |
 | 15 | RC4 | OUTPUT_LCD_I2C_SDA | Output | LCD backpack data line |
@@ -34,7 +34,7 @@ This is the current approved signal map for the protection controller. The 1602 
 | 21 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC |
 | 22 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC |
 | 23 | RB4 | INPUT_HARD_FAULT | Input | Combined active-high overdrive, drain-peak, and overcurrent comparator fault |
-| 24 | RB5 | OUTPUT_FAN_PWM | Output | Fan speed control |
+| 24 | RB5 | OUTPUT_FAN_PWM | Output | 12 V fan low-side MOSFET control; confirm hardware-PWM alternate-function routing |
 | 25 | RB6 | OUTPUT_WARNING_STATUS | Output | Warning status output |
 | 26 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
 | 6 | RA4 | unused | Input | Reserved; not an ADC channel in this design |
@@ -71,10 +71,12 @@ This is the current approved signal map for the protection controller. The 1602 
 
 The TX, fan, warning, and trip outputs each default active-low but are individually configurable active-low or active-high in the configuration menu. They are forced to their configured inactive levels for a fault, startup inhibit, or receive mode.
 
+The selected fan topology is a 12 V two-wire fan with a low-side logic-level N-MOSFET. RB5 drives the MOSFET gate through a resistor with a gate pull-down to ground. Confirm RB5 PWM routing before relying on internal hardware PWM; an external PWM driver is required if it is not a PWM-capable alternate-function pin.
+
 ### Operator controls
 
 - PTT_IN: RC0
-- FAULT_ACK: RC1
+- COMP_RESET: RC1
 - MENU_NEXT: RC2
 - MENU_INCREASE: RB0
 - MENU_DECREASE: RB1
@@ -103,13 +105,13 @@ The SWR protection channels are not required in hardware because each SWR pair i
 - SWR is evaluated in firmware from the forward/reflected ADC pairs; no dedicated SWR comparator is required.
 - The seven planned analog measurements have dedicated PIC ADC pins, so no external analog multiplexer is required.
 - The three former spare inputs are assigned to the LCD configuration menu; no unallocated GPIO remains in this pin map.
-- PTT is treated as a re-arm event for software fault latches, but it must never override a live hardware comparator fault.
+- On the falling PTT edge, RC1 outputs a 10 ms active-low pulse to reset the comparator latch network. The controller then checks INPUT_HARD_FAULT before enabling a TX sequence.
 - The comparator outputs must combine into one active-high hard-fault signal at RB4. This input remains digital; RB2 and RB3 are dedicated to analogue sensing.
 - Any future expansion should be planned before wiring, so the MCU I/O map does not become inconsistent.
 
 ## Safety and reset behavior
 
-- When PTT is asserted, the controller should re-arm or clear its software latching state after a short settle time.
+- When PTT is asserted, the controller must output a 10 ms active-low comparator reset pulse before re-arming software latches.
 - A comparator trip must remain active until the analog condition is restored.
 - Startup should hold the amplifier disabled for approximately 0.5 to 1.0 seconds after power-up.
 - Temperature monitoring uses the selected 10 kOhm NTC B-value profile to display degrees C and drive warning/trip states; the divider and lookup result require final bench calibration.

@@ -354,9 +354,16 @@ void clear_fault_latches(void) {
     set_trip_output(false);
 }
 
+void pulse_comparator_reset(void) {
+    OUTPUT_COMP_RESET = 0;
+    __delay_ms(10);
+    OUTPUT_COMP_RESET = 1;
+}
+
 void handle_ptt_transition(bool ptt_asserted) {
     if (ptt_asserted) {
         g_ptt_active = true;
+        pulse_comparator_reset();
         if (!g_fault_latched) {
             g_state = STATE_RESET_WAIT;
         }
@@ -368,18 +375,6 @@ void handle_ptt_transition(bool ptt_asserted) {
         g_ptt_active = false;
         g_state = STATE_STANDBY;
     }
-}
-
-void handle_fault_ack(void) {
-    static bool fault_ack_was_pressed = false;
-    bool fault_ack_pressed = (INPUT_FAULT_ACK == 0);
-
-    if (fault_ack_pressed && !fault_ack_was_pressed && !g_ptt_active && INPUT_HARD_FAULT == 0) {
-        clear_fault_latches();
-        g_state = STATE_STANDBY;
-    }
-
-    fault_ack_was_pressed = fault_ack_pressed;
 }
 
 bool swr_trip(unsigned int forward_raw,
@@ -412,6 +407,9 @@ unsigned int temperature_c(unsigned int raw) {
     unsigned char index;
 
     raw >>= 2;
+    if (raw > 250) {
+        return 150;
+    }
     if (raw >= table[0]) {
         return 0;
     }
@@ -649,7 +647,7 @@ int main(void) {
     TRISAbits.TRISA3 = 1;
     TRISAbits.TRISA5 = 1;
     TRISCbits.TRISC0 = 1;
-    TRISCbits.TRISC1 = 1;
+    TRISCbits.TRISC1 = 0;
     TRISCbits.TRISC2 = 1;
     TRISCbits.TRISC3 = 1;
     TRISCbits.TRISC4 = 1;
@@ -668,6 +666,7 @@ int main(void) {
     set_fan_output(false);
     set_warning_output(false);
     set_trip_output(false);
+    OUTPUT_COMP_RESET = 1;
 
     adc_init();
     load_settings();
@@ -708,7 +707,6 @@ int main(void) {
             handle_ptt_transition(INPUT_PTT == 0);
         }
 
-        handle_fault_ack();
         poll_menu_inputs();
 
         if (g_menu_page == MENU_PAGE_STATUS || g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {

@@ -19,8 +19,10 @@
 
 // Control inputs
 #define INPUT_PTT PORTCbits.RC0
-#define INPUT_FAULT_ACK PORTCbits.RC1
 #define INPUT_MENU_NEXT PORTCbits.RC2
+
+// Comparator latch reset output.
+#define OUTPUT_COMP_RESET PORTCbits.RC1
 
 // Dedicated ADC inputs; no external analog multiplexer is required.
 #define ADC_SWR1_FWD_CHANNEL 0

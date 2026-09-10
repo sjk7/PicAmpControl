@@ -18,6 +18,7 @@ The project is in a working design-and-firmware skeleton stage:
 
 - Architecture overview: [docs/project-architecture.md](docs/project-architecture.md)
 - Hardware pin map: [docs/hardware/PIC16F723A_pin_map.md](docs/hardware/PIC16F723A_pin_map.md)
+- Bench validation procedure: [docs/hardware/bench-validation.md](docs/hardware/bench-validation.md)
 - Firmware entry point: [firmware/src/main.c](firmware/src/main.c)
 - Pin definitions: [firmware/include/pin_map.h](firmware/include/pin_map.h)
 - LCD and software-I2C driver: [firmware/src/lcd_i2c.c](firmware/src/lcd_i2c.c)
@@ -52,17 +53,21 @@ flowchart LR
         POST_FWD["ADC_SWR2_FWD"]
         POST_REF["ADC_SWR2_REF"]
         TEMP["ADC_TEMP"]
+      OVERDRIVE["ADC_OVERDRIVE"]
+      DRAIN_ADC["ADC_DRAIN_PEAK"]
     end
 
     subgraph ComparatorBoard["Comparator / protection board"]
         OVR["Overdrive comparator"]
         DRAIN["Drain peak comparator"]
         OC["Overcurrent comparator"]
+      COMP_RESET["Comparator latch reset"]
     end
 
     subgraph MCU["PIC16F723A controller"]
         PTT["INPUT_PTT\nTransmit request"]
-        ACK["INPUT_FAULT_ACK\nFault clear"]
+        RESET["OUTPUT_COMP_RESET\nComparator reset"]
+        HARD["INPUT_HARD_FAULT\nCombined hardware fault"]
         STATE["State machine"]
         SWR1["SWR pair 1\nsoftware trip logic"]
         SWR2["SWR pair 2\nsoftware trip logic"]
@@ -86,15 +91,19 @@ flowchart LR
     POST_FWD --> STATE
     POST_REF --> STATE
     TEMP --> STATE
+    OVERDRIVE --> STATE
+    DRAIN_ADC --> STATE
 
     STATE --> SWR1
     STATE --> SWR2
-    OVR -->|fault| STATE
-    DRAIN -->|fault| STATE
-    OC -->|fault| STATE
+    OVR -->|fault| HARD
+    DRAIN -->|fault| HARD
+    OC -->|fault| HARD
+    HARD --> STATE
 
     PTT --> STATE
-    ACK --> STATE
+    STATE --> RESET
+    RESET --> COMP_RESET
     STATE --> TX
     STATE --> TXVCC
     STATE --> TXBIAS
@@ -112,7 +121,7 @@ This is the current approved signal map for the protection controller. The 1602 
 | PIC pin | Port | Project name | Direction | Function |
 |---|---|---|---|---|
 | 11 | RC0 | INPUT_PTT | Input | Transmit request / key-down input |
-| 12 | RC1 | INPUT_FAULT_ACK | Input | Fault clear / reset trigger |
+| 12 | RC1 | OUTPUT_COMP_RESET | Output | Active-low 10 ms comparator-latch reset pulse on PTT entry |
 | 13 | RC2 | INPUT_MENU_NEXT | Input | Config-menu page select switch |
 | 14 | RC3 | OUTPUT_LCD_I2C_SCL | Output | LCD backpack clock line |
 | 15 | RC4 | OUTPUT_LCD_I2C_SDA | Output | LCD backpack data line |
@@ -144,7 +153,7 @@ This is the current approved signal map for the protection controller. The 1602 
 - Protection faults: software-driven SWR, overdrive, drain-voltage, and temperature thresholds, backed by a combined hardware comparator fault for overdrive, drain peak, and overcurrent
 - SWR measurement pairs: two ADC pairs are required, one before and one after the low-pass filter bank, each with forward and reflected inputs
 - ADC wiring: RA0-RA3, RA5, RB2, and RB3 directly sample the two SWR pairs, temperature, overdrive, and drain voltage; no external analog multiplexer is fitted
-- Operator controls: INPUT_PTT and INPUT_FAULT_ACK
+- Operator control: INPUT_PTT
 - Configuration controls: INPUT_MENU_NEXT, INPUT_MENU_INCREASE, and INPUT_MENU_DECREASE; each switch is active-low and is available only while not transmitting
 - Sequencing outputs: OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS
 - Status outputs: OUTPUT_WARNING_STATUS and OUTPUT_TRIP_STATUS
@@ -226,7 +235,7 @@ The firmware should implement these states:
 
 - STARTUP_INHIBIT
   - active immediately after power-up
-  - holds the comparator reset and TX outputs inactive for the startup interval
+  - holds TX outputs inactive for the startup interval
   - prevents false enable during the first power-on period
 
 - WAIT_FOR_TX
@@ -236,7 +245,7 @@ The firmware should implement these states:
 
 - TX_RESET
   - triggered when INPUT_PTT changes from high to low
-  - a short active-low reset pulse is applied to the comparator latch/reset network
+  - a 10 ms active-low OUTPUT_COMP_RESET pulse is applied to the comparator latch/reset network
   - this is the same hardware action used for startup inhibit, just triggered on TX entry
 
 - TX_SEQUENCE_1
@@ -307,7 +316,7 @@ The firmware should implement these states:
 For a valid transmit request, the controller should complete the sequence in this order:
 
 1. INPUT_PTT goes low
-2. apply the short comparator reset pulse
+2. apply the 10 ms comparator reset pulse
 3. wait for the comparator reset settle time
 4. check all comparator inputs and thermal limits
 5. if safe, assert OUTPUT_TX
@@ -328,7 +337,7 @@ A fresh transmit cycle is allowed only when:
 - temperature has not reached the trip or lockout threshold
 - the output sequence is complete and the RF path is safe
 
-When PTT returns high, the controller disables the TX sequence and returns to receive/idle operation. This is the reset point for the next cycle.
+When PTT returns high, the controller disables the TX sequence and returns to receive/idle operation. The next falling PTT edge produces the comparator reset pulse for the following TX cycle.
 
 See [firmware/src/main.c](firmware/src/main.c) for the protection and sequencer logic, and [firmware/src/lcd_i2c.c](firmware/src/lcd_i2c.c) for the LCD transport.
 
@@ -350,11 +359,11 @@ The following items remain to be finalized before the design is considered compl
 1. Bench-verify the TX sequencing order and set the exact delays for OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS.
 2. Confirm the comparator-board reference levels, latch behavior, and combined active-high INPUT_HARD_FAULT polarity for overdrive, drain peak, and overcurrent.
 3. Measure the overcurrent sensor transfer curve and verify the comparator threshold direction.
-4. Bench-calibrate the selected 10 kOhm NTC, B-value profile, and 10 kOhm divider against the displayed 10 C lookup points.
-5. Select and validate the fan-drive scheme, including its temperature schedule and the actual PWM/analogue interface.
+4. Bench-calibrate the selected 10 kOhm NTC, B-value profile, and 10 kOhm divider against the displayed 10 C lookup points, including the open-sensor high-temperature fallback.
+5. Build and validate the selected 12 V low-side logic-level MOSFET fan drive, its PWM-capable output routing, and its temperature schedule.
 6. Calibrate the two SWR bridges, 10 W input detector, and 300 V drain divider against traceable measurements at the regulated 5.0 V rail, including the RMS/PEP display and PEP-bar response.
 7. Verify that every conditioned ADC input stays between VSS and VDD, including fault/transient tests with the specified external clamps and series resistance.
-8. Validate the shared software-I2C LCD/AT24C256 interface, menu switches, fault acknowledge behaviour, settings restore, and interrupted-power recovery on the final PCB.
+8. Validate the shared software-I2C LCD/AT24C256 interface, menu switches, 10 ms PTT-triggered comparator reset pulse, settings restore, and interrupted-power recovery on the final PCB.
 9. Configure the required self-hosted runner variables, run the GitHub Actions build workflow, and confirm the uploaded firmware artifact before using the manual release workflow.
 10. Review the final PCB against the pin map and update the design documentation for any wiring changes before fabrication.
 
