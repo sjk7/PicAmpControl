@@ -7,7 +7,7 @@
 This repository is the active PIC16F723A linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
 
 ## Firmware
-- Direct ADC inputs monitor two forward/reflected SWR pairs, temperature, input power, and drain voltage.
+- Direct ADC inputs monitor two forward/reflected SWR pairs, temperature, WCS1700 current, input power, and drain voltage.
 - SWR trips, power scales, drain/input thresholds, 10 kOhm NTC B-value profile, sequencer timing, and output polarities are user-configurable from the 1602 LCD menu.
 - Hardware comparators combine at INPUT_HARD_FAULT for independent overdrive, drain-peak, and overcurrent protection.
 - The sequencer runs TX, TX_VCC, and TX_BIAS with two configurable inter-stage delays, defaulting to 20 ms.

@@ -30,7 +30,7 @@ This is the current approved signal map for the protection controller. The 1602 
 | 9,10 | OSC1, OSC2 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
 | 19 | RB0 | INPUT_MENU_ADJUST | Input | Menu adjust: short press increase, hold decrease |
-| 20 | RB1 | INPUT_SPARE_1 | Input | Freed spare input |
+| 20 | RB1 | ADC_CURRENT | Input | WCS1700 current ADC, provisional 70 A full scale |
 | 21 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC |
 | 22 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC |
 | 23 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
@@ -52,6 +52,7 @@ This is the current approved signal map for the protection controller. The 1602 
 - temperature sense: RA5 / AN4, 10 kOhm NTC divider output; selectable B3435/B3950/B4250 profile, default B3950. The firmware uses 10 C lookup points from 0 C to 150 C.
 - overdrive sense: RB2 / AN7, conditioned peak-envelope detector input scaled so the regulated nominal 5.0 V ADC full scale represents 10.0 W into 50 ohms
 - drain-peak sense: RB3 / AN8, conditioned divider scaled so the regulated nominal 5.0 V ADC full scale represents 300 V drain voltage
+- current sense: RB1 / AN6, conditioned WCS1700 output with provisional 70 A full scale and configurable 40 A default trip
 - each sensor is wired directly to its own ADC pin; no external analog multiplexer is used
 
 ### LCD interface
