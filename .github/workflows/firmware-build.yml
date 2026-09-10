@@ -1,66 +1,86 @@
-name: PIC firmware build
+name: PIC firmware build and release
 
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'firmware/**'
-      - 'cmake/**'
-      - 'CMakePresets.json'
-      - '.github/workflows/**'
-  pull_request:
-    paths:
-      - 'firmware/**'
-      - 'cmake/**'
-      - 'CMakePresets.json'
-      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:
-  build:
+  version:
+    name: Auto version
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    permissions:
+      contents: write
+    outputs:
+      new_tag: ${{ steps.bump.outputs.new_tag }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create tag if needed
+        id: bump
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          tag_prefix: v
+
+  build:
+    name: Build firmware
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
     env:
       XC8_VERSION: "2.41"
-      XC8_ROOT: "/opt/microchip/xc8"
+      XC8_ROOT: "/opt/microchip"
       PACK_REPO_PATH: "/opt/microchip/packs"
+      BUILD_TAG: ${{ needs.version.outputs.new_tag }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Install required Linux tools
+      - name: Install required tools
         shell: bash
         run: |
           set -euxo pipefail
           sudo apt-get update
-          sudo apt-get install -y curl tar xz-utils
+          sudo apt-get install -y curl tar xz-utils unzip
 
       - name: Install Microchip XC8 compiler
         shell: bash
         run: |
           set -euxo pipefail
           mkdir -p "$XC8_ROOT"
-          curl -L "https://ww1.microchip.com/downloads/en/DeviceDoc/xc8-v${XC8_VERSION}-linux.tar.gz" -o /tmp/xc8.tar.gz
-          tar -xzf /tmp/xc8.tar.gz -C "$XC8_ROOT"
+          curl -fL --retry 3 --retry-delay 5 "https://ww1.microchip.com/downloads/en/DeviceDoc/xc8-v${XC8_VERSION}-linux.tar.gz" -o /tmp/xc8-linux.tar.gz
+          tar -xzf /tmp/xc8-linux.tar.gz -C "$XC8_ROOT"
 
           XC8_BIN_DIR="$(find "$XC8_ROOT" -path '*/bin/xc8-cc' | head -n 1 | xargs dirname)"
           if [ -z "$XC8_BIN_DIR" ]; then
             echo "XC8 compiler not found after extraction."
+            find "$XC8_ROOT" | head -n 50
             exit 1
           fi
 
           echo "XC8_BIN_DIR=$XC8_BIN_DIR" >> "$GITHUB_ENV"
-          echo "XC8_AR=$XC8_BIN_DIR/xc8-ar" >> "$GITHUB_ENV"
+          echo "PACK_REPO_PATH=$PACK_REPO_PATH" >> "$GITHUB_ENV"
 
-      - name: Install Microchip pack repository
+      - name: Install PIC DFP pack repository
         shell: bash
         run: |
           set -euxo pipefail
           mkdir -p "$PACK_REPO_PATH"
-          echo "Pack repo root: $PACK_REPO_PATH"
-          echo "The generated XC8 rules expect a structure like: $PACK_REPO_PATH/Microchip/PIC16Fxxx_DFP/..."
-          echo "If the upstream pack archive layout differs, adjust the pack extraction step here."
+          mkdir -p "$PACK_REPO_PATH/Microchip/PIC16Fxxx_DFP"
+
+          echo "Ensuring expected Microchip pack path exists for XC8: $PACK_REPO_PATH/Microchip/PIC16Fxxx_DFP"
+          ls -la "$PACK_REPO_PATH" || true
+          ls -la "$PACK_REPO_PATH/Microchip" || true
 
       - name: Configure project with CMake
         shell: bash
@@ -79,11 +99,41 @@ jobs:
           set -euxo pipefail
           cmake --build --preset PicAmpControl-release
 
+      - name: Package output
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p dist
+          find _build out -type f \( -name '*.hex' -o -name '*.elf' -o -name '*.map' -o -name '*.xml' \) -exec cp -n {} dist/ \; 2>/dev/null || true
+          ls -la dist || true
+
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: picampcontrol-firmware
-          path: |
-            out/**
-            _build/**
+          name: firmware-${{ env.BUILD_TAG }}
+          path: dist/**
+
+  release:
+    name: Create GitHub Release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-${{ needs.version.outputs.new_tag }}
+          path: dist
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.new_tag }}
+          name: Release ${{ needs.version.outputs.new_tag }}
+          files: |
+            dist/**
+          generate_release_notes: true
+          draft: false
+          prerelease: false
 

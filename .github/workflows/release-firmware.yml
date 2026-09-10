@@ -13,11 +13,14 @@ jobs:
       contents: write
 
     steps:
-      - name: Download firmware artifacts
-        uses: actions/download-artifact@v4
+      - name: Download firmware artifacts from the latest build
+        uses: dawidd6/action-download-artifact@v3
         with:
-          name: picampcontrol-firmware
+          workflow: firmware-build.yml
+          workflow_conclusion: success
           path: dist
+          name: firmware-*
+          if_no_artifact_found: warn
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
