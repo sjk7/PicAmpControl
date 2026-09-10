@@ -62,25 +62,24 @@ flowchart LR
         LCD["1602 LCD\nI2C backpack"]
     end
 
-    SWR1 -->|fault| MCU
-    SWR2 -->|fault| MCU
-    OVR -->|fault| MCU
-    DRAIN -->|fault| MCU
-    OC -->|fault| MCU
+    SWR1 -->|fault| PTT
+    SWR2 -->|fault| PTT
+    OVR -->|fault| PTT
+    DRAIN -->|fault| PTT
+    OC -->|fault| PTT
 
-    PTT --> MCU
-    ACK --> MCU
-    FWD --> MCU
-    REF --> MCU
-    TEMP --> MCU
+    PTT --> ACK
+    PTT --> FWD
+    PTT --> REF
+    PTT --> TEMP
 
-    MCU -->|I2C| LCD
-    MCU -->|PWM| FAN
-    MCU --> WARN
-    MCU --> TRIP
-    MCU --> TX
-    TX --> TXVCC
-    TXVCC --> TXBIAS
+    TX --> TXVCC --> TXBIAS
+    TXVCC --> FAN
+    TXVCC --> WARN
+    TXVCC --> TRIP
+    TXVCC --> LCD
+    TX -->|I2C| LCD
+    TX -->|PWM| FAN
 ```
 
 ## Approved hardware pin map
