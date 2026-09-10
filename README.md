@@ -159,7 +159,7 @@ Each SWR channel is measured independently at its own RF point.
 - Compute the SWR for that local pair.
 - Compare the result against the configured threshold.
 - If the SWR exceeds the threshold, trip that channel.
-- The default threshold is 2:1 unless a different limit is configured.
+- The pre-filter default trip is 3:1 and the post-filter default trip is 2:1; either is configurable in the menu.
 
 This applies to both SWR measurement points:
 
@@ -174,8 +174,8 @@ The 1602 display config menu is operated by three active-low, normally-open swit
 
 The menu makes these firmware trip thresholds available to the operator:
 
-- SWR1 trip ratio, from 1.1:1 to 5.0:1 in 0.1:1 steps
-- SWR2 trip ratio, from 1.1:1 to 5.0:1 in 0.1:1 steps
+- pre-filter SWR trip ratio, from 1.1:1 to 5.0:1 in 0.1:1 steps; default 3:1
+- post-filter SWR trip ratio, from 1.1:1 to 5.0:1 in 0.1:1 steps; default 2:1
 - SWR1 forward full-scale power, from 500 W to 2500 W in 100 W steps; default 1500 W and also used for SWR1 reflected-power conversion
 - SWR2 forward full-scale power, from 500 W to 2500 W in 100 W steps; default 1500 W and also used for SWR2 reflected-power conversion
 - temperature warning raw ADC value
@@ -330,18 +330,16 @@ The local project build has been validated with the CMake/XC8 flow. The project 
 
 The following items remain to be finalized before the design is considered complete:
 
-1. Confirm the final meaning of INPUT_PTT and ensure the hardware uses a single transmit-request signal, with no duplicate key-down alias.
-2. Finalize the FAULT_ACK behavior: trigger a short pulse on PTT entry or key-edge, and verify the pulse width is long enough to clear stale faults without causing false re-arm.
-3. Confirm the TX sequencing order and timings: OUTPUT_TX first, then OUTPUT_TX_VCC, then OUTPUT_TX_BIAS. Add the exact delay values for each step.
-4. Finalize the comparator board input assignments and threshold values for SWR, overdrive, overcurrent, and drain peak protection.
-5. Confirm the exact overcurrent sensor transfer curve and comparator polarity; verify whether the comparator expects a rising or falling threshold crossing.
-6. Define the warning and trip temperature thresholds and the corresponding fan-speed schedule.
-7. Finalize the fan-drive scheme and whether it is analog, PWM, or stepped control.
-8. Review all output pins and software assumptions against the final PCB layout before fabrication.
-9. Validate the LCD backpack and I2C bus behavior with the final hardware map.
-10. Add missing calibration constants and hardware-specific defaults after bench testing.
-11. Confirm the GitHub Actions runner environment is valid for the appropriate XC8 toolchain and the release workflow attaches the correct build artifacts.
-12. Update the hardware pin map and firmware macro names if any final PCB wiring changes are made.
+1. Bench-verify the TX sequencing order and set the exact delays for OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS.
+2. Confirm the comparator-board reference levels, latch behavior, and combined active-high INPUT_HARD_FAULT polarity for overdrive, drain peak, and overcurrent.
+3. Measure the overcurrent sensor transfer curve and verify the comparator threshold direction.
+4. Select the temperature sensor, define its ADC transfer curve, and replace the provisional raw warning/trip settings with values in degrees C.
+5. Select and validate the fan-drive scheme, including its temperature schedule and the actual PWM/analogue interface.
+6. Calibrate the two SWR bridges, 10 W input detector, and 300 V drain divider against traceable measurements at the regulated 5.0 V rail.
+7. Verify that every conditioned ADC input stays between VSS and VDD, including fault/transient tests with the specified external clamps and series resistance.
+8. Validate the software-I2C LCD interface, menu switches, and fault acknowledge behaviour on the final PCB.
+9. Run the GitHub Actions build/release workflows with the intended XC8 toolchain and confirm the published artifacts.
+10. Review the final PCB against the pin map and update the design documentation for any wiring changes before fabrication.
 
 ## Reference / prototype note
 

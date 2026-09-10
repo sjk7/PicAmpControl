@@ -56,7 +56,7 @@ static volatile bool g_startup_inhibit = true;
 static volatile menu_page_t g_menu_page = MENU_PAGE_STATUS;
 static volatile bool g_menu_changed = true;
 static protection_thresholds_t g_thresholds = {
-    20, 20,
+    30, 20,
     1500, 1500,
     300, 350,
     90, 100,
@@ -312,6 +312,18 @@ void handle_ptt_transition(bool ptt_asserted) {
         g_ptt_active = false;
         g_state = STATE_STANDBY;
     }
+}
+
+void handle_fault_ack(void) {
+    static bool fault_ack_was_pressed = false;
+    bool fault_ack_pressed = (INPUT_FAULT_ACK == 0);
+
+    if (fault_ack_pressed && !fault_ack_was_pressed && !g_ptt_active && INPUT_HARD_FAULT == 0) {
+        clear_fault_latches();
+        g_state = STATE_STANDBY;
+    }
+
+    fault_ack_was_pressed = fault_ack_pressed;
 }
 
 bool swr_trip(unsigned int forward_raw,
@@ -576,6 +588,7 @@ int main(void) {
             handle_ptt_transition(false);
         }
 
+        handle_fault_ack();
         poll_menu_inputs();
 
         if (g_menu_changed) {
