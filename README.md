@@ -176,6 +176,8 @@ The 1602 display config menu is operated by three active-low, normally-open swit
 
 The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adjustable from 0 to 1000 ms in 5 ms steps, each defaulting to 20 ms. The active electrical level for OUTPUT_TX, OUTPUT_TX_VCC, OUTPUT_TX_BIAS, OUTPUT_FAN_PWM, OUTPUT_WARNING_STATUS, and OUTPUT_TRIP_STATUS is selectable as LOW or HIGH, with LOW as the default. LCD I2C polarity is not configurable because its open-drain signalling is defined by the I2C bus.
 
+The status screen displays post-filter forward power. The primary readout can be selected as RMS or PEP, and the second row always shows the forward PEP with an eight-segment bar referenced to the configured post-filter maximum power. PEP is held and decays by one watt at a configurable 50-2000 ms interval; the default is 500 ms.
+
 The menu makes these firmware trip thresholds available to the operator:
 
 - pre-filter SWR trip ratio, from 1.1:1 to 5.0:1 in 0.1:1 steps; default 3:1
@@ -339,7 +341,7 @@ The following items remain to be finalized before the design is considered compl
 3. Measure the overcurrent sensor transfer curve and verify the comparator threshold direction.
 4. Select the temperature sensor, define its ADC transfer curve, and replace the provisional raw warning/trip settings with values in degrees C.
 5. Select and validate the fan-drive scheme, including its temperature schedule and the actual PWM/analogue interface.
-6. Calibrate the two SWR bridges, 10 W input detector, and 300 V drain divider against traceable measurements at the regulated 5.0 V rail.
+6. Calibrate the two SWR bridges, 10 W input detector, and 300 V drain divider against traceable measurements at the regulated 5.0 V rail, including the RMS/PEP display and PEP-bar response.
 7. Verify that every conditioned ADC input stays between VSS and VDD, including fault/transient tests with the specified external clamps and series resistance.
 8. Validate the software-I2C LCD interface, menu switches, and fault acknowledge behaviour on the final PCB.
 9. Run the GitHub Actions build/release workflows with the intended XC8 toolchain and confirm the published artifacts.

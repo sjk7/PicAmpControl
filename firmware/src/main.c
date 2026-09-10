@@ -42,6 +42,8 @@ typedef enum {
     MENU_PAGE_FAN_ACTIVE_HIGH,
     MENU_PAGE_WARNING_ACTIVE_HIGH,
     MENU_PAGE_TRIP_ACTIVE_HIGH,
+    MENU_PAGE_POWER_DISPLAY_MODE,
+    MENU_PAGE_PEP_DECAY_MS,
     MENU_PAGE_COUNT
 } menu_page_t;
 
@@ -64,6 +66,8 @@ typedef struct {
     bool fan_active_high;
     bool warning_active_high;
     bool trip_active_high;
+    bool power_display_pep;
+    unsigned int pep_decay_ms;
 } protection_thresholds_t;
 
 static volatile system_state_t g_state = STATE_STANDBY;
@@ -74,6 +78,10 @@ static volatile menu_page_t g_menu_page = MENU_PAGE_STATUS;
 static volatile bool g_menu_changed = true;
 static unsigned int g_sequence_elapsed_ms = 0;
 static unsigned char g_sequence_stage = 0;
+static unsigned int g_post_fwd_rms_w = 0;
+static unsigned int g_post_fwd_pep_w = 0;
+static unsigned int g_pep_decay_elapsed_ms = 0;
+static unsigned char g_status_refresh_ticks = 0;
 static protection_thresholds_t g_thresholds = {
     30, 20,
     1500, 1500,
@@ -81,7 +89,8 @@ static protection_thresholds_t g_thresholds = {
     90, 100,
     140, 150,
     20, 20,
-    false, false, false, false, false, false
+    false, false, false, false, false, false,
+    true, 500
 };
 
 bool output_level(bool active, bool active_high) {
@@ -189,6 +198,14 @@ void show_menu_page(void) {
             label = "TRIP ACTIVE";
             value = g_thresholds.trip_active_high;
             break;
+        case MENU_PAGE_POWER_DISPLAY_MODE:
+            label = "POWER DISPLAY";
+            value = g_thresholds.power_display_pep;
+            break;
+        case MENU_PAGE_PEP_DECAY_MS:
+            label = "PEP DECAY";
+            value = g_thresholds.pep_decay_ms;
+            break;
         default:
             break;
     }
@@ -199,7 +216,24 @@ void show_menu_page(void) {
     lcd_write_text(label);
     lcd_set_cursor(1, 0);
     if (g_menu_page == MENU_PAGE_STATUS) {
-        lcd_write_text(g_ptt_active ? "TRANSMIT" : "RECEIVE");
+        unsigned char bar_segment;
+        unsigned char bar_segments = (unsigned char)(((unsigned long)g_post_fwd_pep_w * 8UL) / g_thresholds.swr2_fwd_full_scale_w);
+
+        if (bar_segments > 8) {
+            bar_segments = 8;
+        }
+        lcd_write_text(g_thresholds.power_display_pep ? "PEP " : "RMS ");
+        lcd_write_unsigned(g_thresholds.power_display_pep ? g_post_fwd_pep_w : g_post_fwd_rms_w);
+        lcd_write_byte('W', true);
+        lcd_set_cursor(1, 0);
+        lcd_write_text("P");
+        lcd_write_unsigned(g_post_fwd_pep_w);
+        lcd_write_byte('W', true);
+        lcd_write_byte('[', true);
+        for (bar_segment = 0; bar_segment < 8; bar_segment++) {
+            lcd_write_byte(bar_segment < bar_segments ? 0xFF : '-', true);
+        }
+        lcd_write_byte(']', true);
     } else if (g_menu_page == MENU_PAGE_SWR1_TRIP || g_menu_page == MENU_PAGE_SWR2_TRIP) {
         lcd_write_unsigned((unsigned int)(value / 10));
         lcd_write_byte('.', true);
@@ -220,6 +254,11 @@ void show_menu_page(void) {
     } else if (g_menu_page == MENU_PAGE_TX_VCC_DELAY || g_menu_page == MENU_PAGE_TX_BIAS_DELAY) {
         lcd_write_unsigned(value);
         lcd_write_text("ms");
+    } else if (g_menu_page == MENU_PAGE_PEP_DECAY_MS) {
+        lcd_write_unsigned(value);
+        lcd_write_text("ms");
+    } else if (g_menu_page == MENU_PAGE_POWER_DISPLAY_MODE) {
+        lcd_write_text(value != 0 ? "PEP" : "RMS");
     } else if (g_menu_page >= MENU_PAGE_TX_ACTIVE_HIGH) {
         lcd_write_text(value != 0 ? "HIGH" : "LOW");
     } else {
@@ -381,6 +420,12 @@ void adjust_selected_threshold(bool increase) {
         case MENU_PAGE_TRIP_ACTIVE_HIGH:
             selected_polarity = &g_thresholds.trip_active_high;
             break;
+        case MENU_PAGE_POWER_DISPLAY_MODE:
+            selected_polarity = &g_thresholds.power_display_pep;
+            break;
+        case MENU_PAGE_PEP_DECAY_MS:
+            selected_threshold = &g_thresholds.pep_decay_ms;
+            break;
         default:
             break;
     }
@@ -418,7 +463,13 @@ void adjust_selected_threshold(bool increase) {
         return;
     }
 
-    if (g_menu_page == MENU_PAGE_TX_VCC_DELAY || g_menu_page == MENU_PAGE_TX_BIAS_DELAY) {
+    if (g_menu_page == MENU_PAGE_PEP_DECAY_MS) {
+        if (increase && *selected_threshold < 2000) {
+            *selected_threshold += 50;
+        } else if (!increase && *selected_threshold > 50) {
+            *selected_threshold -= 50;
+        }
+    } else if (g_menu_page == MENU_PAGE_TX_VCC_DELAY || g_menu_page == MENU_PAGE_TX_BIAS_DELAY) {
         if (increase && *selected_threshold < 1000) {
             *selected_threshold += 5;
         } else if (!increase && *selected_threshold >= 5) {
@@ -441,6 +492,22 @@ void adjust_selected_threshold(bool increase) {
         *selected_threshold += 10;
     } else if (!increase && *selected_threshold > 10) {
         *selected_threshold -= 10;
+    }
+}
+
+void update_post_filter_power(unsigned int raw) {
+    unsigned int power_w = (unsigned int)(((unsigned long)raw * g_thresholds.swr2_fwd_full_scale_w) / 1023UL);
+
+    g_post_fwd_rms_w = (unsigned int)(((unsigned long)g_post_fwd_rms_w * 7UL + power_w) / 8UL);
+    if (power_w >= g_post_fwd_pep_w) {
+        g_post_fwd_pep_w = power_w;
+        g_pep_decay_elapsed_ms = 0;
+    } else {
+        g_pep_decay_elapsed_ms += 5;
+        if (g_pep_decay_elapsed_ms >= g_thresholds.pep_decay_ms && g_post_fwd_pep_w > 0) {
+            g_post_fwd_pep_w--;
+            g_pep_decay_elapsed_ms = 0;
+        }
     }
 }
 
@@ -598,6 +665,7 @@ int main(void) {
         drain_raw = adc_read(ADC_DRAIN_PEAK_CHANNEL);
         overdrive_power = overdrive_power_mw(overdrive_raw);
         drain_voltage_v = drain_voltage(drain_raw);
+        update_post_filter_power(swr2_fwd_raw);
 
         bool swr1_fault = swr_trip(swr1_fwd_raw, swr1_ref_raw,
                        g_thresholds.swr1_fwd_full_scale_w,
@@ -619,7 +687,14 @@ int main(void) {
         handle_fault_ack();
         poll_menu_inputs();
 
-        if (g_menu_changed) {
+        if (g_menu_page == MENU_PAGE_STATUS) {
+            g_status_refresh_ticks++;
+            if (g_status_refresh_ticks >= 20 || g_menu_changed) {
+                show_menu_page();
+                g_status_refresh_ticks = 0;
+                g_menu_changed = false;
+            }
+        } else if (g_menu_changed) {
             show_menu_page();
             g_menu_changed = false;
         }
