@@ -176,7 +176,7 @@ The 1602 display config menu is operated by three active-low, normally-open swit
 
 The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adjustable from 0 to 1000 ms in 5 ms steps, each defaulting to 20 ms. The active electrical level for OUTPUT_TX, OUTPUT_TX_VCC, OUTPUT_TX_BIAS, OUTPUT_FAN_PWM, OUTPUT_WARNING_STATUS, and OUTPUT_TRIP_STATUS is selectable as LOW or HIGH, with LOW as the default. LCD I2C polarity is not configurable because its open-drain signalling is defined by the I2C bus.
 
-The status screen displays post-filter forward power. The primary readout can be selected as RMS or PEP, and the second row always shows the forward PEP with an eight-segment bar referenced to the configured post-filter maximum power. PEP is held and decays by one watt at a configurable 50-2000 ms interval; the default is 500 ms.
+The default status screen displays post-filter forward power. Its primary readout can be selected as RMS or PEP, and the second row is a full-width bracketed PEP bar referenced to the configured post-filter maximum power. A second status page shows `PEP [----------]` with the temperature in degrees C on the next row. PEP is held and decays by one watt at a configurable 50-2000 ms interval; the default is 500 ms.
 
 The menu makes these firmware trip thresholds available to the operator:
 
@@ -184,8 +184,9 @@ The menu makes these firmware trip thresholds available to the operator:
 - post-filter SWR trip ratio, from 1.1:1 to 5.0:1 in 0.1:1 steps; default 2:1
 - SWR1 forward full-scale power, from 500 W to 2500 W in 100 W steps; default 1500 W and also used for SWR1 reflected-power conversion
 - SWR2 forward full-scale power, from 500 W to 2500 W in 100 W steps; default 1500 W and also used for SWR2 reflected-power conversion
-- temperature warning raw ADC value
-- temperature trip raw ADC value
+- temperature full-scale calibration, from 0 C to 200 C; default 150 C at ADC full scale
+- temperature warning, from 0 C to 200 C; default 70 C
+- temperature trip, from 0 C to 200 C; default 100 C
 - input-power warning, from 0.0 W to 10.0 W in 0.1 W steps
 - input-power trip, from 0.0 W to 10.0 W in 0.1 W steps; default 10.0 W
 - drain-voltage warning, from 0 V to 300 V in 1 V steps
@@ -194,6 +195,8 @@ The menu makes these firmware trip thresholds available to the operator:
 Each SWR ratio setting directly controls its local software trip: the controller calculates the mismatch from that sensor's forward/reflected pair and trips when it reaches the displayed setting. There are no dedicated SWR comparator inputs in this design.
 
 The ADC reference is the regulated nominal 5.0 V VDD rail, so every analogue input is scaled from 0 to VDD, not to an independently guaranteed 5 V reference. With VDD regulated at 5.0 V, drain voltage uses a linear scale: ADC 0-1023 represents 0-300 V. Input power is calculated as peak-envelope power into 50 ohms, with ADC 0-1023 representing 0-10.0 W. This requires the input detector/divider to present 5 V at 31.62 V peak, a scale factor of approximately 6.325:1. Each SWR bridge detector also uses a 0-5 V range. Its bridge-specific 500-2500 W forward full-scale setting is shared by the associated reflected detector, so both readings use the same power range before SWR is calculated. All analogue paths require series resistance and clamps so the PIC pin remains between VSS and VDD under normal operation. The external overdrive, drain-peak, and overcurrent comparators remain independently calibrated hard protection and combine into INPUT_HARD_FAULT. The current PIC16F723A configuration has no EEPROM, so firmware menu settings return to their safe defaults after a power cycle.
+
+Temperature is calculated from a linear input scale: $T=T_{FS}r/1023$, where $T_{FS}$ is the menu-configured temperature at ADC full scale and $r$ is the ADC result. The default $T_{FS}$ is 150 C. This must be calibrated to the chosen temperature sensor before the warning and trip defaults are relied upon.
 
 ## Naming convention used in code
 
@@ -339,7 +342,7 @@ The following items remain to be finalized before the design is considered compl
 1. Bench-verify the TX sequencing order and set the exact delays for OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS.
 2. Confirm the comparator-board reference levels, latch behavior, and combined active-high INPUT_HARD_FAULT polarity for overdrive, drain peak, and overcurrent.
 3. Measure the overcurrent sensor transfer curve and verify the comparator threshold direction.
-4. Select the temperature sensor, define its ADC transfer curve, and replace the provisional raw warning/trip settings with values in degrees C.
+4. Select the temperature sensor and bench-calibrate the configurable linear ADC-to-degrees-C transfer scale.
 5. Select and validate the fan-drive scheme, including its temperature schedule and the actual PWM/analogue interface.
 6. Calibrate the two SWR bridges, 10 W input detector, and 300 V drain divider against traceable measurements at the regulated 5.0 V rail, including the RMS/PEP display and PEP-bar response.
 7. Verify that every conditioned ADC input stays between VSS and VDD, including fault/transient tests with the specified external clamps and series resistance.

@@ -24,10 +24,12 @@ typedef enum {
 
 typedef enum {
     MENU_PAGE_STATUS = 0,
+    MENU_PAGE_POWER_TEMPERATURE,
     MENU_PAGE_SWR1_TRIP,
     MENU_PAGE_SWR2_TRIP,
     MENU_PAGE_SWR1_FWD_FULL_SCALE,
     MENU_PAGE_SWR2_FWD_FULL_SCALE,
+    MENU_PAGE_TEMP_FULL_SCALE,
     MENU_PAGE_TEMP_WARNING,
     MENU_PAGE_TEMP_TRIP,
     MENU_PAGE_OVERDRIVE_WARNING,
@@ -52,8 +54,9 @@ typedef struct {
     unsigned char swr2_trip_tenths;
     unsigned int swr1_fwd_full_scale_w;
     unsigned int swr2_fwd_full_scale_w;
-    unsigned int temp_warning_raw;
-    unsigned int temp_trip_raw;
+    unsigned int temp_full_scale_c;
+    unsigned int temp_warning_c;
+    unsigned int temp_trip_c;
     unsigned char overdrive_warning_tenths_w;
     unsigned char overdrive_trip_tenths_w;
     unsigned int drain_warning_v;
@@ -82,10 +85,11 @@ static unsigned int g_post_fwd_rms_w = 0;
 static unsigned int g_post_fwd_pep_w = 0;
 static unsigned int g_pep_decay_elapsed_ms = 0;
 static unsigned char g_status_refresh_ticks = 0;
+static unsigned int g_temperature_raw = 0;
 static protection_thresholds_t g_thresholds = {
     30, 20,
     1500, 1500,
-    300, 350,
+    150, 70, 100,
     90, 100,
     140, 150,
     20, 20,
@@ -121,6 +125,42 @@ void set_trip_output(bool active) {
     OUTPUT_TRIP_STATUS = output_level(active, g_thresholds.trip_active_high);
 }
 
+void lcd_write_fixed_unsigned(unsigned int value, unsigned char digits) {
+    unsigned int divisor = 1;
+
+    while (digits > 1) {
+        divisor *= 10;
+        digits--;
+    }
+
+    while (divisor > 0) {
+        lcd_write_byte((unsigned char)('0' + (value / divisor) % 10), true);
+        divisor /= 10;
+    }
+}
+
+void lcd_write_spaces(unsigned char count) {
+    while (count > 0) {
+        lcd_write_byte(' ', true);
+        count--;
+    }
+}
+
+void lcd_write_power_bar(unsigned int power_w, unsigned int full_scale_w, unsigned char width) {
+    unsigned char bar_segment;
+    unsigned char bar_segments = (unsigned char)(((unsigned long)power_w * width) / full_scale_w);
+
+    if (bar_segments > width) {
+        bar_segments = width;
+    }
+
+    lcd_write_byte('[', true);
+    for (bar_segment = 0; bar_segment < width; bar_segment++) {
+        lcd_write_byte(bar_segment < bar_segments ? '-' : ' ', true);
+    }
+    lcd_write_byte(']', true);
+}
+
 void show_menu_page(void) {
     const char *label = "STATUS";
     unsigned int value = 0;
@@ -142,13 +182,17 @@ void show_menu_page(void) {
             label = "S2 FWD MAX";
             value = g_thresholds.swr2_fwd_full_scale_w;
             break;
+        case MENU_PAGE_TEMP_FULL_SCALE:
+            label = "TEMP SCALE";
+            value = g_thresholds.temp_full_scale_c;
+            break;
         case MENU_PAGE_TEMP_WARNING:
             label = "TEMP WARNING";
-            value = g_thresholds.temp_warning_raw;
+            value = g_thresholds.temp_warning_c;
             break;
         case MENU_PAGE_TEMP_TRIP:
             label = "TEMP TRIP";
-            value = g_thresholds.temp_trip_raw;
+            value = g_thresholds.temp_trip_c;
             break;
         case MENU_PAGE_OVERDRIVE_WARNING:
             label = "INPUT WARNING";
@@ -216,24 +260,20 @@ void show_menu_page(void) {
     lcd_write_text(label);
     lcd_set_cursor(1, 0);
     if (g_menu_page == MENU_PAGE_STATUS) {
-        unsigned char bar_segment;
-        unsigned char bar_segments = (unsigned char)(((unsigned long)g_post_fwd_pep_w * 8UL) / g_thresholds.swr2_fwd_full_scale_w);
-
-        if (bar_segments > 8) {
-            bar_segments = 8;
-        }
         lcd_write_text(g_thresholds.power_display_pep ? "PEP " : "RMS ");
-        lcd_write_unsigned(g_thresholds.power_display_pep ? g_post_fwd_pep_w : g_post_fwd_rms_w);
+        lcd_write_fixed_unsigned(g_thresholds.power_display_pep ? g_post_fwd_pep_w : g_post_fwd_rms_w, 4);
         lcd_write_byte('W', true);
+        lcd_write_spaces(7);
         lcd_set_cursor(1, 0);
-        lcd_write_text("P");
-        lcd_write_unsigned(g_post_fwd_pep_w);
-        lcd_write_byte('W', true);
-        lcd_write_byte('[', true);
-        for (bar_segment = 0; bar_segment < 8; bar_segment++) {
-            lcd_write_byte(bar_segment < bar_segments ? 0xFF : '-', true);
-        }
-        lcd_write_byte(']', true);
+        lcd_write_power_bar(g_post_fwd_pep_w, g_thresholds.swr2_fwd_full_scale_w, 14);
+    } else if (g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
+        lcd_write_text("PEP ");
+        lcd_write_power_bar(g_post_fwd_pep_w, g_thresholds.swr2_fwd_full_scale_w, 10);
+        lcd_set_cursor(1, 0);
+        lcd_write_text("TEMP ");
+        lcd_write_fixed_unsigned((unsigned int)(((unsigned long)g_temperature_raw * g_thresholds.temp_full_scale_c) / 1023UL), 3);
+        lcd_write_byte('C', true);
+        lcd_write_spaces(7);
     } else if (g_menu_page == MENU_PAGE_SWR1_TRIP || g_menu_page == MENU_PAGE_SWR2_TRIP) {
         lcd_write_unsigned((unsigned int)(value / 10));
         lcd_write_byte('.', true);
@@ -248,6 +288,11 @@ void show_menu_page(void) {
         lcd_write_byte('.', true);
         lcd_write_unsigned((unsigned int)(value % 10));
         lcd_write_byte('W', true);
+    } else if (g_menu_page == MENU_PAGE_TEMP_FULL_SCALE ||
+               g_menu_page == MENU_PAGE_TEMP_WARNING ||
+               g_menu_page == MENU_PAGE_TEMP_TRIP) {
+        lcd_write_unsigned(value);
+        lcd_write_byte('C', true);
     } else if (g_menu_page == MENU_PAGE_DRAIN_WARNING || g_menu_page == MENU_PAGE_DRAIN_TRIP) {
         lcd_write_unsigned(value);
         lcd_write_byte('V', true);
@@ -354,6 +399,10 @@ unsigned int drain_voltage(unsigned int raw) {
     return (unsigned int)(((unsigned long)raw * 300UL) / 1023UL);
 }
 
+unsigned int temperature_c(unsigned int raw) {
+    return (unsigned int)(((unsigned long)raw * g_thresholds.temp_full_scale_c) / 1023UL);
+}
+
 unsigned int overdrive_power_mw(unsigned int raw) {
     unsigned long squared_raw = (unsigned long)raw * raw;
     return (unsigned int)(((squared_raw / 1023UL) * 10000UL) / 1023UL);
@@ -378,11 +427,14 @@ void adjust_selected_threshold(bool increase) {
         case MENU_PAGE_SWR2_FWD_FULL_SCALE:
             selected_threshold = &g_thresholds.swr2_fwd_full_scale_w;
             break;
+        case MENU_PAGE_TEMP_FULL_SCALE:
+            selected_threshold = &g_thresholds.temp_full_scale_c;
+            break;
         case MENU_PAGE_TEMP_WARNING:
-            selected_threshold = &g_thresholds.temp_warning_raw;
+            selected_threshold = &g_thresholds.temp_warning_c;
             break;
         case MENU_PAGE_TEMP_TRIP:
-            selected_threshold = &g_thresholds.temp_trip_raw;
+            selected_threshold = &g_thresholds.temp_trip_c;
             break;
         case MENU_PAGE_OVERDRIVE_WARNING:
             selected_power_threshold = &g_thresholds.overdrive_warning_tenths_w;
@@ -463,7 +515,15 @@ void adjust_selected_threshold(bool increase) {
         return;
     }
 
-    if (g_menu_page == MENU_PAGE_PEP_DECAY_MS) {
+    if (g_menu_page == MENU_PAGE_TEMP_FULL_SCALE ||
+        g_menu_page == MENU_PAGE_TEMP_WARNING ||
+        g_menu_page == MENU_PAGE_TEMP_TRIP) {
+        if (increase && *selected_threshold < 200) {
+            *selected_threshold += 1;
+        } else if (!increase && *selected_threshold > 0) {
+            *selected_threshold -= 1;
+        }
+    } else if (g_menu_page == MENU_PAGE_PEP_DECAY_MS) {
         if (increase && *selected_threshold < 2000) {
             *selected_threshold += 50;
         } else if (!increase && *selected_threshold > 50) {
@@ -568,17 +628,17 @@ void poll_menu_inputs(void) {
     decrease_was_pressed = decrease_pressed;
 }
 
-void update_protection_state(unsigned int temp_raw,
+void update_protection_state(unsigned int temp_c,
                             unsigned int overdrive_raw,
                             unsigned int drain_raw,
                             bool swr1_fault,
                             bool swr2_fault,
                             bool hard_fault) {
     bool any_trip_fault = swr1_fault || swr2_fault || hard_fault ||
-                          (temp_raw >= g_thresholds.temp_trip_raw) ||
+                          (temp_c >= g_thresholds.temp_trip_c) ||
                           (overdrive_raw >= (unsigned int)g_thresholds.overdrive_trip_tenths_w * 100U) ||
                           (drain_raw >= g_thresholds.drain_trip_v);
-    bool any_warning = (temp_raw >= g_thresholds.temp_warning_raw) ||
+    bool any_warning = (temp_c >= g_thresholds.temp_warning_c) ||
                        (overdrive_raw >= (unsigned int)g_thresholds.overdrive_warning_tenths_w * 100U) ||
                        (drain_raw >= g_thresholds.drain_warning_v);
 
@@ -617,6 +677,7 @@ int main(void) {
     unsigned int swr2_fwd_raw = 0;
     unsigned int swr2_ref_raw = 0;
     unsigned int temp_raw = 0;
+    unsigned int temp_c = 0;
     unsigned int overdrive_raw = 0;
     unsigned int drain_raw = 0;
     unsigned int overdrive_power = 0;
@@ -661,6 +722,8 @@ int main(void) {
         swr2_fwd_raw = adc_read(ADC_SWR2_FWD_CHANNEL);
         swr2_ref_raw = adc_read(ADC_SWR2_REF_CHANNEL);
         temp_raw = adc_read(ADC_TEMP_CHANNEL);
+        g_temperature_raw = temp_raw;
+        temp_c = temperature_c(temp_raw);
         overdrive_raw = adc_read(ADC_OVERDRIVE_CHANNEL);
         drain_raw = adc_read(ADC_DRAIN_PEAK_CHANNEL);
         overdrive_power = overdrive_power_mw(overdrive_raw);
@@ -687,7 +750,7 @@ int main(void) {
         handle_fault_ack();
         poll_menu_inputs();
 
-        if (g_menu_page == MENU_PAGE_STATUS) {
+        if (g_menu_page == MENU_PAGE_STATUS || g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
             g_status_refresh_ticks++;
             if (g_status_refresh_ticks >= 20 || g_menu_changed) {
                 show_menu_page();
@@ -699,7 +762,7 @@ int main(void) {
             g_menu_changed = false;
         }
 
-        update_protection_state(temp_raw, overdrive_power, drain_voltage_v,
+        update_protection_state(temp_c, overdrive_power, drain_voltage_v,
                                 swr1_fault,
                                 swr2_fault,
                     hard_fault);
