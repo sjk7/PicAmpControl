@@ -789,8 +789,7 @@ int main(void) {
         bool swr2_fault = swr_trip(swr2_fwd_raw, swr2_ref_raw,
                        g_thresholds.swr2_trip_tenths);
         bool hard_fault = (INPUT_OVERCURRENT_FAULT == 1) ||
-                          ((unsigned long)current_raw * 70UL >=
-                           (unsigned long)g_thresholds.current_trip_a * 1023UL);
+                          (current_raw >= (unsigned int)g_thresholds.current_trip_a * 15U);
 
         if ((INPUT_PTT == 0) != g_ptt_active) {
             handle_ptt_transition(INPUT_PTT == 0);
