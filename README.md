@@ -176,6 +176,8 @@ The menu makes these firmware trip thresholds available to the operator:
 
 - SWR1 trip ratio, from 1.1:1 to 5.0:1 in 0.1:1 steps
 - SWR2 trip ratio, from 1.1:1 to 5.0:1 in 0.1:1 steps
+- SWR1 forward full-scale power, from 500 W to 2500 W in 100 W steps; default 1500 W and also used for SWR1 reflected-power conversion
+- SWR2 forward full-scale power, from 500 W to 2500 W in 100 W steps; default 1500 W and also used for SWR2 reflected-power conversion
 - temperature warning raw ADC value
 - temperature trip raw ADC value
 - input-power warning, from 0.0 W to 10.0 W in 0.1 W steps
@@ -185,7 +187,7 @@ The menu makes these firmware trip thresholds available to the operator:
 
 Each SWR ratio setting directly controls its local software trip: the controller calculates the mismatch from that sensor's forward/reflected pair and trips when it reaches the displayed setting. There are no dedicated SWR comparator inputs in this design.
 
-Drain voltage uses a linear scale: ADC 0-1023 represents 0-300 V. Input power is calculated as peak-envelope power into 50 ohms, with ADC 0-1023 representing 0-10.0 W. This requires the input detector/divider to present 5 V at 31.62 V peak, a scale factor of approximately 6.325:1. The external overdrive, drain-peak, and overcurrent comparators remain independently calibrated hard protection and combine into INPUT_HARD_FAULT. The current PIC16F723A configuration has no EEPROM, so firmware menu settings return to their safe defaults after a power cycle.
+The ADC reference is the regulated nominal 5.0 V VDD rail, so every analogue input is scaled from 0 to VDD, not to an independently guaranteed 5 V reference. With VDD regulated at 5.0 V, drain voltage uses a linear scale: ADC 0-1023 represents 0-300 V. Input power is calculated as peak-envelope power into 50 ohms, with ADC 0-1023 representing 0-10.0 W. This requires the input detector/divider to present 5 V at 31.62 V peak, a scale factor of approximately 6.325:1. Each SWR bridge detector also uses a 0-5 V range. Its bridge-specific 500-2500 W forward full-scale setting is shared by the associated reflected detector, so both readings use the same power range before SWR is calculated. All analogue paths require series resistance and clamps so the PIC pin remains between VSS and VDD under normal operation. The external overdrive, drain-peak, and overcurrent comparators remain independently calibrated hard protection and combine into INPUT_HARD_FAULT. The current PIC16F723A configuration has no EEPROM, so firmware menu settings return to their safe defaults after a power cycle.
 
 ## Naming convention used in code
 

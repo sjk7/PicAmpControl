@@ -45,13 +45,13 @@ This is the current approved signal map for the protection controller. The only 
 
 ### ADC measurement paths
 
-- pre-filter forward power sense: RA0 / AN0
-- pre-filter reflected power sense: RA1 / AN1
-- post-filter forward power sense: RA2 / AN2
-- post-filter reflected power sense: RA3 / AN3
+- pre-filter forward power sense: RA0 / AN0, 0-5 V detector output; configurable full scale from 500 W to 2500 W, default 1500 W
+- pre-filter reflected power sense: RA1 / AN1, 0-5 V detector output; shares the pre-filter forward full-scale setting
+- post-filter forward power sense: RA2 / AN2, 0-5 V detector output; configurable full scale from 500 W to 2500 W, default 1500 W
+- post-filter reflected power sense: RA3 / AN3, 0-5 V detector output; shares the post-filter forward full-scale setting
 - temperature sense: RA5 / AN4
-- overdrive sense: RB2 / AN7, conditioned peak-envelope detector input scaled so 5 V represents 10.0 W into 50 ohms
-- drain-peak sense: RB3 / AN8, conditioned divider scaled so 5 V represents 300 V drain voltage
+- overdrive sense: RB2 / AN7, conditioned peak-envelope detector input scaled so the regulated nominal 5.0 V ADC full scale represents 10.0 W into 50 ohms
+- drain-peak sense: RB3 / AN8, conditioned divider scaled so the regulated nominal 5.0 V ADC full scale represents 300 V drain voltage
 - each sensor is wired directly to its own ADC pin; no external analog multiplexer is used
 
 ### LCD interface
@@ -94,7 +94,7 @@ The SWR protection channels are not required in hardware because each SWR pair i
 - The LCD backpack is assumed to be a common PCF8574-style I2C adapter board; I2C is implemented in firmware on RC3/RC4.
 - No other I2C devices are included in this design to keep the hardware simple and predictable.
 - Overdrive and drain sense nodes are split after their scaling/protection networks: one branch feeds the external comparator and the other feeds the designated ADC input. Neither raw high voltage nor unconditioned RF detector output may reach the PIC.
-- The input-power detector/divider must map 31.62 V peak at the 50-ohm input to 5 V at RB2. The drain divider must map 300 V to 5 V at RB3; both paths need input protection and filtering.
+- The ADC uses VDD as its reference and accepts conversion inputs from 0 to VDD. VDD must be maintained at 5.0 V for the specified scales. The input-power detector/divider must map 31.62 V peak at the 50-ohm input to 5.0 V at RB2. The drain divider must map 300 V to 5.0 V at RB3. Every analogue path needs a series resistor and clamps so the PIC input stays between VSS and VDD under normal operation.
 - The comparator board is deliberately separate from the PIC so that the critical analog faults are hardware-protected before the MCU state machine can act.
 - SWR is evaluated in firmware from the forward/reflected ADC pairs; no dedicated SWR comparator is required.
 - The seven planned analog measurements have dedicated PIC ADC pins, so no external analog multiplexer is required.
