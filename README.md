@@ -122,14 +122,14 @@ This is the current approved signal map for the protection controller. The only 
 | 3 | RA1 | ADC_SWR1_REF | Input | Pre-filter SWR reflected power ADC |
 | 4 | RA2 | ADC_SWR2_FWD | Input | Post-filter SWR forward power ADC |
 | 5 | RA3 | ADC_SWR2_REF | Input | Post-filter SWR reflected power ADC |
-| 6 | RA4 | ADC_TEMP | Input | Temperature sensor input |
+| 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC |
 | 9,10 | OSC1, OSC2 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
 | 19 | RB0 | INPUT_MENU_INCREASE | Input | Config-menu value increase switch |
 | 20 | RB1 | INPUT_MENU_DECREASE | Input | Config-menu value decrease switch |
-| 21 | RB2 | INPUT_COMP_OVERDRIVE | Input | Overdrive comparator |
-| 22 | RB3 | INPUT_COMP_DRAIN_PEAK | Input | Drain peak comparator |
-| 23 | RB4 | INPUT_COMP_OVERCURRENT | Input | Overcurrent comparator |
+| 21 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC |
+| 22 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC |
+| 23 | RB4 | INPUT_HARD_FAULT | Input | Combined active-high comparator fault |
 | 24 | RB5 | OUTPUT_FAN_PWM | Output | Fan speed control |
 | 25 | RB6 | OUTPUT_WARNING_STATUS | Output | Warning status output |
 | 26 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
@@ -140,9 +140,9 @@ This is the current approved signal map for the protection controller. The only 
 - MCU: PIC16F723A
 - Clock: 20 MHz crystal
 - Display: 1602 LCD with I2C backpack only
-- Protection faults: software-driven SWR trip logic plus hardware comparator protection for overdrive, drain peak, and overcurrent detection
+- Protection faults: software-driven SWR, overdrive, drain-voltage, and temperature thresholds, backed by a combined hardware comparator fault for overdrive, drain peak, and overcurrent
 - SWR measurement pairs: two ADC pairs are required, one before and one after the low-pass filter bank, each with forward and reflected inputs
-- ADC wiring: RA0 through RA4 are dedicated directly to the four SWR detector outputs and temperature sensor; no external analog multiplexer is fitted
+- ADC wiring: RA0-RA3, RA5, RB2, and RB3 directly sample the two SWR pairs, temperature, overdrive, and drain voltage; no external analog multiplexer is fitted
 - Operator controls: INPUT_PTT and INPUT_FAULT_ACK
 - Configuration controls: INPUT_MENU_NEXT, INPUT_MENU_INCREASE, and INPUT_MENU_DECREASE; each switch is active-low and is available only while not transmitting
 - Sequencing outputs: OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS
@@ -178,10 +178,14 @@ The menu makes these firmware trip thresholds available to the operator:
 - SWR2 trip ratio, from 1.1:1 to 5.0:1 in 0.1:1 steps
 - temperature warning raw ADC value
 - temperature trip raw ADC value
+- input-power warning, from 0.0 W to 10.0 W in 0.1 W steps
+- input-power trip, from 0.0 W to 10.0 W in 0.1 W steps; default 10.0 W
+- drain-voltage warning, from 0 V to 300 V in 1 V steps
+- drain-voltage trip, from 0 V to 300 V in 1 V steps; default 150 V
 
 Each SWR ratio setting directly controls its local software trip: the controller calculates the mismatch from that sensor's forward/reflected pair and trips when it reaches the displayed setting. There are no dedicated SWR comparator inputs in this design.
 
-The overdrive, drain-peak, and overcurrent trips are hardware comparator thresholds. They require calibration at their analogue reference networks and cannot be changed from the PIC menu without adding programmable analogue reference hardware. The current PIC16F723A configuration has no EEPROM, so firmware menu settings return to their safe defaults after a power cycle.
+Drain voltage uses a linear scale: ADC 0-1023 represents 0-300 V. Input power is calculated as peak-envelope power into 50 ohms, with ADC 0-1023 representing 0-10.0 W. This requires the input detector/divider to present 5 V at 31.62 V peak, a scale factor of approximately 6.325:1. The external overdrive, drain-peak, and overcurrent comparators remain independently calibrated hard protection and combine into INPUT_HARD_FAULT. The current PIC16F723A configuration has no EEPROM, so firmware menu settings return to their safe defaults after a power cycle.
 
 ## Naming convention used in code
 

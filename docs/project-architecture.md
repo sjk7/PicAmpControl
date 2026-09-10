@@ -17,10 +17,10 @@ Build a PIC16F723A-based linear amplifier protection controller that monitors RF
    - overdrive fault comparator
    - drain peak voltage comparator
    - overcurrent comparator
-   - optional spare comparator input for expansion
+   - combined active-high hard-fault output to the PIC
 
 3. Microcontroller logic
-   - direct ADC monitoring of four SWR detector outputs and temperature on five dedicated pins
+   - direct ADC monitoring of four SWR detector outputs, temperature, overdrive, and drain voltage
    - formal protection state machine
    - latching fault states
    - PTT re-arm logic
@@ -58,15 +58,15 @@ This allows each SWR monitor to act independently and gives a clear, local prote
 
 The earlier SWR comparator channels are no longer required in the active design. Their former input pins are assigned to configuration-menu switches.
 
-The five planned analog measurements are wired directly to RA0 through RA4. No external analog multiplexer is required; the PIC selects the dedicated ADC channels sequentially.
+Seven planned measurements are wired directly to ADC-capable pins: RA0-RA3 for the two SWR pairs, RA5 for temperature, RB2 for overdrive, and RB3 for drain voltage. No external analog multiplexer is required; the PIC selects the dedicated ADC channels sequentially.
 
 ## User threshold configuration
 
-The LCD configuration menu uses three active-low switches: `INPUT_MENU_NEXT` on RC2, `INPUT_MENU_INCREASE` on RB0, and `INPUT_MENU_DECREASE` on RB1. The operator can select and adjust an independent SWR trip ratio for each detector pair, from 1.1:1 to 5.0:1 in 0.1:1 steps, as well as the temperature warning and temperature-trip thresholds. Changes are locked out during transmit.
+The LCD configuration menu uses three active-low switches: `INPUT_MENU_NEXT` on RC2, `INPUT_MENU_INCREASE` on RB0, and `INPUT_MENU_DECREASE` on RB1. The operator can select and adjust an independent SWR trip ratio for each detector pair, from 1.1:1 to 5.0:1 in 0.1:1 steps, plus warning and trip thresholds for temperature, input power, and drain voltage. Input power is adjustable from 0.0 W to 10.0 W in 0.1 W steps and defaults to a 10.0 W trip. Drain voltage is adjustable from 0 V to 300 V in 1 V steps and defaults to a 150 V trip. Changes are locked out during transmit.
 
 The software trip comparison follows the displayed ratio rather than a raw ADC limit. For a configured ratio $S$, it trips when the paired measurements satisfy $R(S+1)^2 \geq F(S-1)^2$, where $F$ is forward power and $R$ is reflected power. This is the standard SWR relationship expressed without floating-point arithmetic. The forward sample must exceed a small noise floor before this comparison can trip.
 
-Overdrive, drain peak, and overcurrent are hardware comparator protections. Their thresholds are set and verified in the analogue circuitry; a firmware menu cannot alter them with the present design. Supporting user-adjustable values for those faults would require programmable comparator references or digital potentiometers and an additional control interface. Firmware menu values are retained only while powered because this PIC configuration has no EEPROM.
+Overdrive and drain voltage each have a separate, conditioned ADC path. The drain divider maps ADC full scale to 300 V, so $V_{drain}=300r/1023$, where $r$ is the ADC result. The input-power detector/divider maps 5 V ADC full scale to 31.62 V peak at the 50-ohm input, yielding peak-envelope power $P=10(r/1023)^2$ W. Their menu-configured software warning and trip limits supplement, but never replace, the analogue comparator thresholds. The overdrive, drain-peak, and overcurrent comparator outputs are combined into one active-high `INPUT_HARD_FAULT` signal; it is always a hard trip. Firmware menu values are retained only while powered because this PIC configuration has no EEPROM.
 
 ## LCD strategy
 
@@ -131,6 +131,7 @@ This is a valid analog threshold scheme, but the reference must be chosen carefu
 ## Safety rules
 
 - Input faults that can damage the amplifier must be detected in hardware first.
+- Every ADC voltage input must be scaled, clamped, and filtered to remain between $0$ and $V_{DD}$.
 - Software latches must not override comparator faults.
 - Fault states should remain latched until conditions are safe and the system is re-armed.
 - Alarm output behavior must match actual hardware response and startup timing.

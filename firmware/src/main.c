@@ -27,6 +27,10 @@ typedef enum {
     MENU_PAGE_SWR2_TRIP,
     MENU_PAGE_TEMP_WARNING,
     MENU_PAGE_TEMP_TRIP,
+    MENU_PAGE_OVERDRIVE_WARNING,
+    MENU_PAGE_OVERDRIVE_TRIP,
+    MENU_PAGE_DRAIN_WARNING,
+    MENU_PAGE_DRAIN_TRIP,
     MENU_PAGE_COUNT
 } menu_page_t;
 
@@ -35,6 +39,10 @@ typedef struct {
     unsigned char swr2_trip_tenths;
     unsigned int temp_warning_raw;
     unsigned int temp_trip_raw;
+    unsigned char overdrive_warning_tenths_w;
+    unsigned char overdrive_trip_tenths_w;
+    unsigned int drain_warning_v;
+    unsigned int drain_trip_v;
 } protection_thresholds_t;
 
 static volatile system_state_t g_state = STATE_STANDBY;
@@ -45,7 +53,9 @@ static volatile menu_page_t g_menu_page = MENU_PAGE_STATUS;
 static volatile bool g_menu_changed = true;
 static protection_thresholds_t g_thresholds = {
     20, 20,
-    300, 350
+    300, 350,
+    90, 100,
+    140, 150
 };
 
 void i2c_delay(void) {
@@ -192,6 +202,22 @@ void show_menu_page(void) {
             label = "TEMP TRIP";
             value = g_thresholds.temp_trip_raw;
             break;
+        case MENU_PAGE_OVERDRIVE_WARNING:
+            label = "INPUT WARNING";
+            value = g_thresholds.overdrive_warning_tenths_w;
+            break;
+        case MENU_PAGE_OVERDRIVE_TRIP:
+            label = "INPUT TRIP";
+            value = g_thresholds.overdrive_trip_tenths_w;
+            break;
+        case MENU_PAGE_DRAIN_WARNING:
+            label = "DRAIN WARNING";
+            value = g_thresholds.drain_warning_v;
+            break;
+        case MENU_PAGE_DRAIN_TRIP:
+            label = "DRAIN TRIP";
+            value = g_thresholds.drain_trip_v;
+            break;
         default:
             break;
     }
@@ -208,6 +234,14 @@ void show_menu_page(void) {
         lcd_write_byte('.', true);
         lcd_write_unsigned((unsigned int)(value % 10));
         lcd_write_text(":1");
+    } else if (g_menu_page == MENU_PAGE_OVERDRIVE_WARNING || g_menu_page == MENU_PAGE_OVERDRIVE_TRIP) {
+        lcd_write_unsigned((unsigned int)(value / 10));
+        lcd_write_byte('.', true);
+        lcd_write_unsigned((unsigned int)(value % 10));
+        lcd_write_byte('W', true);
+    } else if (g_menu_page == MENU_PAGE_DRAIN_WARNING || g_menu_page == MENU_PAGE_DRAIN_TRIP) {
+        lcd_write_unsigned(value);
+        lcd_write_byte('V', true);
     } else {
         lcd_write_unsigned(value);
     }
@@ -215,7 +249,8 @@ void show_menu_page(void) {
 
 void adc_init(void) {
     FVRCON = 0x00;
-    ANSELA = 0x1F;
+    ANSELA = 0x2F;
+    ANSELB = 0x0C;
     ADCON1 = 0x22;
     ADCON0 = 0x01;
 }
@@ -252,9 +287,7 @@ void handle_ptt_transition(bool ptt_asserted) {
         if (!g_fault_latched) {
             g_state = STATE_RESET_WAIT;
         }
-        // Purposefully clear only software latches when a new transmit cycle begins.
-        // Real hardware comparator faults must still be checked before enabling the amplifier.
-        if (INPUT_COMP_OVERDRIVE == 0 && INPUT_COMP_OVERCURRENT == 0 && INPUT_COMP_DRAIN_PEAK == 0) {
+        if (INPUT_HARD_FAULT == 0) {
             clear_fault_latches();
             g_state = STATE_OPERATE;
         }
@@ -277,9 +310,19 @@ bool swr_trip(unsigned int forward_raw, unsigned int reflected_raw, unsigned cha
     return (unsigned long)reflected_raw * upper_factor >= (unsigned long)forward_raw * lower_factor;
 }
 
+unsigned int drain_voltage(unsigned int raw) {
+    return (unsigned int)(((unsigned long)raw * 300UL) / 1023UL);
+}
+
+unsigned int overdrive_power_mw(unsigned int raw) {
+    unsigned long squared_raw = (unsigned long)raw * raw;
+    return (unsigned int)(((squared_raw / 1023UL) * 10000UL) / 1023UL);
+}
+
 void adjust_selected_threshold(bool increase) {
     unsigned int *selected_threshold = 0;
     unsigned char *selected_swr_threshold = 0;
+    unsigned char *selected_power_threshold = 0;
 
     switch (g_menu_page) {
         case MENU_PAGE_SWR1_TRIP:
@@ -294,6 +337,18 @@ void adjust_selected_threshold(bool increase) {
         case MENU_PAGE_TEMP_TRIP:
             selected_threshold = &g_thresholds.temp_trip_raw;
             break;
+        case MENU_PAGE_OVERDRIVE_WARNING:
+            selected_power_threshold = &g_thresholds.overdrive_warning_tenths_w;
+            break;
+        case MENU_PAGE_OVERDRIVE_TRIP:
+            selected_power_threshold = &g_thresholds.overdrive_trip_tenths_w;
+            break;
+        case MENU_PAGE_DRAIN_WARNING:
+            selected_threshold = &g_thresholds.drain_warning_v;
+            break;
+        case MENU_PAGE_DRAIN_TRIP:
+            selected_threshold = &g_thresholds.drain_trip_v;
+            break;
         default:
             break;
     }
@@ -307,11 +362,26 @@ void adjust_selected_threshold(bool increase) {
         return;
     }
 
+    if (selected_power_threshold != 0) {
+        if (increase && *selected_power_threshold < 100) {
+            *selected_power_threshold += 1;
+        } else if (!increase && *selected_power_threshold > 0) {
+            *selected_power_threshold -= 1;
+        }
+        return;
+    }
+
     if (selected_threshold == 0) {
         return;
     }
 
-    if (increase && *selected_threshold < 1013) {
+    if (g_menu_page == MENU_PAGE_DRAIN_WARNING || g_menu_page == MENU_PAGE_DRAIN_TRIP) {
+        if (increase && *selected_threshold < 300) {
+            *selected_threshold += 1;
+        } else if (!increase && *selected_threshold > 0) {
+            *selected_threshold -= 1;
+        }
+    } else if (increase && *selected_threshold < 1013) {
         *selected_threshold += 10;
     } else if (!increase && *selected_threshold > 10) {
         *selected_threshold -= 10;
@@ -347,12 +417,18 @@ void poll_menu_inputs(void) {
 }
 
 void update_protection_state(unsigned int temp_raw,
+                            unsigned int overdrive_raw,
+                            unsigned int drain_raw,
                             bool swr1_fault,
                             bool swr2_fault,
-                            bool overdrive_fault,
-                            bool drain_peak_fault,
-                            bool overcurrent_fault) {
-    bool any_trip_fault = swr1_fault || swr2_fault || overdrive_fault || drain_peak_fault || overcurrent_fault || (temp_raw >= g_thresholds.temp_trip_raw);
+                            bool hard_fault) {
+    bool any_trip_fault = swr1_fault || swr2_fault || hard_fault ||
+                          (temp_raw >= g_thresholds.temp_trip_raw) ||
+                          (overdrive_raw >= (unsigned int)g_thresholds.overdrive_trip_tenths_w * 100U) ||
+                          (drain_raw >= g_thresholds.drain_trip_v);
+    bool any_warning = (temp_raw >= g_thresholds.temp_warning_raw) ||
+                       (overdrive_raw >= (unsigned int)g_thresholds.overdrive_warning_tenths_w * 100U) ||
+                       (drain_raw >= g_thresholds.drain_warning_v);
 
     if (g_startup_inhibit) {
         g_state = STATE_RESET_WAIT;
@@ -373,7 +449,7 @@ void update_protection_state(unsigned int temp_raw,
         return;
     }
 
-    if (temp_raw >= g_thresholds.temp_warning_raw) {
+    if (any_warning) {
         g_state = STATE_WARNING;
         OUTPUT_WARNING_STATUS = 0;
         OUTPUT_TX = 0;
@@ -395,12 +471,16 @@ int main(void) {
     unsigned int swr2_fwd_raw = 0;
     unsigned int swr2_ref_raw = 0;
     unsigned int temp_raw = 0;
+    unsigned int overdrive_raw = 0;
+    unsigned int drain_raw = 0;
+    unsigned int overdrive_power = 0;
+    unsigned int drain_voltage_v = 0;
 
     TRISAbits.TRISA0 = 1;
     TRISAbits.TRISA1 = 1;
     TRISAbits.TRISA2 = 1;
     TRISAbits.TRISA3 = 1;
-    TRISAbits.TRISA4 = 1;
+    TRISAbits.TRISA5 = 1;
     TRISCbits.TRISC0 = 1;
     TRISCbits.TRISC1 = 1;
     TRISCbits.TRISC2 = 1;
@@ -434,12 +514,14 @@ int main(void) {
         swr2_fwd_raw = adc_read(ADC_SWR2_FWD_CHANNEL);
         swr2_ref_raw = adc_read(ADC_SWR2_REF_CHANNEL);
         temp_raw = adc_read(ADC_TEMP_CHANNEL);
+        overdrive_raw = adc_read(ADC_OVERDRIVE_CHANNEL);
+        drain_raw = adc_read(ADC_DRAIN_PEAK_CHANNEL);
+        overdrive_power = overdrive_power_mw(overdrive_raw);
+        drain_voltage_v = drain_voltage(drain_raw);
 
         bool swr1_fault = swr_trip(swr1_fwd_raw, swr1_ref_raw, g_thresholds.swr1_trip_tenths);
         bool swr2_fault = swr_trip(swr2_fwd_raw, swr2_ref_raw, g_thresholds.swr2_trip_tenths);
-        bool overdrive_fault = (INPUT_COMP_OVERDRIVE == 1);
-        bool drain_peak_fault = (INPUT_COMP_DRAIN_PEAK == 1);
-        bool overcurrent_fault = (INPUT_COMP_OVERCURRENT == 1);
+        bool hard_fault = (INPUT_HARD_FAULT == 1);
 
         if (g_startup_inhibit) {
             __delay_ms(1000);
@@ -459,11 +541,9 @@ int main(void) {
             g_menu_changed = false;
         }
 
-        update_protection_state(temp_raw,
+        update_protection_state(temp_raw, overdrive_power, drain_voltage_v,
                                 swr1_fault,
                                 swr2_fault,
-                                overdrive_fault,
-                                drain_peak_fault,
-                                overcurrent_fault);
+                    hard_fault);
     }
 }

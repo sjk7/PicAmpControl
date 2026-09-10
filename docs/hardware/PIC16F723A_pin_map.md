@@ -26,18 +26,20 @@ This is the current approved signal map for the protection controller. The only 
 | 3 | RA1 | ADC_SWR1_REF | Input | Pre-filter SWR reflected power ADC |
 | 4 | RA2 | ADC_SWR2_FWD | Input | Post-filter SWR forward power ADC |
 | 5 | RA3 | ADC_SWR2_REF | Input | Post-filter SWR reflected power ADC |
-| 6 | RA4 | ADC_TEMP | Input | Temperature sensor input |
+| 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC |
 | 9,10 | OSC1, OSC2 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
 | 19 | RB0 | INPUT_MENU_INCREASE | Input | Config-menu value increase switch |
 | 20 | RB1 | INPUT_MENU_DECREASE | Input | Config-menu value decrease switch |
-| 21 | RB2 | INPUT_COMP_OVERDRIVE | Input | Overdrive comparator |
-| 22 | RB3 | INPUT_COMP_DRAIN_PEAK | Input | Drain peak comparator |
-| 23 | RB4 | INPUT_COMP_OVERCURRENT | Input | Overcurrent comparator |
+| 21 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC |
+| 22 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC |
+| 23 | RB4 | INPUT_HARD_FAULT | Input | Combined active-high overdrive, drain-peak, and overcurrent comparator fault |
 | 24 | RB5 | OUTPUT_FAN_PWM | Output | Fan speed control |
 | 25 | RB6 | OUTPUT_WARNING_STATUS | Output | Warning status output |
 | 26 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
-| 4,6,7,8,27,28 | VSS/VDD/NC | Power / support | Power | Follow datasheet decoupling rules |
+| 6 | RA4 | unused | Input | Reserved; not an ADC channel in this design |
+| 8,27 | VSS | GND | Power | Ground return |
+| 28 | VDD | +5 V | Power | Decouple locally per datasheet |
 
 ## Functional grouping
 
@@ -47,7 +49,9 @@ This is the current approved signal map for the protection controller. The only 
 - pre-filter reflected power sense: RA1 / AN1
 - post-filter forward power sense: RA2 / AN2
 - post-filter reflected power sense: RA3 / AN3
-- temperature sense: RA4 / AN4
+- temperature sense: RA5 / AN4
+- overdrive sense: RB2 / AN7, conditioned peak-envelope detector input scaled so 5 V represents 10.0 W into 50 ohms
+- drain-peak sense: RB3 / AN8, conditioned divider scaled so 5 V represents 300 V drain voltage
 - each sensor is wired directly to its own ADC pin; no external analog multiplexer is used
 
 ### LCD interface
@@ -80,20 +84,23 @@ The comparator board should include the hardware protection channels for:
 - overdrive detection
 - drain peak voltage trip
 - overcurrent fault (inverse current sense)
-- optional spare comparator input for future fault expansion
+- a combined active-high fault output on RB4, formed from the three comparator outputs
 
 The SWR protection channels are not required in hardware because each SWR pair is measured in firmware from the forward and reflected ADC readings at each RF point.
 
 ## Wiring notes
 
 - This map intentionally keeps the 1602 display on the PIC hardware I2C pins and does not use the LCD on a parallel bus.
-- The LCD backpack is assumed to be a common PCF8574-style I2C adapter board.
+- The LCD backpack is assumed to be a common PCF8574-style I2C adapter board; I2C is implemented in firmware on RC3/RC4.
 - No other I2C devices are included in this design to keep the hardware simple and predictable.
+- Overdrive and drain sense nodes are split after their scaling/protection networks: one branch feeds the external comparator and the other feeds the designated ADC input. Neither raw high voltage nor unconditioned RF detector output may reach the PIC.
+- The input-power detector/divider must map 31.62 V peak at the 50-ohm input to 5 V at RB2. The drain divider must map 300 V to 5 V at RB3; both paths need input protection and filtering.
 - The comparator board is deliberately separate from the PIC so that the critical analog faults are hardware-protected before the MCU state machine can act.
 - SWR is evaluated in firmware from the forward/reflected ADC pairs; no dedicated SWR comparator is required.
-- The five planned analog measurements have dedicated PIC ADC pins, so no external analog multiplexer is required.
+- The seven planned analog measurements have dedicated PIC ADC pins, so no external analog multiplexer is required.
 - The three former spare inputs are assigned to the LCD configuration menu; no unallocated GPIO remains in this pin map.
 - PTT is treated as a re-arm event for software fault latches, but it must never override a live hardware comparator fault.
+- The comparator outputs must combine into one active-high hard-fault signal at RB4. This input remains digital; RB2 and RB3 are dedicated to analogue sensing.
 - Any future expansion should be planned before wiring, so the MCU I/O map does not become inconsistent.
 
 ## Safety and reset behavior
