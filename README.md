@@ -142,6 +142,7 @@ This is the current approved signal map for the protection controller. The only 
 - Display: 1602 LCD with I2C backpack only
 - Protection faults: software-driven SWR trip logic plus hardware comparator protection for overdrive, drain peak, and overcurrent detection
 - SWR measurement pairs: two ADC pairs are required, one before and one after the low-pass filter bank, each with forward and reflected inputs
+- ADC wiring: RA0 through RA4 are dedicated directly to the four SWR detector outputs and temperature sensor; no external analog multiplexer is fitted
 - Operator controls: INPUT_PTT and INPUT_FAULT_ACK
 - Sequencing outputs: OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS
 - Status outputs: OUTPUT_WARNING_STATUS and OUTPUT_TRIP_STATUS

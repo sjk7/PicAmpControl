@@ -28,7 +28,7 @@ static volatile bool g_startup_inhibit = true;
 
 void adc_init(void) {
     FVRCON = 0x00;
-    ANSELA = 0x0B;
+    ANSELA = 0x1F;
     ADCON1 = 0x22;
     ADCON0 = 0x01;
 }
@@ -67,7 +67,7 @@ void handle_ptt_transition(bool ptt_asserted) {
         }
         // Purposefully clear only software latches when a new transmit cycle begins.
         // Real hardware comparator faults must still be checked before enabling the amplifier.
-        if (INPUT_COMP_SWR_1 == 0 && INPUT_COMP_SWR_2 == 0 && INPUT_COMP_OVERDRIVE == 0 && INPUT_COMP_OVERCURRENT == 0 && INPUT_COMP_DRAIN_PEAK == 0) {
+        if (INPUT_COMP_OVERDRIVE == 0 && INPUT_COMP_OVERCURRENT == 0 && INPUT_COMP_DRAIN_PEAK == 0) {
             clear_fault_latches();
             g_state = STATE_OPERATE;
         }
@@ -129,13 +129,17 @@ void update_protection_state(unsigned int fwd_raw,
 }
 
 int main(void) {
-    unsigned int fwd_raw = 0;
-    unsigned int ref_raw = 0;
+    unsigned int swr1_fwd_raw = 0;
+    unsigned int swr1_ref_raw = 0;
+    unsigned int swr2_fwd_raw = 0;
+    unsigned int swr2_ref_raw = 0;
     unsigned int temp_raw = 0;
 
     TRISAbits.TRISA0 = 1;
     TRISAbits.TRISA1 = 1;
+    TRISAbits.TRISA2 = 1;
     TRISAbits.TRISA3 = 1;
+    TRISAbits.TRISA4 = 1;
     TRISCbits.TRISC0 = 1;
     TRISCbits.TRISC1 = 1;
     TRISCbits.TRISC2 = 1;
@@ -160,12 +164,14 @@ int main(void) {
     while (1) {
         __delay_ms(5);
 
-        fwd_raw = adc_read(FWD_ADC_CHANNEL);
-        ref_raw = adc_read(REF_ADC_CHANNEL);
-        temp_raw = adc_read(TEMP_ADC_CHANNEL);
+        swr1_fwd_raw = adc_read(ADC_SWR1_FWD_CHANNEL);
+        swr1_ref_raw = adc_read(ADC_SWR1_REF_CHANNEL);
+        swr2_fwd_raw = adc_read(ADC_SWR2_FWD_CHANNEL);
+        swr2_ref_raw = adc_read(ADC_SWR2_REF_CHANNEL);
+        temp_raw = adc_read(ADC_TEMP_CHANNEL);
 
-        bool swr1_fault = (INPUT_COMP_SWR_1 == 1);
-        bool swr2_fault = (INPUT_COMP_SWR_2 == 1);
+        bool swr1_fault = (swr1_fwd_raw > 400 || swr1_ref_raw > 250);
+        bool swr2_fault = (swr2_fwd_raw > 400 || swr2_ref_raw > 250);
         bool overdrive_fault = (INPUT_COMP_OVERDRIVE == 1);
         bool drain_peak_fault = (INPUT_COMP_DRAIN_PEAK == 1);
         bool overcurrent_fault = (INPUT_COMP_OVERCURRENT == 1);
@@ -181,7 +187,7 @@ int main(void) {
             handle_ptt_transition(false);
         }
 
-        update_protection_state(fwd_raw, ref_raw, temp_raw,
+        update_protection_state(swr1_fwd_raw, swr1_ref_raw, temp_raw,
                                 swr1_fault,
                                 swr2_fault,
                                 overdrive_fault,

@@ -18,17 +18,16 @@
 #define INPUT_PTT PORTCbits.RC0
 #define INPUT_FAULT_ACK PORTCbits.RC1
 
-// ADC inputs
-#define FWD_ADC_CHANNEL 0
-#define REF_ADC_CHANNEL 1
-#define TEMP_ADC_CHANNEL 3
-#define DIAG_ADC_CHANNEL 4
+// Dedicated ADC inputs; no external analog multiplexer is required.
+#define ADC_SWR1_FWD_CHANNEL 0
+#define ADC_SWR1_REF_CHANNEL 1
+#define ADC_SWR2_FWD_CHANNEL 2
+#define ADC_SWR2_REF_CHANNEL 3
+#define ADC_TEMP_CHANNEL 4
 
 // Comparator inputs and status lines (assigned to RBx as needed)
 #define INPUT_SPARE_1 PORTBbits.RB0
 #define INPUT_SPARE_2 PORTBbits.RB1
-#define INPUT_COMP_SWR_1 INPUT_SPARE_1
-#define INPUT_COMP_SWR_2 INPUT_SPARE_2
 #define INPUT_COMP_OVERDRIVE PORTBbits.RB2
 #define INPUT_COMP_DRAIN_PEAK PORTBbits.RB3
 #define INPUT_COMP_OVERCURRENT PORTBbits.RB4

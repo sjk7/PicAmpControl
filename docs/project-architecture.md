@@ -14,15 +14,13 @@ Build a PIC16F723A-based linear amplifier protection controller that monitors RF
    - overcurrent sensor handling
 
 2. Comparator protection stage
-   - SWR protection 1: pre-filter or PA-output side
-   - SWR protection 2: post-filter or antenna-output side
    - overdrive fault comparator
    - drain peak voltage comparator
    - overcurrent comparator
    - optional spare comparator input for expansion
 
 3. Microcontroller logic
-   - ADC monitoring of temperature, power, and diagnostic channels
+   - direct ADC monitoring of four SWR detector outputs and temperature on five dedicated pins
    - formal protection state machine
    - latching fault states
    - PTT re-arm logic
@@ -58,6 +56,8 @@ SWR protection is computed locally for each sensing point:
 This allows each SWR monitor to act independently and gives a clear, local protection decision at each stage.
 
 The earlier SWR comparator channels are no longer required in the active design. Their pins are released as spare inputs and can be used for future expansion if needed.
+
+The five planned analog measurements are wired directly to RA0 through RA4. No external analog multiplexer is required; the PIC selects the dedicated ADC channels sequentially.
 
 ## LCD strategy
 

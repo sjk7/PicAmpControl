@@ -43,10 +43,12 @@ This is the current approved signal map for the protection controller. The only 
 
 ### ADC measurement paths
 
-- forward power sense: RA0 / AN0
-- reflected power sense: RA1 / AN1
-- temperature sense: RA3 / AN3
-- optional spare diagnostic input can be moved to another ADC-capable pin if needed
+- pre-filter forward power sense: RA0 / AN0
+- pre-filter reflected power sense: RA1 / AN1
+- post-filter forward power sense: RA2 / AN2
+- post-filter reflected power sense: RA3 / AN3
+- temperature sense: RA4 / AN4
+- each sensor is wired directly to its own ADC pin; no external analog multiplexer is used
 
 ### LCD interface
 
@@ -85,6 +87,7 @@ The SWR protection channels are not required in hardware because each SWR pair i
 - No other I2C devices are included in this design to keep the hardware simple and predictable.
 - The comparator board is deliberately separate from the PIC so that the critical analog faults are hardware-protected before the MCU state machine can act.
 - SWR is evaluated in firmware from the forward/reflected ADC pairs; no dedicated SWR comparator is required.
+- The five planned analog measurements have dedicated PIC ADC pins, so no external analog multiplexer is required.
 - PTT is treated as a re-arm event for software fault latches, but it must never override a live hardware comparator fault.
 - Any future expansion should be planned before wiring, so the MCU I/O map does not become inconsistent.
 
