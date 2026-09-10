@@ -71,7 +71,7 @@ All detector outputs must remain within 0 to VDD at the PIC, including expected 
 4. Oscilloscope-test ADC_TEMP, ADC_OVERDRIVE, and ADC_DRAIN_PEAK during RF keying, PTT transitions, and supply faults.
 5. Confirm all ADC pins remain within VSS to VDD. Verify the series resistors and external clamps limit current into the PIC pin protection structures during a fault.
 6. Confirm the external overcurrent comparator path asserts INPUT_OVERCURRENT_FAULT fast enough to stop the sequencer independently of ADC polling. Measure and record ADC/software response time for overdrive and drain peak.
-7. Calibrate the WCS1700 zero-current offset and sensitivity at several known currents. Replace or confirm the provisional 70 A full-scale calibration and verify the default 40 A MCU trip against the hardware comparator threshold.
+7. Calibrate the WCS1700 zero-current offset and sensitivity at several known currents. Replace or confirm the provisional 70 A full-scale, approximately 15-counts-per-amp calibration and verify the default 40 A MCU trip against the hardware comparator threshold.
 
 ## 5. Timing and Trip Response
 
