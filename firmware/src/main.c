@@ -96,6 +96,8 @@ static unsigned int g_pep_decay_elapsed_ms = 0;
 static unsigned int g_status_refresh_ms = 0;
 static unsigned int g_startup_elapsed_ms = 0;
 static volatile unsigned char g_timer_ticks_pending = 0;
+static volatile bool g_settings_dirty = false;
+static unsigned int g_settings_save_delay_ms = 0;
 static volatile unsigned char g_adc_scan_index = 0;
 static volatile unsigned int g_adc_swr1_fwd = 0;
 static volatile unsigned int g_adc_swr1_ref = 0;
@@ -298,6 +300,19 @@ void save_settings(void) {
     }
     record[sizeof(protection_thresholds_t) + 3] = settings_checksum(g_menu_page, &g_thresholds);
     at24c256_write(0, record, sizeof(record));
+}
+
+void mark_settings_dirty(void) {
+    g_settings_dirty = true;
+    g_settings_save_delay_ms = 100;
+}
+
+void service_settings_save(void) {
+    if (g_settings_dirty && g_settings_save_delay_ms == 0 &&
+        !g_ptt_active && !g_fault_latched && INPUT_OVERCURRENT_FAULT == 0) {
+        save_settings();
+        g_settings_dirty = false;
+    }
 }
 
 void show_menu_page(void) {
@@ -619,17 +634,17 @@ void poll_menu_inputs(void) {
         if (next_pressed && !next_was_pressed) {
             g_menu_page = (menu_page_t)((g_menu_page + 1) % MENU_PAGE_COUNT);
             g_menu_changed = true;
-            save_settings();
+            mark_settings_dirty();
         }
         if (increase_pressed && !increase_was_pressed) {
             adjust_selected_threshold(true);
             g_menu_changed = true;
-            save_settings();
+            mark_settings_dirty();
         }
         if (decrease_pressed && !decrease_was_pressed) {
             adjust_selected_threshold(false);
             g_menu_changed = true;
-            save_settings();
+            mark_settings_dirty();
         }
     }
 
@@ -775,6 +790,9 @@ int main(void) {
                 update_power_decay(1);
                 update_tx_sequence();
             }
+            if (g_settings_save_delay_ms > 0) {
+                g_settings_save_delay_ms--;
+            }
             g_status_refresh_ms++;
         }
 
@@ -790,5 +808,7 @@ int main(void) {
             show_menu_page();
             g_menu_changed = false;
         }
+
+        service_settings_save();
     }
 }

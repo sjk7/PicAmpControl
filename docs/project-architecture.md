@@ -94,7 +94,7 @@ Recommended states:
 - FAULT_LATCHED
 - RESET_WAIT
 
-The main loop is paced by a Timer0 interrupt tick of approximately 1 ms rather than a blocking 5 ms delay. ADC conversion-complete interrupts capture samples and advance the channel scan, but perform no conversion math or state-machine calls. The main loop consumes the latest samples and updates protection before LCD rendering and menu/EEPROM work. This removes blocking ADC reads while keeping the ISR small enough for XC8, while the external overcurrent comparator remains the asynchronous hard-fault path.
+The main loop is paced by a Timer0 interrupt tick of approximately 1 ms rather than a blocking 5 ms delay. ADC conversion-complete interrupts capture samples and advance the channel scan, but perform no conversion math or state-machine calls. The main loop consumes the latest samples and updates protection before LCD rendering and menu/EEPROM work. EEPROM writes are deferred until 100 ms after the last menu change and only occur while receive mode is safe. This removes blocking ADC reads while keeping the ISR small enough for XC8, while the external overcurrent comparator remains the asynchronous hard-fault path.
 
 ## PTT and re-arm behavior
 
