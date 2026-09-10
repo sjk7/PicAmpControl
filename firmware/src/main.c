@@ -94,12 +94,21 @@ static unsigned int g_pep_decay_elapsed_ms = 0;
 static unsigned int g_status_refresh_ms = 0;
 static unsigned int g_startup_elapsed_ms = 0;
 static volatile unsigned char g_timer_ticks_pending = 0;
+static volatile unsigned char g_adc_scan_index = 0;
+static volatile unsigned int g_adc_swr1_fwd = 0;
+static volatile unsigned int g_adc_swr1_ref = 0;
+static volatile unsigned int g_adc_swr2_fwd = 0;
+static volatile unsigned int g_adc_swr2_ref = 0;
+static volatile unsigned int g_adc_temp = 0;
+static volatile unsigned int g_adc_overdrive = 0;
+static volatile unsigned int g_adc_drain = 0;
 static unsigned int g_temperature_raw = 0;
 static const unsigned char g_ntc_adc[3][16] = {
     {190, 166, 141, 116, 94, 75, 59, 46, 37, 29, 23, 19, 15, 12, 10, 8},
     {197, 171, 142, 114, 89, 68, 51, 38, 29, 22, 17, 13, 10, 8, 6, 5},
     {201, 174, 143, 113, 86, 64, 47, 34, 25, 19, 14, 11, 8, 6, 5, 4}
 };
+static const unsigned char g_adc_scan_channels[7] = {0, 1, 2, 3, 4, 7, 8};
 static const unsigned char g_menu_setting_offsets[] = {
     offsetof(protection_thresholds_t, swr1_trip_tenths),
     offsetof(protection_thresholds_t, swr2_trip_tenths),
@@ -185,6 +194,30 @@ void __interrupt() timer0_isr(void) {
             g_timer_ticks_pending++;
         }
     }
+
+    if (PIR1bits.ADIF != 0) {
+        unsigned int sample = (unsigned int)ADRES;
+        PIR1bits.ADIF = 0;
+
+        switch (g_adc_scan_index) {
+            case 0: g_adc_swr1_fwd = sample; break;
+            case 1: g_adc_swr1_ref = sample; break;
+            case 2: g_adc_swr2_fwd = sample; break;
+            case 3: g_adc_swr2_ref = sample; break;
+            case 4: g_adc_temp = sample; break;
+            case 5: g_adc_overdrive = sample; break;
+            default: g_adc_drain = sample; break;
+        }
+
+        g_adc_scan_index++;
+        if (g_adc_scan_index >= 7) {
+            g_adc_scan_index = 0;
+        }
+        ADCON0 &= 0x03;
+        ADCON0 |= (unsigned char)(g_adc_scan_channels[g_adc_scan_index] << 2);
+        ADCON0bits.GO_DONE = 1;
+    }
+
 }
 
 void timer0_init(void) {
@@ -347,17 +380,10 @@ void adc_init(void) {
     ANSELB = 0x0C;
     ADCON1 = 0x20;
     ADCON0 = 0x01;
-}
-
-unsigned int adc_read(unsigned char channel) {
-    ADCON0 &= 0x03;
-    ADCON0 |= (unsigned char)(channel << 2);
-    __delay_us(20);
+    PIR1bits.ADIF = 0;
+    PIE1bits.ADIE = 1;
+    INTCONbits.PEIE = 1;
     ADCON0bits.GO_DONE = 1;
-    while (ADCON0bits.GO_DONE) {
-        continue;
-    }
-    return (unsigned int)ADRES;
 }
 
 void apply_startup_inhibit(void) {
@@ -664,7 +690,6 @@ int main(void) {
     unsigned int drain_raw = 0;
     unsigned int overdrive_power = 0;
     unsigned int drain_voltage_v = 0;
-
     TRISAbits.TRISA0 = 1;
     TRISAbits.TRISA1 = 1;
     TRISAbits.TRISA2 = 1;
@@ -700,15 +725,15 @@ int main(void) {
     apply_startup_inhibit();
 
     while (1) {
-        swr1_fwd_raw = adc_read(ADC_SWR1_FWD_CHANNEL);
-        swr1_ref_raw = adc_read(ADC_SWR1_REF_CHANNEL);
-        swr2_fwd_raw = adc_read(ADC_SWR2_FWD_CHANNEL);
-        swr2_ref_raw = adc_read(ADC_SWR2_REF_CHANNEL);
-        temp_raw = adc_read(ADC_TEMP_CHANNEL);
+        swr1_fwd_raw = g_adc_swr1_fwd;
+        swr1_ref_raw = g_adc_swr1_ref;
+        swr2_fwd_raw = g_adc_swr2_fwd;
+        swr2_ref_raw = g_adc_swr2_ref;
+        temp_raw = g_adc_temp;
         g_temperature_raw = temp_raw;
         temp_c = temperature_c(temp_raw);
-        overdrive_raw = adc_read(ADC_OVERDRIVE_CHANNEL);
-        drain_raw = adc_read(ADC_DRAIN_PEAK_CHANNEL);
+        overdrive_raw = g_adc_overdrive;
+        drain_raw = g_adc_drain;
         overdrive_power = overdrive_power_mw(overdrive_raw);
         drain_voltage_v = drain_voltage(drain_raw);
         update_post_filter_power(swr2_fwd_raw);

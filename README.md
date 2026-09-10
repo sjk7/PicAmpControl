@@ -66,6 +66,7 @@ flowchart LR
         PTT["INPUT_PTT\nTransmit request"]
         RESET["OUTPUT_COMP_RESET\nComparator reset"]
         HARD["INPUT_OVERCURRENT_FAULT\nHardware overcurrent fault"]
+        TICK["Timer0 ISR\n1 ms scheduler tick"]
         STATE["State machine"]
         SWR1["SWR pair 1\nsoftware trip logic"]
         SWR2["SWR pair 2\nsoftware trip logic"]
@@ -97,6 +98,7 @@ flowchart LR
     SWR2 --> STATE
     OC -->|fault| HARD
     HARD --> STATE
+    TICK -->|schedule| STATE
 
     PTT --> STATE
     STATE --> RESET
@@ -343,7 +345,7 @@ See [firmware/src/main.c](firmware/src/main.c) for the protection and sequencer 
 
 The local project build has been validated with the CMake/XC8 flow. [cmake/My_Pic_Project/default/user.cmake](cmake/My_Pic_Project/default/user.cmake) constrains the production build to `firmware/src/main.c` and `firmware/src/lcd_i2c.c`, excluding historical prototype sources that the generated file list may contain.
 
-The firmware uses a Timer0 interrupt tick of approximately 1 ms instead of a blocking 5 ms loop delay. ADC sampling and protection evaluation run before LCD refresh and menu work, so software SWR, overdrive, drain, and temperature trips are not intentionally delayed by display rendering. The external overcurrent comparator remains the asynchronous hard-protection path.
+The firmware uses a Timer0 interrupt tick of approximately 1 ms instead of a blocking 5 ms loop delay. ADC conversion-complete interrupts capture the seven analogue channels without doing protection math in the ISR. The main loop consumes those samples and evaluates software SWR, overdrive, drain, and temperature trips before LCD refresh and menu work. The external overcurrent comparator remains the asynchronous hard-protection path.
 
 GitHub Actions builds on a self-hosted Windows x64 runner. Set these repository variables to the installed toolchain locations on that runner:
 
@@ -357,7 +359,7 @@ The build workflow runs on pushes and pull requests to `main`, verifies those pa
 The following items remain to be finalized before the design is considered complete:
 
 1. Bench-verify the TX sequencing order and set the exact delays for OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS.
-2. Confirm the comparator-board reference levels, latch behavior, and combined active-high INPUT_HARD_FAULT polarity for overdrive, drain peak, and overcurrent.
+2. Confirm the overcurrent comparator reference level, latch behavior, and active-high INPUT_OVERCURRENT_FAULT polarity; measure ADC/software response for overdrive and drain peak.
 3. Measure the overcurrent sensor transfer curve and verify the comparator threshold direction.
 4. Bench-calibrate the selected 10 kOhm NTC, B-value profile, and 10 kOhm divider against the displayed 10 C lookup points, including the open-sensor high-temperature fallback.
 5. Build and validate the selected 12 V low-side logic-level MOSFET fan drive, its PWM-capable output routing, and its temperature schedule.
