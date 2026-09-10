@@ -113,7 +113,7 @@ Rules:
 
 ## Temperature and fan strategy
 
-Temperature should be monitored on an ADC input using a thermistor or sensor divider.
+Temperature is planned as a 10 kOhm NTC thermistor divider on the ADC input. B3950 is the default intended profile, with selectable B-value profiles required in the configuration menu. The current linear temperature scale is provisional and must be replaced by a lookup conversion before temperature protection is relied upon.
 
 Recommended behavior:
 

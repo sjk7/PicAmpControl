@@ -49,7 +49,7 @@ This is the current approved signal map for the protection controller. The only 
 - pre-filter reflected power sense: RA1 / AN1, 0-5 V detector output; shares the pre-filter forward full-scale setting
 - post-filter forward power sense: RA2 / AN2, 0-5 V detector output; configurable full scale from 500 W to 2500 W, default 1500 W
 - post-filter reflected power sense: RA3 / AN3, 0-5 V detector output; shares the post-filter forward full-scale setting
-- temperature sense: RA5 / AN4, 0-5 V conditioned sensor output; menu-configurable full scale defaults to 150 C
+- temperature sense: RA5 / AN4, 10 kOhm NTC divider output; B3950 is the intended default configurable profile. The current linear display scale is provisional until the NTC conversion is implemented and calibrated.
 - overdrive sense: RB2 / AN7, conditioned peak-envelope detector input scaled so the regulated nominal 5.0 V ADC full scale represents 10.0 W into 50 ohms
 - drain-peak sense: RB3 / AN8, conditioned divider scaled so the regulated nominal 5.0 V ADC full scale represents 300 V drain voltage
 - each sensor is wired directly to its own ADC pin; no external analog multiplexer is used
