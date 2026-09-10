@@ -30,15 +30,14 @@ jobs:
   build:
     name: Build firmware
     needs: version
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 60
     permissions:
       contents: write
     env:
-      XC8_VERSION: "2.41"
-      XC8_ROOT: "/opt/microchip"
-      PACK_REPO_PATH: "/opt/microchip/packs"
       BUILD_TAG: ${{ needs.version.outputs.new_tag }}
+      XC8_DIR: C:/Program Files/Microchip/xc8/v4.00/bin
+      PACK_REPO_PATH: C:/Users/DEVNVME24/.mchp_packs
 
     steps:
       - name: Check out repository
@@ -46,66 +45,40 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install required tools
-        shell: bash
+      - name: Verify XC8 toolchain is installed on the runner
+        shell: pwsh
         run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y curl tar xz-utils unzip
-
-      - name: Install Microchip XC8 compiler
-        shell: bash
-        run: |
-          set -euxo pipefail
-          mkdir -p "$XC8_ROOT"
-          curl -fL --retry 3 --retry-delay 5 "https://ww1.microchip.com/downloads/en/DeviceDoc/xc8-v${XC8_VERSION}-linux.tar.gz" -o /tmp/xc8-linux.tar.gz
-          tar -xzf /tmp/xc8-linux.tar.gz -C "$XC8_ROOT"
-
-          XC8_BIN_DIR="$(find "$XC8_ROOT" -path '*/bin/xc8-cc' | head -n 1 | xargs dirname)"
-          if [ -z "$XC8_BIN_DIR" ]; then
-            echo "XC8 compiler not found after extraction."
-            find "$XC8_ROOT" | head -n 50
-            exit 1
-          fi
-
-          echo "XC8_BIN_DIR=$XC8_BIN_DIR" >> "$GITHUB_ENV"
-          echo "PACK_REPO_PATH=$PACK_REPO_PATH" >> "$GITHUB_ENV"
-
-      - name: Install PIC DFP pack repository
-        shell: bash
-        run: |
-          set -euxo pipefail
-          mkdir -p "$PACK_REPO_PATH"
-          mkdir -p "$PACK_REPO_PATH/Microchip/PIC16Fxxx_DFP"
-
-          echo "Ensuring expected Microchip pack path exists for XC8: $PACK_REPO_PATH/Microchip/PIC16Fxxx_DFP"
-          ls -la "$PACK_REPO_PATH" || true
-          ls -la "$PACK_REPO_PATH/Microchip" || true
+          $xc8 = Join-Path $env:XC8_DIR 'xc8-cc.exe'
+          if (-not (Test-Path $xc8)) {
+            throw "XC8 compiler not found at $xc8. Install the Microchip XC8 toolchain on the self-hosted runner before running this workflow."
+          }
+          if (-not (Test-Path $env:PACK_REPO_PATH)) {
+            New-Item -ItemType Directory -Force -Path $env:PACK_REPO_PATH | Out-Null
+          }
+          Write-Host "Using XC8 compiler: $xc8"
 
       - name: Configure project with CMake
-        shell: bash
+        shell: pwsh
         run: |
-          set -euxo pipefail
-          cmake --preset PicAmpControl-release \
-            -DMP_CC="$XC8_BIN_DIR/xc8-cc" \
-            -DMP_AS="$XC8_BIN_DIR/xc8-cc" \
-            -DMP_LD="$XC8_BIN_DIR/xc8-cc" \
-            -DMP_AR="$XC8_BIN_DIR/xc8-ar" \
-            -DPACK_REPO_PATH="$PACK_REPO_PATH"
+          cmake --preset PicAmpControl-release `
+            -DMP_CC="C:/Program Files/Microchip/xc8/v4.00/bin/xc8-cc.exe" `
+            -DMP_AS="C:/Program Files/Microchip/xc8/v4.00/bin/xc8-cc.exe" `
+            -DMP_LD="C:/Program Files/Microchip/xc8/v4.00/bin/xc8-cc.exe" `
+            -DMP_AR="C:/Program Files/Microchip/xc8/v4.00/bin/xc8-ar.exe" `
+            -DPACK_REPO_PATH="C:/Users/DEVNVME24/.mchp_packs"
 
       - name: Build firmware
-        shell: bash
+        shell: pwsh
         run: |
-          set -euxo pipefail
           cmake --build --preset PicAmpControl-release
 
       - name: Package output
-        shell: bash
+        shell: pwsh
         run: |
-          set -euxo pipefail
-          mkdir -p dist
-          find _build out -type f \( -name '*.hex' -o -name '*.elf' -o -name '*.map' -o -name '*.xml' \) -exec cp -n {} dist/ \; 2>/dev/null || true
-          ls -la dist || true
+          $dist = Join-Path $PWD 'dist'
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          Get-ChildItem -Path @((Join-Path $PWD '_build'), (Join-Path $PWD 'out')) -Recurse -Include *.hex,*.elf,*.map,*.xml -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $dist -Force }
+          Get-ChildItem $dist | Format-Table Name,Length
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
