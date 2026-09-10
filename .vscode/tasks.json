@@ -1,0 +1,62 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build PicAmpControl (Debug)",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "-S",
+        "E:/hamcode/PicAmpControl/cmake/My_Pic_Project/default",
+        "-B",
+        "E:/hamcode/PicAmpControl/_build/My_Pic_Project/debug",
+        "-G",
+        "Ninja",
+        "-DCMAKE_BUILD_TYPE=Debug",
+        "-DCMAKE_TOOLCHAIN_FILE=E:/hamcode/PicAmpControl/cmake/My_Pic_Project/default/.generated/toolchain.cmake",
+        "-DCMAKE_USER_MAKE_RULES_OVERRIDE=E:/hamcode/PicAmpControl/cmake/My_Pic_Project/default/.generated/overrides.cmake",
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+        "&&",
+        "cmake",
+        "--build",
+        "E:/hamcode/PicAmpControl/_build/My_Pic_Project/debug",
+        "--verbose"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build PicAmpControl (Release)",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "-S",
+        "E:/hamcode/PicAmpControl/cmake/My_Pic_Project/default",
+        "-B",
+        "E:/hamcode/PicAmpControl/_build/My_Pic_Project/release",
+        "-G",
+        "Ninja",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_TOOLCHAIN_FILE=E:/hamcode/PicAmpControl/cmake/My_Pic_Project/default/.generated/toolchain.cmake",
+        "-DCMAKE_USER_MAKE_RULES_OVERRIDE=E:/hamcode/PicAmpControl/cmake/My_Pic_Project/default/.generated/overrides.cmake",
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+        "&&",
+        "cmake",
+        "--build",
+        "E:/hamcode/PicAmpControl/_build/My_Pic_Project/release",
+        "--verbose"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

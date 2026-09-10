@@ -1,0 +1,12 @@
+{
+    "mplab.clangd.compileCommandsDir": "${workspaceFolder}\\_build\\My_Pic_Project\\default",
+    "mplab.clangd.arguments": [
+        "--header-insertion=never"
+    ],
+    "mplab.clangd.path": "c:\\Program Files\\Microchip\\xc8\\v4.00\\bin\\xc8-clangd.exe",
+    "cmake.generator": "Ninja",
+    "cmake.useCMakePresets": "always",
+    "cmake.configureOnOpen": false,
+    "cmake.sourceDirectory": "${workspaceFolder}/cmake/My_Pic_Project/default",
+    "cmake.buildDirectory": "${workspaceFolder}/_build/My_Pic_Project/default"
+}

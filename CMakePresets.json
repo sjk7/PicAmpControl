@@ -1,0 +1,41 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "PicAmpControl-debug",
+      "displayName": "PicAmpControl Debug",
+      "binaryDir": "${sourceDir}/_build/My_Pic_Project/debug",
+      "generator": "Ninja",
+      "toolchainFile": "cmake/My_Pic_Project/default/.generated/toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_USER_MAKE_RULES_OVERRIDE": {
+          "type": "FILEPATH",
+          "value": "cmake/My_Pic_Project/default/.generated/overrides.cmake"
+        },
+        "CMAKE_EXPORT_COMPILE_COMMANDS": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      }
+    },
+    {
+      "name": "PicAmpControl-release",
+      "displayName": "PicAmpControl Release",
+      "binaryDir": "${sourceDir}/_build/My_Pic_Project/release",
+      "generator": "Ninja",
+      "toolchainFile": "cmake/My_Pic_Project/default/.generated/toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_USER_MAKE_RULES_OVERRIDE": {
+          "type": "FILEPATH",
+          "value": "cmake/My_Pic_Project/default/.generated/overrides.cmake"
+        },
+        "CMAKE_EXPORT_COMPILE_COMMANDS": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      }
+    }
+  ]
+}

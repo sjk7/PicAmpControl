@@ -1,0 +1,8 @@
+{
+    "mplab.clangd.arguments": [
+        "--header-insertion=never"
+    ],
+    "mplab.clangd.compileCommandsDir": "${workspaceFolder}\\_build\\My_Pic_Project\\default",
+    "mplab.clangd.path": "c:\\Program Files\\Microchip\\xc8\\v4.00\\bin\\xc8-clangd.exe",
+    "cmake.sourceDirectory": "C:/Users/DEVNVME24/MPLABProjects/My_Pic_Project/cmake/My_Pic_Project/default"
+}
