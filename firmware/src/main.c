@@ -84,6 +84,8 @@ static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
 static volatile bool g_ptt_active = false;
 static volatile bool g_startup_inhibit = true;
+static volatile bool g_comparator_reset_active = false;
+static volatile unsigned char g_comparator_reset_elapsed_ms = 0;
 static volatile menu_page_t g_menu_page = MENU_PAGE_STATUS;
 static volatile bool g_menu_changed = true;
 static unsigned int g_sequence_elapsed_ms = 0;
@@ -402,16 +404,16 @@ void clear_fault_latches(void) {
     set_trip_output(false);
 }
 
-void pulse_comparator_reset(void) {
+void start_comparator_reset(void) {
     OUTPUT_COMP_RESET = 0;
-    __delay_ms(10);
-    OUTPUT_COMP_RESET = 1;
+    g_comparator_reset_active = true;
+    g_comparator_reset_elapsed_ms = 0;
 }
 
 void handle_ptt_transition(bool ptt_asserted) {
     if (ptt_asserted) {
         g_ptt_active = true;
-        pulse_comparator_reset();
+        start_comparator_reset();
         if (!g_fault_latched) {
             g_state = STATE_RESET_WAIT;
         }
@@ -577,7 +579,7 @@ void update_power_decay(unsigned int elapsed_ms) {
 }
 
 void update_tx_sequence(void) {
-    if (!g_ptt_active || g_startup_inhibit || g_fault_latched) {
+    if (!g_ptt_active || g_startup_inhibit || g_fault_latched || g_comparator_reset_active) {
         set_tx_output(false);
         set_tx_vcc_output(false);
         set_tx_bias_output(false);
@@ -757,6 +759,13 @@ int main(void) {
 
         while (g_timer_ticks_pending != 0) {
             g_timer_ticks_pending--;
+            if (g_comparator_reset_active) {
+                g_comparator_reset_elapsed_ms++;
+                if (g_comparator_reset_elapsed_ms >= 10) {
+                    OUTPUT_COMP_RESET = 1;
+                    g_comparator_reset_active = false;
+                }
+            }
             if (g_startup_inhibit) {
                 g_startup_elapsed_ms++;
                 if (g_startup_elapsed_ms >= 1000) {
