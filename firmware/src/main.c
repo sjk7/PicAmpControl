@@ -332,12 +332,10 @@ void show_menu_page(void) {
 
     lcd_write_byte(0x01, false);
     __delay_ms(2);
-    lcd_set_cursor(0, 0);
-    lcd_write_text(label);
-    lcd_set_cursor(1, 0);
     if (g_menu_page == MENU_PAGE_STATUS) {
         unsigned int power_w = g_thresholds.power_display_pep ? g_post_fwd_pep_w : g_post_fwd_rms_w;
 
+        lcd_set_cursor(0, 0);
         lcd_write_text("P=");
         if (power_w < 1000) lcd_write_spaces(1);
         if (power_w < 100) lcd_write_spaces(1);
@@ -347,14 +345,22 @@ void show_menu_page(void) {
         lcd_write_text(" SWR=");
         lcd_set_cursor(1, 0);
         lcd_write_power_bar(g_post_fwd_pep_w, g_thresholds.swr2_fwd_full_scale_w, 16);
-    } else if (g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
+        return;
+    }
+    if (g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
+        lcd_set_cursor(0, 0);
         lcd_write_text("PEP ");
         lcd_write_power_bar(g_post_fwd_pep_w, g_thresholds.swr2_fwd_full_scale_w, 12);
         lcd_set_cursor(1, 0);
         lcd_write_text("TEMP ");
         lcd_write_unsigned(temperature_c(g_temperature_raw));
         lcd_write_byte('C', true);
-    } else if (g_menu_page == MENU_PAGE_SWR1_TRIP || g_menu_page == MENU_PAGE_SWR2_TRIP) {
+        return;
+    }
+    lcd_set_cursor(0, 0);
+    lcd_write_text(label);
+    lcd_set_cursor(1, 0);
+    if (g_menu_page == MENU_PAGE_SWR1_TRIP || g_menu_page == MENU_PAGE_SWR2_TRIP) {
         lcd_write_unsigned((unsigned int)(value / 10));
         lcd_write_byte('.', true);
         lcd_write_unsigned((unsigned int)(value % 10));
