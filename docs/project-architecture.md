@@ -51,6 +51,16 @@ Recommended hardware protections:
 
 The PIC should read these comparator outputs and set the controller state, but the analog stage should be the primary protection layer.
 
+SWR protection is computed locally for each sensing point:
+
+- read the forward and reflected samples for the pre-filter sensor
+- compute SWR for that sensor pair
+- compare against the configured threshold, default 2:1
+- trip if the threshold is exceeded
+- repeat the same logic for the post-filter sensor
+
+This allows each SWR monitor to act independently and gives a clear, local protection decision at each stage.
+
 ## LCD strategy
 
 Use a standard low-cost 16x2 or 20x4 character LCD fitted with a PCF8574-based I2C backpack.

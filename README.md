@@ -145,6 +145,24 @@ This is the current approved signal map for the protection controller. The only 
 - Output rule: all MCU output pins are active-low by default unless a specific hardware design requires otherwise
 - Input rule: input pin names follow the actual hardware comparator/sensor polarity; no polarity suffix is added unless a signal deliberately breaks the default output rule
 
+## SWR measurement logic
+
+Each SWR channel is measured independently at its own RF point.
+
+- Read the forward sample at that point.
+- Read the reflected sample at that point.
+- Compute the SWR for that local pair.
+- Compare the result against the configured threshold.
+- If the SWR exceeds the threshold, trip that channel.
+- The default threshold is 2:1 unless a different limit is configured.
+
+This applies to both SWR measurement points:
+
+- pre-filter SWR sensor 1
+- post-filter SWR sensor 2
+
+The same logic is used for each pair and each sensor trips independently. A single high SWR at one measurement point must not be masked by a healthy reading at the other point.
+
 ## Naming convention used in code
 
 All hardware symbols should follow the pattern:
