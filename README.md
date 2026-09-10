@@ -52,22 +52,20 @@ flowchart LR
         PRE_REF["ADC_SWR1_REF"]
         POST_FWD["ADC_SWR2_FWD"]
         POST_REF["ADC_SWR2_REF"]
-        TEMP["ADC_TEMP"]
-      OVERDRIVE["ADC_OVERDRIVE"]
-      DRAIN_ADC["ADC_DRAIN_PEAK"]
+        TEMP["ADC_TEMP\n10 kOhm NTC"]
+        OVERDRIVE["ADC_OVERDRIVE\nsoftware trip"]
+        DRAIN_ADC["ADC_DRAIN_PEAK\nsoftware trip"]
     end
 
     subgraph ComparatorBoard["Comparator / protection board"]
-        OVR["Overdrive comparator"]
-        DRAIN["Drain peak comparator"]
         OC["Overcurrent comparator"]
-      COMP_RESET["Comparator latch reset"]
+        COMP_RESET["Comparator latch reset"]
     end
 
     subgraph MCU["PIC16F723A controller"]
         PTT["INPUT_PTT\nTransmit request"]
         RESET["OUTPUT_COMP_RESET\nComparator reset"]
-        HARD["INPUT_HARD_FAULT\nCombined hardware fault"]
+        HARD["INPUT_OVERCURRENT_FAULT\nHardware overcurrent fault"]
         STATE["State machine"]
         SWR1["SWR pair 1\nsoftware trip logic"]
         SWR2["SWR pair 2\nsoftware trip logic"]
@@ -77,7 +75,8 @@ flowchart LR
         FAN["OUTPUT_FAN_PWM\nFan speed"]
         WARN["OUTPUT_WARNING_STATUS\nWarning"]
         TRIP["OUTPUT_TRIP_STATUS\nTrip"]
-        LCD["1602 LCD\nI2C backpack"]
+        LCD["1602 LCD\nPCF8574 I2C"]
+        EEPROM["AT24C256\nsettings storage"]
     end
 
     PRE --> PRE_FWD
@@ -86,18 +85,16 @@ flowchart LR
     POST --> POST_FWD
     POST --> POST_REF
 
-    PRE_FWD --> STATE
-    PRE_REF --> STATE
-    POST_FWD --> STATE
-    POST_REF --> STATE
+    PRE_FWD --> SWR1
+    PRE_REF --> SWR1
+    POST_FWD --> SWR2
+    POST_REF --> SWR2
     TEMP --> STATE
     OVERDRIVE --> STATE
     DRAIN_ADC --> STATE
 
-    STATE --> SWR1
-    STATE --> SWR2
-    OVR -->|fault| HARD
-    DRAIN -->|fault| HARD
+    SWR1 --> STATE
+    SWR2 --> STATE
     OC -->|fault| HARD
     HARD --> STATE
 
@@ -110,7 +107,8 @@ flowchart LR
     STATE --> FAN
     STATE --> WARN
     STATE --> TRIP
-    STATE -->|I2C| LCD
+    STATE -->|software I2C| LCD
+    STATE -->|software I2C| EEPROM
 ```
 
 
@@ -139,7 +137,7 @@ This is the current approved signal map for the protection controller. The 1602 
 | 20 | RB1 | INPUT_MENU_DECREASE | Input | Config-menu value decrease switch |
 | 21 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC |
 | 22 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC |
-| 23 | RB4 | INPUT_HARD_FAULT | Input | Combined active-high comparator fault |
+| 23 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
 | 24 | RB5 | OUTPUT_FAN_PWM | Output | Fan speed control |
 | 25 | RB6 | OUTPUT_WARNING_STATUS | Output | Warning status output |
 | 26 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
@@ -150,7 +148,7 @@ This is the current approved signal map for the protection controller. The 1602 
 - MCU: PIC16F723A
 - Clock: 20 MHz crystal
 - Display: 1602 LCD with I2C backpack only
-- Protection faults: software-driven SWR, overdrive, drain-voltage, and temperature thresholds, backed by a combined hardware comparator fault for overdrive, drain peak, and overcurrent
+- Protection faults: software-driven SWR, overdrive, drain-voltage, and temperature thresholds, backed by an independent hardware overcurrent comparator
 - SWR measurement pairs: two ADC pairs are required, one before and one after the low-pass filter bank, each with forward and reflected inputs
 - ADC wiring: RA0-RA3, RA5, RB2, and RB3 directly sample the two SWR pairs, temperature, overdrive, and drain voltage; no external analog multiplexer is fitted
 - Operator control: INPUT_PTT
@@ -344,6 +342,8 @@ See [firmware/src/main.c](firmware/src/main.c) for the protection and sequencer 
 ## Build status
 
 The local project build has been validated with the CMake/XC8 flow. [cmake/My_Pic_Project/default/user.cmake](cmake/My_Pic_Project/default/user.cmake) constrains the production build to `firmware/src/main.c` and `firmware/src/lcd_i2c.c`, excluding historical prototype sources that the generated file list may contain.
+
+The firmware uses a Timer0 interrupt tick of approximately 1 ms instead of a blocking 5 ms loop delay. ADC sampling and protection evaluation run before LCD refresh and menu work, so software SWR, overdrive, drain, and temperature trips are not intentionally delayed by display rendering. The external overcurrent comparator remains the asynchronous hard-protection path.
 
 GitHub Actions builds on a self-hosted Windows x64 runner. Set these repository variables to the installed toolchain locations on that runner:
 

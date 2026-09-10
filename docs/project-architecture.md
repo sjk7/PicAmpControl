@@ -14,10 +14,8 @@ Build a PIC16F723A-based linear amplifier protection controller that monitors RF
    - overcurrent sensor handling
 
 2. Comparator protection stage
-   - overdrive fault comparator
-   - drain peak voltage comparator
    - overcurrent comparator
-   - combined active-high hard-fault output to the PIC
+   - active-high overcurrent fault output to the PIC
 
 3. Microcontroller logic
    - direct ADC monitoring of four SWR detector outputs, temperature, overdrive, and drain voltage
@@ -36,12 +34,10 @@ Build a PIC16F723A-based linear amplifier protection controller that monitors RF
 
 ## Protection strategy
 
-The critical faults should be detected by analog comparator hardware for the fast analog failure modes, while SWR is computed directly in firmware from ADC data.
+The overcurrent fault is detected by analogue comparator hardware. SWR, overdrive, and drain peak are computed directly in firmware from conditioned ADC data.
 
 Recommended hardware protections:
 
-- overdrive fault
-- drain peak fault
 - overcurrent fault
 - temperature warning and final trip threshold
 
@@ -98,6 +94,8 @@ Recommended states:
 - FAULT_LATCHED
 - RESET_WAIT
 
+The main loop is paced by a Timer0 interrupt tick of approximately 1 ms rather than a blocking 5 ms delay. ADC sampling and protection-state updates occur before LCD rendering and menu/EEPROM work. This gives software trips a deterministic scheduler reference, while the external overcurrent comparator remains the asynchronous hard-fault path.
+
 ## PTT and re-arm behavior
 
 PTT must act as a transmit-cycle re-arm event.
@@ -108,7 +106,7 @@ Rules:
 - a live comparator fault must not be bypassed by entering PTT
 - if a hardware condition is still outside limits, the amplifier must remain disabled
 - the startup power-up interval should keep the amplifier off for about 0.5 to 1.0 seconds after applying power
-- On the PTT falling edge, OUTPUT_COMP_RESET produces a 10 ms active-low pulse to clear comparator latches. INPUT_HARD_FAULT must then be clear before the controller re-arms software latches or begins sequencing.
+- On the PTT falling edge, OUTPUT_COMP_RESET produces a 10 ms active-low pulse to clear the overcurrent comparator latch. INPUT_OVERCURRENT_FAULT must then be clear before the controller re-arms software latches or begins sequencing.
 
 ## Temperature and fan strategy
 
@@ -136,7 +134,7 @@ This is a valid analog threshold scheme, but the reference must be chosen carefu
 
 ## Safety rules
 
-- Input faults that can damage the amplifier must be detected in hardware first.
+- The overcurrent fault that requires asynchronous response must be detected in hardware first; software ADC trips have a bounded Timer0/main-loop response and must not be described as comparator-speed protection.
 - Every ADC voltage input must be scaled, clamped, and filtered to remain between $0$ and $V_{DD}$.
 - Software latches must not override comparator faults.
 - Fault states should remain latched until conditions are safe and the system is re-armed.

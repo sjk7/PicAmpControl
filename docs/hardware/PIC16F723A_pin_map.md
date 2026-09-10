@@ -33,7 +33,7 @@ This is the current approved signal map for the protection controller. The 1602 
 | 20 | RB1 | INPUT_MENU_DECREASE | Input | Config-menu value decrease switch |
 | 21 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC |
 | 22 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC |
-| 23 | RB4 | INPUT_HARD_FAULT | Input | Combined active-high overdrive, drain-peak, and overcurrent comparator fault |
+| 23 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
 | 24 | RB5 | OUTPUT_FAN_PWM | Output | 12 V fan low-side MOSFET control; confirm hardware-PWM alternate-function routing |
 | 25 | RB6 | OUTPUT_WARNING_STATUS | Output | Warning status output |
 | 26 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
@@ -85,12 +85,10 @@ The menu switches are normally open and active-low, wired from the input pin to 
 
 ### Comparator board interface
 
-The comparator board should include the hardware protection channels for:
+The comparator board should include the hardware protection channel for:
 
-- overdrive detection
-- drain peak voltage trip
 - overcurrent fault (inverse current sense)
-- a combined active-high fault output on RB4, formed from the three comparator outputs
+- an active-high fault output on RB4
 
 The SWR protection channels are not required in hardware because each SWR pair is measured in firmware from the forward and reflected ADC readings at each RF point.
 

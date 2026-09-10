@@ -91,7 +91,9 @@ static unsigned char g_sequence_stage = 0;
 static unsigned int g_post_fwd_rms_w = 0;
 static unsigned int g_post_fwd_pep_w = 0;
 static unsigned int g_pep_decay_elapsed_ms = 0;
-static unsigned char g_status_refresh_ticks = 0;
+static unsigned int g_status_refresh_ms = 0;
+static unsigned int g_startup_elapsed_ms = 0;
+static volatile unsigned char g_timer_ticks_pending = 0;
 static unsigned int g_temperature_raw = 0;
 static const unsigned char g_ntc_adc[3][16] = {
     {190, 166, 141, 116, 94, 75, 59, 46, 37, 29, 23, 19, 15, 12, 10, 8},
@@ -173,6 +175,26 @@ void set_warning_output(bool active) {
 
 void set_trip_output(bool active) {
     OUTPUT_TRIP_STATUS = output_level(active, g_thresholds.trip_active_high);
+}
+
+void __interrupt() timer0_isr(void) {
+    if (INTCONbits.T0IF != 0) {
+        TMR0 = 100;
+        INTCONbits.T0IF = 0;
+        if (g_timer_ticks_pending != 255) {
+            g_timer_ticks_pending++;
+        }
+    }
+}
+
+void timer0_init(void) {
+    OPTION_REGbits.T0CS = 0;
+    OPTION_REGbits.PSA = 0;
+    OPTION_REGbits.PS = 0b100;
+    TMR0 = 100;
+    INTCONbits.T0IF = 0;
+    INTCONbits.T0IE = 1;
+    INTCONbits.GIE = 1;
 }
 
 unsigned int temperature_c(unsigned int raw);
@@ -517,12 +539,14 @@ void update_post_filter_power(unsigned int raw) {
     if (power_w >= g_post_fwd_pep_w) {
         g_post_fwd_pep_w = power_w;
         g_pep_decay_elapsed_ms = 0;
-    } else {
-        g_pep_decay_elapsed_ms += 5;
-        if (g_pep_decay_elapsed_ms >= g_thresholds.pep_decay_ms && g_post_fwd_pep_w > 0) {
-            g_post_fwd_pep_w--;
-            g_pep_decay_elapsed_ms = 0;
-        }
+    }
+}
+
+void update_power_decay(unsigned int elapsed_ms) {
+    g_pep_decay_elapsed_ms += elapsed_ms;
+    while (g_pep_decay_elapsed_ms >= g_thresholds.pep_decay_ms && g_post_fwd_pep_w > 0) {
+        g_post_fwd_pep_w--;
+        g_pep_decay_elapsed_ms -= g_thresholds.pep_decay_ms;
     }
 }
 
@@ -540,14 +564,14 @@ void update_tx_sequence(void) {
         g_sequence_elapsed_ms = 0;
         g_sequence_stage = 1;
     } else if (g_sequence_stage == 1) {
-        g_sequence_elapsed_ms += 5;
+        g_sequence_elapsed_ms++;
         if (g_sequence_elapsed_ms >= g_thresholds.tx_vcc_delay_ms) {
             set_tx_vcc_output(true);
             g_sequence_elapsed_ms = 0;
             g_sequence_stage = 2;
         }
     } else if (g_sequence_stage == 2) {
-        g_sequence_elapsed_ms += 5;
+        g_sequence_elapsed_ms++;
         if (g_sequence_elapsed_ms >= g_thresholds.tx_bias_delay_ms) {
             set_tx_bias_output(true);
             g_sequence_stage = 3;
@@ -671,12 +695,11 @@ int main(void) {
     adc_init();
     load_settings();
     lcd_init();
+    timer0_init();
     show_menu_page();
     apply_startup_inhibit();
 
     while (1) {
-        __delay_ms(5);
-
         swr1_fwd_raw = adc_read(ADC_SWR1_FWD_CHANNEL);
         swr1_ref_raw = adc_read(ADC_SWR1_REF_CHANNEL);
         swr2_fwd_raw = adc_read(ADC_SWR2_FWD_CHANNEL);
@@ -698,33 +721,40 @@ int main(void) {
                        g_thresholds.swr2_trip_tenths);
         bool hard_fault = (INPUT_OVERCURRENT_FAULT == 1);
 
-        if (g_startup_inhibit) {
-            __delay_ms(1000);
-            g_startup_inhibit = false;
-        }
-
         if ((INPUT_PTT == 0) != g_ptt_active) {
             handle_ptt_transition(INPUT_PTT == 0);
+        }
+
+        update_protection_state(temp_c, overdrive_power, drain_voltage_v,
+                                swr1_fault,
+                                swr2_fault,
+                                hard_fault);
+
+        while (g_timer_ticks_pending != 0) {
+            g_timer_ticks_pending--;
+            if (g_startup_inhibit) {
+                g_startup_elapsed_ms++;
+                if (g_startup_elapsed_ms >= 1000) {
+                    g_startup_inhibit = false;
+                }
+            } else {
+                update_power_decay(1);
+                update_tx_sequence();
+            }
+            g_status_refresh_ms++;
         }
 
         poll_menu_inputs();
 
         if (g_menu_page == MENU_PAGE_STATUS || g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
-            g_status_refresh_ticks++;
-            if (g_status_refresh_ticks >= 20 || g_menu_changed) {
+            if (g_status_refresh_ms >= 100 || g_menu_changed) {
                 show_menu_page();
-                g_status_refresh_ticks = 0;
+                g_status_refresh_ms = 0;
                 g_menu_changed = false;
             }
         } else if (g_menu_changed) {
             show_menu_page();
             g_menu_changed = false;
         }
-
-        update_protection_state(temp_c, overdrive_power, drain_voltage_v,
-                                swr1_fault,
-                                swr2_fault,
-                    hard_fault);
-        update_tx_sequence();
     }
 }

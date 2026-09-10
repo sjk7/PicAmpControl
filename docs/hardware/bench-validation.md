@@ -70,7 +70,13 @@ All detector outputs must remain within 0 to VDD at the PIC, including expected 
 3. Confirm the drain warning/trip thresholds operate at the configured voltage values.
 4. Oscilloscope-test ADC_TEMP, ADC_OVERDRIVE, and ADC_DRAIN_PEAK during RF keying, PTT transitions, and supply faults.
 5. Confirm all ADC pins remain within VSS to VDD. Verify the series resistors and external clamps limit current into the PIC pin protection structures during a fault.
-6. Confirm the external comparator path still asserts INPUT_HARD_FAULT fast enough to stop the sequencer independently of ADC polling.
+6. Confirm the external overcurrent comparator path asserts INPUT_OVERCURRENT_FAULT fast enough to stop the sequencer independently of ADC polling. Measure and record ADC/software response time for overdrive and drain peak.
+
+## 5. Timing and Trip Response
+
+1. Apply controlled SWR, overdrive, and drain-threshold breaches and measure the interval from the conditioned ADC signal crossing the configured threshold to the TX outputs becoming inactive.
+2. Confirm LCD refresh and AT24C256 writes do not occur before protection evaluation in the main loop.
+3. Confirm the external overcurrent comparator trips independently of the Timer0 and ADC polling schedule.
 
 ## Records
 
