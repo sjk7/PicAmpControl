@@ -1,5 +1,6 @@
 #include <xc.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include "../include/pin_map.h"
 #include "../include/lcd_i2c.h"
 
@@ -75,6 +76,9 @@ typedef struct {
 
 #define SETTINGS_MAGIC 0xA5
 #define SETTINGS_VERSION 2
+#define MENU_SETTING_U8 0
+#define MENU_SETTING_U16 1
+#define MENU_SETTING_BOOL 2
 
 static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
@@ -93,6 +97,44 @@ static const unsigned char g_ntc_adc[3][16] = {
     {190, 166, 141, 116, 94, 75, 59, 46, 37, 29, 23, 19, 15, 12, 10, 8},
     {197, 171, 142, 114, 89, 68, 51, 38, 29, 22, 17, 13, 10, 8, 6, 5},
     {201, 174, 143, 113, 86, 64, 47, 34, 25, 19, 14, 11, 8, 6, 5, 4}
+};
+static const unsigned char g_menu_setting_offsets[] = {
+    offsetof(protection_thresholds_t, swr1_trip_tenths),
+    offsetof(protection_thresholds_t, swr2_trip_tenths),
+    offsetof(protection_thresholds_t, swr1_fwd_full_scale_w),
+    offsetof(protection_thresholds_t, swr2_fwd_full_scale_w),
+    offsetof(protection_thresholds_t, temp_b_profile),
+    offsetof(protection_thresholds_t, temp_warning_c),
+    offsetof(protection_thresholds_t, temp_trip_c),
+    offsetof(protection_thresholds_t, overdrive_warning_tenths_w),
+    offsetof(protection_thresholds_t, overdrive_trip_tenths_w),
+    offsetof(protection_thresholds_t, drain_warning_v),
+    offsetof(protection_thresholds_t, drain_trip_v),
+    offsetof(protection_thresholds_t, tx_vcc_delay_ms),
+    offsetof(protection_thresholds_t, tx_bias_delay_ms),
+    offsetof(protection_thresholds_t, tx_active_high),
+    offsetof(protection_thresholds_t, tx_vcc_active_high),
+    offsetof(protection_thresholds_t, tx_bias_active_high),
+    offsetof(protection_thresholds_t, fan_active_high),
+    offsetof(protection_thresholds_t, warning_active_high),
+    offsetof(protection_thresholds_t, trip_active_high),
+    offsetof(protection_thresholds_t, power_display_pep),
+    offsetof(protection_thresholds_t, pep_decay_ms)
+};
+static const unsigned char g_menu_setting_types[] = {
+    MENU_SETTING_U8, MENU_SETTING_U8, MENU_SETTING_U16, MENU_SETTING_U16,
+    MENU_SETTING_U8, MENU_SETTING_U16, MENU_SETTING_U16, MENU_SETTING_U8,
+    MENU_SETTING_U8, MENU_SETTING_U16, MENU_SETTING_U16, MENU_SETTING_U16,
+    MENU_SETTING_U16, MENU_SETTING_BOOL, MENU_SETTING_BOOL, MENU_SETTING_BOOL,
+    MENU_SETTING_BOOL, MENU_SETTING_BOOL, MENU_SETTING_BOOL, MENU_SETTING_BOOL,
+    MENU_SETTING_U16
+};
+static const char *const g_menu_labels[] = {
+    "STATUS", "STATUS", "S1 SWR TRIP", "S2 SWR TRIP", "S1 FWD MAX", "S2 FWD MAX",
+    "NTC B VALUE", "TEMP WARNING", "TEMP TRIP", "INPUT WARNING", "INPUT TRIP",
+    "DRAIN WARNING", "DRAIN TRIP", "TX-VCC DELAY", "TX-BIAS DELAY", "TX ACTIVE",
+    "TX-VCC ACTIVE", "TX-BIAS ACTIVE", "FAN ACTIVE", "WARN ACTIVE", "TRIP ACTIVE",
+    "POWER DISPLAY", "PEP DECAY"
 };
 static protection_thresholds_t g_thresholds = {
     30, 20,
@@ -202,96 +244,18 @@ void save_settings(void) {
 }
 
 void show_menu_page(void) {
-    const char *label = "STATUS";
+    const char *label = g_menu_labels[g_menu_page];
     unsigned int value = 0;
+    unsigned char setting_index;
+    unsigned char *setting;
 
-    switch (g_menu_page) {
-        case MENU_PAGE_SWR1_TRIP:
-            label = "S1 SWR TRIP";
-            value = g_thresholds.swr1_trip_tenths;
-            break;
-        case MENU_PAGE_SWR2_TRIP:
-            label = "S2 SWR TRIP";
-            value = g_thresholds.swr2_trip_tenths;
-            break;
-        case MENU_PAGE_SWR1_FWD_FULL_SCALE:
-            label = "S1 FWD MAX";
-            value = g_thresholds.swr1_fwd_full_scale_w;
-            break;
-        case MENU_PAGE_SWR2_FWD_FULL_SCALE:
-            label = "S2 FWD MAX";
-            value = g_thresholds.swr2_fwd_full_scale_w;
-            break;
-        case MENU_PAGE_TEMP_B_VALUE:
-            label = "NTC B VALUE";
-            value = g_thresholds.temp_b_profile == 0 ? 3435 : (g_thresholds.temp_b_profile == 1 ? 3950 : 4250);
-            break;
-        case MENU_PAGE_TEMP_WARNING:
-            label = "TEMP WARNING";
-            value = g_thresholds.temp_warning_c;
-            break;
-        case MENU_PAGE_TEMP_TRIP:
-            label = "TEMP TRIP";
-            value = g_thresholds.temp_trip_c;
-            break;
-        case MENU_PAGE_OVERDRIVE_WARNING:
-            label = "INPUT WARNING";
-            value = g_thresholds.overdrive_warning_tenths_w;
-            break;
-        case MENU_PAGE_OVERDRIVE_TRIP:
-            label = "INPUT TRIP";
-            value = g_thresholds.overdrive_trip_tenths_w;
-            break;
-        case MENU_PAGE_DRAIN_WARNING:
-            label = "DRAIN WARNING";
-            value = g_thresholds.drain_warning_v;
-            break;
-        case MENU_PAGE_DRAIN_TRIP:
-            label = "DRAIN TRIP";
-            value = g_thresholds.drain_trip_v;
-            break;
-        case MENU_PAGE_TX_VCC_DELAY:
-            label = "TX-VCC DELAY";
-            value = g_thresholds.tx_vcc_delay_ms;
-            break;
-        case MENU_PAGE_TX_BIAS_DELAY:
-            label = "TX-BIAS DELAY";
-            value = g_thresholds.tx_bias_delay_ms;
-            break;
-        case MENU_PAGE_TX_ACTIVE_HIGH:
-            label = "TX ACTIVE";
-            value = g_thresholds.tx_active_high;
-            break;
-        case MENU_PAGE_TX_VCC_ACTIVE_HIGH:
-            label = "TX-VCC ACTIVE";
-            value = g_thresholds.tx_vcc_active_high;
-            break;
-        case MENU_PAGE_TX_BIAS_ACTIVE_HIGH:
-            label = "TX-BIAS ACTIVE";
-            value = g_thresholds.tx_bias_active_high;
-            break;
-        case MENU_PAGE_FAN_ACTIVE_HIGH:
-            label = "FAN ACTIVE";
-            value = g_thresholds.fan_active_high;
-            break;
-        case MENU_PAGE_WARNING_ACTIVE_HIGH:
-            label = "WARN ACTIVE";
-            value = g_thresholds.warning_active_high;
-            break;
-        case MENU_PAGE_TRIP_ACTIVE_HIGH:
-            label = "TRIP ACTIVE";
-            value = g_thresholds.trip_active_high;
-            break;
-        case MENU_PAGE_POWER_DISPLAY_MODE:
-            label = "POWER DISPLAY";
-            value = g_thresholds.power_display_pep;
-            break;
-        case MENU_PAGE_PEP_DECAY_MS:
-            label = "PEP DECAY";
-            value = g_thresholds.pep_decay_ms;
-            break;
-        default:
-            break;
+    if (g_menu_page >= MENU_PAGE_SWR1_TRIP) {
+        setting_index = (unsigned char)(g_menu_page - MENU_PAGE_SWR1_TRIP);
+        setting = (unsigned char *)&g_thresholds + g_menu_setting_offsets[setting_index];
+        value = g_menu_setting_types[setting_index] == MENU_SETTING_U16 ? *(unsigned int *)setting : *setting;
+        if (g_menu_page == MENU_PAGE_TEMP_B_VALUE) {
+            value = value == 0 ? 3435 : (value == 1 ? 3950 : 4250);
+        }
     }
 
     lcd_write_byte(0x01, false);
@@ -465,91 +429,18 @@ unsigned int overdrive_power_mw(unsigned int raw) {
 }
 
 void adjust_selected_threshold(bool increase) {
-    unsigned int *selected_threshold = 0;
-    unsigned char *selected_swr_threshold = 0;
-    unsigned char *selected_power_threshold = 0;
-    unsigned char *selected_ntc_profile = 0;
-    bool *selected_polarity = 0;
+    unsigned char setting_index;
+    unsigned char *selected_u8;
+    unsigned int *selected_u16;
 
-    switch (g_menu_page) {
-        case MENU_PAGE_SWR1_TRIP:
-            selected_swr_threshold = &g_thresholds.swr1_trip_tenths;
-            break;
-        case MENU_PAGE_SWR2_TRIP:
-            selected_swr_threshold = &g_thresholds.swr2_trip_tenths;
-            break;
-        case MENU_PAGE_SWR1_FWD_FULL_SCALE:
-            selected_threshold = &g_thresholds.swr1_fwd_full_scale_w;
-            break;
-        case MENU_PAGE_SWR2_FWD_FULL_SCALE:
-            selected_threshold = &g_thresholds.swr2_fwd_full_scale_w;
-            break;
-        case MENU_PAGE_TEMP_B_VALUE:
-            selected_ntc_profile = &g_thresholds.temp_b_profile;
-            break;
-        case MENU_PAGE_TEMP_WARNING:
-            selected_threshold = &g_thresholds.temp_warning_c;
-            break;
-        case MENU_PAGE_TEMP_TRIP:
-            selected_threshold = &g_thresholds.temp_trip_c;
-            break;
-        case MENU_PAGE_OVERDRIVE_WARNING:
-            selected_power_threshold = &g_thresholds.overdrive_warning_tenths_w;
-            break;
-        case MENU_PAGE_OVERDRIVE_TRIP:
-            selected_power_threshold = &g_thresholds.overdrive_trip_tenths_w;
-            break;
-        case MENU_PAGE_DRAIN_WARNING:
-            selected_threshold = &g_thresholds.drain_warning_v;
-            break;
-        case MENU_PAGE_DRAIN_TRIP:
-            selected_threshold = &g_thresholds.drain_trip_v;
-            break;
-        case MENU_PAGE_TX_VCC_DELAY:
-            selected_threshold = &g_thresholds.tx_vcc_delay_ms;
-            break;
-        case MENU_PAGE_TX_BIAS_DELAY:
-            selected_threshold = &g_thresholds.tx_bias_delay_ms;
-            break;
-        case MENU_PAGE_TX_ACTIVE_HIGH:
-            selected_polarity = &g_thresholds.tx_active_high;
-            break;
-        case MENU_PAGE_TX_VCC_ACTIVE_HIGH:
-            selected_polarity = &g_thresholds.tx_vcc_active_high;
-            break;
-        case MENU_PAGE_TX_BIAS_ACTIVE_HIGH:
-            selected_polarity = &g_thresholds.tx_bias_active_high;
-            break;
-        case MENU_PAGE_FAN_ACTIVE_HIGH:
-            selected_polarity = &g_thresholds.fan_active_high;
-            break;
-        case MENU_PAGE_WARNING_ACTIVE_HIGH:
-            selected_polarity = &g_thresholds.warning_active_high;
-            break;
-        case MENU_PAGE_TRIP_ACTIVE_HIGH:
-            selected_polarity = &g_thresholds.trip_active_high;
-            break;
-        case MENU_PAGE_POWER_DISPLAY_MODE:
-            selected_polarity = &g_thresholds.power_display_pep;
-            break;
-        case MENU_PAGE_PEP_DECAY_MS:
-            selected_threshold = &g_thresholds.pep_decay_ms;
-            break;
-        default:
-            break;
-    }
-
-    if (selected_ntc_profile != 0) {
-        if (increase && *selected_ntc_profile < 2) {
-            *selected_ntc_profile += 1;
-        } else if (!increase && *selected_ntc_profile > 0) {
-            *selected_ntc_profile -= 1;
-        }
+    if (g_menu_page < MENU_PAGE_SWR1_TRIP || g_menu_page > MENU_PAGE_PEP_DECAY_MS) {
         return;
     }
 
-    if (selected_polarity != 0) {
-        *selected_polarity = !*selected_polarity;
+    setting_index = (unsigned char)(g_menu_page - MENU_PAGE_SWR1_TRIP);
+    selected_u8 = (unsigned char *)&g_thresholds + g_menu_setting_offsets[setting_index];
+    if (g_menu_setting_types[setting_index] == MENU_SETTING_BOOL) {
+        *selected_u8 = !*selected_u8;
         set_tx_output(false);
         set_tx_vcc_output(false);
         set_tx_bias_output(false);
@@ -559,64 +450,65 @@ void adjust_selected_threshold(bool increase) {
         return;
     }
 
-    if (selected_swr_threshold != 0) {
-        if (increase && *selected_swr_threshold < 50) {
-            *selected_swr_threshold += 1;
-        } else if (!increase && *selected_swr_threshold > 11) {
-            *selected_swr_threshold -= 1;
+    if (g_menu_page == MENU_PAGE_TEMP_B_VALUE) {
+        if (increase && *selected_u8 < 2) {
+            *selected_u8 += 1;
+        } else if (!increase && *selected_u8 > 0) {
+            *selected_u8 -= 1;
         }
         return;
     }
 
-    if (selected_power_threshold != 0) {
-        if (increase && *selected_power_threshold < 100) {
-            *selected_power_threshold += 1;
-        } else if (!increase && *selected_power_threshold > 0) {
-            *selected_power_threshold -= 1;
+    if (g_menu_setting_types[setting_index] == MENU_SETTING_U8) {
+        if (g_menu_page == MENU_PAGE_SWR1_TRIP || g_menu_page == MENU_PAGE_SWR2_TRIP) {
+            if (increase && *selected_u8 < 50) *selected_u8 += 1;
+            else if (!increase && *selected_u8 > 11) *selected_u8 -= 1;
+        } else if (increase && *selected_u8 < 100) {
+            *selected_u8 += 1;
+        } else if (!increase && *selected_u8 > 0) {
+            *selected_u8 -= 1;
         }
         return;
     }
 
-    if (selected_threshold == 0) {
-        return;
-    }
+    selected_u16 = (unsigned int *)selected_u8;
 
     if (g_menu_page == MENU_PAGE_TEMP_WARNING ||
         g_menu_page == MENU_PAGE_TEMP_TRIP) {
-        if (increase && *selected_threshold < 150) {
-            *selected_threshold += 1;
-        } else if (!increase && *selected_threshold > 0) {
-            *selected_threshold -= 1;
+        if (increase && *selected_u16 < 150) {
+            *selected_u16 += 1;
+        } else if (!increase && *selected_u16 > 0) {
+            *selected_u16 -= 1;
         }
     } else if (g_menu_page == MENU_PAGE_PEP_DECAY_MS) {
-        if (increase && *selected_threshold < 2000) {
-            *selected_threshold += 50;
-        } else if (!increase && *selected_threshold > 50) {
-            *selected_threshold -= 50;
+        if (increase && *selected_u16 < 2000) {
+            *selected_u16 += 50;
+        } else if (!increase && *selected_u16 > 50) {
+            *selected_u16 -= 50;
         }
     } else if (g_menu_page == MENU_PAGE_TX_VCC_DELAY || g_menu_page == MENU_PAGE_TX_BIAS_DELAY) {
-        if (increase && *selected_threshold < 1000) {
-            *selected_threshold += 5;
-        } else if (!increase && *selected_threshold >= 5) {
-            *selected_threshold -= 5;
+        if (increase && *selected_u16 < 1000) {
+            *selected_u16 += 5;
+        } else if (!increase && *selected_u16 >= 5) {
+            *selected_u16 -= 5;
         }
     } else if (g_menu_page == MENU_PAGE_SWR1_FWD_FULL_SCALE ||
         g_menu_page == MENU_PAGE_SWR2_FWD_FULL_SCALE) {
-        if (increase && *selected_threshold < 2500) {
-            *selected_threshold += 100;
-        } else if (!increase && *selected_threshold > 500) {
-            *selected_threshold -= 100;
+        if (increase && *selected_u16 < 2500) {
+            *selected_u16 += 100;
+        } else if (!increase && *selected_u16 > 500) {
+            *selected_u16 -= 100;
         }
     } else if (g_menu_page == MENU_PAGE_DRAIN_WARNING || g_menu_page == MENU_PAGE_DRAIN_TRIP) {
-        if (increase && *selected_threshold < 300) {
-            *selected_threshold += 1;
-        } else if (!increase && *selected_threshold > 0) {
-            *selected_threshold -= 1;
+        if (increase && *selected_u16 < 300) {
+            *selected_u16 += 1;
+        } else if (!increase && *selected_u16 > 0) {
+            *selected_u16 -= 1;
         }
-    } else if (increase && *selected_threshold < 1013) {
-        *selected_threshold += 10;
-    } else if (!increase && *selected_threshold > 10) {
-        *selected_threshold -= 10;
+    } else if (increase && *selected_u16 < 1013) {
+        *selected_u16 += 10;
+    } else if (!increase && *selected_u16 > 10) {
+        *selected_u16 -= 10;
     }
 }
 
