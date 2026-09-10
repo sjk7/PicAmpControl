@@ -172,6 +172,8 @@ The same logic is used for each pair and each sensor trips independently. A sing
 
 The 1602 display config menu is operated by three active-low, normally-open switches wired from the menu input pins to ground. RC2 selects the displayed configuration page; RB0 increases and RB1 decreases the selected value. A button action is accepted only while PTT is inactive, so a threshold cannot change during transmit.
 
+The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adjustable from 0 to 1000 ms in 5 ms steps, each defaulting to 20 ms. The active electrical level for OUTPUT_TX, OUTPUT_TX_VCC, OUTPUT_TX_BIAS, OUTPUT_FAN_PWM, OUTPUT_WARNING_STATUS, and OUTPUT_TRIP_STATUS is selectable as LOW or HIGH, with LOW as the default. LCD I2C polarity is not configurable because its open-drain signalling is defined by the I2C bus.
+
 The menu makes these firmware trip thresholds available to the operator:
 
 - pre-filter SWR trip ratio, from 1.1:1 to 5.0:1 in 0.1:1 steps; default 3:1

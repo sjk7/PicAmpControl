@@ -33,6 +33,14 @@ typedef enum {
     MENU_PAGE_OVERDRIVE_TRIP,
     MENU_PAGE_DRAIN_WARNING,
     MENU_PAGE_DRAIN_TRIP,
+    MENU_PAGE_TX_VCC_DELAY,
+    MENU_PAGE_TX_BIAS_DELAY,
+    MENU_PAGE_TX_ACTIVE_HIGH,
+    MENU_PAGE_TX_VCC_ACTIVE_HIGH,
+    MENU_PAGE_TX_BIAS_ACTIVE_HIGH,
+    MENU_PAGE_FAN_ACTIVE_HIGH,
+    MENU_PAGE_WARNING_ACTIVE_HIGH,
+    MENU_PAGE_TRIP_ACTIVE_HIGH,
     MENU_PAGE_COUNT
 } menu_page_t;
 
@@ -47,6 +55,14 @@ typedef struct {
     unsigned char overdrive_trip_tenths_w;
     unsigned int drain_warning_v;
     unsigned int drain_trip_v;
+    unsigned int tx_vcc_delay_ms;
+    unsigned int tx_bias_delay_ms;
+    bool tx_active_high;
+    bool tx_vcc_active_high;
+    bool tx_bias_active_high;
+    bool fan_active_high;
+    bool warning_active_high;
+    bool trip_active_high;
 } protection_thresholds_t;
 
 static volatile system_state_t g_state = STATE_STANDBY;
@@ -55,12 +71,16 @@ static volatile bool g_ptt_active = false;
 static volatile bool g_startup_inhibit = true;
 static volatile menu_page_t g_menu_page = MENU_PAGE_STATUS;
 static volatile bool g_menu_changed = true;
+static unsigned int g_sequence_elapsed_ms = 0;
+static unsigned char g_sequence_stage = 0;
 static protection_thresholds_t g_thresholds = {
     30, 20,
     1500, 1500,
     300, 350,
     90, 100,
-    140, 150
+    140, 150,
+    20, 20,
+    false, false, false, false, false, false
 };
 
 void i2c_delay(void) {
@@ -186,6 +206,34 @@ void lcd_init(void) {
     __delay_ms(2);
 }
 
+bool output_level(bool active, bool active_high) {
+    return active == active_high;
+}
+
+void set_tx_output(bool active) {
+    OUTPUT_TX = output_level(active, g_thresholds.tx_active_high);
+}
+
+void set_tx_vcc_output(bool active) {
+    OUTPUT_TX_VCC = output_level(active, g_thresholds.tx_vcc_active_high);
+}
+
+void set_tx_bias_output(bool active) {
+    OUTPUT_TX_BIAS = output_level(active, g_thresholds.tx_bias_active_high);
+}
+
+void set_fan_output(bool active) {
+    OUTPUT_FAN_PWM = output_level(active, g_thresholds.fan_active_high);
+}
+
+void set_warning_output(bool active) {
+    OUTPUT_WARNING_STATUS = output_level(active, g_thresholds.warning_active_high);
+}
+
+void set_trip_output(bool active) {
+    OUTPUT_TRIP_STATUS = output_level(active, g_thresholds.trip_active_high);
+}
+
 void show_menu_page(void) {
     const char *label = "STATUS";
     unsigned int value = 0;
@@ -231,6 +279,38 @@ void show_menu_page(void) {
             label = "DRAIN TRIP";
             value = g_thresholds.drain_trip_v;
             break;
+        case MENU_PAGE_TX_VCC_DELAY:
+            label = "TX-VCC DELAY";
+            value = g_thresholds.tx_vcc_delay_ms;
+            break;
+        case MENU_PAGE_TX_BIAS_DELAY:
+            label = "TX-BIAS DELAY";
+            value = g_thresholds.tx_bias_delay_ms;
+            break;
+        case MENU_PAGE_TX_ACTIVE_HIGH:
+            label = "TX ACTIVE";
+            value = g_thresholds.tx_active_high;
+            break;
+        case MENU_PAGE_TX_VCC_ACTIVE_HIGH:
+            label = "TX-VCC ACTIVE";
+            value = g_thresholds.tx_vcc_active_high;
+            break;
+        case MENU_PAGE_TX_BIAS_ACTIVE_HIGH:
+            label = "TX-BIAS ACTIVE";
+            value = g_thresholds.tx_bias_active_high;
+            break;
+        case MENU_PAGE_FAN_ACTIVE_HIGH:
+            label = "FAN ACTIVE";
+            value = g_thresholds.fan_active_high;
+            break;
+        case MENU_PAGE_WARNING_ACTIVE_HIGH:
+            label = "WARN ACTIVE";
+            value = g_thresholds.warning_active_high;
+            break;
+        case MENU_PAGE_TRIP_ACTIVE_HIGH:
+            label = "TRIP ACTIVE";
+            value = g_thresholds.trip_active_high;
+            break;
         default:
             break;
     }
@@ -259,6 +339,11 @@ void show_menu_page(void) {
     } else if (g_menu_page == MENU_PAGE_DRAIN_WARNING || g_menu_page == MENU_PAGE_DRAIN_TRIP) {
         lcd_write_unsigned(value);
         lcd_write_byte('V', true);
+    } else if (g_menu_page == MENU_PAGE_TX_VCC_DELAY || g_menu_page == MENU_PAGE_TX_BIAS_DELAY) {
+        lcd_write_unsigned(value);
+        lcd_write_text("ms");
+    } else if (g_menu_page >= MENU_PAGE_TX_ACTIVE_HIGH) {
+        lcd_write_text(value != 0 ? "HIGH" : "LOW");
     } else {
         lcd_write_unsigned(value);
     }
@@ -284,18 +369,19 @@ unsigned int adc_read(unsigned char channel) {
 }
 
 void apply_startup_inhibit(void) {
-    OUTPUT_TX = 1;
-    OUTPUT_TX_VCC = 1;
-    OUTPUT_TX_BIAS = 1;
-    OUTPUT_WARNING_STATUS = 1;
-    OUTPUT_TRIP_STATUS = 1;
+    set_tx_output(false);
+    set_tx_vcc_output(false);
+    set_tx_bias_output(false);
+    set_fan_output(false);
+    set_warning_output(false);
+    set_trip_output(false);
     g_startup_inhibit = true;
 }
 
 void clear_fault_latches(void) {
     g_fault_latched = false;
-    OUTPUT_WARNING_STATUS = 1;
-    OUTPUT_TRIP_STATUS = 1;
+    set_warning_output(false);
+    set_trip_output(false);
 }
 
 void handle_ptt_transition(bool ptt_asserted) {
@@ -360,6 +446,7 @@ void adjust_selected_threshold(bool increase) {
     unsigned int *selected_threshold = 0;
     unsigned char *selected_swr_threshold = 0;
     unsigned char *selected_power_threshold = 0;
+    bool *selected_polarity = 0;
 
     switch (g_menu_page) {
         case MENU_PAGE_SWR1_TRIP:
@@ -392,8 +479,43 @@ void adjust_selected_threshold(bool increase) {
         case MENU_PAGE_DRAIN_TRIP:
             selected_threshold = &g_thresholds.drain_trip_v;
             break;
+        case MENU_PAGE_TX_VCC_DELAY:
+            selected_threshold = &g_thresholds.tx_vcc_delay_ms;
+            break;
+        case MENU_PAGE_TX_BIAS_DELAY:
+            selected_threshold = &g_thresholds.tx_bias_delay_ms;
+            break;
+        case MENU_PAGE_TX_ACTIVE_HIGH:
+            selected_polarity = &g_thresholds.tx_active_high;
+            break;
+        case MENU_PAGE_TX_VCC_ACTIVE_HIGH:
+            selected_polarity = &g_thresholds.tx_vcc_active_high;
+            break;
+        case MENU_PAGE_TX_BIAS_ACTIVE_HIGH:
+            selected_polarity = &g_thresholds.tx_bias_active_high;
+            break;
+        case MENU_PAGE_FAN_ACTIVE_HIGH:
+            selected_polarity = &g_thresholds.fan_active_high;
+            break;
+        case MENU_PAGE_WARNING_ACTIVE_HIGH:
+            selected_polarity = &g_thresholds.warning_active_high;
+            break;
+        case MENU_PAGE_TRIP_ACTIVE_HIGH:
+            selected_polarity = &g_thresholds.trip_active_high;
+            break;
         default:
             break;
+    }
+
+    if (selected_polarity != 0) {
+        *selected_polarity = !*selected_polarity;
+        set_tx_output(false);
+        set_tx_vcc_output(false);
+        set_tx_bias_output(false);
+        set_fan_output(false);
+        set_warning_output(g_state == STATE_WARNING || g_state == STATE_TRIP);
+        set_trip_output(g_state == STATE_TRIP);
+        return;
     }
 
     if (selected_swr_threshold != 0) {
@@ -418,7 +540,13 @@ void adjust_selected_threshold(bool increase) {
         return;
     }
 
-    if (g_menu_page == MENU_PAGE_SWR1_FWD_FULL_SCALE ||
+    if (g_menu_page == MENU_PAGE_TX_VCC_DELAY || g_menu_page == MENU_PAGE_TX_BIAS_DELAY) {
+        if (increase && *selected_threshold < 1000) {
+            *selected_threshold += 5;
+        } else if (!increase && *selected_threshold >= 5) {
+            *selected_threshold -= 5;
+        }
+    } else if (g_menu_page == MENU_PAGE_SWR1_FWD_FULL_SCALE ||
         g_menu_page == MENU_PAGE_SWR2_FWD_FULL_SCALE) {
         if (increase && *selected_threshold < 2500) {
             *selected_threshold += 100;
@@ -435,6 +563,35 @@ void adjust_selected_threshold(bool increase) {
         *selected_threshold += 10;
     } else if (!increase && *selected_threshold > 10) {
         *selected_threshold -= 10;
+    }
+}
+
+void update_tx_sequence(void) {
+    if (!g_ptt_active || g_startup_inhibit || g_fault_latched) {
+        set_tx_output(false);
+        set_tx_vcc_output(false);
+        set_tx_bias_output(false);
+        g_sequence_stage = 0;
+        return;
+    }
+
+    if (g_sequence_stage == 0) {
+        set_tx_output(true);
+        g_sequence_elapsed_ms = 0;
+        g_sequence_stage = 1;
+    } else if (g_sequence_stage == 1) {
+        g_sequence_elapsed_ms += 5;
+        if (g_sequence_elapsed_ms >= g_thresholds.tx_vcc_delay_ms) {
+            set_tx_vcc_output(true);
+            g_sequence_elapsed_ms = 0;
+            g_sequence_stage = 2;
+        }
+    } else if (g_sequence_stage == 2) {
+        g_sequence_elapsed_ms += 5;
+        if (g_sequence_elapsed_ms >= g_thresholds.tx_bias_delay_ms) {
+            set_tx_bias_output(true);
+            g_sequence_stage = 3;
+        }
     }
 }
 
@@ -482,36 +639,30 @@ void update_protection_state(unsigned int temp_raw,
 
     if (g_startup_inhibit) {
         g_state = STATE_RESET_WAIT;
-        OUTPUT_TX = 1;
-        OUTPUT_TX_VCC = 1;
-        OUTPUT_TX_BIAS = 1;
+        set_tx_output(false);
+        set_tx_vcc_output(false);
+        set_tx_bias_output(false);
         return;
     }
 
     if (any_trip_fault) {
         g_fault_latched = true;
         g_state = STATE_TRIP;
-        OUTPUT_TRIP_STATUS = 0;
-        OUTPUT_WARNING_STATUS = 0;
-        OUTPUT_TX = 1;
-        OUTPUT_TX_VCC = 1;
-        OUTPUT_TX_BIAS = 1;
+        set_trip_output(true);
+        set_warning_output(true);
+        set_tx_output(false);
+        set_tx_vcc_output(false);
+        set_tx_bias_output(false);
         return;
     }
 
     if (any_warning) {
         g_state = STATE_WARNING;
-        OUTPUT_WARNING_STATUS = 0;
-        OUTPUT_TX = 0;
-        OUTPUT_TX_VCC = 0;
-        OUTPUT_TX_BIAS = 0;
+        set_warning_output(true);
     } else {
         g_state = STATE_OPERATE;
-        OUTPUT_WARNING_STATUS = 1;
-        OUTPUT_TRIP_STATUS = 1;
-        OUTPUT_TX = 0;
-        OUTPUT_TX_VCC = 0;
-        OUTPUT_TX_BIAS = 0;
+        set_warning_output(false);
+        set_trip_output(false);
     }
 }
 
@@ -545,11 +696,12 @@ int main(void) {
     WPUB = 0x03;
     OPTION_REGbits.nRBPU = 0;
 
-    OUTPUT_TX = 1;
-    OUTPUT_TX_VCC = 1;
-    OUTPUT_TX_BIAS = 1;
-    OUTPUT_WARNING_STATUS = 1;
-    OUTPUT_TRIP_STATUS = 1;
+    set_tx_output(false);
+    set_tx_vcc_output(false);
+    set_tx_bias_output(false);
+    set_fan_output(false);
+    set_warning_output(false);
+    set_trip_output(false);
 
     adc_init();
     lcd_init();
@@ -582,10 +734,8 @@ int main(void) {
             g_startup_inhibit = false;
         }
 
-        if (INPUT_PTT == 0) {
-            handle_ptt_transition(true);
-        } else {
-            handle_ptt_transition(false);
+        if ((INPUT_PTT == 0) != g_ptt_active) {
+            handle_ptt_transition(INPUT_PTT == 0);
         }
 
         handle_fault_ack();
@@ -600,5 +750,6 @@ int main(void) {
                                 swr1_fault,
                                 swr2_fault,
                     hard_fault);
+        update_tx_sequence();
     }
 }
