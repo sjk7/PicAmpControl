@@ -150,6 +150,7 @@ This is a valid analog threshold scheme, but the reference must be chosen carefu
 - Keep the firmware state machine separate from the MCU pin definitions.
 - Use named constants instead of raw magic numbers.
 - Treat the prototype folder as the measurement/reference implementation, not the final protection controller.
+- Build firmware on a self-hosted Windows runner with the XC8 toolchain and PIC16Fxxx device pack installed; publish releases only from an explicitly selected successful build artifact.
 
 ## Recommended implementation order
 

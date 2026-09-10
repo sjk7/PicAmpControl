@@ -22,7 +22,7 @@ The project is in a working design-and-firmware skeleton stage:
 - Pin definitions: [firmware/include/pin_map.h](firmware/include/pin_map.h)
 - LCD and software-I2C driver: [firmware/src/lcd_i2c.c](firmware/src/lcd_i2c.c)
 - LCD driver interface: [firmware/include/lcd_i2c.h](firmware/include/lcd_i2c.h)
-- Project build presets: [CMakePresets.json](CMakePresets.json)
+- Production CMake project: [cmake/My_Pic_Project/default/CMakeLists.txt](cmake/My_Pic_Project/default/CMakeLists.txt)
 - GitHub Actions build workflow: [.github/workflows/firmware-build.yml](.github/workflows/firmware-build.yml)
 - GitHub Actions release workflow: [.github/workflows/release-firmware.yml](.github/workflows/release-firmware.yml)
 
@@ -334,7 +334,14 @@ See [firmware/src/main.c](firmware/src/main.c) for the protection and sequencer 
 
 ## Build status
 
-The local project build has been validated with the CMake/XC8 flow. [cmake/My_Pic_Project/default/user.cmake](cmake/My_Pic_Project/default/user.cmake) constrains the production build to `firmware/src/main.c` and `firmware/src/lcd_i2c.c`, excluding historical prototype sources that the generated file list may contain. The workflow files are in place for GitHub-based automation.
+The local project build has been validated with the CMake/XC8 flow. [cmake/My_Pic_Project/default/user.cmake](cmake/My_Pic_Project/default/user.cmake) constrains the production build to `firmware/src/main.c` and `firmware/src/lcd_i2c.c`, excluding historical prototype sources that the generated file list may contain.
+
+GitHub Actions builds on a self-hosted Windows x64 runner. Set these repository variables to the installed toolchain locations on that runner:
+
+- `XC8_DIR`: XC8 `bin` directory containing `xc8-cc.exe` and `xc8-ar.exe`
+- `PACK_REPO_PATH`: Microchip pack repository containing `Microchip/PIC16Fxxx_DFP/1.8.167/xc8`
+
+The build workflow runs on pushes and pull requests to `main`, verifies those paths before compiling, and uploads an artifact named `firmware-<commit SHA>`. Releases are manual: dispatch the release workflow with an existing tag and the artifact name from a successful build. This prevents automatic release tags and duplicate releases from ordinary commits.
 
 ## TODOs
 
@@ -348,7 +355,7 @@ The following items remain to be finalized before the design is considered compl
 6. Calibrate the two SWR bridges, 10 W input detector, and 300 V drain divider against traceable measurements at the regulated 5.0 V rail, including the RMS/PEP display and PEP-bar response.
 7. Verify that every conditioned ADC input stays between VSS and VDD, including fault/transient tests with the specified external clamps and series resistance.
 8. Validate the shared software-I2C LCD/AT24C256 interface, menu switches, fault acknowledge behaviour, settings restore, and interrupted-power recovery on the final PCB.
-9. Run the GitHub Actions build/release workflows with the intended XC8 toolchain and confirm the published artifacts.
+9. Configure the required self-hosted runner variables, run the GitHub Actions build workflow, and confirm the uploaded firmware artifact before using the manual release workflow.
 10. Review the final PCB against the pin map and update the design documentation for any wiring changes before fabrication.
 
 ## Repository purpose
