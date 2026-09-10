@@ -64,6 +64,7 @@ flowchart LR
     subgraph MCU["PIC16F723A controller"]
         PTT["INPUT_PTT\nTransmit request"]
         ACK["INPUT_FAULT_ACK\nFault clear"]
+        STATE["State machine"]
         TX["OUTPUT_TX\nTX sequence 1"]
         TXVCC["OUTPUT_TX_VCC\nTX sequence 2"]
         TXBIAS["OUTPUT_TX_BIAS\nTX sequence 3"]
@@ -79,27 +80,29 @@ flowchart LR
     POST --> POST_FWD
     POST --> POST_REF
 
-    PRE_FWD --> MCU
-    PRE_REF --> MCU
-    POST_FWD --> MCU
-    POST_REF --> MCU
-    TEMP --> MCU
+    PRE_FWD --> STATE
+    PRE_REF --> STATE
+    POST_FWD --> STATE
+    POST_REF --> STATE
+    TEMP --> STATE
 
-    SWR1 -->|fault| PTT
-    SWR2 -->|fault| PTT
-    OVR -->|fault| PTT
-    DRAIN -->|fault| PTT
-    OC -->|fault| PTT
+    SWR1 -->|fault| STATE
+    SWR2 -->|fault| STATE
+    OVR -->|fault| STATE
+    DRAIN -->|fault| STATE
+    OC -->|fault| STATE
 
-    PTT --> ACK
-    PTT --> TX
-    TX --> TXVCC --> TXBIAS
-    TXVCC --> FAN
-    TXVCC --> WARN
-    TXVCC --> TRIP
-    TX -->|I2C| LCD
-    TX -->|PWM| FAN
+    PTT --> STATE
+    ACK --> STATE
+    STATE --> TX
+    STATE --> TXVCC
+    STATE --> TXBIAS
+    STATE --> FAN
+    STATE --> WARN
+    STATE --> TRIP
+    STATE -->|I2C| LCD
 ```
+
 
 ## Approved hardware pin map
 
