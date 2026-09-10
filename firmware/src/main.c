@@ -45,16 +45,18 @@ unsigned int adc_read(unsigned char channel) {
 }
 
 void apply_startup_inhibit(void) {
-    AMP_ENABLE = 0;
-    WARNING_OUT = 0;
-    TRIP_OUT = 0;
+    OUTPUT_TX = 1;
+    OUTPUT_TX_VCC = 1;
+    OUTPUT_TX_BIAS = 1;
+    OUTPUT_WARNING_STATUS = 1;
+    OUTPUT_TRIP_STATUS = 1;
     g_startup_inhibit = true;
 }
 
 void clear_fault_latches(void) {
     g_fault_latched = false;
-    WARNING_OUT = 0;
-    TRIP_OUT = 0;
+    OUTPUT_WARNING_STATUS = 1;
+    OUTPUT_TRIP_STATUS = 1;
 }
 
 void handle_ptt_transition(bool ptt_asserted) {
@@ -65,7 +67,7 @@ void handle_ptt_transition(bool ptt_asserted) {
         }
         // Purposefully clear only software latches when a new transmit cycle begins.
         // Real hardware comparator faults must still be checked before enabling the amplifier.
-        if (COMP_SWR_1 == 0 && COMP_SWR_2 == 0 && COMP_OVERDRIVE == 0 && COMP_OVERCURRENT == 0 && COMP_DRAIN_PEAK == 0) {
+        if (INPUT_COMP_SWR_1 == 0 && INPUT_COMP_SWR_2 == 0 && INPUT_COMP_OVERDRIVE == 0 && INPUT_COMP_OVERCURRENT == 0 && INPUT_COMP_DRAIN_PEAK == 0) {
             clear_fault_latches();
             g_state = STATE_OPERATE;
         }
@@ -87,32 +89,42 @@ void update_protection_state(unsigned int fwd_raw,
 
     if (g_startup_inhibit) {
         g_state = STATE_RESET_WAIT;
-        AMP_ENABLE = 0;
+        OUTPUT_TX = 1;
+        OUTPUT_TX_VCC = 1;
+        OUTPUT_TX_BIAS = 1;
         return;
     }
 
     if (any_hardware_fault) {
         g_fault_latched = true;
         g_state = STATE_TRIP;
-        TRIP_OUT = 1;
-        WARNING_OUT = 1;
-        AMP_ENABLE = 0;
+        OUTPUT_TRIP_STATUS = 0;
+        OUTPUT_WARNING_STATUS = 0;
+        OUTPUT_TX = 1;
+        OUTPUT_TX_VCC = 1;
+        OUTPUT_TX_BIAS = 1;
         return;
     }
 
     if (temp_raw > 300) {
         g_state = STATE_WARNING;
-        WARNING_OUT = 1;
-        AMP_ENABLE = 1;
+        OUTPUT_WARNING_STATUS = 0;
+        OUTPUT_TX = 0;
+        OUTPUT_TX_VCC = 0;
+        OUTPUT_TX_BIAS = 0;
     } else if (fwd_raw > 400 || ref_raw > 250) {
         g_state = STATE_WARNING;
-        WARNING_OUT = 1;
-        AMP_ENABLE = 1;
+        OUTPUT_WARNING_STATUS = 0;
+        OUTPUT_TX = 0;
+        OUTPUT_TX_VCC = 0;
+        OUTPUT_TX_BIAS = 0;
     } else {
         g_state = STATE_OPERATE;
-        WARNING_OUT = 0;
-        TRIP_OUT = 0;
-        AMP_ENABLE = 1;
+        OUTPUT_WARNING_STATUS = 1;
+        OUTPUT_TRIP_STATUS = 1;
+        OUTPUT_TX = 0;
+        OUTPUT_TX_VCC = 0;
+        OUTPUT_TX_BIAS = 0;
     }
 }
 
@@ -136,9 +148,11 @@ int main(void) {
     TRISB = 0xFF;
     PORTB = 0x00;
 
-    AMP_ENABLE = 0;
-    WARNING_OUT = 0;
-    TRIP_OUT = 0;
+    OUTPUT_TX = 1;
+    OUTPUT_TX_VCC = 1;
+    OUTPUT_TX_BIAS = 1;
+    OUTPUT_WARNING_STATUS = 1;
+    OUTPUT_TRIP_STATUS = 1;
 
     adc_init();
     apply_startup_inhibit();
@@ -150,18 +164,18 @@ int main(void) {
         ref_raw = adc_read(REF_ADC_CHANNEL);
         temp_raw = adc_read(TEMP_ADC_CHANNEL);
 
-        bool swr1_fault = (COMP_SWR_1 == 1);
-        bool swr2_fault = (COMP_SWR_2 == 1);
-        bool overdrive_fault = (COMP_OVERDRIVE == 1);
-        bool drain_peak_fault = (COMP_DRAIN_PEAK == 1);
-        bool overcurrent_fault = (COMP_OVERCURRENT == 1);
+        bool swr1_fault = (INPUT_COMP_SWR_1 == 1);
+        bool swr2_fault = (INPUT_COMP_SWR_2 == 1);
+        bool overdrive_fault = (INPUT_COMP_OVERDRIVE == 1);
+        bool drain_peak_fault = (INPUT_COMP_DRAIN_PEAK == 1);
+        bool overcurrent_fault = (INPUT_COMP_OVERCURRENT == 1);
 
         if (g_startup_inhibit) {
             __delay_ms(1000);
             g_startup_inhibit = false;
         }
 
-        if (PTT_IN == 0) {
+        if (INPUT_PTT == 0) {
             handle_ptt_transition(true);
         } else {
             handle_ptt_transition(false);
