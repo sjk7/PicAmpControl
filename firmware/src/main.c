@@ -449,23 +449,18 @@ void handle_ptt_transition(bool ptt_asserted) {
 
 bool swr_trip(unsigned int forward_raw,
               unsigned int reflected_raw,
-              unsigned int forward_full_scale_w,
               unsigned char limit_tenths) {
     unsigned long upper_factor;
     unsigned long lower_factor;
-    unsigned int forward_power_w;
-    unsigned int reflected_power_w;
 
     if (forward_raw < 10 || limit_tenths <= 10) {
         return false;
     }
 
-    forward_power_w = (unsigned int)(((unsigned long)forward_raw * forward_full_scale_w) / 1023UL);
-    reflected_power_w = (unsigned int)(((unsigned long)reflected_raw * forward_full_scale_w) / 1023UL);
     upper_factor = (unsigned long)(limit_tenths + 10) * (limit_tenths + 10);
     lower_factor = (unsigned long)(limit_tenths - 10) * (limit_tenths - 10);
-    return (unsigned long)reflected_power_w * upper_factor >=
-           (unsigned long)forward_power_w * lower_factor;
+        return (unsigned long)reflected_raw * upper_factor >=
+            (unsigned long)forward_raw * lower_factor;
 }
 
 unsigned int drain_voltage(unsigned int raw) {
@@ -760,10 +755,8 @@ int main(void) {
         update_post_filter_power(swr2_fwd_raw);
 
         bool swr1_fault = swr_trip(swr1_fwd_raw, swr1_ref_raw,
-                       g_thresholds.swr1_fwd_full_scale_w,
                        g_thresholds.swr1_trip_tenths);
         bool swr2_fault = swr_trip(swr2_fwd_raw, swr2_ref_raw,
-                       g_thresholds.swr2_fwd_full_scale_w,
                        g_thresholds.swr2_trip_tenths);
         bool hard_fault = (INPUT_OVERCURRENT_FAULT == 1);
 
