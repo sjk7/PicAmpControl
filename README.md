@@ -177,7 +177,7 @@ The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adj
 
 All menu settings and the selected display page are saved to the AT24C256 at each operator change. The stored record includes a magic value, format version, and checksum. At power-up the record is restored only when valid; a missing, incompatible, or corrupted record loads the compiled safe defaults and the primary status page.
 
-The default status screen displays post-filter forward power. Its primary readout can be selected as RMS or PEP, and the second row is a full-width bracketed PEP bar referenced to the configured post-filter maximum power. A second status page shows `PEP [----------]` with the temperature in degrees C on the next row. PEP is held and decays by one watt at a configurable 50-2000 ms interval; the default is 500 ms.
+The default status screen displays post-filter forward power. Its primary readout can be selected as RMS or PEP, and the second row is a full-width PEP bar referenced to the configured post-filter maximum power. The common bar style uses `-` for measured PEP and `.` for unused capacity. A second status page shows `PEP ------------` with the temperature in degrees C on the next row. PEP is held and decays by one watt at a configurable 50-2000 ms interval; the default is 500 ms.
 
 The menu makes these firmware trip thresholds available to the operator:
 
