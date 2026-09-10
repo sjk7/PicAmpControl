@@ -367,7 +367,7 @@ void handle_ptt_transition(bool ptt_asserted) {
         if (!g_fault_latched) {
             g_state = STATE_RESET_WAIT;
         }
-        if (INPUT_HARD_FAULT == 0) {
+        if (INPUT_OVERCURRENT_FAULT == 0) {
             clear_fault_latches();
             g_state = STATE_OPERATE;
         }
@@ -696,7 +696,7 @@ int main(void) {
         bool swr2_fault = swr_trip(swr2_fwd_raw, swr2_ref_raw,
                        g_thresholds.swr2_fwd_full_scale_w,
                        g_thresholds.swr2_trip_tenths);
-        bool hard_fault = (INPUT_HARD_FAULT == 1);
+        bool hard_fault = (INPUT_OVERCURRENT_FAULT == 1);
 
         if (g_startup_inhibit) {
             __delay_ms(1000);

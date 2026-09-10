@@ -36,7 +36,7 @@
 // Menu controls, comparator inputs, and status lines
 #define INPUT_MENU_INCREASE PORTBbits.RB0
 #define INPUT_MENU_DECREASE PORTBbits.RB1
-#define INPUT_HARD_FAULT PORTBbits.RB4
+#define INPUT_OVERCURRENT_FAULT PORTBbits.RB4
 #define OUTPUT_FAN_PWM PORTBbits.RB5
 #define OUTPUT_WARNING_STATUS PORTBbits.RB6
 #define OUTPUT_TRIP_STATUS PORTBbits.RB7
