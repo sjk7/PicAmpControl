@@ -112,7 +112,7 @@ This is the current approved signal map for the protection controller. The only 
 |---|---|---|---|---|
 | 11 | RC0 | INPUT_PTT | Input | Transmit request / key-down input |
 | 12 | RC1 | INPUT_FAULT_ACK | Input | Fault clear / reset trigger |
-| 13 | RC2 | spare | Input | Reserved if a separate hardware signal is needed later |
+| 13 | RC2 | INPUT_MENU_NEXT | Input | Config-menu page select switch |
 | 14 | RC3 | OUTPUT_LCD_I2C_SCL | Output | LCD backpack clock line |
 | 15 | RC4 | OUTPUT_LCD_I2C_SDA | Output | LCD backpack data line |
 | 16 | RC5 | OUTPUT_TX | Output | First TX sequencing driver |
@@ -125,8 +125,8 @@ This is the current approved signal map for the protection controller. The only 
 | 6 | RA4 | ADC_TEMP | Input | Temperature sensor input |
 | 9,10 | OSC1, OSC2 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
-| 19 | RB0 | INPUT_SPARE_1 | Input | Free spare input; no SWR comparator required |
-| 20 | RB1 | INPUT_SPARE_2 | Input | Free spare input; no SWR comparator required |
+| 19 | RB0 | INPUT_MENU_INCREASE | Input | Config-menu value increase switch |
+| 20 | RB1 | INPUT_MENU_DECREASE | Input | Config-menu value decrease switch |
 | 21 | RB2 | INPUT_COMP_OVERDRIVE | Input | Overdrive comparator |
 | 22 | RB3 | INPUT_COMP_DRAIN_PEAK | Input | Drain peak comparator |
 | 23 | RB4 | INPUT_COMP_OVERCURRENT | Input | Overcurrent comparator |
@@ -144,6 +144,7 @@ This is the current approved signal map for the protection controller. The only 
 - SWR measurement pairs: two ADC pairs are required, one before and one after the low-pass filter bank, each with forward and reflected inputs
 - ADC wiring: RA0 through RA4 are dedicated directly to the four SWR detector outputs and temperature sensor; no external analog multiplexer is fitted
 - Operator controls: INPUT_PTT and INPUT_FAULT_ACK
+- Configuration controls: INPUT_MENU_NEXT, INPUT_MENU_INCREASE, and INPUT_MENU_DECREASE; each switch is active-low and is available only while not transmitting
 - Sequencing outputs: OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS
 - Status outputs: OUTPUT_WARNING_STATUS and OUTPUT_TRIP_STATUS
 - Output rule: all MCU output pins are active-low by default unless a specific hardware design requires otherwise
@@ -166,6 +167,21 @@ This applies to both SWR measurement points:
 - post-filter SWR sensor 2
 
 The same logic is used for each pair and each sensor trips independently. A single high SWR at one measurement point must not be masked by a healthy reading at the other point.
+
+## User configuration
+
+The 1602 display config menu is operated by three active-low, normally-open switches wired from the menu input pins to ground. RC2 selects the displayed configuration page; RB0 increases and RB1 decreases the selected value. A button action is accepted only while PTT is inactive, so a threshold cannot change during transmit.
+
+The menu makes these firmware trip thresholds available to the operator:
+
+- SWR1 trip ratio, from 1.1:1 to 5.0:1 in 0.1:1 steps
+- SWR2 trip ratio, from 1.1:1 to 5.0:1 in 0.1:1 steps
+- temperature warning raw ADC value
+- temperature trip raw ADC value
+
+Each SWR ratio setting directly controls its local software trip: the controller calculates the mismatch from that sensor's forward/reflected pair and trips when it reaches the displayed setting. There are no dedicated SWR comparator inputs in this design.
+
+The overdrive, drain-peak, and overcurrent trips are hardware comparator thresholds. They require calibration at their analogue reference networks and cannot be changed from the PIC menu without adding programmable analogue reference hardware. The current PIC16F723A configuration has no EEPROM, so firmware menu settings return to their safe defaults after a power cycle.
 
 ## Naming convention used in code
 

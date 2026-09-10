@@ -16,7 +16,7 @@ This is the current approved signal map for the protection controller. The only 
 |---|---|---|---|---|
 | 11 | RC0 | INPUT_PTT | Input | Transmit request / key-down input |
 | 12 | RC1 | INPUT_FAULT_ACK | Input | Fault clear / reset trigger |
-| 13 | RC2 | spare | Input | Reserved if a separate hardware signal is needed later |
+| 13 | RC2 | INPUT_MENU_NEXT | Input | Config-menu page select switch |
 | 14 | RC3 | OUTPUT_LCD_I2C_SCL | Output | LCD backpack clock line |
 | 15 | RC4 | OUTPUT_LCD_I2C_SDA | Output | LCD backpack data line |
 | 16 | RC5 | OUTPUT_TX | Output | First TX sequencing driver |
@@ -29,8 +29,8 @@ This is the current approved signal map for the protection controller. The only 
 | 6 | RA4 | ADC_TEMP | Input | Temperature sensor input |
 | 9,10 | OSC1, OSC2 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
-| 19 | RB0 | INPUT_SPARE_1 | Input | Free spare input; no SWR comparator required |
-| 20 | RB1 | INPUT_SPARE_2 | Input | Free spare input; no SWR comparator required |
+| 19 | RB0 | INPUT_MENU_INCREASE | Input | Config-menu value increase switch |
+| 20 | RB1 | INPUT_MENU_DECREASE | Input | Config-menu value decrease switch |
 | 21 | RB2 | INPUT_COMP_OVERDRIVE | Input | Overdrive comparator |
 | 22 | RB3 | INPUT_COMP_DRAIN_PEAK | Input | Drain peak comparator |
 | 23 | RB4 | INPUT_COMP_OVERCURRENT | Input | Overcurrent comparator |
@@ -65,9 +65,13 @@ This is the current approved signal map for the protection controller. The only 
 
 ### Operator controls
 
-- MODE_SWITCH: RC0
+- PTT_IN: RC0
 - FAULT_ACK: RC1
-- PTT_IN: RC2
+- MENU_NEXT: RC2
+- MENU_INCREASE: RB0
+- MENU_DECREASE: RB1
+
+The menu switches are normally open and active-low, wired from the input pin to ground. RB0 and RB1 use PORTB weak pull-ups; RC2 needs an external pull-up resistor. The firmware accepts menu input only while PTT is inactive.
 
 ### Comparator board interface
 
@@ -88,6 +92,7 @@ The SWR protection channels are not required in hardware because each SWR pair i
 - The comparator board is deliberately separate from the PIC so that the critical analog faults are hardware-protected before the MCU state machine can act.
 - SWR is evaluated in firmware from the forward/reflected ADC pairs; no dedicated SWR comparator is required.
 - The five planned analog measurements have dedicated PIC ADC pins, so no external analog multiplexer is required.
+- The three former spare inputs are assigned to the LCD configuration menu; no unallocated GPIO remains in this pin map.
 - PTT is treated as a re-arm event for software fault latches, but it must never override a live hardware comparator fault.
 - Any future expansion should be planned before wiring, so the MCU I/O map does not become inconsistent.
 

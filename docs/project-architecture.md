@@ -33,6 +33,7 @@ Build a PIC16F723A-based linear amplifier protection controller that monitors RF
    - warning and trip thresholds
    - fault acknowledge / reset input
    - PTT input for transmit-cycle arming
+   - three-switch LCD configuration menu
 
 ## Protection strategy
 
@@ -55,9 +56,17 @@ SWR protection is computed locally for each sensing point:
 
 This allows each SWR monitor to act independently and gives a clear, local protection decision at each stage.
 
-The earlier SWR comparator channels are no longer required in the active design. Their pins are released as spare inputs and can be used for future expansion if needed.
+The earlier SWR comparator channels are no longer required in the active design. Their former input pins are assigned to configuration-menu switches.
 
 The five planned analog measurements are wired directly to RA0 through RA4. No external analog multiplexer is required; the PIC selects the dedicated ADC channels sequentially.
+
+## User threshold configuration
+
+The LCD configuration menu uses three active-low switches: `INPUT_MENU_NEXT` on RC2, `INPUT_MENU_INCREASE` on RB0, and `INPUT_MENU_DECREASE` on RB1. The operator can select and adjust an independent SWR trip ratio for each detector pair, from 1.1:1 to 5.0:1 in 0.1:1 steps, as well as the temperature warning and temperature-trip thresholds. Changes are locked out during transmit.
+
+The software trip comparison follows the displayed ratio rather than a raw ADC limit. For a configured ratio $S$, it trips when the paired measurements satisfy $R(S+1)^2 \geq F(S-1)^2$, where $F$ is forward power and $R$ is reflected power. This is the standard SWR relationship expressed without floating-point arithmetic. The forward sample must exceed a small noise floor before this comparison can trip.
+
+Overdrive, drain peak, and overcurrent are hardware comparator protections. Their thresholds are set and verified in the analogue circuitry; a firmware menu cannot alter them with the present design. Supporting user-adjustable values for those faults would require programmable comparator references or digital potentiometers and an additional control interface. Firmware menu values are retained only while powered because this PIC configuration has no EEPROM.
 
 ## LCD strategy
 
