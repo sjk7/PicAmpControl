@@ -101,14 +101,15 @@ static volatile unsigned char g_timer_ticks_pending = 0;
 static volatile bool g_settings_dirty = false;
 static unsigned int g_settings_save_delay_ms = 0;
 static volatile unsigned char g_adc_scan_index = 0;
-static volatile unsigned int g_adc_swr1_fwd = 0;
-static volatile unsigned int g_adc_swr1_ref = 0;
-static volatile unsigned int g_adc_swr2_fwd = 0;
-static volatile unsigned int g_adc_swr2_ref = 0;
-static volatile unsigned int g_adc_temp = 0;
-static volatile unsigned int g_adc_overdrive = 0;
-static volatile unsigned int g_adc_drain = 0;
-static volatile unsigned int g_adc_current = 0;
+static volatile unsigned int g_adc_samples[8] = {0};
+#define ADC_SAMPLE_SWR1_FWD g_adc_samples[0]
+#define ADC_SAMPLE_SWR1_REF g_adc_samples[1]
+#define ADC_SAMPLE_SWR2_FWD g_adc_samples[2]
+#define ADC_SAMPLE_SWR2_REF g_adc_samples[3]
+#define ADC_SAMPLE_TEMP g_adc_samples[4]
+#define ADC_SAMPLE_CURRENT g_adc_samples[5]
+#define ADC_SAMPLE_OVERDRIVE g_adc_samples[6]
+#define ADC_SAMPLE_DRAIN g_adc_samples[7]
 static const unsigned char g_ntc_adc[3][16] = {
     {190, 166, 141, 116, 94, 75, 59, 46, 37, 29, 23, 19, 15, 12, 10, 8},
     {197, 171, 142, 114, 89, 68, 51, 38, 29, 22, 17, 13, 10, 8, 6, 5},
@@ -209,14 +210,14 @@ void __interrupt() timer0_isr(void) {
         PIR1bits.ADIF = 0;
 
         switch (g_adc_scan_index) {
-            case 0: g_adc_swr1_fwd = sample; break;
-            case 1: g_adc_swr1_ref = sample; break;
-            case 2: g_adc_swr2_fwd = sample; break;
-            case 3: g_adc_swr2_ref = sample; break;
-            case 4: g_adc_temp = sample; break;
-            case 5: g_adc_current = sample; break;
-            case 6: g_adc_overdrive = sample; break;
-            default: g_adc_drain = sample; break;
+            case 0: g_adc_samples[0] = sample; break;
+            case 1: g_adc_samples[1] = sample; break;
+            case 2: g_adc_samples[2] = sample; break;
+            case 3: g_adc_samples[3] = sample; break;
+            case 4: g_adc_samples[4] = sample; break;
+            case 5: g_adc_samples[5] = sample; break;
+            case 6: g_adc_samples[6] = sample; break;
+            default: g_adc_samples[7] = sample; break;
         }
 
         g_adc_scan_index++;
@@ -359,7 +360,7 @@ void show_menu_page(void) {
         lcd_write_power_bar(g_post_fwd_pep_w, g_thresholds.swr2_fwd_full_scale_w, 12);
         lcd_set_cursor(1, 0);
         lcd_write_text("TEMP ");
-        lcd_write_unsigned(temperature_c(g_adc_temp));
+        lcd_write_unsigned(temperature_c(ADC_SAMPLE_TEMP));
         lcd_write_byte('C', true);
         return;
     }
@@ -771,17 +772,17 @@ int main(void) {
     apply_startup_inhibit();
 
     while (1) {
-        swr1_fwd_raw = g_adc_swr1_fwd;
-        swr1_ref_raw = g_adc_swr1_ref;
-        swr2_fwd_raw = g_adc_swr2_fwd;
-        swr2_ref_raw = g_adc_swr2_ref;
-        temp_raw = g_adc_temp;
+        swr1_fwd_raw = ADC_SAMPLE_SWR1_FWD;
+        swr1_ref_raw = ADC_SAMPLE_SWR1_REF;
+        swr2_fwd_raw = ADC_SAMPLE_SWR2_FWD;
+        swr2_ref_raw = ADC_SAMPLE_SWR2_REF;
+        temp_raw = ADC_SAMPLE_TEMP;
         temp_c = temperature_c(temp_raw);
-        overdrive_raw = g_adc_overdrive;
-        drain_raw = g_adc_drain;
+        overdrive_raw = ADC_SAMPLE_OVERDRIVE;
+        drain_raw = ADC_SAMPLE_DRAIN;
         overdrive_power = overdrive_power_mw(overdrive_raw);
         drain_voltage_v = drain_voltage(drain_raw);
-        current_raw = g_adc_current;
+        current_raw = ADC_SAMPLE_CURRENT;
         update_post_filter_power(swr2_fwd_raw);
 
         bool swr1_fault = swr_trip(swr1_fwd_raw, swr1_ref_raw,
