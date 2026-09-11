@@ -4,14 +4,14 @@
 #include "../include/pin_map.h"
 #include "../include/lcd_i2c.h"
 
-#pragma config FOSC = HS
+#pragma config FEXTOSC = HS
+#pragma config RSTOSC = EXT1X
 #pragma config WDTE = OFF
 #pragma config PWRTE = OFF
 #pragma config MCLRE = ON
 #pragma config CP = OFF
 #pragma config BOREN = ON
 #pragma config BORV = 19
-#pragma config PLLEN = OFF
 
 typedef enum {
     STATE_STANDBY = 0,
@@ -115,7 +115,7 @@ static const unsigned char g_ntc_adc[3][16] = {
     {197, 171, 142, 114, 89, 68, 51, 38, 29, 22, 17, 13, 10, 8, 6, 5},
     {201, 174, 143, 113, 86, 64, 47, 34, 25, 19, 14, 11, 8, 6, 5, 4}
 };
-static const unsigned char g_adc_scan_channels[8] = {0, 1, 2, 3, 4, 6, 7, 8};
+static const unsigned char g_adc_scan_channels[8] = {0, 1, 2, 3, 5, 9, 10, 11};
 static const unsigned char g_menu_setting_offsets[] = {
     offsetof(protection_thresholds_t, swr1_trip_tenths),
     offsetof(protection_thresholds_t, swr2_trip_tenths),
@@ -197,9 +197,9 @@ void set_trip_output(bool active) {
 }
 
 void __interrupt() timer0_isr(void) {
-    if (INTCONbits.T0IF != 0) {
-        TMR0 = 100;
-        INTCONbits.T0IF = 0;
+    if (PIR0bits.TMR0IF != 0) {
+        TMR0L = 100;
+        PIR0bits.TMR0IF = 0;
         if (g_timer_ticks_pending != 255) {
             g_timer_ticks_pending++;
         }
@@ -224,20 +224,21 @@ void __interrupt() timer0_isr(void) {
         if (g_adc_scan_index >= 8) {
             g_adc_scan_index = 0;
         }
-        ADCON0 &= 0x03;
-        ADCON0 |= (unsigned char)(g_adc_scan_channels[g_adc_scan_index] << 2);
-        ADCON0bits.GO_DONE = 1;
+        ADPCH = g_adc_scan_channels[g_adc_scan_index];
+        ADCON0bits.GO_nDONE = 1;
     }
 
 }
 
 void timer0_init(void) {
-    OPTION_REGbits.T0CS = 0;
-    OPTION_REGbits.PSA = 0;
-    OPTION_REGbits.PS = 0b100;
-    TMR0 = 100;
-    INTCONbits.T0IF = 0;
-    INTCONbits.T0IE = 1;
+    T0CON0bits.T016BIT = 0;
+    T0CON0bits.T0OUTPS = 0;
+    T0CON1bits.T0CS = 0;
+    T0CON1bits.T0CKPS = 4;
+    TMR0L = 100;
+    PIR0bits.TMR0IF = 0;
+    PIE0bits.TMR0IE = 1;
+    T0CON0bits.T0EN = 1;
     INTCONbits.GIE = 1;
 }
 
@@ -410,13 +411,14 @@ void show_menu_page(void) {
 void adc_init(void) {
     FVRCON = 0x00;
     ANSELA = 0x2F;
-    ANSELB = 0x0C;
+    ANSELB = 0x0E;
     ADCON1 = 0x20;
-    ADCON0 = 0x01;
+    ADPCH = 0;
+    ADCON0 = 0x80;
     PIR1bits.ADIF = 0;
     PIE1bits.ADIE = 1;
     INTCONbits.PEIE = 1;
-    ADCON0bits.GO_DONE = 1;
+    ADCON0bits.GO_nDONE = 1;
 }
 
 void apply_startup_inhibit(void) {
@@ -754,7 +756,6 @@ int main(void) {
     TRISB = 0x1F;
     PORTB = 0x00;
     WPUB = 0x03;
-    OPTION_REGbits.nRBPU = 0;
 
     set_tx_output(false);
     set_tx_vcc_output(false);

@@ -34,9 +34,9 @@ jobs:
           if (-not (Test-Path $xc8)) {
             throw "XC8 compiler not found at $xc8. Install the Microchip XC8 toolchain on the self-hosted runner before running this workflow."
           }
-          $devicePack = Join-Path $env:PACK_REPO_PATH 'Microchip/PIC16Fxxx_DFP/1.8.167/xc8'
+          $devicePack = Join-Path $env:PACK_REPO_PATH 'Microchip/PIC16F1xxxx_DFP/1.32.471/xc8'
           if (-not (Test-Path $devicePack)) {
-            throw "PIC16Fxxx_DFP 1.8.167 is not installed at $devicePack. Install the device pack on the self-hosted runner."
+            throw "PIC16F1xxxx_DFP 1.32.471 is not installed at $devicePack. Install the device pack on the self-hosted runner."
           }
           Write-Host "Using XC8 compiler: $xc8"
           Write-Host "Using device pack: $devicePack"

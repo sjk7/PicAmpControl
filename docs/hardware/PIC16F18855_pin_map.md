@@ -1,10 +1,10 @@
-# PIC16F723A Hardware Pin Map
+# PIC16F18855-I/SP Hardware Pin Map
 
-This document captures the current hardware understanding for the PIC16F723A and keeps the MCU pin layout tied directly to the amplifier protection design.
+This document captures the current hardware understanding for the PIC16F18855-I/SP and keeps the MCU pin layout tied directly to the amplifier protection design.
 
 ## MCU
 
-- Device: PIC16F723A
+- Device: PIC16F18855-I/SP
 - Clock: 20 MHz crystal on OSC1/OSC2
 - Core purpose: measure RF power, monitor SWR, control amplifier protection state, and report faults on the LCD
 
@@ -14,32 +14,32 @@ This is the current approved signal map for the protection controller. The 1602 
 
 | PIC pin | Port | Project name | Direction | Function |
 |---|---|---|---|---|
-| 11 | RC0 | INPUT_PTT | Input | Transmit request / key-down input |
-| 12 | RC1 | OUTPUT_COMP_RESET | Output | Active-low 10 ms comparator-latch reset pulse on PTT entry |
-| 13 | RC2 | INPUT_MENU_NEXT | Input | Config-menu page select switch |
-| 14 | RC3 | OUTPUT_LCD_I2C_SCL | Output | LCD backpack clock line |
-| 15 | RC4 | OUTPUT_LCD_I2C_SDA | Output | LCD backpack data line |
-| 16 | RC5 | OUTPUT_TX | Output | First TX sequencing driver |
-| 17 | RC6 | OUTPUT_TX_VCC | Output | Second TX sequencing driver |
-| 18 | RC7 | OUTPUT_TX_BIAS | Output | Final TX sequencing driver |
+| 21 | RC0 | INPUT_PTT | Input | Transmit request / key-down input |
+| 22 | RC1 | OUTPUT_COMP_RESET | Output | Active-low 10 ms comparator-latch reset pulse on PTT entry |
+| 23 | RC2 | INPUT_MENU_NEXT | Input | Config-menu page select switch |
+| 24 | RC3 | OUTPUT_LCD_I2C_SCL | Output | LCD backpack clock line |
+| 25 | RC4 | OUTPUT_LCD_I2C_SDA | Output | LCD backpack data line |
+| 26 | RC5 | OUTPUT_TX | Output | First TX sequencing driver |
+| 27 | RC6 | OUTPUT_TX_VCC | Output | Second TX sequencing driver |
+| 28 | RC7 | OUTPUT_TX_BIAS | Output | Final TX sequencing driver |
 | 2 | RA0 | ADC_SWR1_FWD | Input | Pre-filter SWR forward power ADC |
 | 3 | RA1 | ADC_SWR1_REF | Input | Pre-filter SWR reflected power ADC |
 | 4 | RA2 | ADC_SWR2_FWD | Input | Post-filter SWR forward power ADC |
 | 5 | RA3 | ADC_SWR2_REF | Input | Post-filter SWR reflected power ADC |
-| 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC |
-| 9,10 | OSC1, OSC2 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
+| 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC (AN5) |
+| 9,10 | RA6/OSC2, RA7/OSC1 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
-| 19 | RB0 | INPUT_MENU_ADJUST | Input | Menu adjust: short press increase, hold decrease |
-| 20 | RB1 | ADC_CURRENT | Input | WCS1700 current ADC, provisional 70 A full scale |
-| 21 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC |
-| 22 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC |
-| 23 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
-| 24 | RB5 | OUTPUT_FAN_PWM | Output | 12 V fan low-side MOSFET control; confirm hardware-PWM alternate-function routing |
-| 25 | RB6 | OUTPUT_WARNING_STATUS | Output | Warning status output |
-| 26 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
+| 12 | RB0 | INPUT_MENU_ADJUST | Input | Menu adjust: short press increase, hold decrease |
+| 13 | RB1 | ADC_CURRENT | Input | WCS1700 current ADC (AN9), provisional 70 A full scale |
+| 14 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC (AN10) |
+| 15 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC (AN11) |
+| 16 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
+| 17 | RB5 | OUTPUT_FAN_PWM | Output | 12 V fan low-side MOSFET control; confirm hardware-PWM alternate-function routing |
+| 18 | RB6 | OUTPUT_WARNING_STATUS | Output | Warning status output |
+| 19 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
 | 6 | RA4 | unused | Input | Reserved; not an ADC channel in this design |
-| 8,27 | VSS | GND | Power | Ground return |
-| 28 | VDD | +5 V | Power | Decouple locally per datasheet |
+| 8,20 | VSS | GND | Power | Ground return |
+| 11 | VDD | +5 V | Power | Decouple locally per datasheet |
 
 ## Functional grouping
 
@@ -49,10 +49,10 @@ This is the current approved signal map for the protection controller. The 1602 
 - pre-filter reflected power sense: RA1 / AN1, 0-5 V detector output; shares the pre-filter forward full-scale setting
 - post-filter forward power sense: RA2 / AN2, 0-5 V detector output; configurable full scale from 500 W to 2500 W, default 1500 W
 - post-filter reflected power sense: RA3 / AN3, 0-5 V detector output; shares the post-filter forward full-scale setting
-- temperature sense: RA5 / AN4, 10 kOhm NTC divider output; selectable B3435/B3950/B4250 profile, default B3950. The firmware uses 10 C lookup points from 0 C to 150 C.
-- overdrive sense: RB2 / AN7, conditioned peak-envelope detector input scaled so the regulated nominal 5.0 V ADC full scale represents 10.0 W into 50 ohms
-- drain-peak sense: RB3 / AN8, conditioned divider scaled so the regulated nominal 5.0 V ADC full scale represents 300 V drain voltage
-- current sense: RB1 / AN6, conditioned WCS1700 output with provisional 70 A full scale and configurable 40 A default trip
+- temperature sense: RA5 / AN5, 10 kOhm NTC divider output; selectable B3435/B3950/B4250 profile, default B3950. The firmware uses 10 C lookup points from 0 C to 150 C.
+- overdrive sense: RB2 / AN10, conditioned peak-envelope detector input scaled so the regulated nominal 5.0 V ADC full scale represents 10.0 W into 50 ohms
+- drain-peak sense: RB3 / AN11, conditioned divider scaled so the regulated nominal 5.0 V ADC full scale represents 300 V drain voltage
+- current sense: RB1 / AN9, conditioned WCS1700 output with provisional 70 A full scale and configurable 40 A default trip
 - each sensor is wired directly to its own ADC pin; no external analog multiplexer is used
 
 ### LCD interface

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains the current design for a PIC16F723A-based linear amplifier protection controller. The project is intentionally separated from the old RF/SWR prototype and is now focused on hardware fault protection, safe amplifier enable/disable behavior, operator feedback, and startup/latched fault handling.
+This repository contains the current design for a PIC16F18855-I/SP-based linear amplifier protection controller. The project is intentionally separated from the old RF/SWR prototype and is now focused on hardware fault protection, safe amplifier enable/disable behavior, operator feedback, and startup/latched fault handling.
 
 ## Current project status
 
@@ -17,7 +17,7 @@ The project is in a working design-and-firmware skeleton stage:
 ## Key documentation
 
 - Architecture overview: [docs/project-architecture.md](docs/project-architecture.md)
-- Hardware pin map: [docs/hardware/PIC16F723A_pin_map.md](docs/hardware/PIC16F723A_pin_map.md)
+- Hardware pin map: [docs/hardware/PIC16F18855_pin_map.md](docs/hardware/PIC16F18855_pin_map.md)
 - Bench validation procedure: [docs/hardware/bench-validation.md](docs/hardware/bench-validation.md)
 - Firmware entry point: [firmware/src/main.c](firmware/src/main.c)
 - Pin definitions: [firmware/include/pin_map.h](firmware/include/pin_map.h)
@@ -62,7 +62,7 @@ flowchart LR
         COMP_RESET["Comparator latch reset"]
     end
 
-    subgraph MCU["PIC16F723A controller"]
+    subgraph MCU["PIC16F18855-I/SP controller"]
         PTT["INPUT_PTT\nTransmit request"]
         RESET["OUTPUT_COMP_RESET\nComparator reset"]
         HARD["INPUT_OVERCURRENT_FAULT\nHardware overcurrent fault"]
@@ -120,39 +120,40 @@ This is the current approved signal map for the protection controller. The 1602 
 
 | PIC pin | Port | Project name | Direction | Function |
 |---|---|---|---|---|
-| 11 | RC0 | INPUT_PTT | Input | Transmit request / key-down input |
-| 12 | RC1 | OUTPUT_COMP_RESET | Output | Active-low 10 ms comparator-latch reset pulse on PTT entry |
-| 13 | RC2 | INPUT_MENU_NEXT | Input | Config-menu page select switch |
-| 14 | RC3 | OUTPUT_LCD_I2C_SCL | Output | LCD backpack clock line |
-| 15 | RC4 | OUTPUT_LCD_I2C_SDA | Output | LCD backpack data line |
-| 16 | RC5 | OUTPUT_TX | Output | First TX sequencing driver |
-| 17 | RC6 | OUTPUT_TX_VCC | Output | Second TX sequencing driver |
-| 18 | RC7 | OUTPUT_TX_BIAS | Output | Final TX sequencing driver |
+| 21 | RC0 | INPUT_PTT | Input | Transmit request / key-down input |
+| 22 | RC1 | OUTPUT_COMP_RESET | Output | Active-low 10 ms comparator-latch reset pulse on PTT entry |
+| 23 | RC2 | INPUT_MENU_NEXT | Input | Config-menu page select switch |
+| 24 | RC3 | OUTPUT_LCD_I2C_SCL | Output | LCD backpack clock line |
+| 25 | RC4 | OUTPUT_LCD_I2C_SDA | Output | LCD backpack data line |
+| 26 | RC5 | OUTPUT_TX | Output | First TX sequencing driver |
+| 27 | RC6 | OUTPUT_TX_VCC | Output | Second TX sequencing driver |
+| 28 | RC7 | OUTPUT_TX_BIAS | Output | Final TX sequencing driver |
 | 2 | RA0 | ADC_SWR1_FWD | Input | Pre-filter SWR forward power ADC |
 | 3 | RA1 | ADC_SWR1_REF | Input | Pre-filter SWR reflected power ADC |
 | 4 | RA2 | ADC_SWR2_FWD | Input | Post-filter SWR forward power ADC |
 | 5 | RA3 | ADC_SWR2_REF | Input | Post-filter SWR reflected power ADC |
-| 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC |
-| 9,10 | OSC1, OSC2 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
+| 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC (AN5) |
+| 9,10 | RA6/OSC2, RA7/OSC1 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
-| 19 | RB0 | INPUT_MENU_ADJUST | Input | Menu adjust switch: short press increase, hold decrease |
-| 20 | RB1 | INPUT_SPARE_1 | Input | Freed spare input |
-| 21 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC |
-| 22 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC |
-| 23 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
-| 24 | RB5 | OUTPUT_FAN_PWM | Output | Fan speed control |
-| 25 | RB6 | OUTPUT_WARNING_STATUS | Output | Warning status output |
-| 26 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
-| 4,6,7,8,27,28 | VSS/VDD/NC | Power / support | Power | Follow datasheet decoupling rules |
+| 12 | RB0 | INPUT_MENU_ADJUST | Input | Menu adjust switch: short press increase, hold decrease |
+| 13 | RB1 | INPUT_SPARE_1 | Input | Freed spare input |
+| 14 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC (AN10) |
+| 15 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC (AN11) |
+| 16 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
+| 17 | RB5 | OUTPUT_FAN_PWM | Output | Fan speed control |
+| 18 | RB6 | OUTPUT_WARNING_STATUS | Output | Warning status output |
+| 19 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
+| 8,20 | VSS | GND | Power | Ground return |
+| 11 | VDD | +5 V | Power | Follow datasheet decoupling rules |
 
 ## Current hardware assumptions
 
-- MCU: PIC16F723A
+- MCU: PIC16F18855-I/SP
 - Clock: 20 MHz crystal
 - Display: 1602 LCD with I2C backpack only
 - Protection faults: software-driven SWR, overdrive, drain-voltage, and temperature thresholds, backed by an independent hardware overcurrent comparator
 - SWR measurement pairs: two ADC pairs are required, one before and one after the low-pass filter bank, each with forward and reflected inputs
-- ADC wiring: RA0-RA3, RA5, RB2, and RB3 directly sample the two SWR pairs, temperature, overdrive, and drain voltage; no external analog multiplexer is fitted
+- ADC wiring: RA0-RA3, RA5, RB1, RB2, and RB3 directly sample the two SWR pairs, temperature, current, overdrive, and drain voltage; no external analog multiplexer is fitted
 - Operator control: INPUT_PTT
 - Configuration controls: INPUT_MENU_NEXT and INPUT_MENU_ADJUST; each switch is active-low and is available only while not transmitting
 - Sequencing outputs: OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS
@@ -353,7 +354,7 @@ The firmware uses a Timer0 interrupt tick of approximately 1 ms instead of a blo
 GitHub Actions builds on a self-hosted Windows x64 runner. Set these repository variables to the installed toolchain locations on that runner:
 
 - `XC8_DIR`: XC8 `bin` directory containing `xc8-cc.exe` and `xc8-ar.exe`
-- `PACK_REPO_PATH`: Microchip pack repository containing `Microchip/PIC16Fxxx_DFP/1.8.167/xc8`
+- `PACK_REPO_PATH`: Microchip pack repository containing `Microchip/PIC16F1xxxx_DFP/1.32.471/xc8`
 
 The build workflow runs on pushes and pull requests to `main`, verifies those paths before compiling, and uploads an artifact named `firmware-<commit SHA>`. Releases are manual: dispatch the release workflow with an existing tag and the artifact name from a successful build. This prevents automatic release tags and duplicate releases from ordinary commits.
 

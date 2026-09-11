@@ -6,9 +6,9 @@ function(My_Pic_Project_default_default_XC8_assemble_rule target)
     set(options
         "-c"
         "${MP_EXTRA_AS_PRE}"
-        "-mcpu=16F723A"
+        "-mcpu=16F18855"
         "${DEBUGGER_NAME}"
-        "-mdfp=${PACK_REPO_PATH}/Microchip/PIC16Fxxx_DFP/1.8.167/xc8"
+        "-mdfp=${PACK_REPO_PATH}/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8"
         "-fno-short-double"
         "-fno-short-float"
         "-O0"
@@ -30,7 +30,7 @@ function(My_Pic_Project_default_default_XC8_assemble_rule target)
     list(REMOVE_ITEM options "")
     target_compile_options(${target} PRIVATE "${options}")
     target_compile_definitions(${target}
-        PRIVATE "__16F723A__"
+        PRIVATE "__16F18855__"
         PRIVATE "__DEBUG=1"
         PRIVATE "XPRJ_default=default")
 endfunction()
@@ -38,10 +38,10 @@ function(My_Pic_Project_default_default_XC8_assemblePreprocess_rule target)
     set(options
         "-c"
         "${MP_EXTRA_AS_PRE}"
-        "-mcpu=16F723A"
+        "-mcpu=16F18855"
         "-x"
         "assembler-with-cpp"
-        "-mdfp=${PACK_REPO_PATH}/Microchip/PIC16Fxxx_DFP/1.8.167/xc8"
+        "-mdfp=${PACK_REPO_PATH}/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8"
         "-fno-short-double"
         "-fno-short-float"
         "-O0"
@@ -63,7 +63,7 @@ function(My_Pic_Project_default_default_XC8_assemblePreprocess_rule target)
     list(REMOVE_ITEM options "")
     target_compile_options(${target} PRIVATE "${options}")
     target_compile_definitions(${target}
-        PRIVATE "__16F723A__"
+        PRIVATE "__16F18855__"
         PRIVATE "__DEBUG=1"
         PRIVATE "XPRJ_default=default")
 endfunction()
@@ -71,9 +71,9 @@ function(My_Pic_Project_default_default_XC8_compile_rule target)
     set(options
         "-c"
         "${MP_EXTRA_CC_PRE}"
-        "-mcpu=16F723A"
+        "-mcpu=16F18855"
         "${DEBUGGER_NAME}"
-        "-mdfp=${PACK_REPO_PATH}/Microchip/PIC16Fxxx_DFP/1.8.167/xc8"
+        "-mdfp=${PACK_REPO_PATH}/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8"
         "-fno-short-double"
         "-fno-short-float"
         "-O0"
@@ -95,7 +95,7 @@ function(My_Pic_Project_default_default_XC8_compile_rule target)
     list(REMOVE_ITEM options "")
     target_compile_options(${target} PRIVATE "${options}")
     target_compile_definitions(${target}
-        PRIVATE "__16F723A__"
+        PRIVATE "__16F18855__"
         PRIVATE "__DEBUG=1"
         PRIVATE "XPRJ_default=default")
 endfunction()
@@ -103,10 +103,10 @@ function(My_Pic_Project_default_link_rule target)
     set(options
         "-Wl,-Map=mem.map"
         "${MP_EXTRA_LD_PRE}"
-        "-mcpu=16F723A"
+        "-mcpu=16F18855"
         "${DEBUGGER_NAME}"
         "-Wl,--defsym=__MPLAB_BUILD=1"
-        "-mdfp=${PACK_REPO_PATH}/Microchip/PIC16Fxxx_DFP/1.8.167/xc8"
+        "-mdfp=${PACK_REPO_PATH}/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8"
         "-fno-short-double"
         "-fno-short-float"
         "-O0"

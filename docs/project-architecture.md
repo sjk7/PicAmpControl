@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a PIC16F723A-based linear amplifier protection controller that monitors RF power, SWR, temperature, current, and drain stress, and shuts down the amplifier safely when the system enters a fault condition.
+Build a PIC16F18855-I/SP-based linear amplifier protection controller that monitors RF power, SWR, temperature, current, and drain stress, and shuts down the amplifier safely when the system enters a fault condition.
 
 ## High-level blocks
 
@@ -53,7 +53,7 @@ This allows each SWR monitor to act independently and gives a clear, local prote
 
 The earlier SWR comparator channels are no longer required in the active design. Their former input pins are assigned to configuration-menu switches.
 
-Seven planned measurements are wired directly to ADC-capable pins: RA0-RA3 for the two SWR pairs, RA5 for temperature, RB2 for overdrive, and RB3 for drain voltage. No external analog multiplexer is required; the PIC selects the dedicated ADC channels sequentially.
+Eight planned measurements are wired directly to ADC-capable pins: RA0-RA3 for the two SWR pairs, RA5 for temperature, RB1 for current, RB2 for overdrive, and RB3 for drain voltage. No external analog multiplexer is required; the PIC selects the dedicated ADC channels sequentially.
 
 ## User threshold configuration
 
@@ -71,7 +71,7 @@ Overdrive and drain voltage each have a separate, conditioned ADC path. The ADC 
 
 Use a standard low-cost 16x2 or 20x4 character LCD fitted with a PCF8574-based I2C backpack.
 
-The PIC16F723A implementation uses a dedicated `lcd_i2c.c` software-I2C module on RC3/RC4 because this device does not provide the MSSP I2C register interface expected by a hardware-I2C driver. The module owns the PCF8574 transfers, HD44780 character commands, and AT24C256 settings reads/writes at address `0x50`; protection and menu logic remain in `main.c`. Every operator page or value change stores a versioned, checksummed record. Startup accepts only a valid record and otherwise restores compiled safe defaults. The final PCB validation must include read/write and interrupted-power recovery tests.
+The PIC16F18855-I/SP implementation uses a dedicated `lcd_i2c.c` software-I2C module on RC3/RC4. The module owns the PCF8574 transfers, HD44780 character commands, and AT24C256 settings reads/writes at address `0x50`; protection and menu logic remain in `main.c`. Every operator page or value change stores a versioned, checksummed record. Startup accepts only a valid record and otherwise restores compiled safe defaults. The final PCB validation must include read/write and interrupted-power recovery tests.
 
 Benefits:
 
