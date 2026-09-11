@@ -55,17 +55,25 @@ jobs:
           if (-not (Test-Path 'C:\Windows\System32\ninja.exe')) {
             throw 'Ninja was not found at C:\Windows\System32\ninja.exe on the self-hosted runner.'
           }
-          cmake -S $sourceDir -B $buildDir -G Ninja `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE=$toolchain `
-            -DCMAKE_USER_MAKE_RULES_OVERRIDE=$overrides `
-            -DCMAKE_C_COMPILER="$env:XC8_DIR/xc8-cc.exe" `
-            -DCMAKE_ASM_COMPILER="$env:XC8_DIR/xc8-cc.exe" `
-            -DCMAKE_AR="$env:XC8_DIR/xc8-ar.exe" `
-            -DCMAKE_C_COMPILER_WORKS=TRUE `
-            -DCMAKE_ASM_COMPILER_WORKS=TRUE `
-            -DPACK_REPO_PATH="$env:PACK_REPO_PATH" `
-            -DCMAKE_MAKE_PROGRAM='C:\Windows\System32\ninja.exe'
+          $cmakeArgs = @(
+            '-S', $sourceDir,
+            '-B', $buildDir,
+            '-G', 'Ninja',
+            '-DCMAKE_BUILD_TYPE=Release',
+            "-DCMAKE_TOOLCHAIN_FILE=$toolchain",
+            "-DCMAKE_USER_MAKE_RULES_OVERRIDE=$overrides",
+            "-DCMAKE_C_COMPILER=$env:XC8_DIR/xc8-cc.exe",
+            "-DCMAKE_ASM_COMPILER=$env:XC8_DIR/xc8-cc.exe",
+            "-DCMAKE_AR=$env:XC8_DIR/xc8-ar.exe",
+            '-DCMAKE_C_COMPILER_WORKS=TRUE',
+            '-DCMAKE_ASM_COMPILER_WORKS=TRUE',
+            "-DPACK_REPO_PATH=$env:PACK_REPO_PATH",
+            '-DCMAKE_MAKE_PROGRAM=C:\Windows\System32\ninja.exe'
+          )
+          & cmake @cmakeArgs
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
       - name: Build firmware
         shell: pwsh
