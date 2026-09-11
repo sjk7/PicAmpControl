@@ -44,21 +44,34 @@ jobs:
       - name: Configure project with CMake
         shell: pwsh
         run: |
-          cmake -S cmake/My_Pic_Project/default -B _build/My_Pic_Project/release -G Ninja `
+          Set-Location $env:GITHUB_WORKSPACE
+          $sourceDir = Join-Path $env:GITHUB_WORKSPACE 'cmake/My_Pic_Project/default'
+          $buildDir = Join-Path $env:GITHUB_WORKSPACE '_build/My_Pic_Project/release'
+          $toolchain = Join-Path $sourceDir '.generated/toolchain.cmake'
+          $overrides = Join-Path $sourceDir '.generated/overrides.cmake'
+          if (-not (Test-Path $toolchain)) {
+            throw "Generated CMake toolchain file not found at $toolchain"
+          }
+          if (-not (Test-Path 'C:\Windows\System32\ninja.exe')) {
+            throw 'Ninja was not found at C:\Windows\System32\ninja.exe on the self-hosted runner.'
+          }
+          cmake -S $sourceDir -B $buildDir -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE="cmake/My_Pic_Project/default/.generated/toolchain.cmake" `
-            -DCMAKE_USER_MAKE_RULES_OVERRIDE="$PWD/cmake/My_Pic_Project/default/.generated/overrides.cmake" `
+            -DCMAKE_TOOLCHAIN_FILE=$toolchain `
+            -DCMAKE_USER_MAKE_RULES_OVERRIDE=$overrides `
             -DCMAKE_C_COMPILER="$env:XC8_DIR/xc8-cc.exe" `
             -DCMAKE_ASM_COMPILER="$env:XC8_DIR/xc8-cc.exe" `
             -DCMAKE_AR="$env:XC8_DIR/xc8-ar.exe" `
             -DCMAKE_C_COMPILER_WORKS=TRUE `
             -DCMAKE_ASM_COMPILER_WORKS=TRUE `
-            -DPACK_REPO_PATH="$env:PACK_REPO_PATH"
+            -DPACK_REPO_PATH="$env:PACK_REPO_PATH" `
+            -DCMAKE_MAKE_PROGRAM='C:\Windows\System32\ninja.exe'
 
       - name: Build firmware
         shell: pwsh
         run: |
-          cmake --build _build/My_Pic_Project/release --verbose
+          Set-Location $env:GITHUB_WORKSPACE
+          cmake --build (Join-Path $env:GITHUB_WORKSPACE '_build/My_Pic_Project/release') --verbose
 
       - name: Package output
         shell: pwsh
