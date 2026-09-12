@@ -280,12 +280,12 @@ void load_settings(void) {
     unsigned char checksum;
     protection_thresholds_t stored_settings;
 
-    if (at24c256_read(0, header, sizeof(header)) &&
+    if (internal_eeprom_read(0, header, sizeof(header)) &&
         header[0] == SETTINGS_MAGIC &&
         header[1] == SETTINGS_VERSION &&
         header[2] < MENU_PAGE_COUNT &&
-        at24c256_read(sizeof(header), (unsigned char *)&stored_settings, sizeof(stored_settings)) &&
-        at24c256_read(sizeof(header) + sizeof(stored_settings), &checksum, 1) &&
+        internal_eeprom_read(sizeof(header), (unsigned char *)&stored_settings, sizeof(stored_settings)) &&
+        internal_eeprom_read(sizeof(header) + sizeof(stored_settings), &checksum, 1) &&
         stored_settings.temp_b_profile < 3 &&
         checksum == settings_checksum((menu_page_t)header[2], &stored_settings)) {
         g_thresholds = stored_settings;
@@ -307,7 +307,7 @@ void save_settings(void) {
         record[index + 3] = settings_bytes[index];
     }
     record[sizeof(protection_thresholds_t) + 3] = settings_checksum(g_menu_page, &g_thresholds);
-    at24c256_write(0, record, sizeof(record));
+    internal_eeprom_write(0, record, sizeof(record));
 }
 
 void mark_settings_dirty(void) {

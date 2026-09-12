@@ -1,0 +1,27 @@
+CompileFlags:
+  CompilationDatabase: "_build/My_Pic_Project/release"
+  Add:
+    - "-mcpu=16F18855"
+    - "-mdfp=/Users/stevekerr/.mchp_packs/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8"
+    - "-I/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/pic/include"
+    - "-I/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/pic/include/c99"
+    - "-I/Users/stevekerr/.mchp_packs/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8/pic/include"
+    - "-I/Users/stevekerr/mydocs/code/PicAmpControl/firmware/include"
+    - "-D__16F18855__"
+    - "-D_16F18855"
+    - "-D__XC8"
+    - "-D__XC8_VERSION=4000"
+    - "-D__DEBUG=1"
+    - "-DXPRJ_default=default"
+    - "-Wno-unknown-pragmas"
+    - "-Wno-unused-variable"
+  Remove:
+    - "-msummary=*"
+    - "-maddrqual=*"
+    - "-mwarn=*"
+    - "-ginhx32"
+    - "-mno-*"
+    - "-mstack=*"
+    - "-fno-short-double"
+    - "-fno-short-float"
+

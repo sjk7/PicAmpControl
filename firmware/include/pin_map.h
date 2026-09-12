@@ -5,10 +5,8 @@
 
 #define _XTAL_FREQ 20000000UL
 #define LCD_I2C_ADDRESS 0x27
-#define AT24C256_I2C_WRITE_ADDRESS 0xA0
-#define AT24C256_I2C_READ_ADDRESS 0xA1
 
-// LCD backpack and AT24C256 EEPROM on the software-I2C bus.
+// LCD backpack on the software-I2C bus; settings persist in the PIC's internal EEPROM.
 #define OUTPUT_LCD_I2C_SCL PORTCbits.RC3
 #define OUTPUT_LCD_I2C_SDA PORTCbits.RC4
 

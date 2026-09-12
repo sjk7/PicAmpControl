@@ -77,7 +77,6 @@ flowchart LR
         WARN["OUTPUT_WARNING_STATUS\nWarning"]
         TRIP["OUTPUT_TRIP_STATUS\nTrip"]
         LCD["1602 LCD\nPCF8574 I2C"]
-        EEPROM["AT24C256\nsettings storage"]
     end
 
     PRE --> PRE_FWD
@@ -110,13 +109,12 @@ flowchart LR
     STATE --> WARN
     STATE --> TRIP
     STATE -->|software I2C| LCD
-    STATE -->|software I2C| EEPROM
 ```
 
 
 ## Approved hardware pin map
 
-This is the current approved signal map for the protection controller. The 1602 LCD backpack and AT24C256 EEPROM share the software-I2C bus on RC3/RC4.
+This is the current approved signal map for the protection controller. The 1602 LCD backpack uses the software-I2C bus on RC3/RC4. Menu settings persist in the PIC's internal EEPROM; no external EEPROM is required.
 
 | PIC pin | Port | Project name | Direction | Function |
 |---|---|---|---|---|
@@ -185,7 +183,7 @@ The 1602 display config menu uses two active-low, normally-open switches wired f
 
 The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adjustable from 0 to 1000 ms in 5 ms steps, each defaulting to 20 ms. The active electrical level for OUTPUT_TX, OUTPUT_TX_VCC, OUTPUT_TX_BIAS, OUTPUT_FAN_PWM, OUTPUT_WARNING_STATUS, and OUTPUT_TRIP_STATUS is selectable as LOW or HIGH, with LOW as the default. LCD I2C polarity is not configurable because its open-drain signalling is defined by the I2C bus.
 
-All menu settings and the selected display page are saved to the AT24C256 at each operator change. The stored record includes a magic value, format version, and checksum. At power-up the record is restored only when valid; a missing, incompatible, or corrupted record loads the compiled safe defaults and the primary status page.
+All menu settings and the selected display page are saved to the PIC's internal EEPROM at each operator change. The stored record includes a magic value, format version, and checksum. At power-up the record is restored only when valid; a missing, incompatible, or corrupted record loads the compiled safe defaults and the primary status page.
 
 Menu changes mark the settings record dirty rather than writing immediately. After a 100 ms quiet period, firmware writes the record only while PTT is inactive, no software fault is latched, and the hardware overcurrent input is clear. This coalesces rapid button presses and keeps EEPROM write latency out of the immediate protection decision path.
 
@@ -369,7 +367,7 @@ The following items remain to be finalized before the design is considered compl
 5. Build and validate the selected 12 V low-side logic-level MOSFET fan drive, its PWM-capable output routing, and its temperature schedule.
 6. Calibrate the two SWR bridges, 10 W input detector, and 300 V drain divider against traceable measurements at the regulated 5.0 V rail, including the RMS/PEP display and PEP-bar response.
 7. Verify that every conditioned ADC input stays between VSS and VDD, including fault/transient tests with the specified external clamps and series resistance.
-8. Validate the shared software-I2C LCD/AT24C256 interface, menu switches, 10 ms PTT-triggered comparator reset pulse, settings restore, and interrupted-power recovery on the final PCB.
+8. Validate the shared software-I2C LCD interface, internal EEPROM settings persistence, menu switches, 10 ms PTT-triggered comparator reset pulse, settings restore, and interrupted-power recovery on the final PCB.
 9. Configure the required self-hosted runner variables, run the GitHub Actions build workflow, and confirm the uploaded firmware artifact before using the manual release workflow.
 10. Review the final PCB against the pin map and update the design documentation for any wiring changes before fabrication.
 

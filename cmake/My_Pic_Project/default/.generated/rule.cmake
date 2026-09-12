@@ -1,6 +1,6 @@
 # The following functions contains all the flags passed to the different build stages.
 
-set(PACK_REPO_PATH "C:/Users/DEVNVME24/.mchp_packs" CACHE PATH "Path to the root of a pack repository.")
+set(PACK_REPO_PATH "$ENV{HOME}/.mchp_packs" CACHE PATH "Path to the root of a pack repository.")
 
 function(My_Pic_Project_default_default_XC8_assemble_rule target)
     set(options

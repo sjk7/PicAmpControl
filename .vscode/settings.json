@@ -1,12 +1,35 @@
 {
-    "mplab.clangd.compileCommandsDir": "${workspaceFolder}\\_build\\My_Pic_Project\\default",
+    "clangd.path": "/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-clangd",
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/_build/My_Pic_Project/release",
+        "--header-insertion=never"
+    ],
+    "mplab.clangd.compileCommandsDir": "${workspaceFolder}/_build/My_Pic_Project/release",
     "mplab.clangd.arguments": [
         "--header-insertion=never"
     ],
-    "mplab.clangd.path": "c:\\Program Files\\Microchip\\xc8\\v4.00\\bin\\xc8-clangd.exe",
+    "mplab.clangd.path": "/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-clangd",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/_build/My_Pic_Project/release/compile_commands.json",
+    "C_Cpp.default.includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/firmware/include",
+        "/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/pic/include",
+        "/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/pic/include/c99",
+        "/Users/stevekerr/.mchp_packs/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8/pic/include"
+    ],
+    "C_Cpp.default.defines": [
+        "__16F18855__",
+        "_16F18855",
+        "__XC8",
+        "__XC8_VERSION=4000",
+        "__DEBUG=1",
+        "XPRJ_default=default"
+    ],
+    "C_Cpp.default.cStandard": "c99",
+    "C_Cpp.default.compilerPath": "/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-cc",
     "cmake.generator": "Ninja",
     "cmake.useCMakePresets": "always",
     "cmake.configureOnOpen": false,
     "cmake.sourceDirectory": "${workspaceFolder}/cmake/My_Pic_Project/default",
-    "cmake.buildDirectory": "${workspaceFolder}/_build/My_Pic_Project/default"
+    "cmake.buildDirectory": "${workspaceFolder}/_build/My_Pic_Project/release"
 }

@@ -8,7 +8,7 @@ void lcd_write_byte(unsigned char value, bool data_mode);
 void lcd_write_text(const char *text);
 void lcd_write_unsigned(unsigned int value);
 void lcd_set_cursor(unsigned char row, unsigned char column);
-bool at24c256_read(unsigned int address, unsigned char *data, unsigned char length);
-bool at24c256_write(unsigned int address, const unsigned char *data, unsigned char length);
+bool internal_eeprom_read(unsigned char address, unsigned char *data, unsigned char length);
+bool internal_eeprom_write(unsigned char address, const unsigned char *data, unsigned char length);
 
 #endif

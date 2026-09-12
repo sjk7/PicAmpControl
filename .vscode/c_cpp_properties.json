@@ -1,0 +1,30 @@
+{
+  "configurations": [
+    {
+      "name": "Mac-XC8",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/firmware/include",
+        "/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/pic/include",
+        "/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/pic/include/c99",
+        "/Users/stevekerr/.mchp_packs/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8/pic/include",
+        "${env:HOME}/tools/microchip/xc8/v4.00/xc8-v4.00/pic/include",
+        "${env:HOME}/tools/microchip/xc8/v4.00/xc8-v4.00/pic/include/c99",
+        "${env:HOME}/.mchp_packs/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8/pic/include"
+      ],
+      "defines": [
+        "__16F18855__",
+        "_16F18855",
+        "__XC8",
+        "__XC8_VERSION=4000",
+        "__DEBUG=1",
+        "XPRJ_default=default"
+      ],
+      "compilerPath": "/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-cc",
+      "cStandard": "c99",
+      "compileCommands": "${workspaceFolder}/_build/My_Pic_Project/release/compile_commands.json",
+      "intelliSenseMode": "macos-clang-arm64"
+    }
+  ],
+  "version": 4
+}

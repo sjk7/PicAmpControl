@@ -76,7 +76,7 @@ All detector outputs must remain within 0 to VDD at the PIC, including expected 
 ## 5. Timing and Trip Response
 
 1. Apply controlled SWR, overdrive, and drain-threshold breaches and measure the interval from the conditioned ADC signal crossing the configured threshold to the TX outputs becoming inactive. Include the ADC conversion-complete ISR capture path in the timing record.
-2. Confirm LCD refresh and AT24C256 writes do not occur before protection evaluation in the main loop.
+2. Confirm LCD refresh and internal EEPROM writes do not occur before protection evaluation in the main loop.
 3. Confirm the external overcurrent comparator trips independently of the Timer0 and ADC polling schedule.
 
 ## Records
