@@ -370,6 +370,7 @@ The following items remain to be finalized before the design is considered compl
 8. Validate the shared software-I2C LCD interface, internal EEPROM settings persistence, menu switches, 10 ms PTT-triggered comparator reset pulse, settings restore, and interrupted-power recovery on the final PCB.
 9. Configure the required self-hosted runner variables, run the GitHub Actions build workflow, and confirm the uploaded firmware artifact before using the manual release workflow.
 10. Review the final PCB against the pin map and update the design documentation for any wiring changes before fabrication.
+11. Revisit the full board schematic (sensor conditioning, comparator board, LCD/EEPROM bus, power) once component values are bench-confirmed.
 
 ## Repository purpose
 
