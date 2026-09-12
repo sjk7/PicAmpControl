@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains the current design for a PIC16F18855-I/SP-based linear amplifier protection controller. The project is intentionally separated from the old RF/SWR prototype and is now focused on hardware fault protection, safe amplifier enable/disable behavior, operator feedback, and startup/latched fault handling.
+This repository contains the design for a PIC16F18855-I/SP-based linear amplifier protection controller, covering hardware fault protection, safe amplifier enable/disable behavior, operator feedback, and startup/latched fault handling.
 
 ## Current project status
 
@@ -140,7 +140,7 @@ This is the current approved signal map for the protection controller. The 1602 
 | 15 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC (AN11) |
 | 16 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
 | 17 | RB5 | OUTPUT_FAN_PWM | Output | Fan speed control |
-| 18 | RB6 | INPUT_SPARE_4 | Input | Freed spare input (former warning output) |
+| 18 | RB6 | INPUT_SPARE_4 | Input | Freed spare input |
 | 19 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
 | 8,20 | VSS | GND | Power | Ground return |
 | 11 | VDD | +5 V | Power | Follow datasheet decoupling rules |
@@ -340,7 +340,7 @@ See [firmware/src/main.c](firmware/src/main.c) for the protection and sequencer 
 
 ## Build status
 
-The local project build has been validated with the CMake/XC8 flow. [cmake/My_Pic_Project/default/user.cmake](cmake/My_Pic_Project/default/user.cmake) constrains the production build to `firmware/src/main.c` and `firmware/src/lcd_i2c.c`, excluding historical prototype sources that the generated file list may contain.
+The local project build has been validated with the CMake/XC8 flow. [cmake/My_Pic_Project/default/user.cmake](cmake/My_Pic_Project/default/user.cmake) constrains the production build to `firmware/src/main.c` and `firmware/src/lcd_i2c.c`, excluding any other sources the generated file list may contain.
 
 The firmware uses a Timer0 interrupt tick of approximately 1 ms instead of a blocking 5 ms loop delay. ADC conversion-complete interrupts capture the seven analogue channels without doing protection math in the ISR. The main loop consumes those samples and evaluates software SWR, overdrive, drain, and temperature trips before LCD refresh and menu work. The external overcurrent comparator remains the asynchronous hard-protection path.
 

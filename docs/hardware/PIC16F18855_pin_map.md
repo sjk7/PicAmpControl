@@ -35,7 +35,7 @@ This is the current approved signal map for the protection controller. The 1602 
 | 15 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC (AN11) |
 | 16 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
 | 17 | RB5 | OUTPUT_FAN_PWM | Output | 12 V fan low-side MOSFET control; confirm hardware-PWM alternate-function routing |
-| 18 | RB6 | INPUT_SPARE_4 | Input | Freed spare input (former warning output) |
+| 18 | RB6 | INPUT_SPARE_4 | Input | Freed spare input |
 | 19 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
 | 6 | RA4 | unused | Input | Reserved; not an ADC channel in this design |
 | 8,20 | VSS | GND | Power | Ground return |
@@ -99,7 +99,7 @@ The SWR protection channels are not required in hardware because each SWR pair i
 - The comparator board is deliberately separate from the PIC so that the critical analog faults are hardware-protected before the MCU state machine can act.
 - SWR is evaluated in firmware from the forward/reflected ADC pairs; no dedicated SWR comparator is required.
 - The seven planned analog measurements have dedicated PIC ADC pins, so no external analog multiplexer is required.
-- The three former spare inputs are assigned to the LCD configuration menu.
+- Three spare inputs are assigned to the LCD configuration menu.
 - RA6 and RA7 (former OSC2/OSC1) are unallocated spare GPIO, freed by the internal oscillator; assign before use since they default to inputs with no pull-up.
 - On the falling PTT edge, RC1 outputs a 10 ms active-low pulse to reset the comparator latch network. The controller then checks INPUT_HARD_FAULT before enabling a TX sequence.
 - The comparator outputs must combine into one active-high hard-fault signal at RB4. This input remains digital; RB2 and RB3 are dedicated to analogue sensing.

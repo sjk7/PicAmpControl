@@ -51,7 +51,7 @@ SWR protection is computed locally for each sensing point:
 
 This allows each SWR monitor to act independently and gives a clear, local protection decision at each stage.
 
-The earlier SWR comparator channels are no longer required in the active design. Their former input pins are assigned to configuration-menu switches.
+SWR protection is computed entirely in firmware from the forward and reflected ADC readings at each RF point; no dedicated SWR comparator hardware is used, and those input pins are assigned to configuration-menu switches instead.
 
 Eight planned measurements are wired directly to ADC-capable pins: RA0-RA3 for the two SWR pairs, RA5 for temperature, RB1 for current, RB2 for overdrive, and RB3 for drain voltage. No external analog multiplexer is required; the PIC selects the dedicated ADC channels sequentially.
 

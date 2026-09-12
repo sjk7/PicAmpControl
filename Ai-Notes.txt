@@ -1,7 +1,11 @@
 # Project Status Notes
 
+This file is the AI launch point for a new session: keep it ALWAYS up to date.
+Update the Date and any changed sections whenever design, firmware, docs, or
+CI/release workflows change - don't let it go stale.
+
 ## Date
-2026-09-10
+2026-09-12
 
 ## Current design
 This repository is the active PIC16F18855-I/SP linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
@@ -23,6 +27,13 @@ This repository is the active PIC16F18855-I/SP linear-amplifier protection contr
 - Hardware source of truth: docs/hardware/PIC16F18855_pin_map.md
 - Architecture and safety behaviour: docs/project-architecture.md
 - Firmware entry point: firmware/src/main.c
+- Bug fixes log (update whenever a real bug is found): bugfixes.md
+
+## CI / release
+- .github/workflows/firmware-build.yml builds on every push/PR to main on a self-hosted Windows runner (XC8 + Ninja) and packages `.hex`/`.elf`/`.map`/`.xml` plus the hardware netlist (docs/hardware/schematic/PicAmpControl.net) and pin map (docs/hardware/PIC16F18855_pin_map.md) into a `firmware-<sha>` artifact.
+- .github/workflows/auto-release.yml runs after a successful main build, auto-increments a `v0.0.N` tag, and publishes that artifact as a GitHub Release. This is fully automatic - no manual step needed for a normal push to main.
+- .github/workflows/release-firmware.yml is the manual fallback (workflow_dispatch) to re-publish an older build's artifact under an existing tag.
+- Avoid running bare `git status`/`git status --short` in a terminal that can hit an interactive pager or the configured `gcm-core` credential helper prompt; use `git --no-pager status --short` instead.
 
 ## Remaining work
 The open work is hardware validation: final sensor calibration, comparator thresholds and polarity, ADC transient protection, TX timing, fan implementation, LCD/menu/internal EEPROM persistence testing, final PCB review, and CI validation.
