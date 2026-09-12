@@ -4,6 +4,22 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-12 — Added ADC acquisition delay after channel switch
+
+Per the timing-budget review in docs/hardware/bench-validation.md, the ADC ISR in
+`firmware/src/main.c` switched `ADPCH` to the next channel and immediately set
+`GO_nDONE = 1`, with no settling time for the sample-and-hold capacitor to charge to
+the newly-selected channel's voltage - a real accuracy risk depending on each
+detector's source impedance.
+Fix: added `ADC_ACQUISITION_US` (5 us, a common conservative industry baseline -
+bench-confirm against the datasheet's acquisition-time formula for the actual
+detector source impedances) as an explicit `__delay_us()` between the `ADPCH` change
+and `GO_nDONE = 1`, both in the round-robin ISR and the one-time kick-off in
+`adc_init()`. The delay runs inside the ISR itself, so it briefly (5 us) delays
+servicing of other pending interrupts - negligible next to the 1 ms Timer0 tick.
+Per-channel time goes from ~11 us to ~16 us (round-robin staleness bound ~88 us ->
+~128 us), still far below the LCD-queue-drain latency addressed in the entry below.
+
 ## 2026-09-12 — LCD writes made non-blocking (queued, drained a few bytes per loop pass)
 
 Per the reaction-time budget in docs/hardware/bench-validation.md, the bit-banged LCD

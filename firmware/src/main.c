@@ -117,6 +117,10 @@ static volatile unsigned int g_adc_samples[8] = {0};
 #define ADC_SAMPLE_CURRENT g_adc_samples[5]
 #define ADC_SAMPLE_OVERDRIVE g_adc_samples[6]
 #define ADC_SAMPLE_DRAIN g_adc_samples[7]
+/* Minimum sample-and-hold settling time after switching ADC channel, before
+   starting a conversion; confirm against the datasheet's acquisition-time
+   formula for each detector's actual source impedance during bench validation. */
+#define ADC_ACQUISITION_US 5
 static const unsigned char g_ntc_adc[3][16] = {
     {190, 166, 141, 116, 94, 75, 59, 46, 37, 29, 23, 19, 15, 12, 10, 8},
     {197, 171, 142, 114, 89, 68, 51, 38, 29, 22, 17, 13, 10, 8, 6, 5},
@@ -222,6 +226,7 @@ void __interrupt() timer0_isr(void) {
             g_adc_scan_index = 0;
         }
         ADPCH = g_adc_scan_channels[g_adc_scan_index];
+        __delay_us(ADC_ACQUISITION_US);
         ADCON0bits.GO_nDONE = 1;
     }
 
@@ -481,6 +486,7 @@ void adc_init(void) {
     PIR1bits.ADIF = 0;
     PIE1bits.ADIE = 1;
     INTCONbits.PEIE = 1;
+    __delay_us(ADC_ACQUISITION_US);
     ADCON0bits.GO_nDONE = 1;
 }
 
