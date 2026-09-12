@@ -378,12 +378,11 @@ void show_menu_page(void) {
         if (power_w < 10) lcd_write_spaces(1);
         lcd_write_unsigned(power_w);
         lcd_write_byte('W', true);
-        lcd_write_text(" SWR=");
+        lcd_write_text(g_thresholds.power_display_pep ? " PEP" : " RMS");
         lcd_set_cursor(1, 0);
         lcd_write_power_bar(g_post_fwd_pep_w, g_thresholds.swr2_fwd_full_scale_w, 16);
         return;
-    }
-    if (g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
+    }    if (g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
         unsigned int temp_c_value = temperature_c(ADC_SAMPLE_TEMP);
 
         lcd_set_cursor(0, 0);

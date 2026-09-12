@@ -4,6 +4,18 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-12 — Dead "SWR=" label on the STATUS page (found in review)
+
+The STATUS page in `show_menu_page()` printed `"P=<power>W SWR="` on row 0, but no
+SWR value was ever written after the label - it was leftover/incomplete text with no
+basis in the documented design (docs/project-architecture.md only specifies power +
+a PEP bar for this page). Computing a live SWR ratio from raw ADC counts needs a
+square-root approximation with no FPU on this part, which is new numeric code in a
+safety-relevant display path and out of scope for a text-label cleanup.
+Fix: replaced the dead label with `" PEP"`/`" RMS"`, reusing the already-available
+`power_display_pep` flag so the row now tells the operator which reading mode they're
+looking at instead of showing an unfulfilled promise of a value.
+
 ## 2026-09-12 — LCD full-clear on every refresh caused flicker (found in review)
 
 `show_menu_page()` in [firmware/src/main.c](firmware/src/main.c) unconditionally sent
