@@ -248,6 +248,25 @@ void lcd_write_spaces(unsigned char count) {
     }
 }
 
+/* Right-justifies value within a fixed digit width so repeated redraws never
+   leave a stale digit behind from a previous, wider value. */
+void lcd_write_unsigned_padded(unsigned int value, unsigned char digits) {
+    unsigned int threshold = 1;
+    unsigned char pad;
+
+    for (pad = digits; pad > 1; pad--) {
+        threshold *= 10;
+    }
+    for (pad = digits; pad > 1; pad--) {
+        if (value >= threshold) {
+            break;
+        }
+        lcd_write_spaces(1);
+        threshold /= 10;
+    }
+    lcd_write_unsigned(value);
+}
+
 void lcd_write_power_bar(unsigned int power_w, unsigned int full_scale_w, unsigned char width) {
     unsigned char bar_segment;
     unsigned char bar_segments = (unsigned char)(((unsigned long)power_w * width) / full_scale_w);
@@ -342,9 +361,6 @@ void show_menu_page(void) {
     bool screen_changed = (g_menu_page != g_lcd_drawn_page) ||
                           (g_state != g_lcd_drawn_state) ||
                           (g_state == STATE_TRIP && g_trip_reason != g_lcd_drawn_trip_reason);
-    bool conditional_clear_page = (g_menu_page == MENU_PAGE_STATUS ||
-                                   g_menu_page == MENU_PAGE_POWER_TEMPERATURE ||
-                                   g_state == STATE_TRIP);
 
     if (g_menu_page >= MENU_PAGE_SWR1_TRIP) {
         setting_index = (unsigned char)(g_menu_page - MENU_PAGE_SWR1_TRIP);
@@ -355,11 +371,12 @@ void show_menu_page(void) {
         }
     }
 
-    /* Live pages redraw their fixed-width fields in place every refresh, and the
+    /* Every page redraws its fixed-width fields in place on each call, and the
        trip screen's text never changes while latched, so the display only needs
        a hard clear when the screen identity actually changes; this avoids a
-       visible blank-flash on every periodic PEP/status update or trip redraw. */
-    if (!conditional_clear_page || screen_changed) {
+       visible blank-flash on every periodic status update, trip redraw, or
+       rapid-repeat adjustment of a setting. */
+    if (screen_changed) {
         lcd_write_byte(0x01, false);
         __delay_ms(2);
     }
@@ -421,33 +438,33 @@ void show_menu_page(void) {
         lcd_write_text(":1");
     } else if (g_menu_page == MENU_PAGE_SWR1_FWD_FULL_SCALE ||
                g_menu_page == MENU_PAGE_SWR2_FWD_FULL_SCALE) {
-        lcd_write_unsigned(value);
+        lcd_write_unsigned_padded(value, 4);
         lcd_write_byte('W', true);
     } else if (g_menu_page == MENU_PAGE_OVERDRIVE_TRIP) {
-        lcd_write_unsigned((unsigned int)(value / 10));
+        lcd_write_unsigned_padded((unsigned int)(value / 10), 2);
         lcd_write_byte('.', true);
         lcd_write_unsigned((unsigned int)(value % 10));
         lcd_write_byte('W', true);
     } else if (g_menu_page == MENU_PAGE_TEMP_B_VALUE ||
                g_menu_page == MENU_PAGE_TEMP_TRIP) {
-        lcd_write_unsigned(value);
+        lcd_write_unsigned_padded(value, g_menu_page == MENU_PAGE_TEMP_TRIP ? 3 : 4);
         lcd_write_byte('C', true);
     } else if (g_menu_page == MENU_PAGE_DRAIN_TRIP) {
-        lcd_write_unsigned(value);
+        lcd_write_unsigned_padded(value, 3);
         lcd_write_byte('V', true);
     } else if (g_menu_page == MENU_PAGE_CURRENT_TRIP) {
-        lcd_write_unsigned(value);
+        lcd_write_unsigned_padded(value, 3);
         lcd_write_byte('A', true);
     } else if (g_menu_page == MENU_PAGE_TX_VCC_DELAY || g_menu_page == MENU_PAGE_TX_BIAS_DELAY) {
-        lcd_write_unsigned(value);
+        lcd_write_unsigned_padded(value, 4);
         lcd_write_text("ms");
     } else if (g_menu_page == MENU_PAGE_PEP_DECAY_MS) {
-        lcd_write_unsigned(value);
+        lcd_write_unsigned_padded(value, 4);
         lcd_write_text("ms");
     } else if (g_menu_page == MENU_PAGE_POWER_DISPLAY_MODE) {
         lcd_write_text(value != 0 ? "PEP" : "RMS");
     } else if (g_menu_page >= MENU_PAGE_TX_ACTIVE_HIGH) {
-        lcd_write_text(value != 0 ? "HIGH" : "LOW");
+        lcd_write_text(value != 0 ? "HIGH" : "LOW ");
     } else {
         lcd_write_unsigned(value);
     }

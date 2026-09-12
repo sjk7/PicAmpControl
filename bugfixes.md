@@ -4,6 +4,22 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-12 — Remaining LCD flicker: config pages still cleared on every rapid-adjust redraw
+
+The earlier flicker fix only skipped the LCD clear for STATUS/POWER_TEMPERATURE/TRIP.
+Every other menu/config page still cleared on every redraw, and holding the ADJUST
+button auto-repeats a value change (and a redraw) roughly every 100 ms - so a held
+adjustment flickered exactly like the original bug did. Several of those pages also
+printed numeric fields with no fixed width (`SWR full-scale`, `overdrive`, `temp
+trip`, `drain trip`, `current trip`, both delay pages, `PEP decay`, and the `HIGH`/
+`LOW` boolean fields), so simply skipping their clear would have left stale digits
+behind when a value shrank (e.g. "100" -> "9" leaving a trailing stale "0").
+Fix: the clear now only fires on an actual screen (page/state) change, for every
+page, not just the three live ones; added `lcd_write_unsigned_padded()` and applied
+fixed-width formatting to every previously-unpadded field so an in-place redraw is
+always safe. `"LOW"` is now written as `"LOW "` (trailing space) to match `"HIGH"`'s
+width.
+
 ## 2026-09-12 — STATUS page: live SWR readout, bar now tracks the selected power mode
 
 Two follow-ups to the STATUS page requested after the PEP/RMS-label fix below:
