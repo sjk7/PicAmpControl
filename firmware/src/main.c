@@ -4,8 +4,8 @@
 #include "../include/pin_map.h"
 #include "../include/lcd_i2c.h"
 
-#pragma config FEXTOSC = HS
-#pragma config RSTOSC = EXT1X
+#pragma config FEXTOSC = OFF
+#pragma config RSTOSC = HFINT32
 #pragma config WDTE = OFF
 #pragma config PWRTE = OFF
 #pragma config MCLRE = ON
@@ -198,7 +198,7 @@ void set_trip_output(bool active) {
 
 void __interrupt() timer0_isr(void) {
     if (PIR0bits.TMR0IF != 0) {
-        TMR0L = 100;
+        TMR0L = 6;
         PIR0bits.TMR0IF = 0;
         if (g_timer_ticks_pending != 255) {
             g_timer_ticks_pending++;
@@ -234,8 +234,8 @@ void timer0_init(void) {
     T0CON0bits.T016BIT = 0;
     T0CON0bits.T0OUTPS = 0;
     T0CON1bits.T0CS = 0;
-    T0CON1bits.T0CKPS = 4;
-    TMR0L = 100;
+    T0CON1bits.T0CKPS = 5;
+    TMR0L = 6;
     PIR0bits.TMR0IF = 0;
     PIE0bits.TMR0IE = 1;
     T0CON0bits.T0EN = 1;

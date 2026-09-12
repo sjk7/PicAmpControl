@@ -3,7 +3,7 @@
 
 #include <xc.h>
 
-#define _XTAL_FREQ 20000000UL
+#define _XTAL_FREQ 32000000UL
 #define LCD_I2C_ADDRESS 0x27
 
 // LCD backpack on the software-I2C bus; settings persist in the PIC's internal EEPROM.

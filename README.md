@@ -131,7 +131,7 @@ This is the current approved signal map for the protection controller. The 1602 
 | 4 | RA2 | ADC_SWR2_FWD | Input | Post-filter SWR forward power ADC |
 | 5 | RA3 | ADC_SWR2_REF | Input | Post-filter SWR reflected power ADC |
 | 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC (AN5) |
-| 9,10 | RA6/OSC2, RA7/OSC1 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
+| 9,10 | RA6, RA7 | SPARE_2, SPARE_3 | Input | Freed by the internal oscillator; available for future use |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
 | 12 | RB0 | INPUT_MENU_ADJUST | Input | Menu adjust switch: short press increase, hold decrease |
 | 13 | RB1 | INPUT_SPARE_1 | Input | Freed spare input |
@@ -147,7 +147,7 @@ This is the current approved signal map for the protection controller. The 1602 
 ## Current hardware assumptions
 
 - MCU: PIC16F18855-I/SP
-- Clock: 20 MHz crystal
+- Clock: internal HFINTOSC at 32 MHz (FEXTOSC = OFF, RSTOSC = HFINT32); no external crystal is fitted
 - Display: 1602 LCD with I2C backpack only
 - Protection faults: software-driven SWR, overdrive, drain-voltage, and temperature thresholds, backed by an independent hardware overcurrent comparator
 - SWR measurement pairs: two ADC pairs are required, one before and one after the low-pass filter bank, each with forward and reflected inputs

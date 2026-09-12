@@ -5,7 +5,7 @@ This document captures the current hardware understanding for the PIC16F18855-I/
 ## MCU
 
 - Device: PIC16F18855-I/SP
-- Clock: 20 MHz crystal on OSC1/OSC2
+- Clock: internal HFINTOSC at 32 MHz (FEXTOSC = OFF, RSTOSC = HFINT32); no external crystal is fitted
 - Core purpose: measure RF power, monitor SWR, control amplifier protection state, and report faults on the LCD
 
 ## Approved project signal map
@@ -27,7 +27,7 @@ This is the current approved signal map for the protection controller. The 1602 
 | 4 | RA2 | ADC_SWR2_FWD | Input | Post-filter SWR forward power ADC |
 | 5 | RA3 | ADC_SWR2_REF | Input | Post-filter SWR reflected power ADC |
 | 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC (AN5) |
-| 9,10 | RA6/OSC2, RA7/OSC1 | XTAL_IN/OUT | Input/Output | 20 MHz crystal |
+| 9,10 | RA6, RA7 | SPARE_2, SPARE_3 | Input | Freed by the internal oscillator; available for future use |
 | 1 | MCLR/VPP | RESET | Input | Master clear reset |
 | 12 | RB0 | INPUT_MENU_ADJUST | Input | Menu adjust: short press increase, hold decrease |
 | 13 | RB1 | ADC_CURRENT | Input | WCS1700 current ADC (AN9), provisional 70 A full scale |
@@ -101,7 +101,8 @@ The SWR protection channels are not required in hardware because each SWR pair i
 - The comparator board is deliberately separate from the PIC so that the critical analog faults are hardware-protected before the MCU state machine can act.
 - SWR is evaluated in firmware from the forward/reflected ADC pairs; no dedicated SWR comparator is required.
 - The seven planned analog measurements have dedicated PIC ADC pins, so no external analog multiplexer is required.
-- The three former spare inputs are assigned to the LCD configuration menu; no unallocated GPIO remains in this pin map.
+- The three former spare inputs are assigned to the LCD configuration menu.
+- RA6 and RA7 (former OSC2/OSC1) are unallocated spare GPIO, freed by the internal oscillator; assign before use since they default to inputs with no pull-up.
 - On the falling PTT edge, RC1 outputs a 10 ms active-low pulse to reset the comparator latch network. The controller then checks INPUT_HARD_FAULT before enabling a TX sequence.
 - The comparator outputs must combine into one active-high hard-fault signal at RB4. This input remains digital; RB2 and RB3 are dedicated to analogue sensing.
 - Any future expansion should be planned before wiring, so the MCU I/O map does not become inconsistent.
