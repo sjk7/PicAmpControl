@@ -28,7 +28,7 @@ Build a PIC16F18855-I/SP-based linear amplifier protection controller that monit
 4. Thermal and operator management
    - temperature sensing
    - fan-speed control from temperature
-   - warning and trip thresholds
+   - trip thresholds
    - PTT input for transmit-cycle arming
    - two-switch LCD configuration menu
 
@@ -39,7 +39,7 @@ The overcurrent fault is detected by analogue comparator hardware. SWR, overdriv
 Recommended hardware protections:
 
 - overcurrent fault
-- temperature warning and final trip threshold
+- temperature trip threshold
 
 SWR protection is computed locally for each sensing point:
 
@@ -57,15 +57,15 @@ Eight planned measurements are wired directly to ADC-capable pins: RA0-RA3 for t
 
 ## User threshold configuration
 
-The LCD configuration menu uses two active-low switches: `INPUT_MENU_NEXT` on RC2 and `INPUT_MENU_ADJUST` on RB0. A short adjust press increases the selected value; holding it for 500 ms then decreases the value repeatedly every 100 ms. The operator can select and adjust an independent SWR trip ratio for each detector pair, from 1.1:1 to 5.0:1 in 0.1:1 steps. The pre-filter default is 3:1 and the post-filter default is 2:1. Each bridge has one forward full-scale setting from 500 W to 2500 W in 100 W steps, defaulting to 1500 W; its paired reflected reading uses that same setting. Temperature uses selectable B3435, B3950, or B4250 10 kOhm NTC profiles, defaulting to B3950, with warning/trip settings from 0 C to 150 C. Input power is adjustable from 0.0 W to 10.0 W in 0.1 W steps and defaults to a 10.0 W trip. Drain voltage is adjustable from 0 V to 300 V in 1 V steps and defaults to a 150 V trip. Changes are locked out during transmit. RB1 remains a spare input.
+The LCD configuration menu uses two active-low switches: `INPUT_MENU_NEXT` on RC2 and `INPUT_MENU_ADJUST` on RB0. A short adjust press increases the selected value; holding it for 500 ms then decreases the value repeatedly every 100 ms. The operator can select and adjust an independent SWR trip ratio for each detector pair, from 1.1:1 to 5.0:1 in 0.1:1 steps. The pre-filter default is 3:1 and the post-filter default is 2:1. Each bridge has one forward full-scale setting from 500 W to 2500 W in 100 W steps, defaulting to 1500 W; its paired reflected reading uses that same setting. Temperature uses selectable B3435, B3950, or B4250 10 kOhm NTC profiles, defaulting to B3950, with a trip setting from 0 C to 150 C. Input power is adjustable from 0.0 W to 10.0 W in 0.1 W steps and defaults to a 10.0 W trip. Drain voltage is adjustable from 0 V to 300 V in 1 V steps and defaults to a 150 V trip. Changes are locked out during transmit. RB1 remains a spare input.
 
-The operator can also configure the TX-to-VCC and VCC-to-bias sequencing delays from 0 to 1000 ms in 5 ms steps; both default to 20 ms. Each operational output can be configured active-low or active-high, with active-low as the default: TX, TX_VCC, TX_BIAS, fan, warning, and trip. LCD I2C signalling remains fixed as open-drain bus logic and is driven by the dedicated software-I2C module.
+The operator can also configure the TX-to-VCC and VCC-to-bias sequencing delays from 0 to 1000 ms in 5 ms steps; both default to 20 ms. Each operational output can be configured active-low or active-high, with active-low as the default: TX, TX_VCC, TX_BIAS, fan, and trip. LCD I2C signalling remains fixed as open-drain bus logic and is driven by the dedicated software-I2C module.
 
 The status pages refresh every 100 ms from the post-filter forward-power ADC reading. The primary page presents a smoothed RMS or PEP peak-hold value on row one and a full-width PEP bar on row two. A second page presents `PEP ------------` on row one with temperature in degrees C on row two. The common bar renderer uses `-` for measured PEP and `.` for unused capacity, filling all remaining horizontal columns after each label. The PEP hold decays by one watt per configured interval, adjustable from 50 to 2000 ms and defaulting to 500 ms.
 
 The software trip comparison follows the displayed ratio rather than a raw ADC limit. For a configured ratio $S$, it trips when the paired measurements satisfy $R(S+1)^2 \geq F(S-1)^2$, where $F$ is forward power and $R$ is reflected power. Each bridge's single forward full-scale setting converts both its forward and reflected ADC results to physical power before this comparison. This is the standard SWR relationship expressed without floating-point arithmetic. The forward sample must exceed a small noise floor before this comparison can trip.
 
-Overdrive and drain voltage each have a separate, conditioned ADC path. The ADC reference is VDD, so valid conversion input is 0 to the regulated nominal 5.0 V rail. The drain divider maps 5.0 V ADC full scale to 300 V, so $V_{drain}=300r/1023$, where $r$ is the ADC result. The input-power detector/divider maps 31.62 V peak at the 50-ohm input to 5.0 V ADC full scale, yielding peak-envelope power $P=10(r/1023)^2$ W. The scaling values must be recalibrated if VDD is not maintained at 5.0 V. Their menu-configured software warning and trip limits supplement, but never replace, the analogue comparator thresholds. The overdrive, drain-peak, and overcurrent comparator outputs are combined into one active-high `INPUT_HARD_FAULT` signal; it is always a hard trip.
+Overdrive and drain voltage each have a separate, conditioned ADC path. The ADC reference is VDD, so valid conversion input is 0 to the regulated nominal 5.0 V rail. The drain divider maps 5.0 V ADC full scale to 300 V, so $V_{drain}=300r/1023$, where $r$ is the ADC result. The input-power detector/divider maps 31.62 V peak at the 50-ohm input to 5.0 V ADC full scale, yielding peak-envelope power $P=10(r/1023)^2$ W. The scaling values must be recalibrated if VDD is not maintained at 5.0 V. Their menu-configured software trip limits supplement, but never replace, the analogue comparator thresholds. The overdrive, drain-peak, and overcurrent comparator outputs are combined into one active-high `INPUT_HARD_FAULT` signal; it is always a hard trip.
 
 ## LCD strategy
 
@@ -89,7 +89,6 @@ Recommended states:
 - STANDBY
 - IDLE
 - OPERATE
-- WARNING
 - TRIP
 - FAULT_LATCHED
 - RESET_WAIT
@@ -110,11 +109,11 @@ Rules:
 
 ## Temperature and fan strategy
 
-Temperature uses a 10 kOhm NTC thermistor divider on the ADC input, with a 10 kOhm fixed resistor to the regulated 5 V rail and the NTC to ground. The configuration menu selects B3435, B3950, or B4250; B3950 is the default. The firmware contains compact 10 C lookup points from 0 C to 150 C for each profile. A near-full-scale ADC result is treated as 150 C so an open NTC lead produces a conservative thermal lockout. The selected profile and physical divider must be bench-calibrated before the temperature warning/trip settings are relied upon.
+Temperature uses a 10 kOhm NTC thermistor divider on the ADC input, with a 10 kOhm fixed resistor to the regulated 5 V rail and the NTC to ground. The configuration menu selects B3435, B3950, or B4250; B3950 is the default. The firmware contains compact 10 C lookup points from 0 C to 150 C for each profile. A near-full-scale ADC result is treated as 150 C so an open NTC lead produces a conservative thermal lockout. The selected profile and physical divider must be bench-calibrated before the temperature trip setting is relied upon.
 
 Recommended behavior:
 
-- warning threshold: fan increases speed or begins operation
+- lower threshold: fan increases speed or begins operation
 - higher threshold: fan speed increases further
 - critical threshold: amplifier trips and disables output
 

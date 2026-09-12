@@ -22,9 +22,9 @@ Hardware configuration:
 1. Select the intended NTC B-value profile in the menu. Start with B3950.
 2. Measure the heatsink temperature and ADC_TEMP voltage at 20 C, 40 C, 60 C, 70 C, 80 C, 100 C, and 120 C.
 3. Compare each displayed temperature to the reference temperature.
-4. If the error around the configured warning and trip points is unacceptable, select B3435 or B4250, or replace the NTC/divider with components whose datasheet matches the selected profile.
+4. If the error around the configured trip point is unacceptable, select B3435 or B4250, or replace the NTC/divider with components whose datasheet matches the selected profile.
 5. Confirm that increasing heatsink temperature produces a lower ADC count with the NTC connected to ground.
-6. Verify temperature warning at the configured warning setting and a transmit lockout/trip at the configured trip setting.
+6. Verify a transmit lockout/trip at the configured trip setting.
 
 Acceptance criteria:
 
@@ -49,7 +49,7 @@ Use a logic-level N-MOSFET with a specified low RDS(on) at VGS = 4.5 V. A flybac
 1. Confirm the actual PIC alternate-function mapping before using RB5 for hardware PWM. Until that is confirmed, treat RB5 as a logic output and use a PWM-capable external driver only if PWM is required.
 2. With the fan disconnected, verify the inactive and active gate voltages for both configured output polarities.
 3. With the fan connected, verify startup, current, MOSFET temperature, and electrical noise at 0%, 50%, and 100% drive.
-4. Define the final temperature schedule. Recommended initial targets are fan off below 50 C, reduced speed from 50 C to the warning point, and full speed at or above the warning point. A temperature trip must retain full fan drive while TX remains disabled.
+4. Define the final temperature schedule. Recommended initial targets are fan off below 50 C, reduced speed from 50 C upward, and full speed near the trip point. A temperature trip must retain full fan drive while TX remains disabled.
 5. Verify that the 10 ms PTT-triggered comparator reset pulse, a fault, and PTT release leave the fan in the documented safe state.
 
 ## 3. RF Bridge and Input-Power Calibration
@@ -60,14 +60,14 @@ All detector outputs must remain within 0 to VDD at the PIC, including expected 
 2. For each bridge, inject known forward power at approximately 10%, 50%, and 100% of the selected full scale. Record the ADC result and displayed power.
 3. Confirm each bridge's forward full-scale menu setting maps a 5 V detector output to the intended 500 W to 2500 W maximum.
 4. With a controlled mismatch, compare calculated SWR to an external directional coupler or analyser. Verify the independent pre-filter 3:1 default trip and post-filter 2:1 default trip.
-5. For input power, verify the detector/divider maps 31.62 V peak across 50 ohms, equal to 10 W PEP, to 5.0 V at ADC_OVERDRIVE. Confirm warning and trip behavior at the configured watt settings.
+5. For input power, verify the detector/divider maps 31.62 V peak across 50 ohms, equal to 10 W PEP, to 5.0 V at ADC_OVERDRIVE. Confirm trip behavior at the configured watt setting.
 6. Verify PEP hold, PEP decay, RMS display, and both display bars against a known RF envelope.
 
 ## 4. Drain Divider and ADC Input Protection
 
 1. With the amplifier disconnected, apply 0 V, 150 V, 300 V, and the maximum credible fault/transient voltage to the final drain-divider input.
 2. Verify ADC_DRAIN_PEAK reads 0 V, 150 V, and 300 V at the corresponding points without exceeding VDD at RB3.
-3. Confirm the drain warning/trip thresholds operate at the configured voltage values.
+3. Confirm the drain trip threshold operates at the configured voltage value.
 4. Oscilloscope-test ADC_TEMP, ADC_OVERDRIVE, and ADC_DRAIN_PEAK during RF keying, PTT transitions, and supply faults.
 5. Confirm all ADC pins remain within VSS to VDD. Verify the series resistors and external clamps limit current into the PIC pin protection structures during a fault.
 6. Confirm the external overcurrent comparator path asserts INPUT_OVERCURRENT_FAULT fast enough to stop the sequencer independently of ADC polling. Measure and record ADC/software response time for overdrive and drain peak.

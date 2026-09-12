@@ -74,7 +74,6 @@ flowchart LR
         TXVCC["OUTPUT_TX_VCC\nTX sequence 2"]
         TXBIAS["OUTPUT_TX_BIAS\nTX sequence 3"]
         FAN["OUTPUT_FAN_PWM\nFan speed"]
-        WARN["OUTPUT_WARNING_STATUS\nWarning"]
         TRIP["OUTPUT_TRIP_STATUS\nTrip"]
         LCD["1602 LCD\nPCF8574 I2C"]
     end
@@ -106,7 +105,6 @@ flowchart LR
     STATE --> TXVCC
     STATE --> TXBIAS
     STATE --> FAN
-    STATE --> WARN
     STATE --> TRIP
     STATE -->|software I2C| LCD
 ```
@@ -139,7 +137,7 @@ This is the current approved signal map for the protection controller. The 1602 
 | 15 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC (AN11) |
 | 16 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
 | 17 | RB5 | OUTPUT_FAN_PWM | Output | Fan speed control |
-| 18 | RB6 | OUTPUT_WARNING_STATUS | Output | Warning status output |
+| 18 | RB6 | INPUT_SPARE_4 | Input | Freed spare input (former warning output) |
 | 19 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
 | 8,20 | VSS | GND | Power | Ground return |
 | 11 | VDD | +5 V | Power | Follow datasheet decoupling rules |
@@ -155,7 +153,7 @@ This is the current approved signal map for the protection controller. The 1602 
 - Operator control: INPUT_PTT
 - Configuration controls: INPUT_MENU_NEXT and INPUT_MENU_ADJUST; each switch is active-low and is available only while not transmitting
 - Sequencing outputs: OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS
-- Status outputs: OUTPUT_WARNING_STATUS and OUTPUT_TRIP_STATUS
+- Status output: OUTPUT_TRIP_STATUS
 - Output rule: all operational outputs default to active-low and can be individually changed to active-high in the receive-only configuration menu
 - Input rule: input pin names follow the actual hardware comparator/sensor polarity; no polarity suffix is added unless a signal deliberately breaks the default output rule
 
@@ -181,7 +179,7 @@ The same logic is used for each pair and each sensor trips independently. A sing
 
 The 1602 display config menu uses two active-low, normally-open switches wired from the menu input pins to ground. RC2 selects the displayed configuration page. RB0 is the adjust button: a short press increases the selected value; holding it for 500 ms then decreases the value repeatedly every 100 ms. A button action is accepted only while PTT is inactive, so a threshold cannot change during transmit. RB1 is freed as a spare input.
 
-The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adjustable from 0 to 1000 ms in 5 ms steps, each defaulting to 20 ms. The active electrical level for OUTPUT_TX, OUTPUT_TX_VCC, OUTPUT_TX_BIAS, OUTPUT_FAN_PWM, OUTPUT_WARNING_STATUS, and OUTPUT_TRIP_STATUS is selectable as LOW or HIGH, with LOW as the default. LCD I2C polarity is not configurable because its open-drain signalling is defined by the I2C bus.
+The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adjustable from 0 to 1000 ms in 5 ms steps, each defaulting to 20 ms. The active electrical level for OUTPUT_TX, OUTPUT_TX_VCC, OUTPUT_TX_BIAS, OUTPUT_FAN_PWM, and OUTPUT_TRIP_STATUS is selectable as LOW or HIGH, with LOW as the default. LCD I2C polarity is not configurable because its open-drain signalling is defined by the I2C bus.
 
 All menu settings and the selected display page are saved to the PIC's internal EEPROM at each operator change. The stored record includes a magic value, format version, and checksum. At power-up the record is restored only when valid; a missing, incompatible, or corrupted record loads the compiled safe defaults and the primary status page.
 
@@ -196,11 +194,8 @@ The menu makes these firmware trip thresholds available to the operator:
 - SWR1 forward full-scale power, from 500 W to 2500 W in 100 W steps; default 1500 W and also used for SWR1 reflected-power conversion
 - SWR2 forward full-scale power, from 500 W to 2500 W in 100 W steps; default 1500 W and also used for SWR2 reflected-power conversion
 - NTC B-value profile: B3435, B3950, or B4250; default B3950
-- temperature warning, from 0 C to 150 C; default 70 C
 - temperature trip, from 0 C to 150 C; default 100 C
-- input-power warning, from 0.0 W to 10.0 W in 0.1 W steps
 - input-power trip, from 0.0 W to 10.0 W in 0.1 W steps; default 10.0 W
-- drain-voltage warning, from 0 V to 300 V in 1 V steps
 - drain-voltage trip, from 0 V to 300 V in 1 V steps; default 150 V
 - current trip, from 0 A to 100 A in 1 A steps; default 40 A, using WCS1700 on RB1/AN6
 
@@ -208,7 +203,7 @@ Each SWR ratio setting directly controls its local software trip: the controller
 
 The ADC reference is the regulated nominal 5.0 V VDD rail, so every analogue input is scaled from 0 to VDD, not to an independently guaranteed 5 V reference. With VDD regulated at 5.0 V, drain voltage uses a linear scale: ADC 0-1023 represents 0-300 V. Input power is calculated as peak-envelope power into 50 ohms, with ADC 0-1023 representing 0-10.0 W. This requires the input detector/divider to present 5 V at 31.62 V peak, a scale factor of approximately 6.325:1. Each SWR bridge detector also uses a 0-5 V range. Its bridge-specific 500-2500 W forward full-scale setting is shared by the associated reflected detector, so both readings use the same power range before SWR is calculated. The WCS1700 current ADC on RB1/AN6 uses a provisional 70 A full-scale calibration, implemented compactly as approximately 15 ADC counts per ampere, with a configurable trip default of 40 A. This approximation must be calibrated against the exact WCS1700 variant, offset, sensitivity, and current path. All analogue paths require series resistance and clamps so the PIC pin remains between VSS and VDD under normal operation. The external overcurrent comparator on RB4 remains the independent fast protection path.
 
-Temperature uses a 10 kOhm NTC divider with a selectable B3435, B3950, or B4250 profile; B3950 is the default. The firmware uses compact lookup points every 10 C from 0 C to 150 C, so displayed temperatures and thermal thresholds have 10 C resolution. The divider must use a 10 kOhm fixed resistor to the regulated 5 V rail and the NTC to ground. Bench-calibrate the selected sensor and resistor tolerance before relying on the warning and trip defaults.
+Temperature uses a 10 kOhm NTC divider with a selectable B3435, B3950, or B4250 profile; B3950 is the default. The firmware uses compact lookup points every 10 C from 0 C to 150 C, so displayed temperatures and thermal thresholds have 10 C resolution. The divider must use a 10 kOhm fixed resistor to the regulated 5 V rail and the NTC to ground. Bench-calibrate the selected sensor and resistor tolerance before relying on the trip defaults.
 
 ## Naming convention used in code
 
@@ -264,10 +259,6 @@ The firmware should implement these states:
   - all sequencing outputs are in their required state and the amplifier is allowed to run
   - normal operation continues while no safety fault is active
 
-- WARNING
-  - temperature or other monitored parameter is above warning threshold but below trip threshold
-  - warning output is asserted and the display informs the operator
-
 - THERMAL_LOCKOUT
   - configured temperature threshold (typically around 100 C) has been reached or exceeded
   - transmit is forbidden regardless of PTT
@@ -285,6 +276,7 @@ The firmware should implement these states:
   - all transmitter outputs are disabled
   - the trip output is asserted
   - this state remains latched until the next safe restart condition
+  - the display shows which condition tripped (SWR, hardware/current fault, temperature, overdrive, or drain voltage)
 
 ### Critical behavior rules
 

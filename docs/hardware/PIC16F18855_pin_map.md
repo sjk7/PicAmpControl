@@ -35,7 +35,7 @@ This is the current approved signal map for the protection controller. The 1602 
 | 15 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC (AN11) |
 | 16 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
 | 17 | RB5 | OUTPUT_FAN_PWM | Output | 12 V fan low-side MOSFET control; confirm hardware-PWM alternate-function routing |
-| 18 | RB6 | OUTPUT_WARNING_STATUS | Output | Warning status output |
+| 18 | RB6 | INPUT_SPARE_4 | Input | Freed spare input (former warning output) |
 | 19 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
 | 6 | RA4 | unused | Input | Reserved; not an ADC channel in this design |
 | 8,20 | VSS | GND | Power | Ground return |
@@ -65,11 +65,9 @@ This is the current approved signal map for the protection controller. The 1602 
 
 ### Protection outputs
 
-- WARNING_OUT: RC6
-- TRIP_OUT: RC7
-- AMP_ENABLE: RC5
+- TRIP_OUT: RB7 (OUTPUT_TRIP_STATUS)
 
-The TX, fan, warning, and trip outputs each default active-low but are individually configurable active-low or active-high in the configuration menu. They are forced to their configured inactive levels for a fault, startup inhibit, or receive mode.
+The TX, fan, and trip outputs each default active-low but are individually configurable active-low or active-high in the configuration menu. They are forced to their configured inactive levels for a fault, startup inhibit, or receive mode.
 
 The selected fan topology is a 12 V two-wire fan with a low-side logic-level N-MOSFET. RB5 drives the MOSFET gate through a resistor with a gate pull-down to ground. Confirm RB5 PWM routing before relying on internal hardware PWM; an external PWM driver is required if it is not a PWM-capable alternate-function pin.
 
