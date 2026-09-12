@@ -4,6 +4,28 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-12 — LCD full-clear on every refresh caused flicker (found in review)
+
+`show_menu_page()` in [firmware/src/main.c](firmware/src/main.c) unconditionally sent
+the HD44780 "Clear Display" command (`0x01`) plus a 2 ms delay on every call. The
+STATUS and POWER/TEMPERATURE pages are redrawn every 100 ms during normal operation,
+and the TRIP screen was redrawn identically every 100 ms while latched, so the
+display blanked and repainted at ~10 Hz - a visible flicker on real hardware, worst on
+the continuously-updating PEP bar.
+Fix: track the last-drawn (menu page, state, trip reason) and only send the clear
+command when that identity actually changes. Live pages now update their
+fixed-width fields in place each refresh; the temperature field on the
+POWER/TEMPERATURE page was also space-padded to a fixed 3 digits so no stale digit
+can be left behind now that the clear is skipped between refreshes. Config/setting
+pages keep the previous clear-per-change behavior since they only redraw on an
+actual button press, not a timer.
+
+Also added, as related usability fixes:
+- an 8 s menu-inactivity timeout that returns the display to STATUS from any config
+  page (`MENU_IDLE_TIMEOUT_MS` in `poll_menu_inputs()`), and
+- forcing the display back to STATUS the instant PTT is asserted
+  (`handle_ptt_transition()`), so an operator can't key up onto a frozen config page.
+
 ## 2026-09-12 — Found while removing the warning system (KISS refactor)
 
 While rebuilding `g_menu_setting_offsets`/`g_menu_setting_types` in

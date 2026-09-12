@@ -81,6 +81,8 @@ typedef struct {
 #define TRIP_REASON_OVERDRIVE 0x20
 #define TRIP_REASON_DRAIN 0x40
 
+#define MENU_IDLE_TIMEOUT_MS 8000
+
 static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
 static volatile unsigned char g_trip_reason = 0;
@@ -98,6 +100,10 @@ static unsigned int g_pep_decay_elapsed_ms = 0;
 static unsigned int g_status_refresh_ms = 0;
 static unsigned int g_startup_elapsed_ms = 0;
 static volatile unsigned char g_timer_ticks_pending = 0;
+static menu_page_t g_lcd_drawn_page = MENU_PAGE_COUNT;
+static system_state_t g_lcd_drawn_state = STATE_RESET_WAIT;
+static unsigned char g_lcd_drawn_trip_reason = 0;
+static unsigned int g_menu_idle_ms = 0;
 static volatile bool g_settings_dirty = false;
 static unsigned int g_settings_save_delay_ms = 0;
 static volatile unsigned char g_adc_scan_index = 0;
@@ -318,6 +324,12 @@ void show_menu_page(void) {
     unsigned int value = 0;
     unsigned char setting_index;
     unsigned char *setting;
+    bool screen_changed = (g_menu_page != g_lcd_drawn_page) ||
+                          (g_state != g_lcd_drawn_state) ||
+                          (g_state == STATE_TRIP && g_trip_reason != g_lcd_drawn_trip_reason);
+    bool conditional_clear_page = (g_menu_page == MENU_PAGE_STATUS ||
+                                   g_menu_page == MENU_PAGE_POWER_TEMPERATURE ||
+                                   g_state == STATE_TRIP);
 
     if (g_menu_page >= MENU_PAGE_SWR1_TRIP) {
         setting_index = (unsigned char)(g_menu_page - MENU_PAGE_SWR1_TRIP);
@@ -328,9 +340,22 @@ void show_menu_page(void) {
         }
     }
 
-    lcd_write_byte(0x01, false);
-    __delay_ms(2);
+    /* Live pages redraw their fixed-width fields in place every refresh, and the
+       trip screen's text never changes while latched, so the display only needs
+       a hard clear when the screen identity actually changes; this avoids a
+       visible blank-flash on every periodic PEP/status update or trip redraw. */
+    if (!conditional_clear_page || screen_changed) {
+        lcd_write_byte(0x01, false);
+        __delay_ms(2);
+    }
+    g_lcd_drawn_page = g_menu_page;
+    g_lcd_drawn_state = g_state;
+    g_lcd_drawn_trip_reason = g_trip_reason;
+
     if (g_state == STATE_TRIP) {
+        if (!screen_changed) {
+            return;
+        }
         lcd_set_cursor(0, 0);
         lcd_write_text("*** TRIP ***");
         lcd_set_cursor(1, 0);
@@ -359,12 +384,16 @@ void show_menu_page(void) {
         return;
     }
     if (g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
+        unsigned int temp_c_value = temperature_c(ADC_SAMPLE_TEMP);
+
         lcd_set_cursor(0, 0);
         lcd_write_text("PEP ");
         lcd_write_power_bar(g_post_fwd_pep_w, g_thresholds.swr2_fwd_full_scale_w, 12);
         lcd_set_cursor(1, 0);
         lcd_write_text("TEMP ");
-        lcd_write_unsigned(temperature_c(ADC_SAMPLE_TEMP));
+        if (temp_c_value < 100) lcd_write_spaces(1);
+        if (temp_c_value < 10) lcd_write_spaces(1);
+        lcd_write_unsigned(temp_c_value);
         lcd_write_byte('C', true);
         return;
     }
@@ -447,6 +476,10 @@ void start_comparator_reset(void) {
 void handle_ptt_transition(bool ptt_asserted) {
     if (ptt_asserted) {
         g_ptt_active = true;
+        if (g_menu_page != MENU_PAGE_STATUS) {
+            g_menu_page = MENU_PAGE_STATUS;
+            g_menu_changed = true;
+        }
         start_comparator_reset();
         if (!g_fault_latched) {
             g_state = STATE_RESET_WAIT;
@@ -681,6 +714,21 @@ void poll_menu_inputs(unsigned int elapsed_ms) {
 
     next_was_pressed = next_pressed;
     adjust_was_pressed = adjust_pressed;
+
+    /* Auto-return to the live status page after sitting idle on a config page,
+       so a forgotten menu screen doesn't hide the live power/trip readout. */
+    if (next_pressed || adjust_pressed) {
+        g_menu_idle_ms = 0;
+    } else if (g_menu_page >= MENU_PAGE_SWR1_TRIP) {
+        g_menu_idle_ms += elapsed_ms;
+        if (g_menu_idle_ms >= MENU_IDLE_TIMEOUT_MS) {
+            g_menu_page = MENU_PAGE_STATUS;
+            g_menu_changed = true;
+            g_menu_idle_ms = 0;
+        }
+    } else {
+        g_menu_idle_ms = 0;
+    }
 }
 
 void update_protection_state(unsigned int temp_c,
