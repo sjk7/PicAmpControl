@@ -133,7 +133,7 @@ This is a valid analog threshold scheme, but the reference must be chosen carefu
 
 ## Safety rules
 
-- The overcurrent fault that requires asynchronous response must be detected in hardware first; software ADC trips have a bounded Timer0/main-loop response and must not be described as comparator-speed protection.
+- The overcurrent fault that requires asynchronous response must be detected in hardware first; software ADC trips have a bounded Timer0/main-loop response and must not be described as comparator-speed protection. See [docs/hardware/bench-validation.md](hardware/bench-validation.md#firmware-derived-timing-budget-computed-from-the-code-confirm-on-the-bench) for the computed reaction-time budget and its tolerances.
 - Every ADC voltage input must be scaled, clamped, and filtered to remain between $0$ and $V_{DD}$.
 - Software latches must not override comparator faults.
 - Fault states should remain latched until conditions are safe and the system is re-armed.
