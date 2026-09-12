@@ -847,6 +847,18 @@ void update_protection_state(unsigned int temp_c,
         return;
     }
 
+    if (g_fault_latched) {
+        /* The condition itself cleared, but the latch persists until the next
+           PTT re-arm edge explicitly clears it (see clear_fault_latches() in
+           handle_ptt_transition()), so TRIP stays shown/TX stays inhibited. */
+        g_state = STATE_TRIP;
+        set_trip_output(true);
+        set_tx_output(false);
+        set_tx_vcc_output(false);
+        set_tx_bias_output(false);
+        return;
+    }
+
     g_state = STATE_OPERATE;
     set_trip_output(false);
 }

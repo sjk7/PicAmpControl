@@ -4,6 +4,24 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-12 — TRIP state/display cleared before the PTT re-arm, not only on it
+
+`update_protection_state()` in [firmware/src/main.c](firmware/src/main.c) recomputed
+`any_trip_fault` from live sensor readings every loop and unconditionally set
+`g_state = STATE_OPERATE` the instant that reading looked clear - with no check of
+`g_fault_latched`. Only `handle_ptt_transition()`'s PTT key-down path actually clears
+`g_fault_latched`/`g_trip_reason`. Net effect: the TRIP screen (and `g_state`) could
+silently revert to a normal STATUS screen as soon as the offending condition itself
+cleared (e.g. forward power decays after unkeying), well before any new PTT keydown,
+even though the fault was still latched underneath. TX sequencing itself was never
+unsafe - `update_tx_sequence()` independently gates on `g_fault_latched`, not
+`g_state` - but the operator-facing display didn't reflect the real latched state.
+Fix: when the live condition clears but `g_fault_latched` is still true,
+`update_protection_state()` now keeps `g_state = STATE_TRIP` (and the trip output
+active) until the next PTT re-arm edge actually clears the latch via
+`clear_fault_latches()`, matching the documented "latched until conditions are safe
+and the system is re-armed" rule.
+
 ## 2026-09-12 — Remaining LCD flicker: config pages still cleared on every rapid-adjust redraw
 
 The earlier flicker fix only skipped the LCD clear for STATUS/POWER_TEMPERATURE/TRIP.
