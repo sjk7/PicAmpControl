@@ -96,6 +96,7 @@ static unsigned int g_sequence_elapsed_ms = 0;
 static unsigned char g_sequence_stage = 0;
 static unsigned int g_post_fwd_rms_w = 0;
 static unsigned int g_post_fwd_pep_w = 0;
+static unsigned int g_swr2_live_tenths = 10;
 static unsigned int g_pep_decay_elapsed_ms = 0;
 static unsigned int g_status_refresh_ms = 0;
 static unsigned int g_startup_elapsed_ms = 0;
@@ -260,6 +261,20 @@ void lcd_write_power_bar(unsigned int power_w, unsigned int full_scale_w, unsign
     }
 }
 
+void lcd_write_swr_right(unsigned char field_width, unsigned int swr_tenths) {
+    unsigned int whole = swr_tenths / 10;
+    unsigned char text_len = (unsigned char)(4 + (whole >= 10 ? 2 : 1) + 2);
+
+    while (field_width > text_len) {
+        lcd_write_byte(' ', true);
+        field_width--;
+    }
+    lcd_write_text("SWR=");
+    lcd_write_unsigned(whole);
+    lcd_write_byte('.', true);
+    lcd_write_unsigned((unsigned int)(swr_tenths % 10));
+}
+
 unsigned char settings_checksum(menu_page_t page, const protection_thresholds_t *settings) {
     const unsigned char *bytes = (const unsigned char *)settings;
     unsigned char checksum = (unsigned char)page;
@@ -372,15 +387,15 @@ void show_menu_page(void) {
         unsigned int power_w = g_thresholds.power_display_pep ? g_post_fwd_pep_w : g_post_fwd_rms_w;
 
         lcd_set_cursor(0, 0);
-        lcd_write_text("P=");
+        lcd_write_text(g_thresholds.power_display_pep ? "P=" : "R=");
         if (power_w < 1000) lcd_write_spaces(1);
         if (power_w < 100) lcd_write_spaces(1);
         if (power_w < 10) lcd_write_spaces(1);
         lcd_write_unsigned(power_w);
         lcd_write_byte('W', true);
-        lcd_write_text(g_thresholds.power_display_pep ? " PEP" : " RMS");
+        lcd_write_swr_right(9, g_swr2_live_tenths);
         lcd_set_cursor(1, 0);
-        lcd_write_power_bar(g_post_fwd_pep_w, g_thresholds.swr2_fwd_full_scale_w, 16);
+        lcd_write_power_bar(power_w, g_thresholds.swr2_fwd_full_scale_w, 16);
         return;
     }    if (g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
         unsigned int temp_c_value = temperature_c(ADC_SAMPLE_TEMP);
@@ -507,6 +522,52 @@ bool swr_trip(unsigned int forward_raw,
     lower_factor = (unsigned long)(limit_tenths - 10) * (limit_tenths - 10);
         return (unsigned long)reflected_raw * upper_factor >=
             (unsigned long)forward_raw * lower_factor;
+}
+
+unsigned int isqrt32(unsigned long value) {
+    unsigned long result = 0;
+    unsigned long bit = 1UL << 30;
+
+    while (bit > value) {
+        bit >>= 2;
+    }
+    while (bit != 0) {
+        if (value >= result + bit) {
+            value -= result + bit;
+            result = (result >> 1) + bit;
+        } else {
+            result >>= 1;
+        }
+        bit >>= 2;
+    }
+    return (unsigned int)result;
+}
+
+/* Power-based SWR: forward/reflected ADC samples are proportional to power, so
+   SWR = (1 + sqrt(Pr/Pf)) / (1 - sqrt(Pr/Pf)), computed here in fixed-point
+   tenths since this part has no FPU/sqrt(). Display-only; not used for trips. */
+unsigned int compute_swr_tenths(unsigned int forward_raw, unsigned int reflected_raw) {
+    unsigned long ratio_scaled;
+    unsigned int sqrt_ratio;
+    unsigned int denominator;
+    unsigned long swr_tenths;
+
+    if (forward_raw < 10) {
+        return 10;
+    }
+
+    ratio_scaled = ((unsigned long)reflected_raw * 1000000UL) / forward_raw;
+    sqrt_ratio = isqrt32(ratio_scaled);
+    if (sqrt_ratio > 999) {
+        sqrt_ratio = 999;
+    }
+
+    denominator = (unsigned int)(1000 - sqrt_ratio);
+    swr_tenths = ((unsigned long)(1000 + sqrt_ratio) * 10UL) / denominator;
+    if (swr_tenths > 999) {
+        swr_tenths = 999;
+    }
+    return (unsigned int)swr_tenths;
 }
 
 unsigned int drain_voltage(unsigned int raw) {
@@ -830,6 +891,7 @@ int main(void) {
         drain_voltage_v = drain_voltage(drain_raw);
         current_raw = ADC_SAMPLE_CURRENT;
         update_post_filter_power(swr2_fwd_raw);
+        g_swr2_live_tenths = compute_swr_tenths(swr2_fwd_raw, swr2_ref_raw);
 
         bool swr1_fault = swr_trip(swr1_fwd_raw, swr1_ref_raw,
                        g_thresholds.swr1_trip_tenths);

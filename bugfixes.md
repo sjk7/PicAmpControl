@@ -4,6 +4,25 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-12 — STATUS page: live SWR readout, bar now tracks the selected power mode
+
+Two follow-ups to the STATUS page requested after the PEP/RMS-label fix below:
+
+1. The power bar on row 1 always used the PEP value (`g_post_fwd_pep_w`) even when
+   RMS mode was selected, so the bar and the number above it could disagree. Fixed:
+   the bar now uses the same `power_w` (PEP or RMS, per `power_display_pep`) as the
+   numeric reading.
+2. Added a live SWR reading, right-justified on row 0 (`lcd_write_swr_right()`).
+   `compute_swr_tenths()` derives it from the post-filter forward/reflected ADC
+   samples using the standard power-based relation
+   `SWR = (1 + sqrt(Pr/Pf)) / (1 - sqrt(Pr/Pf))`, via a fixed-point integer square
+   root (`isqrt32()`) since this part has no FPU. Display-only - trip logic still
+   uses the existing threshold comparison in `swr_trip()`, unchanged.
+
+Row 0 layout is now `P=nnnnW` or `R=nnnnW` (mode is now a single-letter prefix
+instead of a trailing `" PEP"`/`" RMS"`) followed by right-justified `SWR=X.X`,
+filling all 16 columns.
+
 ## 2026-09-12 — Dead "SWR=" label on the STATUS page (found in review)
 
 The STATUS page in `show_menu_page()` printed `"P=<power>W SWR="` on row 0, but no
@@ -14,7 +33,8 @@ square-root approximation with no FPU on this part, which is new numeric code in
 safety-relevant display path and out of scope for a text-label cleanup.
 Fix: replaced the dead label with `" PEP"`/`" RMS"`, reusing the already-available
 `power_display_pep` flag so the row now tells the operator which reading mode they're
-looking at instead of showing an unfulfilled promise of a value.
+looking at instead of showing an unfulfilled promise of a value. (Superseded by the
+entry above, which adds the actual SWR value.)
 
 ## 2026-09-12 — LCD full-clear on every refresh caused flicker (found in review)
 
