@@ -85,9 +85,12 @@ jobs:
         shell: pwsh
         run: |
           $dist = Join-Path $PWD 'dist'
-          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          $distHardware = Join-Path $dist 'hardware'
+          New-Item -ItemType Directory -Force -Path $dist, $distHardware | Out-Null
           Get-ChildItem -Path @((Join-Path $PWD '_build'), (Join-Path $PWD 'out')) -Recurse -Include *.hex,*.elf,*.map,*.xml -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $dist -Force }
-          Get-ChildItem $dist | Format-Table Name,Length
+          Copy-Item (Join-Path $PWD 'docs/hardware/schematic/PicAmpControl.net') $distHardware -Force
+          Copy-Item (Join-Path $PWD 'docs/hardware/PIC16F18855_pin_map.md') $distHardware -Force
+          Get-ChildItem $dist -Recurse -File | Format-Table FullName,Length
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4

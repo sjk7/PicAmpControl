@@ -27,6 +27,8 @@ The project is in a working design-and-firmware skeleton stage:
 - GitHub Actions build workflow: [.github/workflows/firmware-build.yml](.github/workflows/firmware-build.yml)
 - GitHub Actions release workflow: [.github/workflows/release-firmware.yml](.github/workflows/release-firmware.yml)
 
+The build workflow packages each run's firmware output (`.hex`/`.elf`/`.map`/`.xml`) together with the current hardware netlist ([docs/hardware/schematic/PicAmpControl.net](docs/hardware/schematic/PicAmpControl.net)) and pin map ([docs/hardware/PIC16F18855_pin_map.md](docs/hardware/PIC16F18855_pin_map.md)) into a single `firmware-<sha>` build artifact, under a `hardware/` subfolder for the netlist and pin map. The release workflow publishes that artifact as-is, so every GitHub Release contains matching firmware, netlist, and pinout documentation.
+
 ## Design direction
 
 The controller is intended to use a layered protection model:
