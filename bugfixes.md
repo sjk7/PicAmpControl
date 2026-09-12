@@ -4,6 +4,26 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-12 — LCD writes made non-blocking (queued, drained a few bytes per loop pass)
+
+Per the reaction-time budget in docs/hardware/bench-validation.md, the bit-banged LCD
+write was the dominant source of protection-loop latency: a full page redraw was
+~13 ms of blocking bit-banging, during which `update_protection_state()` could not
+run, so a fault occurring mid-redraw wasn't acted on until the LCD transaction
+finished.
+Fix: `lcd_write_byte()` in `firmware/src/lcd_i2c.c` now enqueues into a 56-entry ring
+buffer (sized for the worst case: the TRIP screen with every fault reason set at
+once, 49 bytes) instead of transmitting immediately. The main loop drains it via the
+new `lcd_service(2)` (2 bytes/pass) after `update_protection_state()` has already run
+that pass. The actual I2C bit-banging moved to `lcd_write_byte_now()`, used directly
+by `lcd_init()`'s one-time startup sequence and by the "Clear Display" command on a
+real page/state transition (both have their own real timing requirements and stay
+synchronous; the queue is flushed first so ordering can't be disturbed). Rendering
+code (`lcd_write_text`, `lcd_write_unsigned`, etc.) is unchanged - only *when* each
+byte physically goes out changed, not what gets displayed. Worst-case gap between
+consecutive `update_protection_state()` calls due to the LCD dropped from ~13 ms to
+~0.8 ms (2 queued bytes), or ~2 ms including an occasional page-transition clear.
+
 ## 2026-09-12 — TRIP state/display cleared before the PTT re-arm, not only on it
 
 `update_protection_state()` in [firmware/src/main.c](firmware/src/main.c) recomputed

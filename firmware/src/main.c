@@ -377,7 +377,8 @@ void show_menu_page(void) {
        visible blank-flash on every periodic status update, trip redraw, or
        rapid-repeat adjustment of a setting. */
     if (screen_changed) {
-        lcd_write_byte(0x01, false);
+        lcd_service(255); /* flush any bytes still queued from the previous page first */
+        lcd_write_byte_now(0x01, false);
         __delay_ms(2);
     }
     g_lcd_drawn_page = g_menu_page;
@@ -977,6 +978,11 @@ int main(void) {
             show_menu_page();
             g_menu_changed = false;
         }
+
+        /* Drain a few queued LCD bytes per pass instead of blocking for a
+           whole page, so update_protection_state() above is never starved by
+           an in-progress screen redraw (see bench-validation.md timing budget). */
+        lcd_service(2);
 
         service_settings_save();
     }
