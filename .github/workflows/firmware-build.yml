@@ -10,13 +10,10 @@ on:
 jobs:
   build:
     name: Build firmware
-    runs-on: [self-hosted, windows, x64]
-    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
-    env:
-      XC8_DIR: ${{ vars.XC8_DIR }}
-      PACK_REPO_PATH: ${{ vars.PACK_REPO_PATH }}
 
     steps:
       - name: Check out repository
@@ -24,73 +21,57 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify XC8 toolchain is installed on the runner
-        shell: pwsh
+      - name: Cache XC8 Toolchain & DFP
+        id: cache-xc8
+        uses: actions/cache@v4
+        with:
+          path: /opt/microchip
+          key: xc8-v4.00-dfp-1.32.471
+
+      - name: Install XC8 Toolchain & DFP
+        if: steps.cache-xc8.outputs.cache-hit != 'true'
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:XC8_DIR) -or [string]::IsNullOrWhiteSpace($env:PACK_REPO_PATH)) {
-            throw 'Set repository variables XC8_DIR and PACK_REPO_PATH to the installed XC8 bin directory and Microchip pack repository on the self-hosted runner.'
-          }
-          $xc8 = Join-Path $env:XC8_DIR 'xc8-cc.exe'
-          if (-not (Test-Path $xc8)) {
-            throw "XC8 compiler not found at $xc8. Install the Microchip XC8 toolchain on the self-hosted runner before running this workflow."
-          }
-          $devicePack = Join-Path $env:PACK_REPO_PATH 'Microchip/PIC16F1xxxx_DFP/1.32.471/xc8'
-          if (-not (Test-Path $devicePack)) {
-            throw "PIC16F1xxxx_DFP 1.32.471 is not installed at $devicePack. Install the device pack on the self-hosted runner."
-          }
-          Write-Host "Using XC8 compiler: $xc8"
-          Write-Host "Using device pack: $devicePack"
+          mkdir -p /tmp/xc8
+          cd /tmp/xc8
+          curl -sSL -A "Mozilla/5.0 (X11; Linux x86_64)" "https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/xc8-v4.00-full-install-linux-x64-installer.run" -o xc8-installer.run
+          chmod +x xc8-installer.run
+          sudo ./xc8-installer.run --mode unattended --unattendedmodeui none --netservername '' --LicenseType FreeMode --prefix /opt/microchip/xc8/v4.00
+
+          curl -sSL -A "Mozilla/5.0 (X11; Linux x86_64)" "https://packs.download.microchip.com/Microchip.PIC16F1xxxx_DFP.1.32.471.atpack" -o dfp.atpack
+          sudo mkdir -p /opt/microchip/packs/Microchip/PIC16F1xxxx_DFP/1.32.471
+          sudo unzip -q dfp.atpack -d /opt/microchip/packs/Microchip/PIC16F1xxxx_DFP/1.32.471
+          sudo chown -R $USER:$USER /opt/microchip
+          rm -rf /tmp/xc8
 
       - name: Configure project with CMake
-        shell: pwsh
+        env:
+          XC8_DIR: /opt/microchip/xc8/v4.00/bin
+          PACK_REPO_PATH: /opt/microchip/packs
         run: |
-          Set-Location $env:GITHUB_WORKSPACE
-          $sourceDir = Join-Path $env:GITHUB_WORKSPACE 'cmake/My_Pic_Project/default'
-          $buildDir = Join-Path $env:GITHUB_WORKSPACE '_build/My_Pic_Project/release'
-          $toolchain = Join-Path $sourceDir '.generated/toolchain.cmake'
-          $overrides = Join-Path $sourceDir '.generated/overrides.cmake'
-          if (-not (Test-Path $toolchain)) {
-            throw "Generated CMake toolchain file not found at $toolchain"
-          }
-          if (-not (Test-Path 'C:\Windows\System32\ninja.exe')) {
-            throw 'Ninja was not found at C:\Windows\System32\ninja.exe on the self-hosted runner.'
-          }
-          $cmakeArgs = @(
-            '-S', $sourceDir,
-            '-B', $buildDir,
-            '-G', 'Ninja',
-            '-DCMAKE_BUILD_TYPE=Release',
-            "-DCMAKE_TOOLCHAIN_FILE=$toolchain",
-            "-DCMAKE_USER_MAKE_RULES_OVERRIDE=$overrides",
-            "-DCMAKE_C_COMPILER=$env:XC8_DIR/xc8-cc.exe",
-            "-DCMAKE_ASM_COMPILER=$env:XC8_DIR/xc8-cc.exe",
-            "-DCMAKE_AR=$env:XC8_DIR/xc8-ar.exe",
-            '-DCMAKE_C_COMPILER_WORKS=TRUE',
-            '-DCMAKE_ASM_COMPILER_WORKS=TRUE',
-            "-DPACK_REPO_PATH=$env:PACK_REPO_PATH",
-            '-DCMAKE_MAKE_PROGRAM=C:\Windows\System32\ninja.exe'
-          )
-          & cmake @cmakeArgs
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
+          cmake -S cmake/My_Pic_Project/default -B _build/My_Pic_Project/release -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="cmake/My_Pic_Project/default/.generated/toolchain.cmake" \
+            -DCMAKE_USER_MAKE_RULES_OVERRIDE="${PWD}/cmake/My_Pic_Project/default/.generated/overrides.cmake" \
+            -DCMAKE_C_COMPILER="${XC8_DIR}/xc8-cc" \
+            -DCMAKE_ASM_COMPILER="${XC8_DIR}/xc8-cc" \
+            -DCMAKE_AR="${XC8_DIR}/xc8-ar" \
+            -DCMAKE_C_COMPILER_WORKS=TRUE \
+            -DCMAKE_ASM_COMPILER_WORKS=TRUE \
+            -DPACK_REPO_PATH="${PACK_REPO_PATH}"
 
       - name: Build firmware
-        shell: pwsh
         run: |
-          Set-Location $env:GITHUB_WORKSPACE
-          cmake --build (Join-Path $env:GITHUB_WORKSPACE '_build/My_Pic_Project/release') --verbose
+          cmake --build _build/My_Pic_Project/release --verbose
 
       - name: Package output
-        shell: pwsh
         run: |
-          $dist = Join-Path $PWD 'dist'
-          $distHardware = Join-Path $dist 'hardware'
-          New-Item -ItemType Directory -Force -Path $dist, $distHardware | Out-Null
-          Get-ChildItem -Path @((Join-Path $PWD '_build'), (Join-Path $PWD 'out')) -Recurse -Include *.hex,*.elf,*.map,*.xml -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $dist -Force }
-          Copy-Item (Join-Path $PWD 'docs/hardware/schematic/PicAmpControl.net') $distHardware -Force
-          Copy-Item (Join-Path $PWD 'docs/hardware/PIC16F18855_pin_map.md') $distHardware -Force
-          Get-ChildItem $dist -Recurse -File | Format-Table FullName,Length
+      - name: Package output
+        run: |
+          mkdir -p dist/hardware
+          find _build out -type f \( -name "*.hex" -o -name "*.elf" -o -name "*.map" -o -name "*.xml" \) -exec cp {} dist/ \;
+          cp docs/hardware/schematic/PicAmpControl.net dist/hardware/
+          cp docs/hardware/PIC16F18855_pin_map.md dist/hardware/
+          ls -lhR dist/
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
