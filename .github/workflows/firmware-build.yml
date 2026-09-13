@@ -35,7 +35,7 @@ jobs:
           cd /tmp/xc8
           curl -sSL -A "Mozilla/5.0 (X11; Linux x86_64)" "https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/xc8-v4.00-full-install-linux-x64-installer.run" -o xc8-installer.run
           chmod +x xc8-installer.run
-          sudo ./xc8-installer.run --mode unattended --unattendedmodeui none --netservername '' --LicenseType FreeMode --prefix /opt/microchip/xc8/v4.00
+          sudo ./xc8-installer.run --mode unattended --unattendedmodeui none --LicenseType FreeMode --prefix /opt/microchip/xc8/v4.00
 
           curl -sSL -A "Mozilla/5.0 (X11; Linux x86_64)" "https://packs.download.microchip.com/Microchip.PIC16F1xxxx_DFP.1.32.471.atpack" -o dfp.atpack
           sudo mkdir -p /opt/microchip/packs/Microchip/PIC16F1xxxx_DFP/1.32.471
