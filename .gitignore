@@ -12,3 +12,5 @@ out/
 *.cmf
 *.hxl
 *.mum
+__pycache__/
+*.pyc
