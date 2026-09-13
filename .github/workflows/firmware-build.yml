@@ -35,7 +35,7 @@ jobs:
           cd /tmp/xc8
           curl -sSL -A "Mozilla/5.0 (X11; Linux x86_64)" "https://ww1.microchip.com/downloads/aemDocuments/documents/DEV/ProductDocuments/SoftwareTools/xc8-v4.00-full-install-linux-x64-installer.run" -o xc8-installer.run
           chmod +x xc8-installer.run
-          ./xc8-installer.run --help || true
+          sudo ./xc8-installer.run --mode unattended --unattendedmodeui none --prefix /opt/microchip/xc8/v4.00
 
           curl -sSL -A "Mozilla/5.0 (X11; Linux x86_64)" "https://packs.download.microchip.com/Microchip.PIC16F1xxxx_DFP.1.32.471.atpack" -o dfp.atpack
           sudo mkdir -p /opt/microchip/packs/Microchip/PIC16F1xxxx_DFP/1.32.471
@@ -50,7 +50,7 @@ jobs:
         run: |
           cmake -S cmake/My_Pic_Project/default -B _build/My_Pic_Project/release -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE="cmake/My_Pic_Project/default/.generated/toolchain.cmake" \
+            -DCMAKE_TOOLCHAIN_FILE="${PWD}/cmake/My_Pic_Project/default/.generated/toolchain.cmake" \
             -DCMAKE_USER_MAKE_RULES_OVERRIDE="${PWD}/cmake/My_Pic_Project/default/.generated/overrides.cmake" \
             -DCMAKE_C_COMPILER="${XC8_DIR}/xc8-cc" \
             -DCMAKE_ASM_COMPILER="${XC8_DIR}/xc8-cc" \
@@ -63,8 +63,6 @@ jobs:
         run: |
           cmake --build _build/My_Pic_Project/release --verbose
 
-      - name: Package output
-        run: |
       - name: Package output
         run: |
           mkdir -p dist/hardware
