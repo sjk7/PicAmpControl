@@ -99,6 +99,7 @@ The SWR protection channels are not required in hardware because each SWR pair i
 
 ## Wiring notes
 
+- Pull-up and input-bias requirements are consolidated in [pull-up-resistor-guidance.md](pull-up-resistor-guidance.md).
 - This map intentionally keeps the 1602 display on the PIC hardware I2C pins and does not use the LCD on a parallel bus.
 - The LCD backpack is assumed to be a common PCF8574-style I2C adapter board; I2C is implemented in firmware on RC3/RC4.
 - The LCD backpack may have its own I2C pull-ups; avoid overly strong parallel pull-ups and target a combined bus pull-up resistance of approximately 4.7-10 kOhm.

@@ -18,6 +18,7 @@ The project is in a working design-and-firmware skeleton stage:
 
 - Architecture overview: [docs/project-architecture.md](docs/project-architecture.md)
 - Hardware pin map: [docs/hardware/PIC16F18855_pin_map.md](docs/hardware/PIC16F18855_pin_map.md)
+- Pull-up resistor guidance: [docs/hardware/pull-up-resistor-guidance.md](docs/hardware/pull-up-resistor-guidance.md)
 - Bench validation procedure: [docs/hardware/bench-validation.md](docs/hardware/bench-validation.md)
 - Firmware entry point: [firmware/src/main.c](firmware/src/main.c)
 - Pin definitions: [firmware/include/pin_map.h](firmware/include/pin_map.h)
