@@ -16,6 +16,9 @@ import os
 components = [
     # Microcontroller & Power
     ("U1", "PIC16F18855-I/SP", "Package_DIP:DIP-28_W7.62mm"),
+    ("U12", "LM7805_TO220", "Package_TO_SOT_THT:TO-220-3_Vertical"),              # Local +5V Linear Regulator
+    ("C1", "330nF", "Capacitor_THT:C_Disc_D3.0mm_W2.0mm_P2.50mm"),                 # 7805 Input Cap
+    ("C2", "100nF", "Capacitor_THT:C_Disc_D3.0mm_W2.0mm_P2.50mm"),                 # 7805 Output Cap
     ("C3", "100nF", "Capacitor_THT:C_Disc_D3.0mm_W2.0mm_P2.50mm"),
     ("C4", "10uF", "Capacitor_THT:CP_Radial_D5.0mm_P2.00mm"),
     ("D7", "BZX84C5V6", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),  # Rail TVS clamp
@@ -128,6 +131,7 @@ components = [
 nets = {
     "+5V": [
         ("U1", "11"), ("R1", "2"), ("C3", "1"), ("C4", "1"), ("D7", "1"),
+        ("U12", "3"), ("C2", "1"),
         ("J1", "2"), ("J2", "5"), ("R4", "2"), ("R5", "2"), ("R6", "2"),
         ("J7", "1"), ("R18", "2"),
         ("U3", "2"), ("U4", "2"), ("U5", "2"), ("U6", "2"), ("U7", "2"),
@@ -135,6 +139,7 @@ nets = {
     ],
     "GND": [
         ("U1", "8"), ("U1", "20"), ("C3", "2"), ("C4", "2"), ("D7", "2"),
+        ("U12", "2"), ("C1", "2"), ("C2", "2"),
         ("SW1", "2"), ("SW2", "2"), ("R3", "2"), ("Q1", "3"),
         ("J1", "1"), ("J2", "6"), ("J7", "3"), ("J10", "2"),
         ("U2", "3"), ("C5", "2"),
@@ -148,6 +153,7 @@ nets = {
     ],
     "+12V_RAIL": [
         ("J7", "2"), ("D1", "1"), ("J3", "1"),
+        ("U12", "1"), ("C1", "1"),
         ("D2", "1"), ("D3", "1"), ("D4", "1"), ("D5", "1")
     ],
     "MCLR": [("U1", "1"), ("R1", "1")],
