@@ -169,6 +169,186 @@ net_labels = [
     ("COMP_RESET_MCU", 200, 220),
 ]
 
+def build_lib_symbols():
+    """Build embedded (lib_symbols ...) section containing graphical symbol definitions."""
+    mcu_pins = [
+        ("1", "MCLR/VPP", "input"),
+        ("2", "RA0/AN0", "bidirectional"),
+        ("3", "RA1/AN1", "bidirectional"),
+        ("4", "RA2/AN2", "bidirectional"),
+        ("5", "RA3/AN3", "bidirectional"),
+        ("6", "RA4", "bidirectional"),
+        ("7", "RA5/AN5", "bidirectional"),
+        ("8", "VSS", "power_in"),
+        ("9", "RA6", "bidirectional"),
+        ("10", "RA7", "bidirectional"),
+        ("11", "VDD", "power_in"),
+        ("12", "RB0", "bidirectional"),
+        ("13", "RB1/AN9", "bidirectional"),
+        ("14", "RB2/AN10", "bidirectional"),
+        ("15", "RB3/AN11", "bidirectional"),
+        ("16", "RB4", "bidirectional"),
+        ("17", "RB5", "bidirectional"),
+        ("18", "RB6", "bidirectional"),
+        ("19", "RB7", "bidirectional"),
+        ("20", "VSS", "power_in"),
+        ("21", "RC0", "bidirectional"),
+        ("22", "RC1", "bidirectional"),
+        ("23", "RC2", "bidirectional"),
+        ("24", "RC3/SCL", "bidirectional"),
+        ("25", "RC4/SDA", "bidirectional"),
+        ("26", "RC5", "bidirectional"),
+        ("27", "RC6", "bidirectional"),
+        ("28", "RC7", "bidirectional"),
+    ]
+
+    mcu_pin_lines = []
+    for i in range(14):
+        pnum, pname, ptype = mcu_pins[i]
+        y_pos = 17.78 - (i * 2.54)
+        mcu_pin_lines.append(f'      (pin {ptype} line (at -15.24 {y_pos:.2f} 0) (length 2.54) (name "{pname}" (effects (font (size 1.27 1.27)))) (number "{pnum}" (effects (font (size 1.27 1.27)))))')
+
+    for i in range(14):
+        pnum, pname, ptype = mcu_pins[14 + i]
+        y_pos = -15.24 + (i * 2.54)
+        mcu_pin_lines.append(f'      (pin {ptype} line (at 15.24 {y_pos:.2f} 180) (length 2.54) (name "{pname}" (effects (font (size 1.27 1.27)))) (number "{pnum}" (effects (font (size 1.27 1.27)))))')
+
+    mcu_pins_str = "\n".join(mcu_pin_lines)
+
+    def gen_conn_pins(count):
+        lines = []
+        for i in range(count):
+            y = (count - 1) * 1.27 - i * 2.54
+            lines.append(f'      (pin passive line (at -5.08 {y:.2f} 0) (length 2.54) (name "Pin_{i+1}" (effects (font (size 1.27 1.27)))) (number "{i+1}" (effects (font (size 1.27 1.27)))))')
+        return "\n".join(lines)
+
+    return f'''  (lib_symbols
+    (symbol "MCU_Microchip_PIC:PIC16F18855-I_SP" (in_bom yes) (on_board yes)
+      (symbol "PIC16F18855-I_SP_0_1"
+        (rectangle (start -12.7 20.32) (end 12.7 -17.78) (stroke (width 0.254) (type default)) (fill (type background)))
+{mcu_pins_str}
+      )
+    )
+    (symbol "Device:R" (pin_numbers hide) (pin_names hide) (in_bom yes) (on_board yes)
+      (symbol "R_0_1"
+        (rectangle (start -1.016 2.54) (end 1.016 -2.54) (stroke (width 0.254) (type default)) (fill (type none)))
+        (pin passive line (at 0 5.08 270) (length 2.54) (name "~" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 0 -5.08 90) (length 2.54) (name "~" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+      )
+    )
+    (symbol "Device:C" (pin_numbers hide) (pin_names hide) (in_bom yes) (on_board yes)
+      (symbol "C_0_1"
+        (polyline (pts (xy -2.54 0.635) (xy 2.54 0.635)) (stroke (width 0.508) (type default)))
+        (polyline (pts (xy -2.54 -0.635) (xy 2.54 -0.635)) (stroke (width 0.508) (type default)))
+        (pin passive line (at 0 3.81 270) (length 3.175) (name "~" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 0 -3.81 90) (length 3.175) (name "~" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+      )
+    )
+    (symbol "Device:C_Polarized" (pin_names hide) (in_bom yes) (on_board yes)
+      (symbol "C_Polarized_0_1"
+        (polyline (pts (xy -2.54 0.635) (xy 2.54 0.635)) (stroke (width 0.508) (type default)))
+        (polyline (pts (xy -2.54 -0.635) (xy 2.54 -0.635)) (stroke (width 0.508) (type default)))
+        (pin passive line (at 0 3.81 270) (length 3.175) (name "~" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 0 -3.81 90) (length 3.175) (name "~" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+      )
+    )
+    (symbol "Device:D" (pin_names hide) (in_bom yes) (on_board yes)
+      (symbol "D_0_1"
+        (polyline (pts (xy -1.27 1.27) (xy -1.27 -1.27) (xy 1.27 0) (xy -1.27 1.27)) (stroke (width 0.254) (type default)) (fill (type none)))
+        (polyline (pts (xy 1.27 1.27) (xy 1.27 -1.27)) (stroke (width 0.254) (type default)))
+        (pin passive line (at -3.81 0 0) (length 2.54) (name "K" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 3.81 0 180) (length 2.54) (name "A" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+      )
+    )
+    (symbol "Device:D_Zener" (pin_names hide) (in_bom yes) (on_board yes)
+      (symbol "D_Zener_0_1"
+        (polyline (pts (xy -1.27 1.27) (xy -1.27 -1.27) (xy 1.27 0) (xy -1.27 1.27)) (stroke (width 0.254) (type default)) (fill (type none)))
+        (polyline (pts (xy 1.27 1.27) (xy 1.27 -1.27)) (stroke (width 0.254) (type default)))
+        (pin passive line (at -3.81 0 0) (length 2.54) (name "K" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 3.81 0 180) (length 2.54) (name "A" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+      )
+    )
+    (symbol "Device:D_Schottky" (pin_names hide) (in_bom yes) (on_board yes)
+      (symbol "D_Schottky_0_1"
+        (polyline (pts (xy -1.27 1.27) (xy -1.27 -1.27) (xy 1.27 0) (xy -1.27 1.27)) (stroke (width 0.254) (type default)) (fill (type none)))
+        (polyline (pts (xy 1.27 1.27) (xy 1.27 -1.27)) (stroke (width 0.254) (type default)))
+        (pin passive line (at -3.81 0 0) (length 2.54) (name "K" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 3.81 0 180) (length 2.54) (name "A" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+      )
+    )
+    (symbol "Device:D_Schottky_x2_KA_AK" (in_bom yes) (on_board yes)
+      (symbol "D_Schottky_x2_KA_AK_0_1"
+        (rectangle (start -5.08 5.08) (end 5.08 -5.08) (stroke (width 0.254) (type default)) (fill (type background)))
+        (pin passive line (at -7.62 2.54 0) (length 2.54) (name "A1" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at -7.62 -2.54 0) (length 2.54) (name "K2" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 7.62 0 180) (length 2.54) (name "K1A2" (effects (font (size 1.27 1.27)))) (number "3" (effects (font (size 1.27 1.27)))))
+      )
+    )
+    (symbol "Isolator:PC817" (in_bom yes) (on_board yes)
+      (symbol "PC817_0_1"
+        (rectangle (start -7.62 5.08) (end 7.62 -5.08) (stroke (width 0.254) (type default)) (fill (type background)))
+        (pin passive line (at -10.16 2.54 0) (length 2.54) (name "A" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at -10.16 -2.54 0) (length 2.54) (name "K" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 10.16 -2.54 180) (length 2.54) (name "E" (effects (font (size 1.27 1.27)))) (number "3" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 10.16 2.54 180) (length 2.54) (name "C" (effects (font (size 1.27 1.27)))) (number "4" (effects (font (size 1.27 1.27)))))
+      )
+    )
+    (symbol "Switch:SW_Push" (pin_names hide) (in_bom yes) (on_board yes)
+      (symbol "SW_Push_0_1"
+        (circle (center -1.27 0) (radius 0.635) (stroke (width 0.254) (type default)) (fill (type none)))
+        (circle (center 1.27 0) (radius 0.635) (stroke (width 0.254) (type default)) (fill (type none)))
+        (pin passive line (at -3.81 0 0) (length 2.54) (name "1" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 3.81 0 180) (length 2.54) (name "2" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+      )
+    )
+    (symbol "Transistor_FET:IRLZ44N" (in_bom yes) (on_board yes)
+      (symbol "IRLZ44N_0_1"
+        (polyline (pts (xy 0 2.54) (xy 0 -2.54)) (stroke (width 0.508) (type default)))
+        (pin input line (at -5.08 -1.27 0) (length 3.81) (name "G" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 2.54 5.08 270) (length 2.54) (name "D" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 2.54 -5.08 90) (length 2.54) (name "S" (effects (font (size 1.27 1.27)))) (number "3" (effects (font (size 1.27 1.27)))))
+      )
+    )
+    (symbol "Transistor_BJT:2N3904" (in_bom yes) (on_board yes)
+      (symbol "2N3904_0_1"
+        (polyline (pts (xy 0 2.54) (xy 0 -2.54)) (stroke (width 0.508) (type default)))
+        (pin passive line (at 2.54 -5.08 90) (length 2.54) (name "E" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+        (pin input line (at -5.08 0 0) (length 3.81) (name "B" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+        (pin passive line (at 2.54 5.08 270) (length 2.54) (name "C" (effects (font (size 1.27 1.27)))) (number "3" (effects (font (size 1.27 1.27)))))
+      )
+    )
+    (symbol "Connector:Conn_01x01_Pin" (in_bom yes) (on_board yes)
+      (symbol "Conn_01x01_Pin_0_1"
+        (rectangle (start -2.54 2.54) (end 2.54 -2.54) (stroke (width 0.254) (type default)) (fill (type background)))
+{gen_conn_pins(1)}
+      )
+    )
+    (symbol "Connector:Conn_01x02_Pin" (in_bom yes) (on_board yes)
+      (symbol "Conn_01x02_Pin_0_1"
+        (rectangle (start -2.54 3.81) (end 2.54 -3.81) (stroke (width 0.254) (type default)) (fill (type background)))
+{gen_conn_pins(2)}
+      )
+    )
+    (symbol "Connector:Conn_01x03_Pin" (in_bom yes) (on_board yes)
+      (symbol "Conn_01x03_Pin_0_1"
+        (rectangle (start -2.54 5.08) (end 2.54 -5.08) (stroke (width 0.254) (type default)) (fill (type background)))
+{gen_conn_pins(3)}
+      )
+    )
+    (symbol "Connector:Conn_01x04_Pin" (in_bom yes) (on_board yes)
+      (symbol "Conn_01x04_Pin_0_1"
+        (rectangle (start -2.54 6.35) (end 2.54 -6.35) (stroke (width 0.254) (type default)) (fill (type background)))
+{gen_conn_pins(4)}
+      )
+    )
+    (symbol "Connector:Conn_01x06_Pin" (in_bom yes) (on_board yes)
+      (symbol "Conn_01x06_Pin_0_1"
+        (rectangle (start -2.54 8.89) (end 2.54 -8.89) (stroke (width 0.254) (type default)) (fill (type background)))
+{gen_conn_pins(6)}
+      )
+    )
+  )'''
+
 def build_kicad_sch():
     u_str = lambda s: gen_uuid(s)
 
@@ -182,6 +362,8 @@ def build_kicad_sch():
     lines.append('    (rev "2")')
     lines.append('    (comment 1 "Includes Input Protection & NPN Drivers")')
     lines.append('  )')
+    lines.append('')
+    lines.append(build_lib_symbols())
     lines.append('')
 
     # Placed Symbol Instances
