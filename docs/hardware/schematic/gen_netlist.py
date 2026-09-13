@@ -15,7 +15,7 @@ import os
 # (ref, value, footprint)
 components = [
     # Microcontroller & Power
-    ("U1", "PIC16F18855-I/SP", "Package_DIP:DIP-28_W7.62mm"),
+    ("U1", "PIC16F18855-I/SP", "Package_DIP:DIP-28_W7.62mm"),  # SPDIP-28 (300mil/7.62mm row spacing, per "-I/SP" suffix)
     ("U12", "LM7805_TO220", "Package_TO_SOT_THT:TO-220-3_Vertical"),              # Local +5V Linear Regulator
     ("C1", "330nF", "Capacitor_THT:C_Disc_D3.0mm_W2.0mm_P2.50mm"),                 # 7805 Input Cap
     ("C2", "100nF", "Capacitor_THT:C_Disc_D3.0mm_W2.0mm_P2.50mm"),                 # 7805 Output Cap
@@ -31,16 +31,34 @@ components = [
     ("R27", "1k", "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"),   # PTT to MCU series protection
     ("C5", "10nF", "Capacitor_THT:C_Disc_D3.0mm_W2.0mm_P2.50mm"),                      # PTT filter cap
 
-    # Dual Schottky Clamps (BAT54S: Pin 1=GND, Pin 2=+5V, Pin 3=Common Signal Node)
-    ("D8", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),   # SWR1_FWD
-    ("D9", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),   # SWR1_REF
-    ("D10", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # SWR2_FWD
-    ("D11", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # SWR2_REF
-    ("D12", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # TEMP
-    ("D13", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # CURRENT
-    ("D14", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # OVERDRIVE
-    ("D15", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # OC_FAULT
-    ("D16", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # DRAIN_PEAK
+    # Individual 2-Pin Schottky Clamps (BAT54 / 1N5819: Pin 1=Cathode K, Pin 2=Anode A)
+    # Channel 1: SWR1_FWD (D8: GND->Signal, D9: Signal->+5V)
+    ("D8", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    ("D9", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    # Channel 2: SWR1_REF
+    ("D10", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    ("D11", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    # Channel 3: SWR2_FWD
+    ("D12", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    ("D13", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    # Channel 4: SWR2_REF
+    ("D14", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    ("D15", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    # Channel 5: TEMP
+    ("D16", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    ("D17", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    # Channel 6: CURRENT
+    ("D18", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    ("D19", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    # Channel 7: OVERDRIVE
+    ("D20", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    ("D21", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    # Channel 8: OC_FAULT
+    ("D22", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    ("D23", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    # Channel 9: DRAIN_PEAK
+    ("D24", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
+    ("D25", "BAT54", "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal"),
 
     # Input Series Protection Resistors (1k)
     ("R19", "1k", "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"),  # SWR1_FWD
@@ -130,21 +148,21 @@ components = [
 # net_name -> [(ref, pin), ...]
 nets = {
     "+5V": [
-        ("U1", "11"), ("R1", "2"), ("C3", "1"), ("C4", "1"), ("D7", "1"),
+        ("U1", "20"), ("R1", "2"), ("C3", "1"), ("C4", "1"), ("D7", "1"),
         ("U12", "3"), ("C2", "1"),
         ("J1", "2"), ("J2", "5"), ("R4", "2"), ("R5", "2"), ("R6", "2"),
         ("J7", "1"), ("R18", "2"),
-        ("D8", "2"), ("D9", "2"), ("D10", "2"), ("D11", "2"), ("D12", "2"),
-        ("D13", "2"), ("D14", "2"), ("D15", "2"), ("D16", "2")
+        ("D9", "1"), ("D11", "1"), ("D13", "1"), ("D15", "1"), ("D17", "1"),
+        ("D19", "1"), ("D21", "1"), ("D23", "1"), ("D25", "1")
     ],
     "GND": [
-        ("U1", "8"), ("U1", "20"), ("C3", "2"), ("C4", "2"), ("D7", "2"),
+        ("U1", "8"), ("U1", "19"), ("C3", "2"), ("C4", "2"), ("D7", "2"),
         ("U12", "2"), ("C1", "2"), ("C2", "2"),
         ("SW1", "2"), ("SW2", "2"), ("R3", "2"), ("Q1", "3"),
         ("J1", "1"), ("J2", "6"), ("J7", "3"), ("J10", "2"),
         ("U2", "3"), ("C5", "2"),
-        ("D8", "1"), ("D9", "1"), ("D10", "1"), ("D11", "1"), ("D12", "1"),
-        ("D13", "1"), ("D14", "1"), ("D15", "1"), ("D16", "1"),
+        ("D8", "2"), ("D10", "2"), ("D12", "2"), ("D14", "2"), ("D16", "2"),
+        ("D18", "2"), ("D20", "2"), ("D22", "2"), ("D24", "2"),
         ("C6", "2"), ("C7", "2"), ("C8", "2"), ("C9", "2"), ("C10", "2"),
         ("C11", "2"), ("C12", "2"), ("C13", "2"), ("C14", "2"), ("C15", "2"), ("C16", "2"),
         ("R34", "2"), ("D6", "2"),
@@ -160,82 +178,82 @@ nets = {
 
     # Input Signals (Connector -> Series Protection Resistor -> MCU Pin Node)
     "SWR1_FWD_RAW": [("J8", "1"), ("R19", "1")],
-    "SWR1_FWD": [("R19", "2"), ("U1", "2"), ("C6", "1"), ("D8", "3")],
+    "SWR1_FWD": [("R19", "2"), ("U1", "2"), ("C6", "1"), ("D8", "1"), ("D9", "2")],
 
     "SWR1_REF_RAW": [("J8", "2"), ("R20", "1")],
-    "SWR1_REF": [("R20", "2"), ("U1", "3"), ("C7", "1"), ("D9", "3")],
+    "SWR1_REF": [("R20", "2"), ("U1", "3"), ("C7", "1"), ("D10", "1"), ("D11", "2")],
 
     "SWR2_FWD_RAW": [("J9", "1"), ("R21", "1")],
-    "SWR2_FWD": [("R21", "2"), ("U1", "4"), ("C8", "1"), ("D10", "3")],
+    "SWR2_FWD": [("R21", "2"), ("U1", "4"), ("C8", "1"), ("D12", "1"), ("D13", "2")],
 
     "SWR2_REF_RAW": [("J9", "2"), ("R22", "1")],
-    "SWR2_REF": [("R22", "2"), ("U1", "5"), ("C9", "1"), ("D11", "3")],
+    "SWR2_REF": [("R22", "2"), ("U1", "5"), ("C9", "1"), ("D14", "1"), ("D15", "2")],
 
     "RA4_NC": [("U1", "6")],
 
     "TEMP_RAW": [("J10", "1"), ("R23", "1")],
-    "TEMP": [("R23", "2"), ("U1", "7"), ("C10", "1"), ("D12", "3")],
+    "TEMP": [("R23", "2"), ("U1", "7"), ("C10", "1"), ("D16", "1"), ("D17", "2")],
 
-    "RA6_SPARE": [("U1", "9")],
-    "RA7_SPARE": [("U1", "10")],
-    "RB6_SPARE": [("U1", "18")],
+    "RA6_SPARE": [("U1", "10")],
+    "RA7_SPARE": [("U1", "9")],
+    "RB6_SPARE": [("U1", "27")],
 
     "CURRENT_RAW": [("J11", "1"), ("R24", "1")],
-    "CURRENT": [("R24", "2"), ("U1", "13"), ("C11", "1"), ("D13", "3")],
+    "CURRENT": [("R24", "2"), ("U1", "22"), ("C11", "1"), ("D18", "1"), ("D19", "2")],
 
     "OVERDRIVE_RAW": [("J2", "1"), ("R25", "1")],
-    "OVERDRIVE": [("R25", "2"), ("U1", "14"), ("C12", "1"), ("D14", "3")],
+    "OVERDRIVE": [("R25", "2"), ("U1", "23"), ("C12", "1"), ("D20", "1"), ("D21", "2")],
 
     # Drain Peak Voltage Divider & Protection
     "DRAIN_HIGH_VOLTAGE": [("J2", "2"), ("R28", "1")],
     "DRAIN_DIV_MID1": [("R28", "2"), ("R29", "1")],
     "DRAIN_DIV_MID2": [("R29", "2"), ("R30", "1")],
     "DRAIN_DIV_SCALED": [("R30", "2"), ("R34", "1"), ("D6", "1"), ("R31", "1")],
-    "DRAIN_PEAK": [("R31", "2"), ("U1", "15"), ("C14", "1"), ("D16", "3")],
+    "DRAIN_PEAK": [("R31", "2"), ("U1", "24"), ("C14", "1"), ("D24", "1"), ("D25", "2")],
 
     "OC_FAULT_RAW": [("J2", "3"), ("R26", "1")],
-    "OC_FAULT": [("R26", "2"), ("U1", "16"), ("C13", "1"), ("D15", "3")],
+    "OC_FAULT": [("R26", "2"), ("U1", "25"), ("C13", "1"), ("D22", "1"), ("D23", "2")],
 
     # Switches & Optocoupler PTT
     "MENU_ADJUST_SW": [("SW1", "1"), ("R32", "1")],
-    "MENU_ADJUST": [("R32", "2"), ("U1", "12"), ("C15", "1")],
+    "MENU_ADJUST": [("R32", "2"), ("U1", "21"), ("C15", "1")],
 
     "MENU_NEXT_SW": [("SW2", "1"), ("R4", "1"), ("R33", "1")],
-    "MENU_NEXT": [("R33", "2"), ("U1", "23"), ("C16", "1")],
+    "MENU_NEXT": [("R33", "2"), ("U1", "13"), ("C16", "1")],
 
     "PTT_EXT": [("J4", "1"), ("R17", "1")],
     "PTT_OPTO_ANODE": [("R17", "2"), ("U2", "1")],
     "PTT_OPTO_CATHODE": [("U2", "2"), ("J4", "2")],
     "PTT_OPTO_COLLECTOR": [("U2", "4"), ("R18", "1"), ("R27", "1")],
-    "PTT": [("R27", "2"), ("U1", "21"), ("C5", "1")],
+    "PTT": [("R27", "2"), ("U1", "11"), ("C5", "1")],
 
     # LCD I2C Bus
-    "LCD_SCL": [("U1", "24"), ("J1", "4"), ("R5", "1")],
-    "LCD_SDA": [("U1", "25"), ("J1", "3"), ("R6", "1")],
+    "LCD_SCL": [("U1", "14"), ("J1", "4"), ("R5", "1")],
+    "LCD_SDA": [("U1", "15"), ("J1", "3"), ("R6", "1")],
 
     # Fan PWM Control
-    "FAN_PWM": [("U1", "17"), ("R2", "1")],
+    "FAN_PWM": [("U1", "26"), ("R2", "1")],
     "FAN_GATE": [("R2", "2"), ("Q1", "1"), ("R3", "1")],
     "FAN_DRAIN": [("Q1", "2"), ("D1", "2"), ("J3", "2")],
 
     # Output Transistor Drivers
-    "TX_MCU": [("U1", "26"), ("R7", "1")],
+    "TX_MCU": [("U1", "16"), ("R7", "1")],
     "TX_BASE": [("R7", "2"), ("Q2", "2"), ("R8", "1")],
     "TX": [("Q2", "3"), ("J5", "1"), ("D2", "2")],
 
-    "TX_VCC_MCU": [("U1", "27"), ("R9", "1")],
+    "TX_VCC_MCU": [("U1", "17"), ("R9", "1")],
     "TX_VCC_BASE": [("R9", "2"), ("Q3", "2"), ("R10", "1")],
     "TX_VCC": [("Q3", "3"), ("J5", "2"), ("D3", "2")],
 
-    "TX_BIAS_MCU": [("U1", "28"), ("R11", "1")],
+    "TX_BIAS_MCU": [("U1", "18"), ("R11", "1")],
     "TX_BIAS_BASE": [("R11", "2"), ("Q4", "2"), ("R12", "1")],
     "TX_BIAS": [("Q4", "3"), ("J5", "3"), ("D4", "2")],
 
-    "TRIP_MCU": [("U1", "19"), ("R13", "1")],
+    "TRIP_MCU": [("U1", "28"), ("R13", "1")],
     "TRIP_BASE": [("R13", "2"), ("Q5", "2"), ("R14", "1")],
     "TRIP": [("Q5", "3"), ("J6", "1"), ("D5", "2")],
 
-    "COMP_RESET_MCU": [("U1", "22"), ("R15", "1")],
+    "COMP_RESET_MCU": [("U1", "12"), ("R15", "1")],
     "COMP_RESET_BASE": [("R15", "2"), ("Q6", "2"), ("R16", "1")],
     "COMP_RESET": [("Q6", "3"), ("J2", "4")],
 }
