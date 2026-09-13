@@ -35,7 +35,7 @@
 // Menu controls, comparator inputs, and status lines
 #define INPUT_MENU_INCREASE PORTBbits.RB0
 #define INPUT_MENU_ADJUST INPUT_MENU_INCREASE
-#define INPUT_SPARE_1 PORTBbits.RB1
+// RB1 is ADC_CURRENT_CHANNEL (analog input, see above) - not a digital pin.
 #define INPUT_OVERCURRENT_FAULT PORTBbits.RB4
 #define OUTPUT_FAN_PWM PORTBbits.RB5
 #define INPUT_SPARE_4 PORTBbits.RB6
