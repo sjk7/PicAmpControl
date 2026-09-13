@@ -76,7 +76,7 @@ components = [
     ("R2", "220R", "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"),   # Fan gate series
     ("R3", "10k", "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"),    # Fan gate pull-down
     ("Q1", "IRLZ44N", "Package_TO_SOT_THT:TO-220-3_Vertical"),                           # Fan N-MOSFET
-    ("D1", "1N5819", "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal"),                    # Fan Schottky flyback
+    ("D1", "1N5819", "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal"),                    # Fan Schottky flyback (Pin 1=K, Pin 2=A)
 
     # Jellybean General Purpose Transistor Output Drivers (2N3904 NPN)
     ("Q2", "2N3904", "Package_TO_SOT_THT:TO-92_Inline"),  # TX Driver
@@ -137,7 +137,7 @@ nets = {
         ("U1", "8"), ("U1", "20"), ("C3", "2"), ("C4", "2"), ("D7", "2"),
         ("SW1", "2"), ("SW2", "2"), ("R3", "2"), ("Q1", "3"),
         ("J1", "1"), ("J2", "6"), ("J7", "3"), ("J10", "2"),
-        ("U2", "3"), ("J4", "2"), ("C5", "2"),
+        ("U2", "3"), ("C5", "2"),
         ("U3", "1"), ("U4", "1"), ("U5", "1"), ("U6", "1"), ("U7", "1"),
         ("U8", "1"), ("U9", "1"), ("U10", "1"), ("U11", "1"),
         ("C6", "2"), ("C7", "2"), ("C8", "2"), ("C9", "2"), ("C10", "2"),
@@ -147,7 +147,7 @@ nets = {
         ("R8", "2"), ("R10", "2"), ("R12", "2"), ("R14", "2"), ("R16", "2")
     ],
     "+12V_RAIL": [
-        ("J7", "2"), ("D1", "2"), ("J3", "1"),
+        ("J7", "2"), ("D1", "1"), ("J3", "1"),
         ("D2", "1"), ("D3", "1"), ("D4", "1"), ("D5", "1")
     ],
     "MCLR": [("U1", "1"), ("R1", "1")],
@@ -199,6 +199,7 @@ nets = {
 
     "PTT_EXT": [("J4", "1"), ("R17", "1")],
     "PTT_OPTO_ANODE": [("R17", "2"), ("U2", "1")],
+    "PTT_OPTO_CATHODE": [("U2", "2"), ("J4", "2")],
     "PTT_OPTO_COLLECTOR": [("U2", "4"), ("R18", "1"), ("R27", "1")],
     "PTT": [("R27", "2"), ("U1", "21"), ("C5", "1")],
 
@@ -209,7 +210,7 @@ nets = {
     # Fan PWM Control
     "FAN_PWM": [("U1", "17"), ("R2", "1")],
     "FAN_GATE": [("R2", "2"), ("Q1", "1"), ("R3", "1")],
-    "FAN_DRAIN": [("Q1", "2"), ("D1", "1"), ("J3", "2")],
+    "FAN_DRAIN": [("Q1", "2"), ("D1", "2"), ("J3", "2")],
 
     # Output Transistor Drivers
     "TX_MCU": [("U1", "26"), ("R7", "1")],
