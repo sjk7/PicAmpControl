@@ -32,15 +32,15 @@ components = [
     ("C5", "10nF", "Capacitor_THT:C_Disc_D3.0mm_W2.0mm_P2.50mm"),                      # PTT filter cap
 
     # Dual Schottky Clamps (BAT54S: Pin 1=GND, Pin 2=+5V, Pin 3=Common Signal Node)
-    ("U3", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),   # SWR1_FWD
-    ("U4", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),   # SWR1_REF
-    ("U5", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),   # SWR2_FWD
-    ("U6", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),   # SWR2_REF
-    ("U7", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),   # TEMP
-    ("U8", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),   # CURRENT
-    ("U9", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),   # OVERDRIVE
-    ("U10", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # OC_FAULT
-    ("U11", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # DRAIN_PEAK
+    ("D8", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),   # SWR1_FWD
+    ("D9", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),   # SWR1_REF
+    ("D10", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # SWR2_FWD
+    ("D11", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # SWR2_REF
+    ("D12", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # TEMP
+    ("D13", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # CURRENT
+    ("D14", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # OVERDRIVE
+    ("D15", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # OC_FAULT
+    ("D16", "BAT54S", "Package_TO_SOT_SMD:SOT-23"),  # DRAIN_PEAK
 
     # Input Series Protection Resistors (1k)
     ("R19", "1k", "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"),  # SWR1_FWD
@@ -134,8 +134,8 @@ nets = {
         ("U12", "3"), ("C2", "1"),
         ("J1", "2"), ("J2", "5"), ("R4", "2"), ("R5", "2"), ("R6", "2"),
         ("J7", "1"), ("R18", "2"),
-        ("U3", "2"), ("U4", "2"), ("U5", "2"), ("U6", "2"), ("U7", "2"),
-        ("U8", "2"), ("U9", "2"), ("U10", "2"), ("U11", "2")
+        ("D8", "2"), ("D9", "2"), ("D10", "2"), ("D11", "2"), ("D12", "2"),
+        ("D13", "2"), ("D14", "2"), ("D15", "2"), ("D16", "2")
     ],
     "GND": [
         ("U1", "8"), ("U1", "20"), ("C3", "2"), ("C4", "2"), ("D7", "2"),
@@ -143,8 +143,8 @@ nets = {
         ("SW1", "2"), ("SW2", "2"), ("R3", "2"), ("Q1", "3"),
         ("J1", "1"), ("J2", "6"), ("J7", "3"), ("J10", "2"),
         ("U2", "3"), ("C5", "2"),
-        ("U3", "1"), ("U4", "1"), ("U5", "1"), ("U6", "1"), ("U7", "1"),
-        ("U8", "1"), ("U9", "1"), ("U10", "1"), ("U11", "1"),
+        ("D8", "1"), ("D9", "1"), ("D10", "1"), ("D11", "1"), ("D12", "1"),
+        ("D13", "1"), ("D14", "1"), ("D15", "1"), ("D16", "1"),
         ("C6", "2"), ("C7", "2"), ("C8", "2"), ("C9", "2"), ("C10", "2"),
         ("C11", "2"), ("C12", "2"), ("C13", "2"), ("C14", "2"), ("C15", "2"), ("C16", "2"),
         ("R34", "2"), ("D6", "2"),
@@ -160,41 +160,41 @@ nets = {
 
     # Input Signals (Connector -> Series Protection Resistor -> MCU Pin Node)
     "SWR1_FWD_RAW": [("J8", "1"), ("R19", "1")],
-    "SWR1_FWD": [("R19", "2"), ("U1", "2"), ("C6", "1"), ("U3", "3")],
+    "SWR1_FWD": [("R19", "2"), ("U1", "2"), ("C6", "1"), ("D8", "3")],
 
     "SWR1_REF_RAW": [("J8", "2"), ("R20", "1")],
-    "SWR1_REF": [("R20", "2"), ("U1", "3"), ("C7", "1"), ("U4", "3")],
+    "SWR1_REF": [("R20", "2"), ("U1", "3"), ("C7", "1"), ("D9", "3")],
 
     "SWR2_FWD_RAW": [("J9", "1"), ("R21", "1")],
-    "SWR2_FWD": [("R21", "2"), ("U1", "4"), ("C8", "1"), ("U5", "3")],
+    "SWR2_FWD": [("R21", "2"), ("U1", "4"), ("C8", "1"), ("D10", "3")],
 
     "SWR2_REF_RAW": [("J9", "2"), ("R22", "1")],
-    "SWR2_REF": [("R22", "2"), ("U1", "5"), ("C9", "1"), ("U6", "3")],
+    "SWR2_REF": [("R22", "2"), ("U1", "5"), ("C9", "1"), ("D11", "3")],
 
     "RA4_NC": [("U1", "6")],
 
     "TEMP_RAW": [("J10", "1"), ("R23", "1")],
-    "TEMP": [("R23", "2"), ("U1", "7"), ("C10", "1"), ("U7", "3")],
+    "TEMP": [("R23", "2"), ("U1", "7"), ("C10", "1"), ("D12", "3")],
 
     "RA6_SPARE": [("U1", "9")],
     "RA7_SPARE": [("U1", "10")],
     "RB6_SPARE": [("U1", "18")],
 
     "CURRENT_RAW": [("J11", "1"), ("R24", "1")],
-    "CURRENT": [("R24", "2"), ("U1", "13"), ("C11", "1"), ("U8", "3")],
+    "CURRENT": [("R24", "2"), ("U1", "13"), ("C11", "1"), ("D13", "3")],
 
     "OVERDRIVE_RAW": [("J2", "1"), ("R25", "1")],
-    "OVERDRIVE": [("R25", "2"), ("U1", "14"), ("C12", "1"), ("U9", "3")],
+    "OVERDRIVE": [("R25", "2"), ("U1", "14"), ("C12", "1"), ("D14", "3")],
 
     # Drain Peak Voltage Divider & Protection
     "DRAIN_HIGH_VOLTAGE": [("J2", "2"), ("R28", "1")],
     "DRAIN_DIV_MID1": [("R28", "2"), ("R29", "1")],
     "DRAIN_DIV_MID2": [("R29", "2"), ("R30", "1")],
     "DRAIN_DIV_SCALED": [("R30", "2"), ("R34", "1"), ("D6", "1"), ("R31", "1")],
-    "DRAIN_PEAK": [("R31", "2"), ("U1", "15"), ("C14", "1"), ("U11", "3")],
+    "DRAIN_PEAK": [("R31", "2"), ("U1", "15"), ("C14", "1"), ("D16", "3")],
 
     "OC_FAULT_RAW": [("J2", "3"), ("R26", "1")],
-    "OC_FAULT": [("R26", "2"), ("U1", "16"), ("C13", "1"), ("U10", "3")],
+    "OC_FAULT": [("R26", "2"), ("U1", "16"), ("C13", "1"), ("D15", "3")],
 
     # Switches & Optocoupler PTT
     "MENU_ADJUST_SW": [("SW1", "1"), ("R32", "1")],
