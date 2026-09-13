@@ -4,7 +4,7 @@ This note defines the planned protection approach for the PIC16F18855 analogue i
 
 ## Inputs requiring protection
 
-Each ADC signal should include a nominal `1 kOhm` series resistor before the PIC pin and suitable low-leakage clamp protection close to the PIC:
+Apply the nominal `1 kOhm` series resistor and two single-Schottky rail-clamp arrangement to physical PIC pins **2, 3, 4, 5, 7, 22, 23, and 24**. These are the eight ADC inputs listed below:
 
 | PIC pin | Port/channel | Signal |
 |---:|---|---|
