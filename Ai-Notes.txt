@@ -37,7 +37,7 @@ This repository is the active PIC16F18855-I/SP linear-amplifier protection contr
 - Bug fixes log (update whenever a real bug is found): bugfixes.md
 
 ## CI / release
-- .github/workflows/firmware-build.yml builds on every push/PR to main on a self-hosted Windows runner (XC8 + Ninja) and packages `.hex`/`.elf`/`.map`/`.xml` plus the hardware netlist (docs/hardware/schematic/PicAmpControl.net) and pin map (docs/hardware/PIC16F18855_pin_map.md) into a `firmware-<sha>` artifact.
+- .github/workflows/firmware-build.yml builds on every push/PR to main on a self-hosted Windows runner (XC8 + Ninja) and packages `.hex`/`.elf`/`.map`/`.xml` plus the pin map (docs/hardware/PIC16F18855_pin_map.md) into a `firmware-<sha>` artifact.
 - .github/workflows/auto-release.yml runs after a successful main build, auto-increments a `v0.0.N` tag, and publishes that artifact as a GitHub Release. This is fully automatic - no manual step needed for a normal push to main.
 - .github/workflows/release-firmware.yml is the manual fallback (workflow_dispatch) to re-publish an older build's artifact under an existing tag.
 

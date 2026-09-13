@@ -67,7 +67,6 @@ jobs:
         run: |
           mkdir -p dist/hardware
           find _build out -type f \( -name "*.hex" -o -name "*.elf" -o -name "*.map" -o -name "*.xml" \) -exec cp {} dist/ \;
-          cp docs/hardware/schematic/PicAmpControl.net dist/hardware/
           cp docs/hardware/PIC16F18855_pin_map.md dist/hardware/
           ls -lhR dist/
 

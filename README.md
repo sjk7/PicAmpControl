@@ -28,7 +28,7 @@ The project is in a working design-and-firmware skeleton stage:
 - GitHub Actions auto-release workflow: [.github/workflows/auto-release.yml](.github/workflows/auto-release.yml)
 - GitHub Actions manual release workflow: [.github/workflows/release-firmware.yml](.github/workflows/release-firmware.yml)
 
-The build workflow packages each run's firmware output (`.hex`/`.elf`/`.map`/`.xml`) together with the current hardware netlist ([docs/hardware/schematic/PicAmpControl.net](docs/hardware/schematic/PicAmpControl.net)) and pin map ([docs/hardware/PIC16F18855_pin_map.md](docs/hardware/PIC16F18855_pin_map.md)) into a single `firmware-<sha>` build artifact, under a `hardware/` subfolder for the netlist and pin map. On every successful build of `main`, the auto-release workflow tags the commit (`v0.0.N`, auto-incremented) and publishes that artifact as a GitHub Release, so every release contains matching firmware, netlist, and pinout documentation without manual steps. The manual release workflow remains available to re-publish an older build's artifact under an existing tag.
+The build workflow packages each run's firmware output (`.hex`/`.elf`/`.map`/`.xml`) together with the pin map ([docs/hardware/PIC16F18855_pin_map.md](docs/hardware/PIC16F18855_pin_map.md)) into a single `firmware-<sha>` build artifact, under a `hardware/` subfolder for the pin map. On every successful build of `main`, the auto-release workflow tags the commit (`v0.0.N`, auto-incremented) and publishes that artifact as a GitHub Release, so every release contains matching firmware and pinout documentation without manual steps. The manual release workflow remains available to re-publish an older build's artifact under an existing tag.
 
 ## Design direction
 
