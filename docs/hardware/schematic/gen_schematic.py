@@ -173,7 +173,7 @@ def build_kicad_sch():
     u_str = lambda s: gen_uuid(s)
 
     lines = []
-    lines.append('(kicad_schematic (version 20211123) (generator "PicAmpControl gen_schematic.py")')
+    lines.append('(kicad_sch (version 20231120) (generator "PicAmpControl gen_schematic.py")')
     lines.append(f'  (uuid "{u_str("root")}")')
     lines.append('  (paper "A2")')
     lines.append('  (title_block')
