@@ -125,6 +125,16 @@ schematic/netlist/PCB need these physical numbers to be correct.
 
 | PIC pin | Port | Project name | Direction | Function |
 |---|---|---|---|---|
+| 1 | MCLR/VPP | RESET | Input | Master clear reset |
+| 2 | RA0 | ADC_SWR1_FWD | Input | Pre-filter SWR forward power ADC |
+| 3 | RA1 | ADC_SWR1_REF | Input | Pre-filter SWR reflected power ADC |
+| 4 | RA2 | ADC_SWR2_FWD | Input | Post-filter SWR forward power ADC |
+| 5 | RA3 | ADC_SWR2_REF | Input | Post-filter SWR reflected power ADC |
+| 6 | RA4 | unused | Input | Reserved; not an ADC channel in this design |
+| 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC (AN5) |
+| 8 | VSS | GND | Power | Ground return |
+| 9 | RA7 | SPARE_3 | Input | Freed by the internal oscillator; available for future use |
+| 10 | RA6 | SPARE_2 | Input | Freed by the internal oscillator; available for future use |
 | 11 | RC0 | INPUT_PTT | Input | Transmit request / key-down input |
 | 12 | RC1 | OUTPUT_COMP_RESET | Output | Active-low 10 ms comparator-latch reset pulse on PTT entry |
 | 13 | RC2 | INPUT_MENU_NEXT | Input | Config-menu page select switch |
@@ -133,13 +143,8 @@ schematic/netlist/PCB need these physical numbers to be correct.
 | 16 | RC5 | OUTPUT_TX | Output | First TX sequencing driver |
 | 17 | RC6 | OUTPUT_TX_VCC | Output | Second TX sequencing driver |
 | 18 | RC7 | OUTPUT_TX_BIAS | Output | Final TX sequencing driver |
-| 2 | RA0 | ADC_SWR1_FWD | Input | Pre-filter SWR forward power ADC |
-| 3 | RA1 | ADC_SWR1_REF | Input | Pre-filter SWR reflected power ADC |
-| 4 | RA2 | ADC_SWR2_FWD | Input | Post-filter SWR forward power ADC |
-| 5 | RA3 | ADC_SWR2_REF | Input | Post-filter SWR reflected power ADC |
-| 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC (AN5) |
-| 10,9 | RA6, RA7 | SPARE_2, SPARE_3 | Input | Freed by the internal oscillator; available for future use |
-| 1 | MCLR/VPP | RESET | Input | Master clear reset |
+| 19 | VSS | GND | Power | Ground return |
+| 20 | VDD | +5 V | Power | Decouple locally per datasheet |
 | 21 | RB0 | INPUT_MENU_ADJUST | Input | Menu adjust: short press increase, hold decrease |
 | 22 | RB1 | ADC_CURRENT | Input | WCS1700 current ADC (AN9), provisional 70 A full scale |
 | 23 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC (AN10) |
@@ -148,9 +153,6 @@ schematic/netlist/PCB need these physical numbers to be correct.
 | 26 | RB5 | OUTPUT_FAN_PWM | Output | 12 V fan low-side MOSFET control; confirm hardware-PWM alternate-function routing |
 | 27 | RB6 | INPUT_SPARE_4 | Input | Freed spare input |
 | 28 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
-| 6 | RA4 | unused | Input | Reserved; not an ADC channel in this design |
-| 8,19 | VSS | GND | Power | Ground return |
-| 20 | VDD | +5 V | Power | Decouple locally per datasheet |
 
 ## Current hardware assumptions
 
