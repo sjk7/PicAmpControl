@@ -24,15 +24,22 @@ A typical arrangement is:
 ```text
 sensor or divider output -- 1 kOhm series -- PIC ADC pin
                                            |
-                                  low-leakage clamps
-                                    to VSS and/or VDD
+                              +------------+------------+
+                              |                         |
+                         DLOW to VSS               DHIGH to VDD
 ```
+
+Two individual single Schottky diodes may be used for each ADC input. Orient `DLOW` with its anode at `VSS/GND` and cathode at the ADC pin to clamp negative excursions. Orient `DHIGH` with its anode at the ADC pin and cathode at `VDD/+5 V` to divert positive overvoltage into the 5 V rail. Suitable starting parts are a `BAT54` single Schottky or a lower-leakage `BAS70` single Schottky; verify the exact diode ratings and package pinout before selecting the production part.
+
+Keep both diodes and their rail connections close to the PIC. Provide local VDD decoupling and verify that the rail can absorb the injected transient current. A single diode to ground only clamps negative excursions and does not protect against positive overvoltage.
 
 ## Zener and TVS guidance
 
 Do not automatically place a conventional `5.1 V` zener directly from every ADC pin to ground. That approach can load the signal near full scale, leak current into the ADC measurement, clamp too late, and fail to protect against negative excursions.
 
 Use a low-leakage rail-clamp arrangement or a suitably specified TVS/zener on the source side of the series resistor when the transient environment requires it. Select the clamp standoff voltage, leakage, capacitance, and pulse-current rating for the actual signal. The protection must not interfere with the required `0-5 V` measurement range.
+
+Small-signal Schottky diodes are not energy absorbers. For `RB2`, `RB3`, PTT wiring, long cables, or any source that can deliver a high-energy transient, add a suitably rated TVS/zener on the source side of the `1 kOhm` resistor or use a proper level/protection interface. Size that device from the expected transient voltage and energy rather than choosing a nominal zener voltage alone.
 
 ## Other external interfaces
 
@@ -46,6 +53,7 @@ Use a low-leakage rail-clamp arrangement or a suitably specified TVS/zener on th
 ## PCB checklist
 
 - Place the series resistor close to each PIC ADC pin.
+- Fit two single Schottky diodes per ADC input: one from the pin to VSS and one from the pin to VDD, with the orientations specified above.
 - Keep analogue clamp connections short and return them to a clean local ground or the regulated rail as appropriate.
 - Verify every ADC input at zero, nominal full scale, maximum credible signal, and expected transient conditions.
 - Confirm ADC source impedance and acquisition time remain compatible after adding the series resistor and clamps.
