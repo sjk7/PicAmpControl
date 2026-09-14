@@ -1,0 +1,6 @@
+Stepi 100000
+print pin RC0
+print pin RC5
+print pin RC6
+print pin RC7
+print pin RB7
