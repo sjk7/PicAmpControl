@@ -957,6 +957,7 @@ int main(void) {
     TRISAbits.TRISA3 = 1;
     TRISAbits.TRISA5 = 1;
     TRISCbits.TRISC0 = 1;
+    WPUCbits.WPUC0 = 1;
     TRISCbits.TRISC1 = 0;
     TRISCbits.TRISC2 = 1;
     TRISCbits.TRISC3 = 1;
