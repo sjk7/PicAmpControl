@@ -157,6 +157,11 @@ static const unsigned char g_menu_setting_types[] = {
     MENU_SETTING_BOOL, MENU_SETTING_BOOL, MENU_SETTING_BOOL, MENU_SETTING_BOOL,
     MENU_SETTING_BOOL, MENU_SETTING_U16
 };
+#define TX_ACTIVE_HIGH_DEFAULT false
+#define TX_VCC_ACTIVE_HIGH_DEFAULT false
+#define TX_BIAS_ACTIVE_HIGH_DEFAULT false
+#define FAN_ACTIVE_HIGH_DEFAULT false
+#define TRIP_ACTIVE_HIGH_DEFAULT false
 static const char *const g_menu_labels[] = {
     "STATUS", "STATUS", "S1 SWR TRIP", "S2 SWR TRIP", "S1 FWD MAX", "S2 FWD MAX",
     "NTC B VALUE", "TEMP TRIP", "INPUT TRIP", "DRAIN TRIP", "CURRENT TRIP",
@@ -172,7 +177,11 @@ static protection_thresholds_t g_thresholds = {
     150,
     40,
     20, 20,
-    false, false, false, false, false,
+    TX_ACTIVE_HIGH_DEFAULT,
+    TX_VCC_ACTIVE_HIGH_DEFAULT,
+    TX_BIAS_ACTIVE_HIGH_DEFAULT,
+    FAN_ACTIVE_HIGH_DEFAULT,
+    TRIP_ACTIVE_HIGH_DEFAULT,
     true, 500
 };
 

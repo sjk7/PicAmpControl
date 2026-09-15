@@ -26,7 +26,10 @@ ELF_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.elf"
 DEVICE = "PIC16F18855"
 
 # Firmware globals that explain why PTT/TX may be blocked (see main.c).
-STATE_VARS = ["g_startup_inhibit", "g_comparator_reset_active", "g_fault_latched", "g_trip_reason"]
+STATE_VARS = [
+    "g_startup_inhibit", "g_comparator_reset_active", "g_fault_latched", "g_trip_reason",
+    "g_ptt_active", "g_sequence_stage", "g_state"
+]
 TRIP_REASON_BITS = [
     (0x01, "SWR1"),
     (0x02, "SWR2"),
@@ -80,8 +83,15 @@ def build_script() -> str:
         for var in STATE_VARS:
             lines.append(f"print {var}")
 
-    # --- Wait for settle (startup inhibit) period: 1100ms @ 32MHz = 8,800,000 instructions ---
-    for _ in range(110):
+    # --- Briefly assert PTT during startup; it must have no effect while inhibited ---
+    lines.append("write pin RC0 0v")
+    for _ in range(5):  # 50 ms while startup inhibit is active
+        lines.append("Stepi 80000")
+        sample()
+    lines.append("write pin RC0 5v")
+
+    # --- Finish the settle (startup inhibit) period: 1100ms total ---
+    for _ in range(105):
         lines.append("Stepi 80000")  # 10 ms per print
         sample()
     # --- Assert PTT (pull RC0 low), triggering SETTLE high for 10 ms ---
@@ -186,11 +196,13 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_path = out_dir / "ptt_trace.csv"
     with open(csv_path, "w") as f:
-        f.write("time_s," + ",".join(PIN_LABELS[p] for p in PINS) + ",block_reason\n")
+        f.write("time_s," + ",".join(PIN_LABELS[p] for p in PINS) +
+            ",g_ptt_active,g_sequence_stage,g_state,block_reason\n")
         for instr_count, vals, state in samples:
             t = instr_count * SECONDS_PER_INSTRUCTION
             reason = block_reason(state) or ""
-            f.write(f"{t:.6f}," + ",".join(str(vals[p]) for p in PINS) + f",{reason}\n")
+            f.write(f"{t:.6f}," + ",".join(str(vals[p]) for p in PINS) +
+                f",{state['g_ptt_active']},{state['g_sequence_stage']},{state['g_state']},{reason}\n")
     print(f"Wrote {csv_path} ({len(samples)} samples)")
 
     # Print console FAULT/blocking-reason transitions so "why can't PTT key up" is obvious
@@ -237,7 +249,7 @@ def main():
     for start, end, reason in block_spans:
         axes[0].text((start + end) / 2, 1.35, reason, ha="center", va="bottom",
                      fontsize=7, color="red", clip_on=False)
-    axes[0].set_xlim(480, times[-1])  # crop the coarse startup-inhibit wait out of view
+    axes[0].set_xlim(0, times[-1])
     axes[-1].set_xlabel("time (ms, approx)")
     fig.suptitle("PTT assert/release sequencing (simulated)")
     fig.tight_layout()
