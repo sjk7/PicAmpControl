@@ -14,6 +14,13 @@ CI/release workflows change - don't let it go stale.
 ## Date
 2026-09-15
 
+## Simulator timer limitation (IMPORTANT)
+- As of 2026-09-15: MPLAB X/mdb simulation does NOT increment hardware Timer0 (TMR0L stays at 6). The Timer0 interrupt only fires once at boot—the counter never overflows or advances.
+- All firmware time-driving features (startup inhibit, SETTLE, comparator reset pulse, TX sequencing delays, menu long-presses) rely on g_timer_ticks_pending incrementing (Timer0 overflows). This simply does not happen in simulation—so state machine logic dependent on timer-based events gets stuck forever after entering main loop.
+- This is a fundamental simulator limitation (not a bug in your firmware), and it affects all timing validation—makes instruction-cycle-accurate simulation impossible for any realistic board-level design.
+- **WORKAROUND ENABLED:** See `SIM_KICK_TIMER` macro in `main.c` (enabled for simulation runs)—this forcibly increments the tick counter once per main loop pass, so events progress in development/test. This workaround must be *disabled* on real hardware.
+- For true timing/bench validation, use real silicon.
+
 ## Current design
 This repository is the active PIC16F18855-I/SP linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
 

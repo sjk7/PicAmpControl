@@ -108,7 +108,10 @@ static unsigned int g_menu_idle_ms = 0;
 static volatile bool g_settings_dirty = false;
 static unsigned int g_settings_save_delay_ms = 0;
 static volatile unsigned char g_adc_scan_index = 0;
-static volatile unsigned int g_adc_samples[8] = {0};
+/* Defaults until the first real ADC scan completes for each channel: 0 (idle,
+   no fault) for power/current/overdrive/drain, and a mid-scale ~2.5V reading
+   for temp (raw 0 would otherwise map to a false 150C thermal trip). */
+static volatile unsigned int g_adc_samples[8] = {0, 0, 0, 0, 511, 0, 0, 0};
 #define ADC_SAMPLE_SWR1_FWD g_adc_samples[0]
 #define ADC_SAMPLE_SWR1_REF g_adc_samples[1]
 #define ADC_SAMPLE_SWR2_FWD g_adc_samples[2]
@@ -406,7 +409,7 @@ void show_menu_page(void) {
             return;
         }
         lcd_set_cursor(0, 0);
-        lcd_write_text("*** TRIP ***");
+        lcd_write_text("FAULT:");
         lcd_set_cursor(1, 0);
         if (g_trip_reason & TRIP_REASON_SWR1) lcd_write_text("SWR1 ");
         if (g_trip_reason & TRIP_REASON_SWR2) lcd_write_text("SWR2 ");
@@ -523,6 +526,8 @@ void start_comparator_reset(void) {
 }
 
 void handle_ptt_transition(bool ptt_asserted) {
+    if (g_startup_inhibit)
+        return; // Ignore PTT changes until system settles (RC1 low)
     if (ptt_asserted) {
         g_ptt_active = true;
         if (g_menu_page != MENU_PAGE_STATUS) {
@@ -773,8 +778,23 @@ void poll_menu_inputs(unsigned int elapsed_ms) {
     static bool adjust_was_pressed = false;
     static unsigned int adjust_hold_ms = 0;
     static unsigned int adjust_repeat_ms = 0;
+    static unsigned int fault_clear_hold_ms = 0;
     bool next_pressed = (INPUT_MENU_NEXT == 0);
     bool adjust_pressed = (INPUT_MENU_ADJUST == 0);
+
+    /* A fault latch only otherwise clears on the next PTT re-arm (see
+       handle_ptt_transition()); a long press of the adjust button gives an
+       operator a way to clear it from the front panel without keying up. */
+    if (g_state == STATE_TRIP && adjust_pressed) {
+        fault_clear_hold_ms += elapsed_ms;
+        if (fault_clear_hold_ms >= 1500) {
+            clear_fault_latches();
+            g_menu_changed = true;
+            fault_clear_hold_ms = 0;
+        }
+    } else {
+        fault_clear_hold_ms = 0;
+    }
 
     if (!g_ptt_active) {
         if (next_pressed && !next_was_pressed) {
