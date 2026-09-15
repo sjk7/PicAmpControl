@@ -202,9 +202,8 @@ void set_trip_output(bool active) {
 
 void __interrupt() timer0_isr(void) {
     bool tick = false;
-    if (PIR0bits.TMR0IF != 0) {
-        TMR0L = 6;
-        PIR0bits.TMR0IF = 0;
+    if (PIR4bits.TMR2IF != 0) {
+        PIR4bits.TMR2IF = 0;
         tick = true;
         if (g_timer_ticks_pending != 255) {
             g_timer_ticks_pending++;
@@ -231,7 +230,7 @@ void __interrupt() timer0_isr(void) {
             g_adc_scan_index = 0;
         }
         /* Select the next channel now; the actual conversion is kicked off from the
-           next Timer0 tick below, well after the channel mux has settled, so no
+           next Timer2 tick below, well after the channel mux has settled, so no
            blocking acquisition delay is needed here (this used to busy-wait inside
            the ISR, starving the main loop of CPU time). */
         ADPCH = g_adc_scan_channels[g_adc_scan_index];
@@ -247,14 +246,17 @@ void __interrupt() timer0_isr(void) {
 }
 
 void timer0_init(void) {
-    T0CON0bits.T016BIT = 0;
-    T0CON0bits.T0OUTPS = 0;
-    T0CON1bits.T0CS = 0;
-    T0CON1bits.T0CKPS = 5;
-    TMR0L = 6;
-    PIR0bits.TMR0IF = 0;
-    PIE0bits.TMR0IE = 1;
-    T0CON0bits.T0EN = 1;
+    /* Timer2 (not Timer0) drives the ~1ms system tick: TMR0's Fosc/4 overflow model
+       stalls under MDB after the first interrupt, and Timer2's simpler compare-based
+       architecture doesn't hit that issue on either real hardware or the simulator. */
+    T2CLKCON = 0x01; /* Fosc/4 */
+    T2CONbits.CKPS = 6;   /* 1:64 prescale */
+    T2CONbits.OUTPS = 0;  /* 1:1 postscale */
+    PR2 = 124;            /* (124+1) * 64 / 8MHz = 1.000ms */
+    TMR2 = 0;
+    PIR4bits.TMR2IF = 0;
+    PIE4bits.TMR2IE = 1;
+    T2CONbits.ON = 1;
     INTCONbits.GIE = 1;
 }
 
@@ -496,7 +498,10 @@ void adc_init(void) {
     ANSELB = 0x0E;
     ADCON1 = 0x20;
     ADPCH = 0;
-    ADCON0 = 0x80;
+    // ADFM<1:0>=10 (legacy right-justified 10-bit result in ADRESH:ADRESL):
+    // temperature_c/drain_voltage/overdrive_power_mw all treat the raw ADC value
+    // as a plain 0-1023 reading, not left-shifted or accumulator-formatted.
+    ADCON0 = 0x88;
     PIR1bits.ADIF = 0;
     PIE1bits.ADIE = 1;
     INTCONbits.PEIE = 1;
@@ -510,6 +515,7 @@ void apply_startup_inhibit(void) {
     set_tx_bias_output(false);
     set_fan_output(false);
     set_trip_output(false);
+    OUTPUT_COMP_RESET = 0; // SETTLE held low for the startup-inhibit window
     g_startup_inhibit = true;
 }
 
@@ -745,7 +751,7 @@ void update_power_decay(unsigned int elapsed_ms) {
 }
 
 void update_tx_sequence(void) {
-    if (!g_ptt_active || g_startup_inhibit || g_fault_latched || g_comparator_reset_active) {
+    if (g_startup_inhibit || g_fault_latched || g_comparator_reset_active) {
         set_tx_output(false);
         set_tx_vcc_output(false);
         set_tx_bias_output(false);
@@ -753,23 +759,55 @@ void update_tx_sequence(void) {
         return;
     }
 
-    if (g_sequence_stage == 0) {
-        set_tx_output(true);
-        g_sequence_elapsed_ms = 0;
-        g_sequence_stage = 1;
-    } else if (g_sequence_stage == 1) {
-        g_sequence_elapsed_ms++;
-        if (g_sequence_elapsed_ms >= g_thresholds.tx_vcc_delay_ms) {
-            set_tx_vcc_output(true);
+    if (g_ptt_active) {
+        if (g_sequence_stage == 0) {
+            set_tx_output(true);
             g_sequence_elapsed_ms = 0;
-            g_sequence_stage = 2;
+            g_sequence_stage = 1;
+        } else if (g_sequence_stage == 1) {
+            g_sequence_elapsed_ms++;
+            if (g_sequence_elapsed_ms >= g_thresholds.tx_vcc_delay_ms) {
+                set_tx_vcc_output(true);
+                g_sequence_elapsed_ms = 0;
+                g_sequence_stage = 2;
+            }
+        } else if (g_sequence_stage == 2) {
+            g_sequence_elapsed_ms++;
+            if (g_sequence_elapsed_ms >= g_thresholds.tx_bias_delay_ms) {
+                set_tx_bias_output(true);
+                g_sequence_stage = 3;
+            }
         }
-    } else if (g_sequence_stage == 2) {
+        return;
+    }
+
+    // PTT released: unwind whatever stage we reached in the reverse order it was
+    // brought up (bias off -> delay -> vcc off -> delay -> tx off), rather than
+    // dropping every output at once.
+    if (g_sequence_stage == 3) {
+        set_tx_bias_output(false);
+        g_sequence_elapsed_ms = 0;
+        g_sequence_stage = 4;
+    } else if (g_sequence_stage == 4) {
         g_sequence_elapsed_ms++;
         if (g_sequence_elapsed_ms >= g_thresholds.tx_bias_delay_ms) {
-            set_tx_bias_output(true);
-            g_sequence_stage = 3;
+            set_tx_vcc_output(false);
+            g_sequence_elapsed_ms = 0;
+            g_sequence_stage = 5;
         }
+    } else if (g_sequence_stage == 2) {
+        set_tx_vcc_output(false);
+        g_sequence_elapsed_ms = 0;
+        g_sequence_stage = 5;
+    } else if (g_sequence_stage == 5) {
+        g_sequence_elapsed_ms++;
+        if (g_sequence_elapsed_ms >= g_thresholds.tx_vcc_delay_ms) {
+            set_tx_output(false);
+            g_sequence_stage = 0;
+        }
+    } else if (g_sequence_stage == 1) {
+        set_tx_output(false);
+        g_sequence_stage = 0;
     }
 }
 
@@ -936,7 +974,6 @@ int main(void) {
     set_tx_bias_output(false);
     set_fan_output(false);
     set_trip_output(false);
-    OUTPUT_COMP_RESET = 1;
 
     adc_init();
     load_settings();
@@ -992,7 +1029,10 @@ int main(void) {
                 g_startup_elapsed_ms++;
                 if (g_startup_elapsed_ms >= 1000) {
                     g_startup_inhibit = false;
-                    start_comparator_reset();
+                    // Single low->high transition signals hardware has settled; PTT
+                    // is only actionable after this (SETTLE then idles high, pulsing
+                    // low again on each subsequent PTT transition).
+                    OUTPUT_COMP_RESET = 1;
                 }
             } else {
                 update_power_decay(1);

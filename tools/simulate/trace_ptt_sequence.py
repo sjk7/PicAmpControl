@@ -94,6 +94,12 @@ def build_script() -> str:
     for _ in range(40):  # 5 ms steps for more TX sequencing, 40x5 = 200 ms
         lines.append("Stepi 40000")
         sample()
+    # --- Release PTT (RC0 back high) and step through the reverse teardown
+    # sequence (bias off -> delay -> vcc off -> delay -> tx off) ---
+    lines.append("write pin RC0 5v")
+    for _ in range(40):  # 5 ms steps, 40x5 = 200 ms
+        lines.append("Stepi 40000")
+        sample()
     lines.append("quit")
     return "\n".join(lines)
 
