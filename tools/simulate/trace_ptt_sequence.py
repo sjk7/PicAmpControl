@@ -30,7 +30,7 @@ DEVICE = "PIC16F18855"
 # Firmware globals that explain why PTT/TX may be blocked (see main.c).
 STATE_VARS = [
     "g_startup_inhibit", "g_comparator_reset_active", "g_fault_latched", "g_trip_reason",
-    "g_ptt_active", "g_sequence_stage", "g_state"
+    "g_ptt_active", "g_sequence_stage", "g_state", "g_trip_shutdown_active"
 ]
 TRIP_REASON_BITS = [
     (0x01, "SWR1"),
@@ -123,8 +123,13 @@ def build_script(temperature_trip=False) -> str:
         for step in range(1, 21):
             voltage = 2.5 + step * 0.125
             lines.append(f"write pin RA5 {voltage:.3f}v")
-            lines.append("Stepi 400000")  # 50ms per ramp step
-            sample()
+            if step < 20:
+                lines.append("Stepi 400000")  # 50ms per ramp step
+                sample()
+            else:
+                for _ in range(10):  # capture the five-millisecond shutdown sequence
+                    lines.append("Stepi 8000")
+                    sample()
         for _ in range(10):  # show the latched trip state for another 500ms
             lines.append("Stepi 400000")
             sample()
@@ -206,8 +211,14 @@ def validate_temperature_trip(samples) -> None:
         raise AssertionError("temperature trip was not reported")
     if trip[2]["g_ptt_active"] != "true":
         raise AssertionError("temperature trip did not occur while PTT was active")
-    if (trip[1]["RC5"], trip[1]["RC6"], trip[1]["RC7"]) != (1, 1, 1):
-        raise AssertionError("TX outputs were not inhibited after temperature trip")
+    shutdown = next((sample for sample in samples if sample[2]["g_trip_shutdown_active"] == "true"), None)
+    if shutdown is None or (shutdown[1]["RC5"], shutdown[1]["RC6"], shutdown[1]["RC7"]) != (0, 1, 0):
+        raise AssertionError("fault did not raise TX_VCC immediately before the delayed shutdown")
+    shutdown_done = next((sample for sample in samples
+                          if sample[2]["g_trip_shutdown_active"] == "false" and
+                          block_reason(sample[2]) == "FAULT: TEMPERATURE"), None)
+    if shutdown_done is None or (shutdown_done[1]["RC5"], shutdown_done[1]["RC6"], shutdown_done[1]["RC7"]) != (1, 1, 1):
+        raise AssertionError("fault did not raise RELAYS and TX_BIAS after five milliseconds")
     if trip[3]["RA5"] < 4.0:
         raise AssertionError("temperature ADC input did not rise above 4V")
     print("ADC voltages at temperature trip: " +

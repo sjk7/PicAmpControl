@@ -86,6 +86,8 @@ typedef struct {
 static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
 static volatile unsigned char g_trip_reason = 0;
+static volatile bool g_trip_shutdown_active = false;
+static volatile unsigned char g_trip_shutdown_elapsed_ms = 0;
 static volatile bool g_ptt_active = false;
 static volatile bool g_startup_inhibit = true;
 static volatile bool g_comparator_reset_active = false;
@@ -531,6 +533,8 @@ void apply_startup_inhibit(void) {
 void clear_fault_latches(void) {
     g_fault_latched = false;
     g_trip_reason = 0;
+    g_trip_shutdown_active = false;
+    g_trip_shutdown_elapsed_ms = 0;
     set_trip_output(false);
 }
 
@@ -760,11 +764,14 @@ void update_power_decay(unsigned int elapsed_ms) {
 }
 
 void update_tx_sequence(void) {
-    if (g_startup_inhibit || g_fault_latched || g_comparator_reset_active) {
+    if (g_startup_inhibit || g_comparator_reset_active) {
         set_tx_output(false);
         set_tx_vcc_output(false);
         set_tx_bias_output(false);
         g_sequence_stage = 0;
+        return;
+    }
+    if (g_fault_latched) {
         return;
     }
 
@@ -921,12 +928,18 @@ void update_protection_state(unsigned int temp_c,
             (temp_trip ? TRIP_REASON_TEMP : 0) |
             (overdrive_trip ? TRIP_REASON_OVERDRIVE : 0) |
             (drain_trip ? TRIP_REASON_DRAIN : 0));
-        g_fault_latched = true;
+        if (!g_fault_latched) {
+            g_fault_latched = true;
+            g_trip_shutdown_active = true;
+            g_trip_shutdown_elapsed_ms = 0;
+        }
         g_state = STATE_TRIP;
         set_trip_output(true);
-        set_tx_output(false);
         set_tx_vcc_output(false);
-        set_tx_bias_output(false);
+        if (!g_trip_shutdown_active) {
+            set_tx_output(false);
+            set_tx_bias_output(false);
+        }
         return;
     }
 
@@ -936,9 +949,11 @@ void update_protection_state(unsigned int temp_c,
            handle_ptt_transition()), so TRIP stays shown/TX stays inhibited. */
         g_state = STATE_TRIP;
         set_trip_output(true);
-        set_tx_output(false);
         set_tx_vcc_output(false);
-        set_tx_bias_output(false);
+        if (!g_trip_shutdown_active) {
+            set_tx_output(false);
+            set_tx_bias_output(false);
+        }
         return;
     }
 
@@ -1032,6 +1047,14 @@ int main(void) {
                 if (g_comparator_reset_elapsed_ms >= 10) {
                     OUTPUT_COMP_RESET = 1;
                     g_comparator_reset_active = false;
+                }
+            }
+            if (g_trip_shutdown_active) {
+                g_trip_shutdown_elapsed_ms++;
+                if (g_trip_shutdown_elapsed_ms >= 5) {
+                    set_tx_output(false);
+                    set_tx_bias_output(false);
+                    g_trip_shutdown_active = false;
                 }
             }
             if (g_startup_inhibit) {
