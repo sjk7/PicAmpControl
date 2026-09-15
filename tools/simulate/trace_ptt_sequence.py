@@ -60,6 +60,10 @@ PHASES = [
 PINS = ["RC1", "RC0", "RC5", "RC6", "RC7"]
 PIN_LABELS = {"RC1": "SETTLE", "RC0": "PTT", "RC5": "RELAYS", "RC6": "TX_VCC", "RC7": "TX_BIAS"}
 ADC_PINS = ["RA0", "RA1", "RA2", "RA3", "RA5", "RB1", "RB2", "RB3"]
+ADC_LABELS = {
+    "RA0": "SWR1 FWD", "RA1": "SWR1 REF", "RA2": "SWR2 FWD", "RA3": "SWR2 REF",
+    "RA5": "TEMPERATURE", "RB1": "CURRENT", "RB2": "OVERDRIVE", "RB3": "DRAIN"
+}
 
 
 def find_mdb() -> Path:
@@ -88,15 +92,16 @@ def build_script(temperature_trip=False) -> str:
         for var in STATE_VARS:
             lines.append(f"print {var}")
 
-    # --- Briefly assert PTT during startup; it must have no effect while inhibited ---
-    lines.append("write pin RC0 0v")
-    for _ in range(5):  # 50 ms while startup inhibit is active
-        lines.append("Stepi 80000")
-        sample()
-    lines.append("write pin RC0 5v")
+    if not temperature_trip:
+        # --- Briefly assert PTT during startup; it must have no effect while inhibited ---
+        lines.append("write pin RC0 0v")
+        for _ in range(5):  # 50 ms while startup inhibit is active
+            lines.append("Stepi 80000")
+            sample()
+        lines.append("write pin RC0 5v")
 
     # --- Finish the settle (startup inhibit) period: 1100ms total ---
-    for _ in range(105):
+    for _ in range(105 if not temperature_trip else 110):
         lines.append("Stepi 80000")  # 10 ms per print
         sample()
     # --- Assert PTT (pull RC0 low), triggering SETTLE high for 10 ms ---
@@ -106,7 +111,7 @@ def build_script(temperature_trip=False) -> str:
         lines.append("Stepi 8000")
         sample()
     # Continue simulation for sequencer actions (TX, TX_VCC, etc), 200 ms more
-    for _ in range(40):  # 5 ms steps for more TX sequencing, 40x5 = 200 ms
+    for _ in range(10 if temperature_trip else 40):
         lines.append("Stepi 40000")
         sample()
     # Hold PTT low for 500 ms before releasing it.
@@ -114,9 +119,14 @@ def build_script(temperature_trip=False) -> str:
         lines.append("Stepi 40000")
         sample()
     if temperature_trip:
-        lines.append("write pin RA5 5v")
-        for _ in range(10):
-            lines.append("Stepi 40000")
+        # Raise the temperature stimulus from 2.5V to 5V over one simulated second.
+        for step in range(1, 21):
+            voltage = 2.5 + step * 0.125
+            lines.append(f"write pin RA5 {voltage:.3f}v")
+            lines.append("Stepi 400000")  # 50ms per ramp step
+            sample()
+        for _ in range(10):  # show the latched trip state for another 500ms
+            lines.append("Stepi 400000")
             sample()
         lines.append("quit")
         return "\n".join(lines)
@@ -267,7 +277,8 @@ def main():
 
     out_dir = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"
     out_dir.mkdir(parents=True, exist_ok=True)
-    csv_path = out_dir / "ptt_trace.csv"
+    trace_name = "temperature_trip_trace" if temperature_trip else "ptt_trace"
+    csv_path = out_dir / f"{trace_name}.csv"
     with open(csv_path, "w") as f:
         f.write("time_s," + ",".join(PIN_LABELS[p] for p in PINS) +
             "," + ",".join(f"ADC_{pin}_V" for pin in ADC_PINS) +
@@ -317,18 +328,28 @@ def main():
         ax.step(times, values, where="post")
         ax.set_ylim(-0.2, 1.2)
         ax.set_yticks([0, 1])
-        ax.set_ylabel(PIN_LABELS[pin], rotation=0, labelpad=30, va="center")
+        ax.set_ylabel(f"{pin}\n{PIN_LABELS[pin]}", rotation=0, labelpad=34, va="center")
         ax.grid(True, alpha=0.3)
         for start, end, reason in block_spans:
             ax.axvspan(start, end, color="red", alpha=0.12)
+        if temperature_trip:
+            trip_time = times[next(index for index, sample in enumerate(samples)
+                                   if block_reason(sample[2]) == "FAULT: TEMPERATURE")]
+            ax.axvline(trip_time, color="red", linestyle="--", alpha=0.6)
     for start, end, reason in block_spans:
         axes[0].text((start + end) / 2, 1.35, reason, ha="center", va="bottom",
                      fontsize=7, color="red", clip_on=False)
+    if temperature_trip:
+        axes[2].annotate("RELAYS HIGH: TX INHIBITED",
+                         xy=(trip_time, 1), xytext=(8, 12),
+                         textcoords="offset points", color="red", fontsize=8,
+                         arrowprops={"arrowstyle": "->", "color": "red"})
     axes[0].set_xlim(0, times[-1])
     axes[-1].set_xlabel("time (ms, approx)")
-    fig.suptitle("PTT assert/release sequencing (simulated)")
+    fig.suptitle("PTT sequencing with temperature trip (simulated)" if temperature_trip
+                 else "PTT assert/release sequencing (simulated)")
     fig.tight_layout()
-    png_path = out_dir / "ptt_trace.png"
+    png_path = out_dir / f"{trace_name}.png"
     fig.savefig(png_path, dpi=120)
     print(f"Wrote {png_path}")
 
@@ -339,7 +360,7 @@ def main():
         for ax, pin in zip(adc_axes, ADC_PINS):
             values = [sample[3][pin] for sample in samples]
             ax.plot(times, values, drawstyle="steps-post")
-            ax.set_ylabel(pin, rotation=0, labelpad=28, va="center")
+            ax.set_ylabel(f"{pin}\n{ADC_LABELS[pin]}", rotation=0, labelpad=34, va="center")
             ax.grid(True, alpha=0.3)
             ax.annotate(f"{values[trip_index]:.3f} V",
                         (times[trip_index], values[trip_index]),
