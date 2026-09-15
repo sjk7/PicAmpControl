@@ -14,3 +14,8 @@ add_test(
     COMMAND "${PYTHON_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
             --test)
+add_test(
+    NAME PTT_TemperatureTrip_InTransmit
+    COMMAND "${PYTHON_EXECUTABLE}"
+            "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
+            --temperature-trip)
