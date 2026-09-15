@@ -133,6 +133,12 @@ def build_script(temperature_trip=False) -> str:
         for _ in range(10):  # show the latched trip state for another 500ms
             lines.append("Stepi 400000")
             sample()
+        # Lower the temperature stimulus back to 2.5V over two simulated seconds.
+        for step in range(19, -1, -1):
+            voltage = 2.5 + step * 0.125
+            lines.append(f"write pin RA5 {voltage:.3f}v")
+            lines.append("Stepi 400000")  # 50ms per recovery-ramp step
+            sample()
         lines.append("quit")
         return "\n".join(lines)
     # --- Release PTT (RC0 back high): relays open, then VCC, then bias ---
@@ -219,6 +225,12 @@ def validate_temperature_trip(samples) -> None:
                           block_reason(sample[2]) == "FAULT: TEMPERATURE"), None)
     if shutdown_done is None or (shutdown_done[1]["RC5"], shutdown_done[1]["RC6"], shutdown_done[1]["RC7"]) != (1, 1, 1):
         raise AssertionError("fault did not raise RELAYS and TX_BIAS after five milliseconds")
+    recovered = next((sample for sample in samples[samples.index(shutdown_done) + 1:]
+                      if sample[2]["g_fault_latched"] == "false" and
+                      sample[2]["g_sequence_stage"] == "3"), None)
+    if recovered is None or (recovered[1]["RC5"], recovered[1]["RC6"], recovered[1]["RC7"]) != (0, 0, 0):
+        raise AssertionError("temperature recovery did not re-enter the active TX sequence")
+    print("TEMP RECOVERED: TX sequence resumed after hysteresis")
     if trip[3]["RA5"] < 4.0:
         raise AssertionError("temperature ADC input did not rise above 4V")
     print("ADC voltages at temperature trip: " +

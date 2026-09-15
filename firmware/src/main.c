@@ -82,6 +82,7 @@ typedef struct {
 #define TRIP_REASON_DRAIN 0x40
 
 #define MENU_IDLE_TIMEOUT_MS 8000
+#define TEMPERATURE_RECOVERY_HYSTERESIS_C 5U
 
 static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
@@ -944,6 +945,19 @@ void update_protection_state(unsigned int temp_c,
     }
 
     if (g_fault_latched) {
+        if (g_trip_reason == TRIP_REASON_TEMP &&
+            !any_trip_fault &&
+            temp_c + TEMPERATURE_RECOVERY_HYSTERESIS_C < g_thresholds.temp_trip_c) {
+            g_fault_latched = false;
+            g_trip_reason = 0;
+            g_trip_shutdown_active = false;
+            g_trip_shutdown_elapsed_ms = 0;
+            g_sequence_stage = 0;
+            g_state = STATE_RESET_WAIT;
+            set_trip_output(false);
+            start_comparator_reset();
+            return;
+        }
         /* The condition itself cleared, but the latch persists until the next
            PTT re-arm edge explicitly clears it (see clear_fault_latches() in
            handle_ptt_transition()), so TRIP stays shown/TX stays inhibited. */
