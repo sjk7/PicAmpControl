@@ -31,5 +31,12 @@
     "cmake.useCMakePresets": "always",
     "cmake.configureOnOpen": false,
     "cmake.sourceDirectory": "${workspaceFolder}/cmake/My_Pic_Project/default",
-    "cmake.buildDirectory": "${workspaceFolder}/_build/My_Pic_Project/release"
+    "cmake.buildDirectory": "${workspaceFolder}/_build/My_Pic_Project/release",
+    "memory-inspector.debugTypes": [
+        "arm-debugger",
+        "embedded-debug",
+        "gdb",
+        "gdbtarget",
+        "mplab-core-da"
+    ]
 }

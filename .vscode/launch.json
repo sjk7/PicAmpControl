@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Note: Properties here can override MPLAB project settings
+      "name": "Simulate PicAmpControl (Debug)",
+      "type": "mplab-core-da",
+      "request": "launch",
+      "program": "${workspaceFolder}/out/My_Pic_Project/default.elf",
+      "device": "PIC16F18855",
+      "tool": "Simulator",
+      "stopOnEntry": true
+    }
+  ]
+}

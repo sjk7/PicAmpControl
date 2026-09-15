@@ -34,4 +34,6 @@ trap 'rm -f "$PREAMBLE"' EXIT
     fi
 } > "$PREAMBLE"
 
-"$MDB_SH" "$PREAMBLE"
+# W0106-SIM TMR1/3/5 warnings are benign simulator-model noise (see Ai-Notes.txt); filter them out
+# (`|| true` avoids pipefail tripping if grep -v ever finds no non-matching lines)
+"$MDB_SH" "$PREAMBLE" 2>&1 | { grep -v 'W0106-SIM' || true; }
