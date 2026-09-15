@@ -198,9 +198,11 @@ void set_trip_output(bool active) {
 }
 
 void __interrupt() timer0_isr(void) {
+    bool tick = false;
     if (PIR0bits.TMR0IF != 0) {
         TMR0L = 6;
         PIR0bits.TMR0IF = 0;
+        tick = true;
         if (g_timer_ticks_pending != 255) {
             g_timer_ticks_pending++;
         }
@@ -225,8 +227,17 @@ void __interrupt() timer0_isr(void) {
         if (g_adc_scan_index >= 8) {
             g_adc_scan_index = 0;
         }
+        /* Select the next channel now; the actual conversion is kicked off from the
+           next Timer0 tick below, well after the channel mux has settled, so no
+           blocking acquisition delay is needed here (this used to busy-wait inside
+           the ISR, starving the main loop of CPU time). */
         ADPCH = g_adc_scan_channels[g_adc_scan_index];
-        __delay_us(ADC_ACQUISITION_US);
+    }
+
+    /* Pace one ADC conversion per timer tick (~1 ms) instead of re-arming immediately
+       after each conversion completes, so the main loop always gets CPU time between
+       conversions regardless of how fast the ADC itself runs. */
+    if (tick && ADCON0bits.GO_nDONE == 0) {
         ADCON0bits.GO_nDONE = 1;
     }
 

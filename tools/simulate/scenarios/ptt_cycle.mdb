@@ -1,0 +1,21 @@
+write pin RC0 high
+Stepi 200000
+print pin RC0
+print PORTC
+print pin RC5
+print pin RC6
+print pin RC7
+write pin RC0 low
+Stepi 500000
+print pin RC0
+print PORTC
+print pin RC5
+print pin RC6
+print pin RC7
+write pin RC0 high
+Stepi 500000
+print pin RC0
+print PORTC
+print pin RC5
+print pin RC6
+print pin RC7

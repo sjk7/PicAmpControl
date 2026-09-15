@@ -1,0 +1,11 @@
+write pin RC0 low
+break set_tx_output
+break set_tx_vcc_output
+break set_tx_bias_output
+Stopwatch nror
+Run
+Stopwatch
+Continue
+Stopwatch
+Continue
+Stopwatch

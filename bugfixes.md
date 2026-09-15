@@ -4,6 +4,32 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-15 — ADC ISR self-re-arm starved the main loop of CPU time
+
+Found via MPLAB X simulation (see Ai-Notes.txt "Simulation" section): with PTT
+asserted and no faults present, `update_tx_sequence()`/`update_protection_state()`
+never ran even once after 30+ simulated seconds - the CPU was always caught inside
+the interrupt vector on `Halt`, and the debug console was flooded with continuous
+`W0223-ADC` underflow warnings. Root cause: `timer0_isr()`'s ADC branch (added in the
+2026-09-12 entry below) immediately re-armed the next conversion
+(`ADCON0bits.GO_nDONE = 1`) right after each conversion completed, with a blocking
+`__delay_us(ADC_ACQUISITION_US)` in between - all from inside the ISR. This created a
+back-to-back interrupt chain with no guaranteed idle time for the main loop between
+conversions.
+Fix: the ADC branch of `timer0_isr()` now only captures the completed sample and
+selects the next channel; it no longer calls `__delay_us()` or re-arms the
+conversion. Re-arming (`GO_nDONE = 1`) now happens only once per Timer0 tick
+(~1 ms), gated by a new `tick` flag set from the `TMR0IF` branch. This paces the
+8-channel scan to a full cycle every ~8 ms (still fast enough for this application)
+and guarantees the main loop gets to run for the bulk of each 1 ms tick period
+between conversions, regardless of how fast the ADC itself completes. Also removed
+the now-redundant acquisition delay's dependency on the ISR: the ~1 ms natural gap
+between ticks is vastly longer than the 5 us settle time it replaced, so no
+functional accuracy regression versus the 2026-09-12 fix.
+Verified via `tools/simulate/run_sim.ps1`: main-loop breakpoints (e.g.
+`update_protection_state`) now hit normally and the PC advances through real code
+between `Halt`s, instead of being stuck at the interrupt vector.
+
 ## 2026-09-12 — Added ADC acquisition delay after channel switch
 
 Per the timing-budget review in docs/hardware/bench-validation.md, the ADC ISR in
