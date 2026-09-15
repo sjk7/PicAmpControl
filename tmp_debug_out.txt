@@ -1,0 +1,539 @@
+device PIC16F18855
+
+hwtool sim
+
+W0106-SIM: This device only has partial support for TMR1 peripheral. Use internal oscillator as timer clock slection is not implemented
+W0106-SIM: This device only has partial support for TMR3 peripheral. Use internal oscillator as timer clock slection is not implemented
+W0106-SIM: This device only has partial support for TMR5 peripheral. Use internal oscillator as timer clock slection is not implemented
+Resetting SFRs
+Resetting peripherals
+
+program E:/hamcode/PicAmpControl/out/My_Pic_Project/default.hex
+Programming target...
+W0106-SIM: This device only has partial support for TMR1 peripheral. Use internal oscillator as timer clock slection is not implemented
+W0106-SIM: This device only has partial support for TMR3 peripheral. Use internal oscillator as timer clock slection is not implemented
+W0106-SIM: This device only has partial support for TMR5 peripheral. Use internal oscillator as timer clock slection is not implemented
+Resetting SFRs
+Resetting peripherals
+Resetting SFRs
+Resetting peripherals
+Program succeeded.
+write pin RA5 2.5v
+
+write pin RA0 0v
+
+write pin RA1 0v
+
+write pin RA2 0v
+
+write pin RA3 0v
+
+write pin RB1 0v
+
+write pin RB2 0v
+
+write pin RB3 0v
+
+write pin RB4 0v
+
+write pin RC0 5v
+
+Stepi 20000
+W0223-ADC: ADC input voltage low.  ADC output underflow.
+Stop at
+	address:0x154a
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x154b
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x154a
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x154b
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x154a
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x154b
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x154b
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x154a
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x154b
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x154a
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x154b
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x154a
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x154b
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x7fb
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1573
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x195
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1597
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1197
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1199
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x7fc
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1519
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x153a
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x7fb
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x7fc
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1520
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x7fc
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x159a
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x166d
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x7fb
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x7fd
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0xf2b
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1689
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x98e
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1195
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x118f
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1766
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1528
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x7fc
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1793
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x7fc
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1781
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x969
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x177e
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x178f
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x177f
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x178d
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x972
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x178b
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1793
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x178c
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1790
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x975
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x178e
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1797
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x178f
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1794
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x978
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1792
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x176b
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+Stepi 20000
+Stop at
+	address:0x1793
+
+print pin RC1
+Pin	Mode	Value	Owner or Mapping
+RC1	Aout	5.0V	(RC1)/IOCC1/ANC1/SOSCI
+
+quit
+
+Sep 15, 2026 5:40:48 PM org.jline.utils.Log logr
+WARNING: Unable to create a system terminal, creating a dumb terminal (enable debug logging for more information)
+Sep 15, 2026 5:40:49 PM com.microchip.mplab.mdbcore.platformtool.PlatformToolMetaManager init
+INFO: Could not read file: MultiFileObject@53fdffa1[Embedded/PlatformTool/seggerjlink]
+Sep 15, 2026 5:40:49 PM com.microchip.mplab.mdbcore.platformtool.PlatformToolMetaManager init
+INFO: Could not read file: MultiFileObject@32ee6fee[Embedded/PlatformTool/segger-samice]
+Sep 15, 2026 5:40:49 PM org.openide.util.NbPreferences getPreferencesProvider
+WARNING: NetBeans implementation of Preferences not found
+Sep 15, 2026 5:40:49 PM com.microchip.mplab.nativeloader.NativeLoader loadNativeLibrary
+INFO: Library resource path: libs\USBAccessLink.dll
+Sep 15, 2026 5:40:49 PM com.microchip.mplab.comm.MPLABCommUSBAccess setSystemVersionVariables
+INFO: USBAccess 3.51.4
+Sep 15, 2026 5:40:49 PM com.microchip.mplab.nativeloader.NativeLoader loadNativeLibrary
+INFO: Library resource path: libs\SerialAccessLink.dll
+Sep 15, 2026 5:40:49 PM com.microchip.mplab.comm.MPLABCommUSBAccess setSystemVersionVariables
+INFO: SerialAccess 3.19.0

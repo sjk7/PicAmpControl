@@ -972,6 +972,7 @@ int main(void) {
                 g_startup_elapsed_ms++;
                 if (g_startup_elapsed_ms >= 1000) {
                     g_startup_inhibit = false;
+                    start_comparator_reset();
                 }
             } else {
                 update_power_decay(1);

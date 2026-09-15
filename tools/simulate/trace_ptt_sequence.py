@@ -26,11 +26,16 @@ SECONDS_PER_INSTRUCTION = 4 / XTAL_FREQ  # approx; 1 instruction cycle = 4 osc c
 
 STEP_SIZE = 2000
 PHASES = [
-    # PTT idle (inactive, active-low); held past the ~1s startup-inhibit settle
-    # (see g_startup_elapsed_ms in main.c) before PTT is allowed to assert.
-    ("steady", "high", 45, 180000),
-    ("asserted", "low", 300, STEP_SIZE),  # PTT pressed; covers both ~20ms sequencer delays
-    ("released", "high", 100, STEP_SIZE),  # PTT released again
+    # PTT idle (inactive, active-low), coarsely stepped through the bulk of
+    # the ~1s startup-inhibit wait (see g_startup_elapsed_ms in main.c).
+    ("steady_coarse", "5v", 22, 180000),  # ~495ms
+    # Finer-grained stepping across the 1000ms boundary (with margin for
+    # init overhead: lcd_init/adc_init delays before the main loop's ms
+    # clock starts) so the ~10ms SETTLE (comparator reset) pulse isn't
+    # skipped between samples.
+    ("steady_mid", "5v", 402, 20000),  # ~495ms -> ~1500ms, 2.5ms/sample
+    ("asserted", "0v", 300, STEP_SIZE),  # PTT pressed; covers both ~20ms sequencer delays
+    ("released", "5v", 100, STEP_SIZE),  # PTT released again
 ]
 PINS = ["RC1", "RC0", "RC5", "RC6", "RC7"]
 PIN_LABELS = {"RC1": "SETTLE", "RC0": "PTT", "RC5": "TX", "RC6": "TX_VCC", "RC7": "TX_BIAS"}
@@ -47,6 +52,18 @@ def find_mdb() -> Path:
 
 def build_script() -> str:
     lines = [f"device {DEVICE}", "hwtool sim", f"program {HEX_PATH}"]
+    # RA5 feeds the NTC temp ADC; left floating it reads ~0 raw, which
+    # temperature_c() maps to 150C, latching a false thermal trip that blocks
+    # TX for the whole run. Bias it to ~2.5V (a plausible room-temp reading).
+    lines.append("write pin RA5 2.5v")
+    # SWR fwd/ref, current, overdrive, and drain ADC inputs float otherwise,
+    # which can read as spurious power/fault levels and latch a trip that
+    # blocks TX; bias them to 0V (idle/no-fault) so PTT is free to sequence.
+    for pin in ("RA0", "RA1", "RA2", "RA3", "RB1", "RB2", "RB3"):
+        lines.append(f"write pin {pin} 0v")
+    # RB4 is the active-high hardware overcurrent-fault input; floating it can
+    # read as an asserted fault and latch a trip that blocks TX indefinitely.
+    lines.append("write pin RB4 0v")
     for _, level, count, step_size in PHASES:
         lines.append(f"write pin RC0 {level}")
         for _ in range(count):
@@ -131,7 +148,7 @@ def main():
         ax.set_yticks([0, 1])
         ax.set_ylabel(PIN_LABELS[pin], rotation=0, labelpad=30, va="center")
         ax.grid(True, alpha=0.3)
-    axes[0].set_xlim(990, times[-1])  # crop the startup-inhibit settle wait out of view
+    axes[0].set_xlim(480, times[-1])  # crop the coarse startup-inhibit wait out of view
     axes[-1].set_xlabel("time (ms, approx)")
     fig.suptitle("PTT assert/release sequencing (simulated)")
     fig.tight_layout()
