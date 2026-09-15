@@ -11,6 +11,7 @@ measurement.
 
 Usage:
     python tools/simulate/trace_ptt_sequence.py
+    python tools/simulate/trace_ptt_sequence.py --test
 Requires: MPLAB X IDE (mdb), and matplotlib (pip install matplotlib) for the PNG output.
 """
 import re
@@ -150,6 +151,34 @@ def block_reason(state: dict) -> str | None:
     return None
 
 
+def validate_sequence(samples) -> None:
+    """Fail when startup inhibit or either PTT sequencing direction is wrong."""
+    startup_samples = [sample for sample in samples if sample[2]["g_startup_inhibit"] == "true"]
+    if not any(sample[1]["RC0"] == 0 and all(sample[1][pin] == 1 for pin in ("RC5", "RC6", "RC7"))
+               for sample in startup_samples):
+        raise AssertionError("PTT was not ignored during startup inhibit")
+
+    active_samples = [sample for sample in samples
+                      if sample[2]["g_ptt_active"] == "true" and sample[2]["g_sequence_stage"] == "3"]
+    if not active_samples:
+        raise AssertionError("PTT active sequence did not reach stage 3")
+    active = active_samples[0][1]
+    if (active["RC5"], active["RC6"], active["RC7"]) != (0, 0, 0):
+        raise AssertionError("active sequence did not drive RELAYS, TX_VCC, TX_BIAS low")
+
+    release_samples = [sample for sample in samples if sample[2]["g_ptt_active"] == "false"]
+    release_stage4 = next((sample for sample in release_samples if sample[2]["g_sequence_stage"] == "4"), None)
+    release_stage5 = next((sample for sample in release_samples if sample[2]["g_sequence_stage"] == "5"), None)
+    release_done = next((sample for sample in release_samples if sample[2]["g_sequence_stage"] == "0"
+                         and sample[1]["RC5"] == 1 and sample[1]["RC6"] == 1 and sample[1]["RC7"] == 1), None)
+    if release_stage4 is None or release_stage4[1]["RC5"] != 1 or release_stage4[1]["RC6"] != 0 or release_stage4[1]["RC7"] != 0:
+        raise AssertionError("release did not raise RELAYS first")
+    if release_stage5 is None or release_stage5[1]["RC5"] != 1 or release_stage5[1]["RC6"] != 1 or release_stage5[1]["RC7"] != 0:
+        raise AssertionError("release did not raise TX_VCC second")
+    if release_done is None:
+        raise AssertionError("release did not raise TX_BIAS last")
+
+
 def parse_trace(output: str):
     """Walks the mdb transcript in order, tracking cumulative instruction count and
     each pin's/variable's most-recently-printed value, sampling a full snapshot every
@@ -186,6 +215,7 @@ def parse_trace(output: str):
 
 
 def main():
+    test_mode = "--test" in sys.argv[1:]
     if not ELF_PATH.exists():
         sys.exit(f"error: {ELF_PATH} not found - build firmware first (build_firmware.ps1/.sh)")
     mdb_path = find_mdb()
@@ -194,6 +224,9 @@ def main():
     samples = parse_trace(output)
     if not samples:
         sys.exit("error: no samples parsed from mdb output - dumping raw output:\n" + output[-4000:])
+    if test_mode:
+        validate_sequence(samples)
+        print("PTT sequencing test passed")
 
     out_dir = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"
     out_dir.mkdir(parents=True, exist_ok=True)
