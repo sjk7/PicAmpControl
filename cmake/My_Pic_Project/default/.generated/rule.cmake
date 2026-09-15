@@ -1,6 +1,12 @@
 # The following functions contains all the flags passed to the different build stages.
 
-set(PACK_REPO_PATH "$ENV{HOME}/.mchp_packs" CACHE PATH "Path to the root of a pack repository.")
+# $ENV{HOME} is not set on Windows; fall back to $ENV{USERPROFILE} there.
+if(DEFINED ENV{HOME})
+    set(_PACK_REPO_HOME "$ENV{HOME}")
+else()
+    set(_PACK_REPO_HOME "$ENV{USERPROFILE}")
+endif()
+set(PACK_REPO_PATH "${_PACK_REPO_HOME}/.mchp_packs" CACHE PATH "Path to the root of a pack repository.")
 
 function(My_Pic_Project_default_default_XC8_assemble_rule target)
     set(options

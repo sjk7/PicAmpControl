@@ -1,15 +1,30 @@
 # This file configures the compiler to use with CMake.
 
 set(CMAKE_C_COMPILER_WORKS YES CACHE BOOL "Tell CMake that the compiler works, but cannot be run during the configuration stage")
-set(XC8_BIN_DIR "$ENV{HOME}/tools/microchip/xc8/v4.00/xc8-v4.00/bin" CACHE PATH "Path to the XC8 compiler binaries")
+# Cross-platform XC8 discovery: prefer an explicit XC8_BIN_DIR (env or -D), else fall back to
+# each OS's default install location (macOS: XC8 unpacked under $HOME/tools; Windows: MPLAB's
+# standard Program Files install). $ENV{HOME} is not set on Windows, so it must not be relied on.
+if(DEFINED ENV{XC8_BIN_DIR})
+    set(_XC8_BIN_DIR_DEFAULT "$ENV{XC8_BIN_DIR}")
+elseif(WIN32)
+    set(_XC8_BIN_DIR_DEFAULT "C:/Program Files/Microchip/xc8/v4.00/bin")
+else()
+    set(_XC8_BIN_DIR_DEFAULT "$ENV{HOME}/tools/microchip/xc8/v4.00/xc8-v4.00/bin")
+endif()
+set(XC8_BIN_DIR "${_XC8_BIN_DIR_DEFAULT}" CACHE PATH "Path to the XC8 compiler binaries")
+if(WIN32)
+    set(_XC8_EXE_SUFFIX ".exe")
+else()
+    set(_XC8_EXE_SUFFIX "")
+endif()
 set(MP_CC "${XC8_BIN_DIR}/xc8-cc" CACHE STRING "Legacy variable from MPLAB X pointing to the compiler")
 set(MP_CC_DIR "${XC8_BIN_DIR}" CACHE STRING "Legacy variable from MPLAB X pointing to the compiler base directory")
-set(CMAKE_C_COMPILER "${XC8_BIN_DIR}/xc8-cc" CACHE FILEPATH "Path to the compiler binary")
+set(CMAKE_C_COMPILER "${XC8_BIN_DIR}/xc8-cc${_XC8_EXE_SUFFIX}" CACHE FILEPATH "Path to the compiler binary")
 
 set(CMAKE_ASM_COMPILER_WORKS YES CACHE BOOL "Tell CMake that the assembler works, but cannot be run during the configuration stage")
 set(MP_AS "${XC8_BIN_DIR}/xc8-cc" CACHE STRING "Legacy variable from MPLAB X pointing to the assembler")
 set(MP_AS_DIR "${XC8_BIN_DIR}" CACHE STRING "Legacy variable from MPLAB X pointing to the assembler base directory")
-set(CMAKE_ASM_COMPILER "${XC8_BIN_DIR}/xc8-cc" CACHE FILEPATH "Path to the compiler binary.")
+set(CMAKE_ASM_COMPILER "${XC8_BIN_DIR}/xc8-cc${_XC8_EXE_SUFFIX}" CACHE FILEPATH "Path to the compiler binary.")
 set(MP_AS "${CMAKE_ASM_COMPILER}" CACHE STRING "Legacy variable from MPLAB X pointing to the assembler binary.")
 
 set(MP_LD "${XC8_BIN_DIR}/xc8-cc" CACHE STRING "Legacy variable from MPLAB X pointing to the linker binary.")
@@ -18,9 +33,9 @@ set(MP_LD_DIR "${XC8_BIN_DIR}" CACHE STRING "Legacy variable from MPLAB X pointi
 set(MP_AR "${XC8_BIN_DIR}/xc8-ar" CACHE STRING "Legacy variable from MPLAB X pointing to the archiver binary.")
 set(MP_AR_DIR "${XC8_BIN_DIR}" CACHE STRING "Legacy variable from MPLAB X pointing to the archiver base directory")
 
-set(CMAKE_AR "${XC8_BIN_DIR}/xc8-ar" CACHE FILEPATH "Path to the archiver binary.")
+set(CMAKE_AR "${XC8_BIN_DIR}/xc8-ar${_XC8_EXE_SUFFIX}" CACHE FILEPATH "Path to the archiver binary.")
 
-set(OBJDUMP "${XC8_BIN_DIR}/pic-objdump" CACHE FILEPATH "Path to objdump executable")
+set(OBJDUMP "${XC8_BIN_DIR}/pic-objdump${_XC8_EXE_SUFFIX}" CACHE FILEPATH "Path to objdump executable")
 
 set(CMAKE_RANLIB "" CACHE FILEPATH "Do not run ranlib")
 set(CMAKE_C_ARCHIVE_CREATE "<CMAKE_AR> <LINK_FLAGS> <TARGET> <OBJECTS>")
