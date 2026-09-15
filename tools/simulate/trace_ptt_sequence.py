@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
-"""Captures a scope-like trace of PTT/TX/TX_VCC/TX_BIAS pins across a PTT assert/release
-cycle by single-stepping the MPLAB X `mdb` simulator and polling pin state at fixed
-instruction intervals, then renders a logic-analyzer-style PNG.
+pre#!/usr/bin/env python3
+pre#!/usr/bin/env python3
 
 Timing is approximate: instruction counts are converted to seconds assuming one
 instruction cycle per Stepi step at _XTAL_FREQ/4 (see firmware/include/pin_map.h).
@@ -49,24 +47,14 @@ def build_script() -> str:
         lines.append(f"write pin RC0 {level}")
         for _ in range(count):
             lines.append(f"Stepi {STEP_SIZE}")
-            for pin in PINS:
-                lines.append(f"print pin {pin}")
-    lines.append("quit")
-    return "\n".join(lines)
+    for _, level, count in PHASES:
+        lines.append(f"write pin RC0 {level}")
+        for _ in range(count):
+        lines.append("Stepi 8000")
 
 
-def run_mdb(mdb_path: Path, script: str) -> str:
-    with tempfile.NamedTemporaryFile("w", suffix=".mdb", delete=False) as f:
-        f.write(script)
-        script_path = f.name
     try:
         result = subprocess.run(
-            [str(mdb_path), script_path], capture_output=True, text=True, check=False
-        )
-        return result.stdout + result.stderr
-    finally:
-        Path(script_path).unlink(missing_ok=True)
-
 
 PRINT_RE = re.compile(r"^(R[A-Z]\d+)\s+\S+\s+([\d.]+)V", re.MULTILINE)
 
@@ -137,3 +125,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

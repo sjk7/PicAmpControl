@@ -42,3 +42,4 @@
 #define OUTPUT_TRIP_STATUS PORTBbits.RB7
 
 #endif
+
