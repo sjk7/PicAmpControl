@@ -26,9 +26,11 @@ SECONDS_PER_INSTRUCTION = 4 / XTAL_FREQ  # approx; 1 instruction cycle = 4 osc c
 
 STEP_SIZE = 2000
 PHASES = [
-    ("steady", "high", 50),   # PTT idle (inactive, active-low) before asserting
-    ("asserted", "low", 300),  # PTT pressed; covers both ~20ms sequencer delays
-    ("released", "high", 100),  # PTT released again
+    # PTT idle (inactive, active-low); held past the ~1s startup-inhibit settle
+    # (see g_startup_elapsed_ms in main.c) before PTT is allowed to assert.
+    ("steady", "high", 45, 180000),
+    ("asserted", "low", 300, STEP_SIZE),  # PTT pressed; covers both ~20ms sequencer delays
+    ("released", "high", 100, STEP_SIZE),  # PTT released again
 ]
 PINS = ["RC1", "RC0", "RC5", "RC6", "RC7"]
 PIN_LABELS = {"RC1": "SETTLE", "RC0": "PTT", "RC5": "TX", "RC6": "TX_VCC", "RC7": "TX_BIAS"}
@@ -45,10 +47,10 @@ def find_mdb() -> Path:
 
 def build_script() -> str:
     lines = [f"device {DEVICE}", "hwtool sim", f"program {HEX_PATH}"]
-    for _, level, count in PHASES:
+    for _, level, count, step_size in PHASES:
         lines.append(f"write pin RC0 {level}")
         for _ in range(count):
-            lines.append(f"Stepi {STEP_SIZE}")
+            lines.append(f"Stepi {step_size}")
             for pin in PINS:
                 lines.append(f"print pin {pin}")
     lines.append("quit")
@@ -69,6 +71,7 @@ def run_mdb(mdb_path: Path, script: str) -> str:
 
 
 PRINT_RE = re.compile(r"^(R[A-Z]\d+)\s+\S+\s+([\d.]+)V", re.MULTILINE)
+STEPI_RE = re.compile(r"^Stepi\s+(\d+)")
 
 
 def parse_trace(output: str):
@@ -79,8 +82,9 @@ def parse_trace(output: str):
     instr_count = 0
     pending = {}
     for line in output.splitlines():
-        if line.startswith("Stepi"):
-            instr_count += STEP_SIZE
+        m_stepi = STEPI_RE.match(line.strip())
+        if m_stepi:
+            instr_count += int(m_stepi.group(1))
             continue
         m = PRINT_RE.match(line.strip())
         if m:
@@ -127,6 +131,7 @@ def main():
         ax.set_yticks([0, 1])
         ax.set_ylabel(PIN_LABELS[pin], rotation=0, labelpad=30, va="center")
         ax.grid(True, alpha=0.3)
+    axes[0].set_xlim(990, times[-1])  # crop the startup-inhibit settle wait out of view
     axes[-1].set_xlabel("time (ms, approx)")
     fig.suptitle("PTT assert/release sequencing (simulated)")
     fig.tight_layout()
