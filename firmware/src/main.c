@@ -790,30 +790,28 @@ void update_tx_sequence(void) {
         return;
     }
 
-    // PTT released: unwind whatever stage we reached in the reverse order it was
-    // brought up (bias off -> delay -> vcc off -> delay -> tx off), rather than
-    // dropping every output at once.
+    // PTT released: open relays first, then remove VCC and bias in order.
     if (g_sequence_stage == 3) {
-        set_tx_bias_output(false);
+        set_tx_output(false);
         g_sequence_elapsed_ms = 0;
         g_sequence_stage = 4;
     } else if (g_sequence_stage == 4) {
         g_sequence_elapsed_ms++;
-        if (g_sequence_elapsed_ms >= g_thresholds.tx_bias_delay_ms) {
+        if (g_sequence_elapsed_ms >= g_thresholds.tx_vcc_delay_ms) {
             set_tx_vcc_output(false);
             g_sequence_elapsed_ms = 0;
             g_sequence_stage = 5;
         }
-    } else if (g_sequence_stage == 2) {
-        set_tx_vcc_output(false);
-        g_sequence_elapsed_ms = 0;
-        g_sequence_stage = 5;
     } else if (g_sequence_stage == 5) {
         g_sequence_elapsed_ms++;
-        if (g_sequence_elapsed_ms >= g_thresholds.tx_vcc_delay_ms) {
-            set_tx_output(false);
+        if (g_sequence_elapsed_ms >= g_thresholds.tx_bias_delay_ms) {
+            set_tx_bias_output(false);
             g_sequence_stage = 0;
         }
+    } else if (g_sequence_stage == 2) {
+        set_tx_output(false);
+        g_sequence_elapsed_ms = 0;
+        g_sequence_stage = 5;
     } else if (g_sequence_stage == 1) {
         set_tx_output(false);
         g_sequence_stage = 0;

@@ -56,7 +56,7 @@ PHASES = [
     ("released", "5v", 100, STEP_SIZE),  # PTT released again
 ]
 PINS = ["RC1", "RC0", "RC5", "RC6", "RC7"]
-PIN_LABELS = {"RC1": "SETTLE", "RC0": "PTT", "RC5": "TX", "RC6": "TX_VCC", "RC7": "TX_BIAS"}
+PIN_LABELS = {"RC1": "SETTLE", "RC0": "PTT", "RC5": "RELAYS", "RC6": "TX_VCC", "RC7": "TX_BIAS"}
 
 
 def find_mdb() -> Path:
@@ -104,8 +104,11 @@ def build_script() -> str:
     for _ in range(40):  # 5 ms steps for more TX sequencing, 40x5 = 200 ms
         lines.append("Stepi 40000")
         sample()
-    # --- Release PTT (RC0 back high) and step through the reverse teardown
-    # sequence (bias off -> delay -> vcc off -> delay -> tx off) ---
+    # Hold PTT low for 500 ms before releasing it.
+    for _ in range(100):
+        lines.append("Stepi 40000")
+        sample()
+    # --- Release PTT (RC0 back high): relays open, then VCC, then bias ---
     lines.append("write pin RC0 5v")
     for _ in range(40):  # 5 ms steps, 40x5 = 200 ms
         lines.append("Stepi 40000")
