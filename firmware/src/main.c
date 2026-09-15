@@ -186,7 +186,7 @@ static protection_thresholds_t g_thresholds = {
 };
 
 bool output_level(bool active, bool active_high) {
-    return active == active_high;
+    return active_high ? active : !active;
 }
 
 void set_tx_output(bool active) {
@@ -965,6 +965,7 @@ int main(void) {
     TRISAbits.TRISA2 = 1;
     TRISAbits.TRISA3 = 1;
     TRISAbits.TRISA5 = 1;
+    ANSELC = 0x00;
     TRISCbits.TRISC0 = 1;
     WPUCbits.WPUC0 = 1;
     TRISCbits.TRISC1 = 0;

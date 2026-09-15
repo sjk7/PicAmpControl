@@ -126,7 +126,7 @@ def run_mdb(mdb_path: Path, script: str) -> str:
         Path(script_path).unlink(missing_ok=True)
 
 
-PRINT_RE = re.compile(r"^(R[A-Z]\d+)\s+\S+\s+([\d.]+)V", re.MULTILINE)
+PRINT_RE = re.compile(r"^(R[A-Z]\d+)\s+\S+\s+(?:(HIGH|LOW)|([\d.]+)V)", re.MULTILINE)
 STEPI_RE = re.compile(r"^Stepi\s+(\d+)")
 VAR_NAME_RE = re.compile(r"^(g_\w+)=$")
 
@@ -173,8 +173,8 @@ def parse_trace(output: str):
             continue
         m = PRINT_RE.match(line)
         if m:
-            pin, volts = m.group(1), float(m.group(2))
-            pending[pin] = 1 if volts >= 2.5 else 0
+            pin, level, volts = m.groups()
+            pending[pin] = 1 if level == "HIGH" or (volts is not None and float(volts) >= 2.5) else 0
         if len(pending) == len(PINS) and len(state_pending) == len(STATE_VARS):
             samples.append((instr_count, dict(pending), dict(state_pending)))
             pending.clear()
