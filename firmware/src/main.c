@@ -125,6 +125,8 @@ static unsigned int g_menu_idle_ms = 0;
 static volatile bool g_settings_dirty = false;
 static unsigned int g_settings_save_delay_ms = 0;
 static volatile unsigned char g_adc_scan_index = 0;
+static volatile unsigned char g_adc_active_index = 0;
+static volatile bool g_overdrive_priority_slot = false;
 /* Defaults until the first real ADC scan completes for each channel: 0 (idle,
    no fault) for power/current/overdrive/drain, and a mid-scale ~2.5V reading
    for temp (raw 0 would otherwise map to a false 150C thermal trip). */
@@ -241,7 +243,7 @@ void __interrupt() timer0_isr(void) {
         unsigned int sample = (unsigned int)ADRES;
         PIR1bits.ADIF = 0;
 
-        switch (g_adc_scan_index) {
+        switch (g_adc_active_index) {
             case 0: g_adc_samples[0] = sample; break;
             case 1: g_adc_samples[1] = sample; break;
             case 2: g_adc_samples[2] = sample; break;
@@ -252,21 +254,23 @@ void __interrupt() timer0_isr(void) {
             default: g_adc_samples[7] = sample; break;
         }
 
-        g_adc_scan_index++;
-        if (g_adc_scan_index >= 8) {
-            g_adc_scan_index = 0;
-        }
-        /* Select the next channel now; the actual conversion is kicked off from the
-           next Timer2 tick below, well after the channel mux has settled, so no
-           blocking acquisition delay is needed here (this used to busy-wait inside
-           the ISR, starving the main loop of CPU time). */
-        ADPCH = g_adc_scan_channels[g_adc_scan_index];
     }
 
-    /* Pace one ADC conversion per timer tick (~1 ms) instead of re-arming immediately
-       after each conversion completes, so the main loop always gets CPU time between
-       conversions regardless of how fast the ADC itself runs. */
+    /* Prioritize overdrive on alternating ticks (~2 ms) while preserving a slower
+       round-robin scan for the other seven ADC channels. */
     if (tick && ADCON0bits.GO_nDONE == 0) {
+        if (!g_overdrive_priority_slot) {
+            g_adc_active_index = 6;
+            ADPCH = ADC_OVERDRIVE_CHANNEL;
+        } else {
+            g_adc_active_index = g_adc_scan_index;
+            ADPCH = g_adc_scan_channels[g_adc_scan_index];
+            g_adc_scan_index++;
+            if (g_adc_scan_index >= 8) {
+                g_adc_scan_index = 0;
+            }
+        }
+        g_overdrive_priority_slot = !g_overdrive_priority_slot;
         ADCON0bits.GO_nDONE = 1;
     }
 
@@ -448,11 +452,15 @@ void show_menu_page(void) {
             lcd_write_unsigned(g_thresholds.temp_trip_c);
             lcd_write_byte('C', true);
         } else if (g_trip_reason & TRIP_REASON_SWR1) {
-            lcd_write_text("SWR1 ");
-            lcd_write_swr_right(11, g_swr1_live_tenths);
-            lcd_set_cursor(1, 0);
-            lcd_write_text("MAX ");
-            lcd_write_swr_right(11, (unsigned int)g_thresholds.swr1_trip_tenths);
+            if (g_swr1_live_tenths >= 100) {
+                lcd_write_text("FLTR?? CHECK LPF");
+            } else {
+                lcd_write_text("SWR1 ");
+                lcd_write_swr_right(11, g_swr1_live_tenths);
+                lcd_set_cursor(1, 0);
+                lcd_write_text("MAX ");
+                lcd_write_swr_right(11, (unsigned int)g_thresholds.swr1_trip_tenths);
+            }
         } else if (g_trip_reason & TRIP_REASON_SWR2) {
             lcd_write_text("SWR2 ");
             lcd_write_swr_right(11, g_swr2_live_tenths);
