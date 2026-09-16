@@ -38,7 +38,10 @@
 // RB1 is ADC_CURRENT_CHANNEL (analog input, see above) - not a digital pin.
 #define INPUT_OVERCURRENT_FAULT PORTBbits.RB4
 #define OUTPUT_FAN_PWM PORTBbits.RB5
-#define INPUT_SPARE_4 PORTBbits.RB6
+#define OUTPUT_FILTER_BAND_0 PORTAbits.RA4
+#define OUTPUT_FILTER_BAND_1 PORTAbits.RA6
+#define OUTPUT_FILTER_BAND_2 PORTAbits.RA7
+#define OUTPUT_FILTER_BAND_3 PORTBbits.RB6
 #define OUTPUT_TRIP_STATUS PORTBbits.RB7
 
 #endif

@@ -23,6 +23,17 @@ typedef enum {
 } system_state_t;
 
 typedef enum {
+    BAND_NONE = 0,
+    BAND_160M,
+    BAND_80M,
+    BAND_40M,
+    BAND_20M,
+    BAND_15M,
+    BAND_10M,
+    BAND_6M
+} filter_band_t;
+
+typedef enum {
     MENU_PAGE_STATUS = 0,
     MENU_PAGE_POWER_TEMPERATURE,
     MENU_PAGE_SWR1_TRIP,
@@ -207,6 +218,27 @@ static protection_thresholds_t g_thresholds = {
 
 bool output_level(bool active, bool active_high) {
     return active_high ? active : !active;
+}
+
+void set_filter_band(filter_band_t band) {
+    unsigned char code = 0;
+
+    switch (band) {
+        case BAND_160M: code = 0x1; break;
+        case BAND_80M:  code = 0x2; break;
+        case BAND_40M:  code = 0x3; break;
+        case BAND_20M:  code = 0x4; break;
+        case BAND_15M:  code = 0x5; break;
+        case BAND_10M:  code = 0x6; break;
+        case BAND_6M:  code = 0x7; break;
+        case BAND_NONE:
+        default:       code = 0x0; break;
+    }
+
+    OUTPUT_FILTER_BAND_0 = (code >> 0) & 1U;
+    OUTPUT_FILTER_BAND_1 = (code >> 1) & 1U;
+    OUTPUT_FILTER_BAND_2 = (code >> 2) & 1U;
+    OUTPUT_FILTER_BAND_3 = (code >> 3) & 1U;
 }
 
 void set_tx_output(bool active) {
@@ -578,6 +610,7 @@ void show_boot_message(void) {
 void adc_init(void) {
     FVRCON = 0x00;
     ANSELA = 0x2F;
+    ANSELA &= ~0x10; /* RA4 is reserved for the coarse LPF band-select bus */
     ANSELB = 0x0E;
     ADCON1 = 0x20;
     ADPCH = 0;
@@ -1100,7 +1133,10 @@ int main(void) {
     TRISAbits.TRISA1 = 1;
     TRISAbits.TRISA2 = 1;
     TRISAbits.TRISA3 = 1;
+    TRISAbits.TRISA4 = 0;
     TRISAbits.TRISA5 = 1;
+    TRISAbits.TRISA6 = 0;
+    TRISAbits.TRISA7 = 0;
     ANSELC = 0x00;
     TRISCbits.TRISC0 = 1;
     WPUCbits.WPUC0 = 1;
@@ -1113,9 +1149,11 @@ int main(void) {
     TRISCbits.TRISC7 = 0;
 
     TRISB = 0x5F;
+    TRISBbits.TRISB6 = 0;
     PORTB = 0x00;
     WPUB = 0x03;
 
+    set_filter_band(BAND_NONE);
     set_tx_output(false);
     set_tx_vcc_output(false);
     set_tx_bias_output(false);
