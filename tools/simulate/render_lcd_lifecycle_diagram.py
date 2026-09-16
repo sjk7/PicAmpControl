@@ -23,20 +23,27 @@ PANELS = [
 
 
 def lcd_panel(ax, x, y, title, line1, line2, note, accent):
-    width, height = 7.2, 2.05
+    cell_width = 0.39
+    screen_width = cell_width * 16
+    width, height = screen_width + 0.72, 2.05
     line1 = line1[:16].ljust(16)
     line2 = line2[:16].ljust(16)
     ax.add_patch(FancyBboxPatch((x, y), width, height, boxstyle="round,pad=0.04,rounding_size=0.08",
                                 linewidth=1.4, edgecolor="#263238", facecolor="#263238"))
-    screen = Rectangle((x + 0.22, y + 0.38), width - 0.44, 1.42,
-                       linewidth=1, edgecolor="#58705a", facecolor="#b9d59b")
-    ax.add_patch(screen)
+    screen_x, screen_y = x + 0.36, y + 0.38
+    for row, text in enumerate((line1, line2)):
+        for column, character in enumerate(text):
+            cell = Rectangle((screen_x + column * cell_width, screen_y + (1 - row) * 0.5),
+                             cell_width, 0.5, linewidth=0.35,
+                             edgecolor="#91ae78", facecolor="#b9d59b")
+            ax.add_patch(cell)
+            if character != " ":
+                ax.text(screen_x + (column + 0.5) * cell_width,
+                        screen_y + (1 - row) * 0.5 + 0.25,
+                        character, ha="center", va="center", fontsize=15,
+                        family="monospace", color="#1d2b1e")
     ax.text(x + width / 2, y + height + 0.16, title, ha="center", va="bottom", fontsize=11,
             color=accent, weight="bold")
-    ax.text(x + 0.52, y + 1.28, line1, ha="left", va="center",
-            fontsize=18, family="monospace", color="#1d2b1e")
-    ax.text(x + 0.52, y + 0.78, line2, ha="left", va="center",
-            fontsize=18, family="monospace", color="#1d2b1e")
     ax.text(x + width / 2, y + 0.14, note, ha="center", va="center", fontsize=7, color="#455a64")
 
 
