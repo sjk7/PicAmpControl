@@ -10,6 +10,8 @@ CI/release workflows change - don't let it go stale.
 - Keep README.md and docs/ purely current-facing: no "old prototype was replaced by..." style historical narrative. Historical context belongs only in prototype_reference/.
 - Never run bare `git status`/`git status --short`; use `git --no-pager status --short` (avoids hitting an interactive pager or the `gcm-core` credential helper prompt).
 - Any new "remember this" instruction from the user must be added to this section, not just kept in assistant memory.
+- `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their active-low levels; keep it transient, then restore the user's saved home page.
+- Keep verified changes committed and pushed promptly; generated simulator CSVs belong in `_build/My_Pic_Project/sim/csv/` and graphs in `_build/My_Pic_Project/sim/graphs/`.
 
 ## Date
 2026-09-15

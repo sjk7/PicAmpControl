@@ -257,6 +257,10 @@ def validate_sequence(samples) -> None:
     active = active_samples[0][1]
     if (active["RC5"], active["RC6"], active["RC7"]) != (0, 0, 0):
         raise AssertionError("active sequence did not drive RELAYS, TX_VCC, TX_BIAS low")
+    complete_display = next((sample for sample in samples
+                             if sample[2]["g_ptt_complete_display_active"] == "true"), None)
+    if complete_display is None or (complete_display[1]["RC5"], complete_display[1]["RC6"], complete_display[1]["RC7"]) != (0, 0, 0):
+        raise AssertionError("PTT COMPLETE was displayed before all TX outputs went low")
 
     release_samples = [sample for sample in samples if sample[2]["g_ptt_active"] == "false"]
     release_stage4 = next((sample for sample in release_samples if sample[2]["g_sequence_stage"] == "4"), None)
