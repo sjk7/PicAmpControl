@@ -17,6 +17,12 @@ PANELS = [
     ("PTT_COMPLETE", "PTT COMPLETE    ", "TX ACTIVE       ", "Shown only after RELAYS, TX_VCC, and TX_BIAS are all active"),
     ("HOME PAGE RESTORED", "P=   0W SWR=1.0", "----------------", "Restored 500 ms after PTT_COMPLETE"),
     ("TRIP: TEMPERATURE", "FAULT:          ", "TEMP            ", "Fault display has priority and remains until temperature recovery"),
+    ("TRIP: SWR1", "FAULT:          ", "SWR1            ", "Individual SWR1 trip"),
+    ("TRIP: SWR2", "FAULT:          ", "SWR2            ", "Individual SWR2 trip"),
+    ("TRIP: HARDWARE", "FAULT:          ", "HWFLT           ", "Hardware comparator fault"),
+    ("TRIP: CURRENT", "FAULT:          ", "AMPS            ", "WCS1700 current trip"),
+    ("TRIP: OVERDRIVE", "FAULT:          ", "OVDR            ", "Overdrive trip"),
+    ("TRIP: DRAIN", "FAULT:          ", "DRN             ", "Trip example: 150 V limit; ADC full scale 300 V at 5 V"),
     ("TRIP: ALL-FAULT EXAMPLE", "FAULT: ALL TRIPS", "S1 S2 HW A T O D ", "16x2 shorthand: SWR1, SWR2, HWFLT, AMPS, TEMP, OVDR, DRN"),
     ("TEMP RECOVERY", "P=   0W SWR=1.0", "----------------", "After hysteresis: comparator reset, then TX can sequence again"),
 ]
@@ -50,12 +56,12 @@ def lcd_panel(ax, x, y, title, line1, line2, note, accent):
 def main():
     fig, ax = plt.subplots(figsize=(18, 15))
     ax.set_xlim(0, 16)
-    ax.set_ylim(0, 15.5)
+    ax.set_ylim(0, 24.5)
     ax.axis("off")
     fig.patch.set_facecolor("white")
     ax.set_title("PIC AmpControl LCD lifecycle: exact 16x2 display states", fontsize=16, pad=18)
 
-    positions = [(0.55 + (index % 2) * 7.85, 12.15 - (index // 2) * 2.55)
+    positions = [(0.55 + (index % 2) * 7.85, 21.0 - (index // 2) * 2.55)
                  for index in range(len(PANELS))]
     for index, ((title, line1, line2, note), (x, y)) in enumerate(zip(PANELS, positions)):
         accent = "#b71c1c" if title.startswith("TRIP") else "#1565c0" if "PTT" in title else "#2e7d32"
