@@ -494,20 +494,25 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir):
     for start, end, reason in spans:
         for ax in axes:
             ax.axvspan(start, end, color="red", alpha=0.12)
-        axes[0].text((start + end) / 2, 1.28, reason, ha="center", fontsize=7, color="red")
     for marker_time, marker_label in lifecycle:
         axes[0].axvline(marker_time, color="steelblue", linestyle="-.", alpha=0.45)
-    for index, (marker_time, marker_label) in enumerate(lifecycle):
-        fig.text(0.02, 0.985 - index * 0.025,
-                 f"{marker_label} @ {marker_time:.1f} ms",
-                 ha="left", va="top", fontsize=7, color="steelblue")
     if trip_time is not None:
         axes[0].axvline(trip_time, color="red", linestyle="--", alpha=0.6)
+    events = [(time, label, "steelblue") for time, label in lifecycle]
+    events += [(times[span_start], reason, "red") for span_start, _end, reason in spans]
+    if trip_time is not None:
+        events += [(trip_time, "TX_VCC HIGH (immediate)", "red"),
+                   (shutdown_complete_time, "RELAYS HIGH (+5 ms)", "red"),
+                   (shutdown_complete_time, "TX_BIAS HIGH (+5 ms)", "red")]
+    for index, (event_time, event_label, color) in enumerate(events):
+        fig.text(0.02, 0.93 - index * 0.035,
+                 f"{event_label} @ {event_time:.1f} ms",
+                 ha="left", va="top", fontsize=7, color=color)
     axes[0].set_xlim(0, times[-1])
     axes[-1].set_xlabel("time (ms, approx)")
     title = f"PTT sequencing with {trip_name} trip (simulated)" if trip_name else "PTT assert/release sequencing (simulated)"
     fig.suptitle(title)
-    fig.tight_layout(rect=(0, 0, 1, 0.88))
+    fig.tight_layout(rect=(0, 0, 1, max(0.55, 0.93 - len(events) * 0.035)))
     graph_path = graph_dir / f"{trace_name}.png"
     fig.savefig(graph_path, dpi=120)
     plt.close(fig)
@@ -676,35 +681,25 @@ def main():
         if trip_name in TRIP_NAMES:
             ax.axvline(trip_time, color="red", linestyle="--", alpha=0.6)
             ax.axvline(shutdown_complete_time, color="orange", linestyle=":", alpha=0.7)
-    for start, end, reason in block_spans:
-        axes[0].text((start + end) / 2, 1.28, reason, ha="center", va="bottom",
-                     fontsize=7, color="red", clip_on=False)
-    if trip_name in TRIP_NAMES:
-        axes[2].annotate("2. RELAYS HIGH (+5 ms)",
-                         xy=(shutdown_complete_time, 1), xytext=(8, 12),
-                         textcoords="offset points", color="red", fontsize=8,
-                         arrowprops={"arrowstyle": "->", "color": "red"})
-        axes[3].annotate("1. TX_VCC HIGH (immediate)",
-                         xy=(trip_time, 1), xytext=(8, 12),
-                         textcoords="offset points", color="red", fontsize=8,
-                         arrowprops={"arrowstyle": "->", "color": "red"})
-        axes[4].annotate("3. TX_BIAS HIGH (+5 ms)",
-                         xy=(shutdown_complete_time, 1), xytext=(8, 12),
-                         textcoords="offset points", color="red", fontsize=8,
-                         arrowprops={"arrowstyle": "->", "color": "red"})
     for marker_time, marker_label in lifecycle:
         axes[0].axvline(marker_time, color="steelblue", linestyle="-.", alpha=0.45)
-    for marker_index, (marker_time, marker_label) in enumerate(lifecycle):
-        fig.text(0.02, 0.985 - marker_index * 0.025,
-                 f"{marker_label} @ {marker_time:.1f} ms",
-                 ha="left", va="top", fontsize=7, color="steelblue")
+    events = [(time, label, "steelblue") for time, label in lifecycle]
+    events += [(times[0], reason, "red") for _start, _end, reason in block_spans]
+    if trip_name in TRIP_NAMES:
+        events += [(trip_time, "TX_VCC HIGH (immediate)", "red"),
+                   (shutdown_complete_time, "RELAYS HIGH (+5 ms)", "red"),
+                   (shutdown_complete_time, "TX_BIAS HIGH (+5 ms)", "red")]
+    for event_index, (event_time, event_label, color) in enumerate(events):
+        fig.text(0.02, 0.93 - event_index * 0.035,
+                 f"{event_label} @ {event_time:.1f} ms",
+                 ha="left", va="top", fontsize=7, color=color)
     axes[0].set_xlim(0, times[-1])
     axes[-1].set_xlabel("time (ms, approx)")
     title = ("PTT sequencing with SWR1 1.5:1 no-trip (simulated)" if trip_name == "SWR1_1P5"
              else f"PTT sequencing with {trip_name} trip (simulated)" if trip_name
              else "PTT assert/release sequencing (simulated)")
     fig.suptitle(title)
-    fig.tight_layout(rect=(0, 0, 1, 0.88))
+    fig.tight_layout(rect=(0, 0, 1, max(0.55, 0.93 - len(events) * 0.035)))
     png_path = graph_dir / f"{trace_name}.png"
     fig.savefig(png_path, dpi=120)
     print(f"Wrote {png_path}")
