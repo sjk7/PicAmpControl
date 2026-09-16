@@ -282,6 +282,10 @@ def validate_trip(samples, trip_name) -> None:
         raise AssertionError(f"{trip_name} trip was not reported")
     if trip[2]["g_ptt_active"] != "true":
         raise AssertionError(f"{trip_name} trip did not occur while PTT was active")
+    fault_samples = [sample for sample in samples
+                     if (block_reason(sample[2]) or "").startswith("FAULT:")]
+    if any(sample[2]["g_ptt_complete_display_active"] == "true" for sample in fault_samples):
+        raise AssertionError(f"{trip_name} fault display was overwritten by PTT_COMPLETE")
     tx_active = next((sample for sample in samples
                       if sample[2]["g_sequence_stage"] == "3" and
                       (sample[1]["RC5"], sample[1]["RC6"], sample[1]["RC7"]) == (0, 0, 0)), None)

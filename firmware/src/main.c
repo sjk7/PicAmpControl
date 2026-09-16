@@ -425,14 +425,6 @@ void show_menu_page(void) {
     g_lcd_drawn_state = g_state;
     g_lcd_drawn_trip_reason = g_trip_reason;
 
-    if (g_ptt_complete_display_active) {
-        lcd_set_cursor(0, 0);
-        lcd_write_text("PTT COMPLETE");
-        lcd_set_cursor(1, 0);
-        lcd_write_text("TX ACTIVE");
-        return;
-    }
-
     if (g_state == STATE_TRIP) {
         if (!screen_changed) {
             return;
@@ -447,6 +439,13 @@ void show_menu_page(void) {
         if (g_trip_reason & TRIP_REASON_TEMP) lcd_write_text("TEMP ");
         if (g_trip_reason & TRIP_REASON_OVERDRIVE) lcd_write_text("OVDR ");
         if (g_trip_reason & TRIP_REASON_DRAIN) lcd_write_text("DRN ");
+        return;
+    }
+    if (g_ptt_complete_display_active) {
+        lcd_set_cursor(0, 0);
+        lcd_write_text("PTT COMPLETE");
+        lcd_set_cursor(1, 0);
+        lcd_write_text("TX ACTIVE");
         return;
     }
     if (g_menu_page == MENU_PAGE_STATUS) {
@@ -962,6 +961,9 @@ void update_protection_state(unsigned int temp_c,
             (drain_trip ? TRIP_REASON_DRAIN : 0));
         if (!g_fault_latched) {
             g_fault_latched = true;
+            g_ptt_complete_display_active = false;
+            g_ptt_complete_display_elapsed_ms = 0;
+            g_menu_changed = true;
             g_trip_shutdown_active = true;
             g_trip_shutdown_elapsed_ms = 0;
         }
@@ -1107,8 +1109,10 @@ int main(void) {
                 if (g_ptt_complete_display_elapsed_ms >= 500) {
                     g_ptt_complete_display_active = false;
                     g_ptt_complete_display_elapsed_ms = 0;
-                    g_transient_menu_display = false;
-                    g_menu_page = g_saved_user_menu_page;
+                    if (!g_fault_latched) {
+                        g_transient_menu_display = false;
+                        g_menu_page = g_saved_user_menu_page;
+                    }
                     g_menu_changed = true;
                 }
             }
