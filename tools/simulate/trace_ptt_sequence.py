@@ -232,7 +232,7 @@ def block_reason(state: dict) -> str | None:
     if state.get("g_startup_inhibit") == "true":
         return "STARTUP INHIBIT"
     if state.get("g_comparator_reset_active") == "true":
-        return "SETTLE PULSE"
+        return "PTT_RESET_PULSE"
     if state.get("g_fault_latched") == "true":
         try:
             reason_bits = int(state.get("g_trip_reason", "0"))
@@ -384,6 +384,94 @@ def parse_trace(output: str):
     return samples
 
 
+def write_trace_csv(samples, trace_name, csv_dir):
+    csv_path = csv_dir / f"{trace_name}.csv"
+    with open(csv_path, "w") as f:
+        f.write("time_s," + ",".join(PIN_LABELS[p] for p in PINS) +
+                "," + ",".join(f"ADC_{pin}_V" for pin in ADC_PINS) +
+                ",g_ptt_active,g_sequence_stage,g_state,block_reason\n")
+        for instr_count, vals, state, adc_voltages in samples:
+            t = instr_count * SECONDS_PER_INSTRUCTION
+            reason = block_reason(state) or ""
+            f.write(f"{t:.6f}," + ",".join(str(vals[p]) for p in PINS) +
+                    "," + ",".join(f"{adc_voltages[pin]:.3f}" for pin in ADC_PINS) +
+                    f",{state['g_ptt_active']},{state['g_sequence_stage']},{state['g_state']},{reason}\n")
+    return csv_path
+
+
+def write_trace_graph(samples, trip_name, trace_name, graph_dir):
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return None
+    times = [sample[0] * SECONDS_PER_INSTRUCTION * 1000 for sample in samples]
+    graph_adc_pins = TRIP_ADC_PINS.get(trip_name, []) if trip_name else []
+    graph_rows = [("digital", pin) for pin in PINS] + [("adc", pin) for pin in graph_adc_pins]
+    fig, axes = plt.subplots(len(graph_rows), 1, sharex=True,
+                             figsize=(10, max(6, len(graph_rows) * 1.25)))
+    axes = list(axes) if hasattr(axes, "__len__") else [axes]
+    trip_index = next((index for index, sample in enumerate(samples)
+                       if trip_name in TRIP_NAMES and block_reason(sample[2]) == f"FAULT: {trip_name}"), None)
+    trip_time = times[trip_index] if trip_index is not None else None
+    complete_index = next((index for index, sample in enumerate(samples)
+                           if sample[2]["g_ptt_complete_display_active"] == "true" and
+                           (sample[1]["RC5"], sample[1]["RC6"], sample[1]["RC7"]) == (0, 0, 0)), None)
+    lifecycle = [(times[0], "LCD: STARTUP")]
+    ptt_index = next((index for index, sample in enumerate(samples) if sample[2]["g_ptt_active"] == "true"), None)
+    if ptt_index is not None:
+        lifecycle.append((times[ptt_index], "LCD: PTT REQ"))
+    if complete_index is not None:
+        lifecycle.append((times[complete_index], "LCD: COMPLETE"))
+    if trip_time is not None:
+        lifecycle.append((trip_time, f"LCD: TRIP {trip_name}"))
+    for ax, (kind, pin) in zip(axes, graph_rows):
+        if kind == "digital":
+            ax.step(times, [sample[1][pin] for sample in samples], where="post")
+            ax.set_ylim(-0.2, 1.2)
+            ax.set_yticks([0, 1])
+            label = PIN_LABELS[pin]
+        else:
+            values = [sample[3][pin] for sample in samples]
+            ax.plot(times, values, drawstyle="steps-post")
+            ax.set_ylim(-0.2, 5.2)
+            label = f"ADC {ADC_LABELS[pin]}"
+            if trip_index is not None:
+                ax.annotate(f"{values[trip_index]:.3f} V", (times[trip_index], values[trip_index]),
+                            xytext=(8, 4), textcoords="offset points", fontsize=8)
+        ax.set_ylabel(f"{pin}\n{label}", rotation=0, labelpad=42, va="center")
+        ax.grid(True, alpha=0.3)
+    reasons = [block_reason(sample[2]) for sample in samples]
+    span_start = 0
+    span_reason = reasons[0]
+    spans = []
+    for index, reason in enumerate(reasons[1:], 1):
+        if reason != span_reason:
+            if span_reason:
+                spans.append((times[span_start], times[index], span_reason))
+            span_start, span_reason = index, reason
+    if span_reason:
+        spans.append((times[span_start], times[-1], span_reason))
+    for start, end, reason in spans:
+        for ax in axes:
+            ax.axvspan(start, end, color="red", alpha=0.12)
+        axes[0].text((start + end) / 2, 1.28, reason, ha="center", fontsize=7, color="red")
+    for index, (marker_time, marker_label) in enumerate(lifecycle):
+        axes[0].axvline(marker_time, color="steelblue", linestyle="-.", alpha=0.45)
+        axes[0].text(marker_time, 1.42 + (index % 3) * 0.28, marker_label,
+                 ha="center", fontsize=7, color="steelblue", clip_on=False)
+    if trip_time is not None:
+        axes[0].axvline(trip_time, color="red", linestyle="--", alpha=0.6)
+    axes[0].set_xlim(0, times[-1])
+    axes[-1].set_xlabel("time (ms, approx)")
+    title = f"PTT sequencing with {trip_name} trip (simulated)" if trip_name else "PTT assert/release sequencing (simulated)"
+    fig.suptitle(title)
+    fig.tight_layout()
+    graph_path = graph_dir / f"{trace_name}.png"
+    fig.savefig(graph_path, dpi=120)
+    plt.close(fig)
+    return graph_path
+
+
 def main():
     test_mode = "--test" in sys.argv[1:]
     trip_name = "TEMPERATURE" if "--temperature-trip" in sys.argv[1:] else None
@@ -414,6 +502,15 @@ def main():
                 validate_swr1_1p5(scenario_samples)
             else:
                 validate_trip(scenario_samples, scenario)
+        out_dir = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"
+        csv_dir = out_dir / "csv"
+        graph_dir = out_dir / "graphs"
+        csv_dir.mkdir(parents=True, exist_ok=True)
+        graph_dir.mkdir(parents=True, exist_ok=True)
+        for scenario, (_, scenario_samples) in zip(scenario_names, groups):
+            trace_name = f"{scenario.lower()}_trace" if scenario else "ptt_trace"
+            write_trace_csv(scenario_samples, trace_name, csv_dir)
+            write_trace_graph(scenario_samples, scenario, trace_name, graph_dir)
         print(f"PTT suite passed: {len(scenario_names)} scenarios in one MDB session")
         return
     if not ELF_PATH.exists():
@@ -507,7 +604,7 @@ def main():
                            if sample[2]["g_ptt_complete_display_active"] == "true" and
                            (sample[1]["RC5"], sample[1]["RC6"], sample[1]["RC7"]) == (0, 0, 0)), None)
     if complete_index is not None:
-        lifecycle.append((times[complete_index], "LCD: PTT COMPLETE"))
+        lifecycle.append((times[complete_index], "LCD: COMPLETE"))
     if trip_time is not None:
         lifecycle.append((trip_time, f"LCD: TRIP {trip_name}"))
     restored_index = next((index for index, sample in enumerate(samples)
@@ -555,8 +652,8 @@ def main():
                          arrowprops={"arrowstyle": "->", "color": "red"})
     for marker_index, (marker_time, marker_label) in enumerate(lifecycle):
         axes[0].axvline(marker_time, color="steelblue", linestyle="-.", alpha=0.45)
-        axes[0].text(marker_time, 1.62 + (marker_index % 3) * 0.22, marker_label, rotation=35,
-                     ha="left", va="bottom", fontsize=7, color="steelblue",
+        axes[0].text(marker_time, 1.42 + (marker_index % 3) * 0.28, marker_label,
+                 ha="center", va="bottom", fontsize=7, color="steelblue",
                      clip_on=False)
     axes[0].set_xlim(0, times[-1])
     axes[-1].set_xlabel("time (ms, approx)")
