@@ -17,7 +17,7 @@ PANELS = [
     ("PTT_COMPLETE", "PTT COMPLETE    ", "TX ACTIVE       ", "Shown only after RELAYS, TX_VCC, and TX_BIAS are all active"),
     ("HOME PAGE RESTORED", "P=   0W SWR=1.0", "----------------", "Restored 500 ms after PTT_COMPLETE"),
     ("TRIP: TEMPERATURE", "FAULT:          ", "TEMP            ", "Fault display has priority and remains until temperature recovery"),
-    ("TRIP: OTHER FAULT", "FAULT:          ", "SWR1 / AMPS    ", "Other trips latch until a valid PTT re-arm or long press"),
+    ("TRIP: ALL-FAULT EXAMPLE", "FAULT: ALL TRIPS", "S1 S2 HW A T O D ", "16x2 shorthand: SWR1, SWR2, HWFLT, AMPS, TEMP, OVDR, DRN"),
     ("TEMP RECOVERY", "P=   0W SWR=1.0", "----------------", "After hysteresis: comparator reset, then TX can sequence again"),
 ]
 
