@@ -23,32 +23,32 @@ PANELS = [
 
 
 def lcd_panel(ax, x, y, title, line1, line2, note, accent):
-    width, height = 5.65, 1.72
+    width, height = 7.2, 2.05
     line1 = line1[:16].ljust(16)
     line2 = line2[:16].ljust(16)
     ax.add_patch(FancyBboxPatch((x, y), width, height, boxstyle="round,pad=0.04,rounding_size=0.08",
                                 linewidth=1.4, edgecolor="#263238", facecolor="#263238"))
-    screen = Rectangle((x + 0.18, y + 0.35), width - 0.36, 1.22,
+    screen = Rectangle((x + 0.22, y + 0.38), width - 0.44, 1.42,
                        linewidth=1, edgecolor="#58705a", facecolor="#b9d59b")
     ax.add_patch(screen)
-    ax.text(x + width / 2, y + height + 0.16, title, ha="center", va="bottom", fontsize=9,
+    ax.text(x + width / 2, y + height + 0.16, title, ha="center", va="bottom", fontsize=11,
             color=accent, weight="bold")
-    ax.text(x + 0.42, y + 1.08, line1, ha="left", va="center",
-            fontsize=14, family="monospace", color="#1d2b1e")
-    ax.text(x + 0.42, y + 0.62, line2, ha="left", va="center",
-            fontsize=14, family="monospace", color="#1d2b1e")
-    ax.text(x + width / 2, y + 0.14, note, ha="center", va="center", fontsize=6, color="#455a64")
+    ax.text(x + 0.52, y + 1.28, line1, ha="left", va="center",
+            fontsize=18, family="monospace", color="#1d2b1e")
+    ax.text(x + 0.52, y + 0.78, line2, ha="left", va="center",
+            fontsize=18, family="monospace", color="#1d2b1e")
+    ax.text(x + width / 2, y + 0.14, note, ha="center", va="center", fontsize=7, color="#455a64")
 
 
 def main():
-    fig, ax = plt.subplots(figsize=(15, 13))
-    ax.set_xlim(0, 13)
-    ax.set_ylim(0, 14.5)
+    fig, ax = plt.subplots(figsize=(18, 15))
+    ax.set_xlim(0, 16)
+    ax.set_ylim(0, 15.5)
     ax.axis("off")
     fig.patch.set_facecolor("white")
     ax.set_title("PIC AmpControl LCD lifecycle: exact 16x2 display states", fontsize=16, pad=18)
 
-    positions = [(0.65 + (index % 2) * 6.25, 12.0 - (index // 2) * 2.25)
+    positions = [(0.55 + (index % 2) * 7.85, 12.15 - (index // 2) * 2.55)
                  for index in range(len(PANELS))]
     for index, ((title, line1, line2, note), (x, y)) in enumerate(zip(PANELS, positions)):
         accent = "#b71c1c" if title.startswith("TRIP") else "#1565c0" if "PTT" in title else "#2e7d32"
@@ -56,11 +56,11 @@ def main():
         if index > 0:
             prev_x, prev_y = positions[index - 1]
             if index % 2:
-                start = (prev_x + 5.65, prev_y + 0.86)
+                start = (prev_x + 7.2, prev_y + 1.02)
                 end = (x, y + 0.86)
             else:
-                start = (prev_x + 2.83, prev_y)
-                end = (x + 2.83, y + 1.72)
+                start = (prev_x + 3.6, prev_y)
+                end = (x + 3.6, y + 2.05)
             ax.annotate("", xy=end, xytext=start,
                         arrowprops={"arrowstyle": "-|>", "lw": 1.1, "color": "#607d8b"})
     ax.text(0.6, 0.35,
