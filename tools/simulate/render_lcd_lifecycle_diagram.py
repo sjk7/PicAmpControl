@@ -29,13 +29,13 @@ def lcd_panel(ax, x, y, title, line1, line2, note, accent):
     screen = Rectangle((x + 0.18, y + 0.35), width - 0.36, 1.22,
                        linewidth=1, edgecolor="#58705a", facecolor="#b9d59b")
     ax.add_patch(screen)
-        ax.text(x + width / 2, y + 1.56, title, ha="center", va="center", fontsize=9,
+    ax.text(x + width / 2, y + 1.56, title, ha="center", va="center", fontsize=9,
             color=accent, weight="bold")
-        ax.text(x + 0.42, y + 1.02, line1[:16].ljust(16), ha="left", va="center",
+    ax.text(x + 0.42, y + 1.02, line1[:16].ljust(16), ha="left", va="center",
             fontsize=14, family="monospace", color="#1d2b1e")
-        ax.text(x + 0.42, y + 0.58, line2[:16].ljust(16), ha="left", va="center",
+    ax.text(x + 0.42, y + 0.58, line2[:16].ljust(16), ha="left", va="center",
             fontsize=14, family="monospace", color="#1d2b1e")
-        ax.text(x + width / 2, y + 0.14, note, ha="center", va="center", fontsize=6, color="#455a64")
+    ax.text(x + width / 2, y + 0.14, note, ha="center", va="center", fontsize=6, color="#455a64")
 
 
 def main():
