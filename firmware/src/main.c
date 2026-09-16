@@ -108,7 +108,11 @@ static unsigned int g_sequence_elapsed_ms = 0;
 static unsigned char g_sequence_stage = 0;
 static unsigned int g_post_fwd_rms_w = 0;
 static unsigned int g_post_fwd_pep_w = 0;
+static unsigned int g_swr1_live_tenths = 10;
 static unsigned int g_swr2_live_tenths = 10;
+static unsigned int g_live_temperature_c = 0;
+static unsigned int g_live_current_a = 0;
+static unsigned int g_live_overdrive_mw = 0;
 static unsigned int g_pep_decay_elapsed_ms = 0;
 static unsigned int g_status_refresh_ms = 0;
 static unsigned int g_startup_elapsed_ms = 0;
@@ -436,15 +440,42 @@ void show_menu_page(void) {
             return;
         }
         lcd_set_cursor(0, 0);
-        lcd_write_text("FAULT:");
-        lcd_set_cursor(1, 0);
-        if (g_trip_reason & TRIP_REASON_SWR1) lcd_write_text("SWR1 ");
-        if (g_trip_reason & TRIP_REASON_SWR2) lcd_write_text("SWR2 ");
-        if (g_trip_reason & TRIP_REASON_HWFAULT) lcd_write_text("HWFLT ");
-        if (g_trip_reason & TRIP_REASON_CURRENT) lcd_write_text("AMPS ");
-        if (g_trip_reason & TRIP_REASON_TEMP) lcd_write_text("TEMP ");
-        if (g_trip_reason & TRIP_REASON_OVERDRIVE) lcd_write_text("OVDR ");
-        if (g_trip_reason & TRIP_REASON_DRAIN) lcd_write_text("DRN ");
+        if (g_trip_reason & TRIP_REASON_TEMP) {
+            lcd_write_text("TEMP ");
+            lcd_write_unsigned(g_live_temperature_c);
+            lcd_write_byte('/', true);
+            lcd_write_unsigned(g_thresholds.temp_trip_c);
+            lcd_write_byte('C', true);
+        } else if (g_trip_reason & TRIP_REASON_SWR1) {
+            lcd_write_text("SWR1 ");
+            lcd_write_swr_right(11, g_swr1_live_tenths);
+            lcd_set_cursor(1, 0);
+            lcd_write_text("MAX ");
+            lcd_write_swr_right(11, (unsigned int)g_thresholds.swr1_trip_tenths);
+        } else if (g_trip_reason & TRIP_REASON_SWR2) {
+            lcd_write_text("SWR2 ");
+            lcd_write_swr_right(11, g_swr2_live_tenths);
+            lcd_set_cursor(1, 0);
+            lcd_write_text("MAX ");
+            lcd_write_swr_right(11, (unsigned int)g_thresholds.swr2_trip_tenths);
+        } else if (g_trip_reason & TRIP_REASON_CURRENT) {
+            lcd_write_text("AMPS ");
+            lcd_write_unsigned(g_live_current_a);
+            lcd_write_byte('/', true);
+            lcd_write_unsigned(g_thresholds.current_trip_a);
+            lcd_write_byte('A', true);
+        } else if (g_trip_reason & TRIP_REASON_OVERDRIVE) {
+            lcd_write_text("OVDR ");
+            lcd_write_unsigned(g_live_overdrive_mw / 1000U);
+            lcd_write_byte('/', true);
+            lcd_write_unsigned((unsigned int)g_thresholds.overdrive_trip_tenths_w / 10U);
+            lcd_write_byte('W', true);
+        } else {
+            lcd_write_text("FAULT: TRIP");
+            lcd_set_cursor(1, 0);
+            if (g_trip_reason & TRIP_REASON_HWFAULT) lcd_write_text("HARDWARE");
+            else if (g_trip_reason & TRIP_REASON_DRAIN) lcd_write_text("DRAIN");
+        }
         return;
     }
     if (g_ptt_complete_display_active) {
@@ -696,6 +727,15 @@ unsigned int temperature_c(unsigned int raw) {
 unsigned int overdrive_power_mw(unsigned int raw) {
     unsigned long squared_raw = (unsigned long)raw * raw;
     return (unsigned int)(((squared_raw / 1023UL) * 10000UL) / 1023UL);
+}
+
+unsigned int current_amperes(unsigned int raw) {
+    if (raw <= CURRENT_SENSOR_ZERO_RAW) {
+        return 0;
+    }
+    return (unsigned int)(((unsigned long)(raw - CURRENT_SENSOR_ZERO_RAW) *
+                           CURRENT_SENSOR_FULL_SCALE_A) /
+                          CURRENT_SENSOR_POSITIVE_COUNTS);
 }
 
 void adjust_selected_threshold(bool increase) {
@@ -1095,6 +1135,10 @@ int main(void) {
         current_raw = ADC_SAMPLE_CURRENT;
         update_post_filter_power(swr2_fwd_raw, swr2_ref_raw);
         g_swr2_live_tenths = compute_swr_tenths(swr2_fwd_raw, swr2_ref_raw);
+        g_swr1_live_tenths = compute_swr_tenths(swr1_fwd_raw, swr1_ref_raw);
+        g_live_temperature_c = temp_c;
+        g_live_current_a = current_amperes(current_raw);
+        g_live_overdrive_mw = overdrive_power;
 
         bool swr1_fault = swr_trip(swr1_fwd_raw, swr1_ref_raw,
                        g_thresholds.swr1_trip_tenths);

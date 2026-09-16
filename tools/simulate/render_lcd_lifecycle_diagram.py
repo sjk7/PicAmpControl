@@ -20,13 +20,13 @@ PANELS = [
     ("TEMP RECOVERY", "P=   0W SWR=1.0", "----------------", "After hysteresis: comparator reset, then TX can sequence again"),
 ]
 FAULT_PANELS = [
-    ("TRIP: TEMPERATURE", "FAULT:          ", "TEMP            ", "Fault remains until temperature recovery"),
-    ("TRIP: SWR1", "FAULT:          ", "SWR1            ", "Individual SWR1 trip"),
-    ("TRIP: SWR2", "FAULT:          ", "SWR2            ", "Individual SWR2 trip"),
+    ("TRIP: TEMPERATURE", "TEMP 101/100C   ", "MAX 100C        ", "Measured temperature / EEPROM trip limit"),
+    ("TRIP: SWR1", "SWR1 3.2/3.0    ", "MAX 3.0:1       ", "Measured SWR1 / EEPROM trip limit"),
+    ("TRIP: SWR2", "SWR2 2.1/2.0    ", "MAX 2.0:1       ", "Measured SWR2 / EEPROM trip limit"),
     ("TRIP: HARDWARE", "FAULT:          ", "HWFLT           ", "Hardware comparator fault"),
-    ("TRIP: CURRENT", "FAULT:          ", "AMPS            ", "WCS1700 current trip"),
-    ("TRIP: OVERDRIVE", "FAULT:          ", "OVDR            ", "Overdrive trip"),
-    ("TRIP: DRAIN", "FAULT:          ", "DRN             ", "150 V trip example; ADC 5 V = 300 V"),
+    ("TRIP: CURRENT", "AMPS 41/40A     ", "MAX 40A         ", "Measured current / EEPROM trip limit"),
+    ("TRIP: OVERDRIVE", "OVDR 11/10W     ", "MAX 10W         ", "Measured overdrive / EEPROM trip limit"),
+    ("TRIP: DRAIN", "DRN 151/150V    ", "MAX 150V        ", "Measured drain / EEPROM trip limit; ADC 5 V = 300 V"),
     ("TRIP: ALL-FAULT EXAMPLE", "FAULT: ALL TRIPS", "S1 S2 HW A T O D ", "S1/S2/HW/AMPS/TEMP/OVDR/DRN shorthand"),
 ]
 
