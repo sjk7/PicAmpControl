@@ -101,6 +101,7 @@ static volatile unsigned char g_comparator_reset_elapsed_ms = 0;
 static volatile menu_page_t g_menu_page = MENU_PAGE_STATUS;
 static volatile menu_page_t g_saved_user_menu_page = MENU_PAGE_STATUS;
 static volatile bool g_transient_menu_display = false;
+static volatile bool g_boot_message_active = false;
 static volatile bool g_ptt_complete_display_active = false;
 static volatile unsigned int g_ptt_complete_display_elapsed_ms = 0;
 static volatile bool g_menu_changed = true;
@@ -1117,8 +1118,8 @@ int main(void) {
     load_settings();
     lcd_init();
     show_boot_message();
+    g_boot_message_active = true;
     timer0_init();
-    show_menu_page();
     apply_startup_inhibit();
 
     while (1) {
@@ -1196,6 +1197,8 @@ int main(void) {
                 g_startup_elapsed_ms++;
                 if (g_startup_elapsed_ms >= 1000) {
                     g_startup_inhibit = false;
+                    g_boot_message_active = false;
+                    g_menu_changed = true;
                     // Single low->high transition signals hardware has settled; PTT
                     // is only actionable after this (SETTLE then idles high, pulsing
                     // low again on each subsequent PTT transition).
@@ -1213,13 +1216,14 @@ int main(void) {
 
         poll_menu_inputs(elapsed_ms);
 
-        if (g_menu_page == MENU_PAGE_STATUS || g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
+        if (!g_boot_message_active &&
+            (g_menu_page == MENU_PAGE_STATUS || g_menu_page == MENU_PAGE_POWER_TEMPERATURE)) {
             if (g_status_refresh_ms >= 100 || g_menu_changed) {
                 show_menu_page();
                 g_status_refresh_ms = 0;
                 g_menu_changed = false;
             }
-        } else if (g_menu_changed) {
+        } else if (!g_boot_message_active && g_menu_changed) {
             show_menu_page();
             g_menu_changed = false;
         }
