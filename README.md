@@ -20,6 +20,7 @@ The project is in a working firmware-validation stage:
 - Hardware pin map: [docs/hardware/PIC16F18855_pin_map.md](docs/hardware/PIC16F18855_pin_map.md)
 - Pull-up resistor guidance: [docs/hardware/pull-up-resistor-guidance.md](docs/hardware/pull-up-resistor-guidance.md)
 - ADC input protection guidance: [docs/hardware/adc-input-protection-guidance.md](docs/hardware/adc-input-protection-guidance.md)
+- LPF band-select relay netlist and schematic notes: [docs/hardware/lpf-band-select-netlist.md](docs/hardware/lpf-band-select-netlist.md)
 - Bench validation procedure: [docs/hardware/bench-validation.md](docs/hardware/bench-validation.md)
 - Firmware entry point: [firmware/src/main.c](firmware/src/main.c)
 - Pin definitions: [firmware/include/pin_map.h](firmware/include/pin_map.h)
@@ -92,6 +93,7 @@ flowchart LR
     FILTER --> POST
     POST --> POST_FWD
     POST --> POST_REF
+    BANDSEL["Band-select bus\nRA4/RA6/RA7/RB6"] --> DECODER["4-bit decoder\nrelay driver"] --> FILTER
 
     PRE_FWD --> SWR1
     PRE_REF --> SWR1

@@ -110,8 +110,9 @@ The SWR protection channels are not required in hardware because each SWR pair i
 - The comparator board is deliberately separate from the PIC so that the critical analog faults are hardware-protected before the MCU state machine can act.
 - SWR is evaluated in firmware from the forward/reflected ADC pairs; no dedicated SWR comparator is required.
 - The seven planned analog measurements have dedicated PIC ADC pins, so no external analog multiplexer is required.
-- Four GPIOs are currently spare: RA4, RA6, RA7, and RB6. RB6 is used only as a simulator scenario marker by the Python trace tool and is not used by firmware hardware behavior.
-- RA6 and RA7 (former OSC2/OSC1) are unallocated spare GPIO, freed by the internal oscillator; assign before use since they default to inputs with no pull-up.
+- Four GPIOs are currently spare: RA4, RA6, RA7, and RB6. The current design assigns these as the 4-bit LPF band-select bus for the output filter relay bank. RB6 is also used only as a simulator scenario marker by the Python trace tool, so the hardware mapping must be kept consistent with the firmware and the sim scenario conventions.
+- RA6 and RA7 (former OSC2/OSC1) are unallocated spare GPIO, freed by the internal oscillator; the current design assigns them to the LC filter band-select bus instead of leaving them unused.
+- The band-select bus uses RA4, RA6, RA7, and RB6 as B0, B1, B2, and B3 respectively, decoded by an external logic/driver stage to energize the correct LPF relay. See [../hardware/lpf-band-select-netlist.md](lpf-band-select-netlist.md).
 - On the falling PTT edge, RC1 outputs a 10 ms active-low pulse to reset the comparator latch network. The controller then checks INPUT_HARD_FAULT before enabling a TX sequence.
 - The comparator outputs must combine into one active-high hard-fault signal at RB4. This input remains digital; RB2 and RB3 are dedicated to analogue sensing.
 - Any future expansion should be planned before wiring, so the MCU I/O map does not become inconsistent.
