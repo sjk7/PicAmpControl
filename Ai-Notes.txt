@@ -10,18 +10,15 @@ CI/release workflows change - don't let it go stale.
 - Keep README.md and docs/ purely current-facing: no "old prototype was replaced by..." style historical narrative. Historical context belongs only in prototype_reference/.
 - Never run bare `git status`/`git status --short`; use `git --no-pager status --short` (avoids hitting an interactive pager or the `gcm-core` credential helper prompt).
 - Any new "remember this" instruction from the user must be added to this section, not just kept in assistant memory.
-- `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their active-low levels; keep it transient, then restore the user's saved home page.
+- `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their configured active levels (active-low by default); keep it transient, then restore the user's saved home page.
 - Keep verified changes committed and pushed promptly; generated simulator CSVs belong in `_build/My_Pic_Project/sim/csv/` and graphs in `_build/My_Pic_Project/sim/graphs/`.
 
 ## Date
-2026-09-15
+2026-09-16
 
-## Simulator timer limitation (IMPORTANT)
-- As of 2026-09-15: MPLAB X/mdb simulation does NOT increment hardware Timer0 (TMR0L stays at 6). The Timer0 interrupt only fires once at boot—the counter never overflows or advances.
-- All firmware time-driving features (startup inhibit, SETTLE, comparator reset pulse, TX sequencing delays, menu long-presses) rely on g_timer_ticks_pending incrementing (Timer0 overflows). This simply does not happen in simulation—so state machine logic dependent on timer-based events gets stuck forever after entering main loop.
-- This is a fundamental simulator limitation (not a bug in your firmware), and it affects all timing validation—makes instruction-cycle-accurate simulation impossible for any realistic board-level design.
-- **WORKAROUND ENABLED:** See `SIM_KICK_TIMER` macro in `main.c` (enabled for simulation runs)—this forcibly increments the tick counter once per main loop pass, so events progress in development/test. This workaround must be *disabled* on real hardware.
-- For true timing/bench validation, use real silicon.
+## Simulator timing limitation (IMPORTANT)
+- The firmware uses Timer2 for the approximately 1 ms scheduler tick because MDB's Timer0 model stalled during earlier testing.
+- The simulator is still a debugger model, not a substitute for silicon timing. The suite validates state ordering, LCD lifecycle, trip latching, and recovery behavior; bench validation remains required for exact hardware timing.
 
 ## Current design
 This repository is the active PIC16F18855-I/SP linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
@@ -49,11 +46,11 @@ This repository is the active PIC16F18855-I/SP linear-amplifier protection contr
 - `tools/simulate/run_sim.sh` / `run_sim.ps1 [scenario.mdb]` builds, then launches `mdb` against device `PIC16F18855` with the hex programmed, filtering the benign `W0106-SIM` TMR1/3/5 warnings (see below) out of the output. With no argument it's an interactive `mdb` session; with a scenario file it runs those commands then exits. `write pin <name> high|low|<N>v` to drive inputs, `print pin <name>` to read outputs, `Stepi <count>` to single-step, `break <function>`/`break <file>:<line>` + `Run`/`Continue`/`Halt` for real breakpoint-based debugging, `Stopwatch [nror]` for real simulated elapsed time. Example scenarios: `tools/simulate/scenarios/boot_smoke.mdb`, `ptt_cycle.mdb`.
 - mdb command files do not support `;`/`#` comment lines - an invalid line aborts the rest of the script, so keep scenario files to plain commands only.
 - A VS Code GUI debug session (breakpoints/variables/watch/registers, no terminal) is available via `.vscode/launch.json`'s "Simulate PicAmpControl (Debug)" config, using `microchip.mplab-core-da` against `Simulator`/`PIC16F18855`. Requires `out/My_Pic_Project/default.elf` to exist (build first). Pin/register live-watch: add `PORTA`/`PORTB`/`PORTC`, `LATA`/`LATB`/`LATC`, `TRISA`/`TRISB`/`TRISC` (or bitfields like `PORTCbits.RC5`) to the Watch panel manually - there is no file-based way to pre-seed Watch expressions.
-- Known finding from simulation (not yet fixed): `ANSELC` is never cleared in `main.c` (only `ANSELA`/`ANSELB` are), so RC0/RC3-RC7 stay in their power-on-reset analog-capable state as far as the pin model is concerned. Outputs (RC5-7) still drive correctly because TRIS overrides ANSEL for output pins, but the digital input path used for the software-I2C bus (RC3/RC4) and future digital reads on RC0 may be affected on real silicon - worth a bench check.
+- `main.c` explicitly clears `ANSELC` so RC0/RC3-RC7 operate as digital I/O; keep this initialization when changing the port map.
 - Benign, expected simulator noise: `W0106-SIM: This device only has partial support for TMR1/TMR3/TMR5 peripheral...` on every reset. Firmware never touches T1CON/T3CON/T5CON; this is just `mdb`'s partial clock-source-mux model for those timers at their POR default state, not a real firmware/silicon issue - safe to ignore (already filtered out by run_sim.sh/.ps1).
 - FIXED (2026-09-15, see bugfixes.md): the ADC ISR used to immediately re-arm the next conversion (with a blocking `__delay_us`) right after each conversion completed, entirely inside `timer0_isr()`. In simulation this created a back-to-back interrupt chain that fully starved the main loop - `update_tx_sequence()`/`update_protection_state()` never ran even once after 30+ simulated seconds. Fixed by only re-arming once per Timer0 tick (~1 ms) instead of immediately; verified main-loop breakpoints now hit normally. If future simulation runs show the CPU stuck at the interrupt vector address on every `Halt` with continuous `W0223-ADC` spam, that class of bug is back.
 - To simulate a steady-state-then-PTT-drop scenario without spurious protection faults, drive plausible idle ADC voltages before running: `write pin RA0/RA1/RA2/RA3 0v` (SWR fwd/ref, both pairs), `write pin RA5 2.5v` (temp), `write pin RB1/RB2/RB3 0v` (current/overdrive/drain), `write pin RB4 low` (hw overcurrent fault, active-high). PTT (`RC0`) is active-low; hold `high` for idle/steady-state, then `low` to assert. Without explicit stimulus, floating ADC inputs read as very low/high and spam `W0222/W0223-ADC` over/underflow warnings (cosmetic) but can also cause `swr_trip()` etc. to behave unpredictably.
-- Not yet re-verified after the ISR fix: the actual ~20 ms TX -> TX_VCC -> TX_BIAS stagger (the earlier attempt was invalidated by both the -Os build bug and the ISR starvation bug being fixed later in the same session). Next step for whoever picks this up: rerun a PTT-assert capture (breakpoints on `set_tx_output`/`set_tx_vcc_output`/`set_tx_bias_output`, `Stopwatch` at each hit) now that both root causes are fixed, and produce a trustworthy oscilloscope-style plot.
+- The simulator suite runs nine scenarios in one MDB session and emits per-scenario CSVs and graphs under `_build/My_Pic_Project/sim/csv/` and `_build/My_Pic_Project/sim/graphs/`.
 
 ## References
 - Hardware source of truth: docs/hardware/PIC16F18855_pin_map.md

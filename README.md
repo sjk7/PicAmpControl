@@ -6,11 +6,11 @@ This repository contains the design for a PIC16F18855-I/SP-based linear amplifie
 
 ## Current project status
 
-The project is in a working design-and-firmware skeleton stage:
+The project is in a working firmware-validation stage:
 
 - the MCU pin map is documented and approved for the protection controller
 - the state-machine concept is defined
-- the firmware includes a protection-state skeleton and startup inhibit logic
+- the firmware includes startup inhibit, PTT sequencing, LCD lifecycle, protection trips, and temperature recovery logic
 - the build is configured through CMake for a PIC XC8 toolchain flow
 - GitHub Actions workflows are in place for remote build/release automation
 
@@ -25,12 +25,16 @@ The project is in a working design-and-firmware skeleton stage:
 - Pin definitions: [firmware/include/pin_map.h](firmware/include/pin_map.h)
 - LCD and software-I2C driver: [firmware/src/lcd_i2c.c](firmware/src/lcd_i2c.c)
 - LCD driver interface: [firmware/include/lcd_i2c.h](firmware/include/lcd_i2c.h)
+- Display/menu state diagram: [_build/My_Pic_Project/sim/graphs/display_menu_state_diagram.png](_build/My_Pic_Project/sim/graphs/display_menu_state_diagram.png)
+- 16x2 LCD lifecycle diagram: [_build/My_Pic_Project/sim/graphs/lcd_lifecycle_16x2.png](_build/My_Pic_Project/sim/graphs/lcd_lifecycle_16x2.png)
+- Individual LCD fault screens: [_build/My_Pic_Project/sim/graphs/lcd_fault_screens_16x2.png](_build/My_Pic_Project/sim/graphs/lcd_fault_screens_16x2.png)
+- Latest simulator graphs: [_build/My_Pic_Project/sim/graphs/](_build/My_Pic_Project/sim/graphs/)
 - Production CMake project: [cmake/My_Pic_Project/default/CMakeLists.txt](cmake/My_Pic_Project/default/CMakeLists.txt)
 - GitHub Actions build workflow: [.github/workflows/firmware-build.yml](.github/workflows/firmware-build.yml)
 - GitHub Actions auto-release workflow: [.github/workflows/auto-release.yml](.github/workflows/auto-release.yml)
 - GitHub Actions manual release workflow: [.github/workflows/release-firmware.yml](.github/workflows/release-firmware.yml)
 
-The build workflow packages each run's firmware output (`.hex`/`.elf`/`.map`/`.xml`) together with the pin map ([docs/hardware/PIC16F18855_pin_map.md](docs/hardware/PIC16F18855_pin_map.md)) into a single `firmware-<sha>` build artifact, under a `hardware/` subfolder for the pin map. On every successful build of `main`, the auto-release workflow tags the commit (`v0.0.N`, auto-incremented) and publishes that artifact as a GitHub Release, so every release contains matching firmware and pinout documentation without manual steps. The manual release workflow remains available to re-publish an older build's artifact under an existing tag.
+The build workflow packages each run's firmware output (`.hex`/`.elf`/`.map`/`.xml`) together with the pin map ([docs/hardware/PIC16F18855_pin_map.md](docs/hardware/PIC16F18855_pin_map.md)) into a single `firmware-<sha>` build artifact, under a `hardware/` subfolder for the pin map. The auto-release workflow publishes a matching release after a successful `main` build; the manual release workflow remains available for re-publishing an older artifact under an existing tag.
 
 ## Design direction
 
@@ -71,7 +75,7 @@ flowchart LR
         PTT["INPUT_PTT\nTransmit request"]
         RESET["OUTPUT_COMP_RESET\nComparator reset"]
         HARD["INPUT_OVERCURRENT_FAULT\nHardware overcurrent fault"]
-        TICK["Timer0 ISR\n1 ms scheduler tick"]
+        TICK["Timer2 ISR\n~1 ms scheduler tick"]
         STATE["State machine"]
         SWR1["SWR pair 1\nsoftware trip logic"]
         SWR2["SWR pair 2\nsoftware trip logic"]
@@ -148,7 +152,7 @@ schematic/netlist/PCB need these physical numbers to be correct.
 | 19 | VSS | GND | Power | Ground return |
 | 20 | VDD | +5 V | Power | Decouple locally per datasheet |
 | 21 | RB0 | INPUT_MENU_ADJUST | Input | Menu adjust: short press increase, hold decrease |
-| 22 | RB1 | ADC_CURRENT | Input | WCS1700 current ADC (AN9), provisional 70 A full scale |
+| 22 | RB1 | ADC_CURRENT | Input | WCS1700 current ADC (AN9), 2.5 V center, 0-5 V = -70 to +70 A |
 | 23 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC (AN10) |
 | 24 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC (AN11) |
 | 25 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
@@ -168,6 +172,7 @@ schematic/netlist/PCB need these physical numbers to be correct.
 - Configuration controls: INPUT_MENU_NEXT and INPUT_MENU_ADJUST; each switch is active-low and is available only while not transmitting
 - Sequencing outputs: OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS
 - Status output: OUTPUT_TRIP_STATUS
+- Current sensor: buffered WCS1700 output centered at 2.5 V; positive current rises toward 5 V and negative current falls toward 0 V
 - Output rule: all operational outputs default to active-low and can be individually changed to active-high in the receive-only configuration menu
 - Input rule: input pin names follow the actual hardware comparator/sensor polarity; no polarity suffix is added unless a signal deliberately breaks the default output rule
 
@@ -191,15 +196,15 @@ The same logic is used for each pair and each sensor trips independently. A sing
 
 ## User configuration
 
-The 1602 display config menu uses two active-low, normally-open switches wired from the menu input pins to ground. RC2 selects the displayed configuration page. RB0 is the adjust button: a short press increases the selected value; holding it for 500 ms then decreases the value repeatedly every 100 ms. A button action is accepted only while PTT is inactive, so a threshold cannot change during transmit. RB1 is freed as a spare input.
+The 1602 display config menu uses two active-low, normally-open switches wired from the menu input pins to ground. RC2 selects the displayed configuration page. RB0 is the adjust button: a short press increases the selected value; holding it for 500 ms then decreases the value repeatedly every 100 ms. A button action is accepted only while PTT is inactive, so a threshold cannot change during transmit. RB1 remains dedicated to the WCS1700 current ADC.
 
-The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adjustable from 0 to 1000 ms in 5 ms steps, each defaulting to 20 ms. The active electrical level for OUTPUT_TX, OUTPUT_TX_VCC, OUTPUT_TX_BIAS, OUTPUT_FAN_PWM, and OUTPUT_TRIP_STATUS is selectable as LOW or HIGH, with LOW as the default. LCD I2C polarity is not configurable because its open-drain signalling is defined by the I2C bus.
+The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adjustable from 0 to 1000 ms in 5 ms steps, each defaulting to 20 ms. The active electrical level for OUTPUT_TX, OUTPUT_TX_VCC, OUTPUT_TX_BIAS, OUTPUT_FAN_PWM, and OUTPUT_TRIP_STATUS is selectable as LOW or HIGH, with LOW as the default. The power display can show forward power or net power (`forward - reflected`); forward-only is the default. LCD I2C polarity is not configurable because its open-drain signalling is defined by the I2C bus.
 
 All menu settings and the selected display page are saved to the PIC's internal EEPROM at each operator change. The stored record includes a magic value, format version, and checksum. At power-up the record is restored only when valid; a missing, incompatible, or corrupted record loads the compiled safe defaults and the primary status page.
 
 Menu changes mark the settings record dirty rather than writing immediately. After a 100 ms quiet period, firmware writes the record only while PTT is inactive, no software fault is latched, and the hardware overcurrent input is clear. This coalesces rapid button presses and keeps EEPROM write latency out of the immediate protection decision path.
 
-The default status screen displays post-filter forward power. Its primary readout can be selected as RMS or PEP, and the second row is a full-width PEP bar referenced to the configured post-filter maximum power. The common bar style uses `-` for measured PEP and `.` for unused capacity. A second status page shows `PEP ------------` with the temperature in degrees C on the next row. PEP is held and decays by one watt at a configurable 50-2000 ms interval; the default is 500 ms.
+The default status screen displays post-filter forward power. Its primary readout can be selected as RMS or PEP, and the optional NET POWER setting subtracts post-filter reflected power from that display. The second row is a full-width PEP bar referenced to the configured post-filter maximum power. A second status page shows `PEP ------------` with the temperature in degrees C on the next row. PEP is held and decays by one watt at a configurable 50-2000 ms interval; the default is 500 ms.
 
 The menu makes these firmware trip thresholds available to the operator:
 
@@ -211,11 +216,11 @@ The menu makes these firmware trip thresholds available to the operator:
 - temperature trip, from 0 C to 150 C; default 100 C
 - input-power trip, from 0.0 W to 10.0 W in 0.1 W steps; default 10.0 W
 - drain-voltage trip, from 0 V to 300 V in 1 V steps; default 150 V
-- current trip, from 0 A to 100 A in 1 A steps; default 40 A, using WCS1700 on RB1/AN6
+- current trip, from 0 A to 100 A in 1 A steps; default 40 A, using WCS1700 on RB1/AN9 with 2.5 V center and +/-70 A full scale
 
 Each SWR ratio setting directly controls its local software trip: the controller calculates the mismatch from that sensor's forward/reflected pair and trips when it reaches the displayed setting. There are no dedicated SWR comparator inputs in this design.
 
-The ADC reference is the regulated nominal 5.0 V VDD rail, so every analogue input is scaled from 0 to VDD, not to an independently guaranteed 5 V reference. With VDD regulated at 5.0 V, drain voltage uses a linear scale: ADC 0-1023 represents 0-300 V. Input power is calculated as peak-envelope power into 50 ohms, with ADC 0-1023 representing 0-10.0 W. This requires the input detector/divider to present 5 V at 31.62 V peak, a scale factor of approximately 6.325:1. Each SWR bridge detector also uses a 0-5 V range. Its bridge-specific 500-2500 W forward full-scale setting is shared by the associated reflected detector, so both readings use the same power range before SWR is calculated. The WCS1700 current ADC on RB1/AN6 uses a provisional 70 A full-scale calibration, implemented compactly as approximately 15 ADC counts per ampere, with a configurable trip default of 40 A. This approximation must be calibrated against the exact WCS1700 variant, offset, sensitivity, and current path. All analogue paths require series resistance and clamps so the PIC pin remains between VSS and VDD under normal operation. The external overcurrent comparator on RB4 remains the independent fast protection path.
+The ADC reference is the regulated nominal 5.0 V VDD rail, so every analogue input is scaled from 0 to VDD, not to an independently guaranteed 5 V reference. With VDD regulated at 5.0 V, drain voltage uses a linear scale: ADC 0-1023 represents 0-300 V. Input power is calculated as peak-envelope power into 50 ohms, with ADC 0-1023 representing 0-10.0 W. Each SWR bridge detector uses a 0-5 V range and its bridge-specific forward full-scale setting is shared by the associated reflected detector. The optional NET POWER display subtracts post-filter reflected power; forward-only display is the default. The WCS1700 current ADC on RB1/AN9 is centered at 2.5 V: 0-5 V represents approximately -70 to +70 A, with a configurable positive-current trip default of 40 A. This approximation must be calibrated against the exact WCS1700 variant, offset, sensitivity, and current path. All analogue paths require series resistance and clamps so the PIC pin remains between VSS and VDD under normal operation. The external overcurrent comparator on RB4 remains the independent fast protection path.
 
 Temperature uses a 10 kOhm NTC divider with a selectable B3435, B3950, or B4250 profile; B3950 is the default. The firmware uses compact lookup points every 10 C from 0 C to 150 C, so displayed temperatures and thermal thresholds have 10 C resolution. The divider must use a 10 kOhm fixed resistor to the regulated 5 V rail and the NTC to ground. Bench-calibrate the selected sensor and resistor tolerance before relying on the trip defaults.
 
@@ -229,6 +234,12 @@ All hardware symbols should follow the pattern:
 - Input pins use the actual hardware polarity and comparator behavior
 
 Polarity suffixes are not added to pin names unless a specific signal intentionally breaks the default active-low output rule.
+
+## LCD lifecycle
+
+At boot the LCD shows `Booting, please` / `wait.` through the startup-inhibit period, then the saved EEPROM home page is shown. A PTT request temporarily uses the status display and applies the `PTT_RESET_PULSE`. `PTT_COMPLETE` appears for 500 ms only after RELAYS, TX_VCC, and TX_BIAS have all reached their active levels, then the saved home page is restored. A TRIP display always has priority over both transient states and the home page until a valid re-arm clears the fault; temperature is the exception and may recover after its hysteresis band is satisfied.
+
+The [LCD lifecycle diagram](_build/My_Pic_Project/sim/graphs/lcd_lifecycle_16x2.png) and [individual fault-screen diagram](_build/My_Pic_Project/sim/graphs/lcd_fault_screens_16x2.png) show the exact 16x2 examples.
 
 ## Firmware state model
 
@@ -286,8 +297,8 @@ The firmware should implement these states:
 
 - TRIP
   - a fault or temperature threshold has been exceeded during TX operation
-  - the output sequence is aborted immediately
-  - all transmitter outputs are disabled
+  - TX_VCC goes inactive immediately; RELAYS and TX_BIAS go inactive 5 ms later
+  - outputs remain latched inactive until a valid re-arm, except temperature recovery with hysteresis
   - the trip output is asserted
   - this state remains latched until the next safe restart condition
   - the display shows which condition tripped (SWR, hardware/current fault, temperature, overdrive, or drain voltage)
@@ -345,7 +356,7 @@ A fresh transmit cycle is allowed only when:
 - temperature has not reached the trip or lockout threshold
 - the output sequence is complete and the RF path is safe
 
-When PTT returns high, the controller disables the TX sequence and returns to receive/idle operation. The next falling PTT edge produces the comparator reset pulse for the following TX cycle.
+Once a TX sequence begins, it completes its engage order even if PTT returns high early; it then completes the ordered release sequence. The next falling PTT edge produces the comparator reset pulse for the following TX cycle.
 
 See [firmware/src/main.c](firmware/src/main.c) for the protection and sequencer logic, and [firmware/src/lcd_i2c.c](firmware/src/lcd_i2c.c) for the LCD transport.
 
@@ -353,7 +364,7 @@ See [firmware/src/main.c](firmware/src/main.c) for the protection and sequencer 
 
 The local project build has been validated with the CMake/XC8 flow. [cmake/My_Pic_Project/default/user.cmake](cmake/My_Pic_Project/default/user.cmake) constrains the production build to `firmware/src/main.c` and `firmware/src/lcd_i2c.c`, excluding any other sources the generated file list may contain.
 
-The firmware uses a Timer0 interrupt tick of approximately 1 ms instead of a blocking 5 ms loop delay. ADC conversion-complete interrupts capture the seven analogue channels without doing protection math in the ISR. The main loop consumes those samples and evaluates software SWR, overdrive, drain, and temperature trips before LCD refresh and menu work. The external overcurrent comparator remains the asynchronous hard-protection path.
+The firmware uses a Timer2 interrupt tick of approximately 1 ms. ADC conversion-complete interrupts capture the eight analogue channels without doing protection math in the ISR. The main loop consumes those samples and evaluates software SWR, overdrive, drain, current, and temperature trips before LCD refresh and menu work. The external overcurrent comparator remains the asynchronous hard-protection path. Fault shutdown raises TX_VCC inactive immediately, then raises RELAYS and TX_BIAS inactive after 5 ms; the outputs remain latched until re-arm, except for temperature hysteresis recovery.
 
 GitHub Actions builds on a self-hosted Windows x64 runner. Set these repository variables to the installed toolchain locations on that runner:
 

@@ -21,7 +21,7 @@ PANELS = [
 ]
 FAULT_PANELS = [
     ("TRIP: TEMPERATURE", "TEMP 101/100C   ", "MAX 100C        ", "Measured temperature / EEPROM trip limit"),
-    ("TRIP: SWR1", "SWR1 3.2/3.0    ", "MAX 3.0:1       ", "Measured SWR1 / EEPROM trip limit"),
+    ("TRIP: SWR1", "FLTR?? CHECK LPF", "SWR1 > 10:1     ", "Extreme SWR1 suggests wrong output filter selection"),
     ("TRIP: SWR2", "SWR2 2.1/2.0    ", "MAX 2.0:1       ", "Measured SWR2 / EEPROM trip limit"),
     ("TRIP: HARDWARE", "FAULT:          ", "HWFLT           ", "Hardware comparator fault"),
     ("TRIP: CURRENT", "AMPS 41/40A     ", "MAX 40A         ", "Measured current / EEPROM trip limit"),
@@ -80,8 +80,8 @@ def render_page(panels, output, title, accent_default):
                 end = (x + 3.6, y + 2.05)
             ax.annotate("", xy=end, xytext=start,
                         arrowprops={"arrowstyle": "-|>", "lw": 1.1, "color": "#607d8b"})
-        ax.text(0.6, 0.35, "TRIP text overrides PTT_COMPLETE and home-page restoration until the fault is cleared.",
-            fontsize=9, color="#b71c1c")
+    ax.text(0.6, 0.35, "TRIP text overrides PTT_COMPLETE and home-page restoration until the fault is cleared.",
+        fontsize=9, color="#b71c1c")
     fig.tight_layout()
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output, dpi=150, bbox_inches="tight")

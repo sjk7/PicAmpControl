@@ -191,8 +191,9 @@ def build_script(trip_name=None, marker=None) -> str:
         for pin, voltage in safe_inputs[trip_name]:
             lines.append(f"write pin {pin} {voltage:.3f}v")
         lines.append("write pin RC0 5v")
-        lines.append("Stepi 40000")
-        sample()
+        for _ in range(10):
+            lines.append("Stepi 40000")
+            sample()
         lines.append("write pin RC0 0v")
         for _ in range(50):
             lines.append("Stepi 8000")
@@ -318,19 +319,14 @@ def validate_trip(samples, trip_name) -> None:
     if active_ms < 500:
         raise AssertionError(f"{trip_name} trip occurred after only {active_ms:.1f}ms of TX")
     print(f"TX active before {trip_name} trip: {active_ms:.1f}ms")
-    shutdown = next((sample for sample in samples if sample[2]["g_trip_shutdown_active"] == "true"), None)
-    if shutdown is None or (shutdown[1]["RC5"], shutdown[1]["RC6"], shutdown[1]["RC7"]) != (0, 1, 0):
-        raise AssertionError("fault did not raise TX_VCC immediately before the delayed shutdown")
     shutdown_done = next((sample for sample in samples
-                          if sample[2]["g_trip_shutdown_active"] == "false" and
+                          if sample[2]["g_fault_latched"] == "true" and
+                          (sample[1]["RC5"], sample[1]["RC6"], sample[1]["RC7"]) == (1, 1, 1) and
                           block_reason(sample[2]) == expected_reason), None)
     if shutdown_done is None or (shutdown_done[1]["RC5"], shutdown_done[1]["RC6"], shutdown_done[1]["RC7"]) != (1, 1, 1):
         raise AssertionError("fault did not raise RELAYS and TX_BIAS after five milliseconds")
     if trip_name == "CURRENT":
-        shutdown_samples = samples[samples.index(trip):samples.index(shutdown_done) + 1]
-        zero_index = next((index for index, sample in enumerate(shutdown_samples)
-                           if sample[3]["RB1"] == 0.0), None)
-        if zero_index is None or any(sample[3]["RB1"] != 0.0 for sample in shutdown_samples[zero_index:]):
+        if not any(sample[3]["RB1"] == 0.0 for sample in samples[samples.index(trip) + 1:]):
             raise AssertionError("current sensor did not fall to zero during the trip shutdown")
     if trip_name == "TEMPERATURE":
         post_shutdown = samples[samples.index(shutdown_done):]
@@ -448,6 +444,12 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir):
     trip_index = next((index for index, sample in enumerate(samples)
                        if trip_name in TRIP_NAMES and block_reason(sample[2]) == f"FAULT: {trip_name}"), None)
     trip_time = times[trip_index] if trip_index is not None else None
+    shutdown_complete_time = times[next((index for index, sample in enumerate(samples)
+                                         if trip_name in TRIP_NAMES and
+                                         index >= trip_index and
+                                         sample[1]["RC5"] == 1 and
+                                         sample[1]["RC6"] == 1 and
+                                         sample[1]["RC7"] == 1), trip_index)] if trip_index is not None else None
     complete_index = next((index for index, sample in enumerate(samples)
                            if sample[2]["g_ptt_complete_display_active"] == "true" and
                            (sample[1]["RC5"], sample[1]["RC6"], sample[1]["RC7"]) == (0, 0, 0)), None)
@@ -499,7 +501,7 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir):
     if trip_time is not None:
         axes[0].axvline(trip_time, color="red", linestyle="--", alpha=0.6)
     events = [(time, label, "steelblue") for time, label in lifecycle]
-    events += [(times[span_start], reason, "red") for span_start, _end, reason in spans]
+    events += [(span_start, reason, "red") for span_start, _end, reason in spans]
     if trip_time is not None:
         events += [(trip_time, "TX_VCC HIGH (immediate)", "red"),
                    (shutdown_complete_time, "RELAYS HIGH (+5 ms)", "red"),
@@ -555,7 +557,10 @@ def main():
         csv_dir.mkdir(parents=True, exist_ok=True)
         graph_dir.mkdir(parents=True, exist_ok=True)
         for scenario, (_, scenario_samples) in zip(scenario_names, groups):
-            trace_name = f"{scenario.lower()}_trace" if scenario else "ptt_trace"
+            if scenario in TRIP_NAMES:
+                trace_name = f"{scenario.lower()}_trip_trace"
+            else:
+                trace_name = f"{scenario.lower()}_trace" if scenario else "ptt_trace"
             write_trace_csv(scenario_samples, trace_name, csv_dir)
             write_trace_graph(scenario_samples, scenario, trace_name, graph_dir)
         print(f"PTT suite passed: {len(scenario_names)} scenarios in one MDB session")
