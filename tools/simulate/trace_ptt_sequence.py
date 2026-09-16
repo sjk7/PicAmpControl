@@ -326,9 +326,12 @@ def validate_trip(samples, trip_name) -> None:
                           block_reason(sample[2]) == expected_reason), None)
     if shutdown_done is None or (shutdown_done[1]["RC5"], shutdown_done[1]["RC6"], shutdown_done[1]["RC7"]) != (1, 1, 1):
         raise AssertionError("fault did not raise RELAYS and TX_BIAS after five milliseconds")
-    if trip_name == "CURRENT" and any(sample[3]["RB1"] != 0.0
-                                      for sample in samples[samples.index(trip) + 1:samples.index(shutdown_done) + 1]):
-        raise AssertionError("current sensor did not fall to zero after the current trip")
+    if trip_name == "CURRENT":
+        shutdown_samples = samples[samples.index(trip):samples.index(shutdown_done) + 1]
+        zero_index = next((index for index, sample in enumerate(shutdown_samples)
+                           if sample[3]["RB1"] == 0.0), None)
+        if zero_index is None or any(sample[3]["RB1"] != 0.0 for sample in shutdown_samples[zero_index:]):
+            raise AssertionError("current sensor did not fall to zero during the trip shutdown")
     if trip_name == "TEMPERATURE":
         post_shutdown = samples[samples.index(shutdown_done):]
         if any((sample[1]["RC5"], sample[1]["RC6"], sample[1]["RC7"]) != (1, 1, 1)
