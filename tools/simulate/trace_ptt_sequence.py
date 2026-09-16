@@ -495,17 +495,19 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir):
         for ax in axes:
             ax.axvspan(start, end, color="red", alpha=0.12)
         axes[0].text((start + end) / 2, 1.28, reason, ha="center", fontsize=7, color="red")
-    for index, (marker_time, marker_label) in enumerate(lifecycle):
+    for marker_time, marker_label in lifecycle:
         axes[0].axvline(marker_time, color="steelblue", linestyle="-.", alpha=0.45)
-        axes[0].text(marker_time, 1.42 + (index % 3) * 0.28, marker_label,
-                 ha="center", fontsize=7, color="steelblue", clip_on=False)
+    for index, (marker_time, marker_label) in enumerate(lifecycle):
+        fig.text(0.02, 0.985 - index * 0.025,
+                 f"{marker_label} @ {marker_time:.1f} ms",
+                 ha="left", va="top", fontsize=7, color="steelblue")
     if trip_time is not None:
         axes[0].axvline(trip_time, color="red", linestyle="--", alpha=0.6)
     axes[0].set_xlim(0, times[-1])
     axes[-1].set_xlabel("time (ms, approx)")
     title = f"PTT sequencing with {trip_name} trip (simulated)" if trip_name else "PTT assert/release sequencing (simulated)"
     fig.suptitle(title)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 0.88))
     graph_path = graph_dir / f"{trace_name}.png"
     fig.savefig(graph_path, dpi=120)
     plt.close(fig)
@@ -690,18 +692,19 @@ def main():
                          xy=(shutdown_complete_time, 1), xytext=(8, 12),
                          textcoords="offset points", color="red", fontsize=8,
                          arrowprops={"arrowstyle": "->", "color": "red"})
-    for marker_index, (marker_time, marker_label) in enumerate(lifecycle):
+    for marker_time, marker_label in lifecycle:
         axes[0].axvline(marker_time, color="steelblue", linestyle="-.", alpha=0.45)
-        axes[0].text(marker_time, 1.42 + (marker_index % 3) * 0.28, marker_label,
-                 ha="center", va="bottom", fontsize=7, color="steelblue",
-                     clip_on=False)
+    for marker_index, (marker_time, marker_label) in enumerate(lifecycle):
+        fig.text(0.02, 0.985 - marker_index * 0.025,
+                 f"{marker_label} @ {marker_time:.1f} ms",
+                 ha="left", va="top", fontsize=7, color="steelblue")
     axes[0].set_xlim(0, times[-1])
     axes[-1].set_xlabel("time (ms, approx)")
     title = ("PTT sequencing with SWR1 1.5:1 no-trip (simulated)" if trip_name == "SWR1_1P5"
              else f"PTT sequencing with {trip_name} trip (simulated)" if trip_name
              else "PTT assert/release sequencing (simulated)")
     fig.suptitle(title)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 0.88))
     png_path = graph_dir / f"{trace_name}.png"
     fig.savefig(png_path, dpi=120)
     print(f"Wrote {png_path}")
