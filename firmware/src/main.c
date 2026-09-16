@@ -94,6 +94,10 @@ static volatile bool g_startup_inhibit = true;
 static volatile bool g_comparator_reset_active = false;
 static volatile unsigned char g_comparator_reset_elapsed_ms = 0;
 static volatile menu_page_t g_menu_page = MENU_PAGE_STATUS;
+static volatile menu_page_t g_saved_user_menu_page = MENU_PAGE_STATUS;
+static volatile bool g_transient_menu_display = false;
+static volatile bool g_ptt_complete_display_active = false;
+static volatile unsigned int g_ptt_complete_display_elapsed_ms = 0;
 static volatile bool g_menu_changed = true;
 static unsigned int g_sequence_elapsed_ms = 0;
 static unsigned char g_sequence_stage = 0;
@@ -353,8 +357,10 @@ void load_settings(void) {
         checksum == settings_checksum((menu_page_t)header[2], &stored_settings)) {
         g_thresholds = stored_settings;
         g_menu_page = (menu_page_t)header[2];
+        g_saved_user_menu_page = g_menu_page;
     } else {
         g_menu_page = MENU_PAGE_STATUS;
+        g_saved_user_menu_page = MENU_PAGE_STATUS;
     }
 }
 
@@ -393,7 +399,8 @@ void show_menu_page(void) {
     unsigned char *setting;
     bool screen_changed = (g_menu_page != g_lcd_drawn_page) ||
                           (g_state != g_lcd_drawn_state) ||
-                          (g_state == STATE_TRIP && g_trip_reason != g_lcd_drawn_trip_reason);
+                          (g_state == STATE_TRIP && g_trip_reason != g_lcd_drawn_trip_reason) ||
+                          g_ptt_complete_display_active;
 
     if (g_menu_page >= MENU_PAGE_SWR1_TRIP) {
         setting_index = (unsigned char)(g_menu_page - MENU_PAGE_SWR1_TRIP);
@@ -417,6 +424,14 @@ void show_menu_page(void) {
     g_lcd_drawn_page = g_menu_page;
     g_lcd_drawn_state = g_state;
     g_lcd_drawn_trip_reason = g_trip_reason;
+
+    if (g_ptt_complete_display_active) {
+        lcd_set_cursor(0, 0);
+        lcd_write_text("PTT COMPLETE");
+        lcd_set_cursor(1, 0);
+        lcd_write_text("TX ACTIVE");
+        return;
+    }
 
     if (g_state == STATE_TRIP) {
         if (!screen_changed) {
@@ -550,7 +565,9 @@ void handle_ptt_transition(bool ptt_asserted) {
         return; // Ignore PTT changes until system settles (RC1 low)
     if (ptt_asserted) {
         g_ptt_active = true;
-        if (g_menu_page != MENU_PAGE_STATUS) {
+        if (!g_transient_menu_display) {
+            g_saved_user_menu_page = g_menu_page;
+            g_transient_menu_display = true;
             g_menu_page = MENU_PAGE_STATUS;
             g_menu_changed = true;
         }
@@ -565,6 +582,13 @@ void handle_ptt_transition(bool ptt_asserted) {
     } else {
         g_ptt_active = false;
         g_state = STATE_STANDBY;
+        g_ptt_complete_display_active = false;
+        g_ptt_complete_display_elapsed_ms = 0;
+        if (g_transient_menu_display) {
+            g_menu_page = g_saved_user_menu_page;
+            g_transient_menu_display = false;
+            g_menu_changed = true;
+        }
     }
 }
 
@@ -792,7 +816,14 @@ void update_tx_sequence(void) {
             g_sequence_elapsed_ms++;
             if (g_sequence_elapsed_ms >= g_thresholds.tx_bias_delay_ms) {
                 set_tx_bias_output(true);
-                g_sequence_stage = 3;
+                if (OUTPUT_TX == output_level(true, g_thresholds.tx_active_high) &&
+                    OUTPUT_TX_VCC == output_level(true, g_thresholds.tx_vcc_active_high) &&
+                    OUTPUT_TX_BIAS == output_level(true, g_thresholds.tx_bias_active_high)) {
+                    g_sequence_stage = 3;
+                    g_ptt_complete_display_active = true;
+                    g_ptt_complete_display_elapsed_ms = 0;
+                    g_menu_changed = true;
+                }
             }
         }
         return;
@@ -1069,6 +1100,16 @@ int main(void) {
                     set_tx_output(false);
                     set_tx_bias_output(false);
                     g_trip_shutdown_active = false;
+                }
+            }
+            if (g_ptt_complete_display_active) {
+                g_ptt_complete_display_elapsed_ms++;
+                if (g_ptt_complete_display_elapsed_ms >= 500) {
+                    g_ptt_complete_display_active = false;
+                    g_ptt_complete_display_elapsed_ms = 0;
+                    g_transient_menu_display = false;
+                    g_menu_page = g_saved_user_menu_page;
+                    g_menu_changed = true;
                 }
             }
             if (g_startup_inhibit) {

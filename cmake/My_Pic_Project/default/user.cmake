@@ -10,24 +10,33 @@ target_link_options(My_Pic_Project_default_image_LRxgA9DB PRIVATE "$<$<CONFIG:Re
 enable_testing()
 find_program(PYTHON_EXECUTABLE NAMES python python3 REQUIRED)
 add_test(
-    NAME PTT_ActiveLow_StartupAndReleaseSequence
+    NAME PTT_SequencerAndTripSuite
     COMMAND "${PYTHON_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
-            --test)
-add_test(
-    NAME PTT_TemperatureTrip_InTransmit
-    COMMAND "${PYTHON_EXECUTABLE}"
-            "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
-            --temperature-trip)
-add_test(
-    NAME PTT_SWR1_1P5_NoTrip_At2kW
-    COMMAND "${PYTHON_EXECUTABLE}"
-            "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
-            --swr1-1p5)
-foreach(TRIP_NAME SWR1 SWR2 HWFAULT CURRENT OVERDRIVE DRAIN)
+            --suite)
+
+option(PICAMP_ENABLE_INDIVIDUAL_SIM_TESTS "Register each simulator scenario separately" OFF)
+if (PICAMP_ENABLE_INDIVIDUAL_SIM_TESTS)
     add_test(
-        NAME PTT_${TRIP_NAME}Trip_InTransmit
+        NAME PTT_ActiveLow_StartupAndReleaseSequence
         COMMAND "${PYTHON_EXECUTABLE}"
                 "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
-                --trip ${TRIP_NAME})
-endforeach()
+                --test)
+    add_test(
+        NAME PTT_TemperatureTrip_InTransmit
+        COMMAND "${PYTHON_EXECUTABLE}"
+                "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
+                --temperature-trip)
+    add_test(
+        NAME PTT_SWR1_1P5_NoTrip_At2kW
+        COMMAND "${PYTHON_EXECUTABLE}"
+                "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
+                --swr1-1p5)
+    foreach(TRIP_NAME SWR1 SWR2 HWFAULT CURRENT OVERDRIVE DRAIN)
+        add_test(
+            NAME PTT_${TRIP_NAME}Trip_InTransmit
+            COMMAND "${PYTHON_EXECUTABLE}"
+                    "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
+                    --trip ${TRIP_NAME})
+    endforeach()
+endif()
