@@ -538,7 +538,7 @@ def main():
             ax.axvline(trip_time, color="red", linestyle="--", alpha=0.6)
             ax.axvline(shutdown_complete_time, color="orange", linestyle=":", alpha=0.7)
     for start, end, reason in block_spans:
-        axes[0].text((start + end) / 2, 1.35, reason, ha="center", va="bottom",
+        axes[0].text((start + end) / 2, 1.28, reason, ha="center", va="bottom",
                      fontsize=7, color="red", clip_on=False)
     if trip_name in TRIP_NAMES:
         axes[2].annotate("2. RELAYS HIGH (+5 ms)",
@@ -555,7 +555,7 @@ def main():
                          arrowprops={"arrowstyle": "->", "color": "red"})
     for marker_index, (marker_time, marker_label) in enumerate(lifecycle):
         axes[0].axvline(marker_time, color="steelblue", linestyle="-.", alpha=0.45)
-        axes[0].text(marker_time, 1.34 + (marker_index % 3) * 0.22, marker_label, rotation=35,
+        axes[0].text(marker_time, 1.62 + (marker_index % 3) * 0.22, marker_label, rotation=35,
                      ha="left", va="bottom", fontsize=7, color="steelblue",
                      clip_on=False)
     axes[0].set_xlim(0, times[-1])
