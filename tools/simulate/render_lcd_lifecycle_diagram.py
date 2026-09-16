@@ -9,16 +9,16 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = REPO_ROOT / "_build" / "My_Pic_Project" / "sim" / "graphs" / "lcd_lifecycle_16x2.png"
 
 PANELS = [
-    ("BOOT / EEPROM", "P=   0W  SWR 1.0", "----------------", "Loaded saved home page; example STATUS page"),
-    ("HOME PAGE: PEP", "P=   0W  SWR 1.0", "----------------", "User-selected home page remains saved"),
+    ("BOOT / EEPROM", "P=   0W SWR=1.0", "----------------", "Loaded saved home page; example STATUS page"),
+    ("HOME PAGE: PEP", "P=   0W SWR=1.0", "----------------", "User-selected home page remains saved"),
     ("HOME PAGE: TEMP", "PEP ------------", "TEMP  25C", "Other selectable home page example"),
-    ("PTT LOW REQUEST", "P=   0W  SWR 1.0", "----------------", "Firmware saves the selected home page; no fault text"),
-    ("PTT RESET PULSE", "P=   0W  SWR 1.0", "----------------", "RC1/SETTLE pulses LOW for 10 ms; LCD page is unchanged"),
+    ("PTT LOW REQUEST", "P=   0W SWR=1.0", "----------------", "Firmware saves the selected home page; no fault text"),
+    ("PTT RESET PULSE", "P=   0W SWR=1.0", "----------------", "RC1/SETTLE pulses LOW for 10 ms; LCD page is unchanged"),
     ("PTT_COMPLETE", "PTT COMPLETE    ", "TX ACTIVE       ", "Shown only after RELAYS, TX_VCC, and TX_BIAS are all active"),
-    ("HOME PAGE RESTORED", "P=   0W  SWR 1.0", "----------------", "Restored 500 ms after PTT_COMPLETE"),
+    ("HOME PAGE RESTORED", "P=   0W SWR=1.0", "----------------", "Restored 500 ms after PTT_COMPLETE"),
     ("TRIP: TEMPERATURE", "FAULT:          ", "TEMP            ", "Fault display has priority and remains until temperature recovery"),
     ("TRIP: OTHER FAULT", "FAULT:          ", "SWR1 / AMPS    ", "Other trips latch until a valid PTT re-arm or long press"),
-    ("TEMP RECOVERY", "P=   0W  SWR 1.0", "----------------", "After hysteresis: comparator reset, then TX can sequence again"),
+    ("TEMP RECOVERY", "P=   0W SWR=1.0", "----------------", "After hysteresis: comparator reset, then TX can sequence again"),
 ]
 
 
