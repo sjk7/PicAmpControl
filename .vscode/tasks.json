@@ -20,7 +20,8 @@
         "cmake",
         "--build",
         "E:/hamcode/PicAmpControl/_build/My_Pic_Project/debug",
-        "--verbose"
+        "--verbose",
+        "-j4",
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -50,7 +51,8 @@
         "cmake",
         "--build",
         "E:/hamcode/PicAmpControl/_build/My_Pic_Project/release",
-        "--verbose"
+        "--verbose",
+        "-j4",
       ],
       "options": {
         "cwd": "${workspaceFolder}"
