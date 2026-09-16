@@ -86,7 +86,7 @@ The selected fan topology is a 12 V two-wire fan with a low-side logic-level N-M
 - MENU_NEXT: RC2
 - MENU_ADJUST: RB0
 
-The menu switches are normally open and active-low, wired from the input pin to ground. RB0 uses a PORTB weak pull-up; RC2 needs an external pull-up resistor. The firmware accepts menu input only while PTT is inactive. RB1 is available as a spare input.
+The menu switches are normally open and active-low, wired from the input pin to ground. RB0 uses a PORTB weak pull-up; RC2 needs an external pull-up resistor. The firmware accepts menu input only while PTT is inactive. RB1 remains dedicated to the WCS1700 current ADC.
 
 ### Comparator board interface
 
@@ -110,7 +110,7 @@ The SWR protection channels are not required in hardware because each SWR pair i
 - The comparator board is deliberately separate from the PIC so that the critical analog faults are hardware-protected before the MCU state machine can act.
 - SWR is evaluated in firmware from the forward/reflected ADC pairs; no dedicated SWR comparator is required.
 - The seven planned analog measurements have dedicated PIC ADC pins, so no external analog multiplexer is required.
-- Three spare inputs are assigned to the LCD configuration menu.
+- Four GPIOs are currently spare: RA4, RA6, RA7, and RB6. RB6 is used only as a simulator scenario marker by the Python trace tool and is not used by firmware hardware behavior.
 - RA6 and RA7 (former OSC2/OSC1) are unallocated spare GPIO, freed by the internal oscillator; assign before use since they default to inputs with no pull-up.
 - On the falling PTT edge, RC1 outputs a 10 ms active-low pulse to reset the comparator latch network. The controller then checks INPUT_HARD_FAULT before enabling a TX sequence.
 - The comparator outputs must combine into one active-high hard-fault signal at RB4. This input remains digital; RB2 and RB3 are dedicated to analogue sensing.
