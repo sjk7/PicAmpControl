@@ -42,6 +42,7 @@ typedef enum {
     MENU_PAGE_FAN_ACTIVE_HIGH,
     MENU_PAGE_TRIP_ACTIVE_HIGH,
     MENU_PAGE_POWER_DISPLAY_MODE,
+    MENU_PAGE_NET_POWER,
     MENU_PAGE_PEP_DECAY_MS,
     MENU_PAGE_COUNT
 } menu_page_t;
@@ -64,11 +65,12 @@ typedef struct {
     bool fan_active_high;
     bool trip_active_high;
     bool power_display_pep;
+    bool net_power_display;
     unsigned int pep_decay_ms;
 } protection_thresholds_t;
 
 #define SETTINGS_MAGIC 0xA5
-#define SETTINGS_VERSION 5
+#define SETTINGS_VERSION 6
 #define MENU_SETTING_U8 0
 #define MENU_SETTING_U16 1
 #define MENU_SETTING_BOOL 2
@@ -158,6 +160,7 @@ static const unsigned char g_menu_setting_offsets[] = {
     offsetof(protection_thresholds_t, fan_active_high),
     offsetof(protection_thresholds_t, trip_active_high),
     offsetof(protection_thresholds_t, power_display_pep),
+    offsetof(protection_thresholds_t, net_power_display),
     offsetof(protection_thresholds_t, pep_decay_ms)
 };
 static const unsigned char g_menu_setting_types[] = {
@@ -165,7 +168,7 @@ static const unsigned char g_menu_setting_types[] = {
     MENU_SETTING_U8, MENU_SETTING_U16, MENU_SETTING_U8, MENU_SETTING_U16,
     MENU_SETTING_U16, MENU_SETTING_U16, MENU_SETTING_U16, MENU_SETTING_BOOL,
     MENU_SETTING_BOOL, MENU_SETTING_BOOL, MENU_SETTING_BOOL, MENU_SETTING_BOOL,
-    MENU_SETTING_BOOL, MENU_SETTING_U16
+    MENU_SETTING_BOOL, MENU_SETTING_BOOL, MENU_SETTING_U16
 };
 #define TX_ACTIVE_HIGH_DEFAULT false
 #define TX_VCC_ACTIVE_HIGH_DEFAULT false
@@ -177,7 +180,7 @@ static const char *const g_menu_labels[] = {
     "NTC B VALUE", "TEMP TRIP", "INPUT TRIP", "DRAIN TRIP", "CURRENT TRIP",
     "TX-VCC DELAY", "TX-BIAS DELAY", "TX ACTIVE",
     "TX-VCC ACTIVE", "TX-BIAS ACTIVE", "FAN ACTIVE", "TRIP ACTIVE",
-    "POWER DISPLAY", "PEP DECAY"
+    "POWER DISPLAY", "NET POWER", "PEP DECAY"
 };
 static protection_thresholds_t g_thresholds = {
     30, 20,
@@ -192,7 +195,7 @@ static protection_thresholds_t g_thresholds = {
     TX_BIAS_ACTIVE_HIGH_DEFAULT,
     FAN_ACTIVE_HIGH_DEFAULT,
     TRIP_ACTIVE_HIGH_DEFAULT,
-    true, 500
+    true, false, 500
 };
 
 bool output_level(bool active, bool active_high) {
@@ -514,6 +517,8 @@ void show_menu_page(void) {
         lcd_write_text("ms");
     } else if (g_menu_page == MENU_PAGE_POWER_DISPLAY_MODE) {
         lcd_write_text(value != 0 ? "PEP" : "RMS");
+    } else if (g_menu_page == MENU_PAGE_NET_POWER) {
+        lcd_write_text(value != 0 ? "NET" : "FWD");
     } else if (g_menu_page >= MENU_PAGE_TX_ACTIVE_HIGH) {
         lcd_write_text(value != 0 ? "HIGH" : "LOW ");
     } else {
@@ -772,8 +777,18 @@ void adjust_selected_threshold(bool increase) {
     }
 }
 
-void update_post_filter_power(unsigned int raw) {
-    unsigned int power_w = (unsigned int)(((unsigned long)raw * g_thresholds.swr2_fwd_full_scale_w) / 1023UL);
+void update_post_filter_power(unsigned int forward_raw, unsigned int reflected_raw) {
+    unsigned int forward_w = (unsigned int)(((unsigned long)forward_raw *
+                                             g_thresholds.swr2_fwd_full_scale_w) / 1023UL);
+    unsigned int reflected_w = (unsigned int)(((unsigned long)reflected_raw *
+                                               g_thresholds.swr2_fwd_full_scale_w) / 1023UL);
+    unsigned int power_w = forward_w;
+
+    if (g_thresholds.net_power_display && reflected_w < power_w) {
+        power_w -= reflected_w;
+    } else if (g_thresholds.net_power_display) {
+        power_w = 0;
+    }
 
     g_post_fwd_rms_w = (unsigned int)(((unsigned long)g_post_fwd_rms_w * 7UL + power_w) / 8UL);
     if (power_w >= g_post_fwd_pep_w) {
@@ -1068,7 +1083,7 @@ int main(void) {
         overdrive_power = overdrive_power_mw(overdrive_raw);
         drain_voltage_v = drain_voltage(drain_raw);
         current_raw = ADC_SAMPLE_CURRENT;
-        update_post_filter_power(swr2_fwd_raw);
+        update_post_filter_power(swr2_fwd_raw, swr2_ref_raw);
         g_swr2_live_tenths = compute_swr_tenths(swr2_fwd_raw, swr2_ref_raw);
 
         bool swr1_fault = swr_trip(swr1_fwd_raw, swr1_ref_raw,
