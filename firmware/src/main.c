@@ -582,9 +582,9 @@ void handle_ptt_transition(bool ptt_asserted) {
     } else {
         g_ptt_active = false;
         g_state = STATE_STANDBY;
-        g_ptt_complete_display_active = false;
-        g_ptt_complete_display_elapsed_ms = 0;
-        if (g_transient_menu_display) {
+        if (g_ptt_complete_display_active) {
+            g_ptt_complete_display_elapsed_ms = 0;
+        } else if (g_transient_menu_display) {
             g_menu_page = g_saved_user_menu_page;
             g_transient_menu_display = false;
             g_menu_changed = true;

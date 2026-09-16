@@ -33,7 +33,7 @@ DEVICE = "PIC16F18855"
 STATE_VARS = [
     "g_startup_inhibit", "g_comparator_reset_active", "g_fault_latched", "g_trip_reason",
     "g_ptt_active", "g_sequence_stage", "g_state", "g_trip_shutdown_active",
-    "g_ptt_complete_display_active"
+    "g_ptt_complete_display_active", "g_transient_menu_display"
 ]
 TRIP_REASON_BITS = [
     (0x01, "SWR1"),
@@ -421,7 +421,12 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir):
     if ptt_index is not None:
         lifecycle.append((times[ptt_index], "LCD: PTT REQ"))
     if complete_index is not None:
-        lifecycle.append((times[complete_index], "LCD: COMPLETE"))
+        lifecycle.append((times[complete_index], "LCD: PTT_COMPLETE"))
+        restored_index = next((index for index, sample in enumerate(samples)
+                               if index > complete_index and
+                               sample[2]["g_transient_menu_display"] == "false"), None)
+        if restored_index is not None:
+            lifecycle.append((times[restored_index], "LCD: RESTORED USER PAGE"))
     if trip_time is not None:
         lifecycle.append((trip_time, f"LCD: TRIP {trip_name}"))
     for ax, (kind, pin) in zip(axes, graph_rows):
@@ -604,12 +609,12 @@ def main():
                            if sample[2]["g_ptt_complete_display_active"] == "true" and
                            (sample[1]["RC5"], sample[1]["RC6"], sample[1]["RC7"]) == (0, 0, 0)), None)
     if complete_index is not None:
-        lifecycle.append((times[complete_index], "LCD: COMPLETE"))
+        lifecycle.append((times[complete_index], "LCD: PTT_COMPLETE"))
     if trip_time is not None:
         lifecycle.append((trip_time, f"LCD: TRIP {trip_name}"))
     restored_index = next((index for index, sample in enumerate(samples)
-                           if ptt_index is not None and index > ptt_index and
-                           sample[2]["g_ptt_active"] == "false"), None)
+                           if complete_index is not None and index > complete_index and
+                           sample[2]["g_transient_menu_display"] == "false"), None)
     if restored_index is not None:
         lifecycle.append((times[restored_index], "LCD: RESTORED USER PAGE"))
     for ax, (kind, pin) in zip(axes, graph_rows):
