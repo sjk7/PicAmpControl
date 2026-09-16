@@ -83,6 +83,9 @@ typedef struct {
 
 #define MENU_IDLE_TIMEOUT_MS 8000
 #define TEMPERATURE_RECOVERY_HYSTERESIS_C 5U
+#define CURRENT_SENSOR_ZERO_RAW 512U
+#define CURRENT_SENSOR_POSITIVE_COUNTS 511U
+#define CURRENT_SENSOR_FULL_SCALE_A 70U
 
 static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
@@ -1073,7 +1076,11 @@ int main(void) {
         bool swr2_fault = swr_trip(swr2_fwd_raw, swr2_ref_raw,
                        g_thresholds.swr2_trip_tenths);
         bool hw_fault = (INPUT_OVERCURRENT_FAULT == 1);
-        bool current_fault = (current_raw >= (unsigned int)g_thresholds.current_trip_a * 15U);
+        unsigned int current_trip_raw = CURRENT_SENSOR_ZERO_RAW +
+            (unsigned int)(((unsigned long)g_thresholds.current_trip_a *
+                            CURRENT_SENSOR_POSITIVE_COUNTS) /
+                           CURRENT_SENSOR_FULL_SCALE_A);
+        bool current_fault = (current_raw >= current_trip_raw);
 
         if ((INPUT_PTT == 0) != g_ptt_active) {
             handle_ptt_transition(INPUT_PTT == 0);

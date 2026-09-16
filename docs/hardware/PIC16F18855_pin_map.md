@@ -60,7 +60,7 @@ schematic/netlist/PCB need these physical numbers to be correct.
 - temperature sense: RA5 / AN5, 10 kOhm NTC divider output; selectable B3435/B3950/B4250 profile, default B3950. The firmware uses 10 C lookup points from 0 C to 150 C.
 - overdrive sense: RB2 / AN10, conditioned peak-envelope detector input scaled so the regulated nominal 5.0 V ADC full scale represents 10.0 W into 50 ohms
 - drain-peak sense: RB3 / AN11, conditioned divider scaled so the regulated nominal 5.0 V ADC full scale represents 300 V drain voltage
-- current sense: RB1 / AN9, conditioned WCS1700 output with provisional 70 A full scale and configurable 40 A default trip
+- current sense: RB1 / AN9, conditioned bidirectional WCS1700 output centered at 2.5 V; firmware uses a provisional +/-70 A full-scale model and configurable 40 A positive-current trip
 - each sensor is wired directly to its own ADC pin; no external analog multiplexer is used
 
 ### LCD interface
