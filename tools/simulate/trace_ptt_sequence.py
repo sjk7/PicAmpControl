@@ -145,6 +145,25 @@ def build_script(trip_name=None, marker=None) -> str:
         lines.append("quit")
         return "\n".join(lines)
     if trip_name and not temperature_trip:
+        if trip_name == "CURRENT":
+            for step in range(1, 21):
+                current_a = 20 + step * 1.5
+                voltage = 2.5 + (current_a / 70.0) * 2.5
+                lines.append(f"write pin RB1 {voltage:.3f}v")
+                if current_a >= 41:
+                    for _ in range(10):  # capture the five-millisecond trip shutdown
+                        lines.append("Stepi 8000")
+                        sample()
+                    break
+                lines.append("Stepi 400000")  # 50ms per ramp step
+                sample()
+            lines.append("write pin RB1 0.000v")  # sensor output falls when TX is removed
+            for _ in range(10):
+                lines.append("Stepi 40000")
+                sample()
+            safe_inputs = {"CURRENT": [("RB1", 2.857)]}  # 10A maximum on the next PTT attempt
+        else:
+            safe_inputs = None
         trip_inputs = {
             "SWR1": [("RA0", 2.500), ("RA1", 0.750)],
             "SWR2": [("RA2", 2.500), ("RA3", 0.400)],
@@ -153,20 +172,22 @@ def build_script(trip_name=None, marker=None) -> str:
             "OVERDRIVE": [("RB2", 5.000)],
             "DRAIN": [("RB3", 5.000)],
         }
-        for pin, voltage in trip_inputs[trip_name]:
-            lines.append(f"write pin {pin} {voltage:.3f}v")
-        for _ in range(10):
-            lines.append("Stepi 8000")
-            sample()
-        for _ in range(10):  # show the latched trip state for another 50ms
-            lines.append("Stepi 400000")
-            sample()
-        safe_inputs = {
+        if trip_name != "CURRENT":
+            for pin, voltage in trip_inputs[trip_name]:
+                lines.append(f"write pin {pin} {voltage:.3f}v")
+            for _ in range(10):
+                lines.append("Stepi 8000")
+                sample()
+            for _ in range(10):  # show the latched trip state for another 50ms
+                lines.append("Stepi 400000")
+                sample()
+        if safe_inputs is None:
+            safe_inputs = {
             "SWR1": [("RA0", 0.0), ("RA1", 0.0)],
             "SWR2": [("RA2", 0.0), ("RA3", 0.0)],
             "HWFAULT": [("RB4", 0.0)], "CURRENT": [("RB1", 0.0)],
             "OVERDRIVE": [("RB2", 0.0)], "DRAIN": [("RB3", 0.0)]
-        }
+            }
         for pin, voltage in safe_inputs[trip_name]:
             lines.append(f"write pin {pin} {voltage:.3f}v")
         lines.append("write pin RC0 5v")
@@ -282,6 +303,8 @@ def validate_trip(samples, trip_name) -> None:
         raise AssertionError(f"{trip_name} trip was not reported")
     if trip[2]["g_ptt_active"] != "true":
         raise AssertionError(f"{trip_name} trip did not occur while PTT was active")
+    if trip_name == "CURRENT" and not 3.85 <= trip[3]["RB1"] <= 4.10:
+        raise AssertionError(f"current trip occurred at {trip[3]['RB1']:.3f}V, outside the expected 40A threshold")
     fault_samples = [sample for sample in samples
                      if (block_reason(sample[2]) or "").startswith("FAULT:")]
     if any(sample[2]["g_ptt_complete_display_active"] == "true" for sample in fault_samples):
@@ -303,6 +326,9 @@ def validate_trip(samples, trip_name) -> None:
                           block_reason(sample[2]) == expected_reason), None)
     if shutdown_done is None or (shutdown_done[1]["RC5"], shutdown_done[1]["RC6"], shutdown_done[1]["RC7"]) != (1, 1, 1):
         raise AssertionError("fault did not raise RELAYS and TX_BIAS after five milliseconds")
+    if trip_name == "CURRENT" and any(sample[3]["RB1"] != 0.0
+                                      for sample in samples[samples.index(trip):samples.index(shutdown_done) + 1]):
+        raise AssertionError("current sensor did not fall to zero after the current trip")
     if trip_name == "TEMPERATURE":
         post_shutdown = samples[samples.index(shutdown_done):]
         if any((sample[1]["RC5"], sample[1]["RC6"], sample[1]["RC7"]) != (1, 1, 1)
@@ -322,6 +348,8 @@ def validate_trip(samples, trip_name) -> None:
                           sample[2]["g_sequence_stage"] == "3"), None)
         if recovered is None:
             raise AssertionError(f"{trip_name} did not clear and re-enter TX after a PTT re-arm")
+        if trip_name == "CURRENT" and recovered[3]["RB1"] > 2.95:
+            raise AssertionError("current re-arm exceeded the 10A limit")
         print(f"{trip_name} cleared by PTT re-arm; TX sequence resumed")
     if trip_name == "TEMPERATURE" and trip[3]["RA5"] < 4.0:
         raise AssertionError("temperature ADC input did not rise above 4V")
