@@ -526,6 +526,15 @@ void show_menu_page(void) {
     }
 }
 
+void show_boot_message(void) {
+    lcd_write_byte_now(0x01, false);
+    __delay_ms(2);
+    lcd_set_cursor(0, 0);
+    lcd_write_text("Booting, please");
+    lcd_set_cursor(1, 0);
+    lcd_write_text("wait.");
+}
+
 void adc_init(void) {
     FVRCON = 0x00;
     ANSELA = 0x2F;
@@ -1067,6 +1076,7 @@ int main(void) {
     adc_init();
     load_settings();
     lcd_init();
+    show_boot_message();
     timer0_init();
     show_menu_page();
     apply_startup_inhibit();
