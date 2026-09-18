@@ -196,8 +196,8 @@ static const unsigned char g_menu_setting_types[] = {
 #define TX_BIAS_ACTIVE_HIGH_DEFAULT false
 #define FAN_ACTIVE_HIGH_DEFAULT false
 #define TRIP_ACTIVE_HIGH_DEFAULT false
-static const char *const g_menu_labels[] = {
-    "STATUS", "STATUS", "SWR METER", "CURRENT METER", "S1 SWR TRIP", "S2 SWR TRIP", "S1 FWD MAX", "S2 FWD MAX",
+static const char *const g_setting_menu_labels[] = {
+    "S1 SWR TRIP", "S2 SWR TRIP", "S1 FWD MAX", "S2 FWD MAX",
     "NTC B VALUE", "TEMP TRIP", "INPUT TRIP", "DRAIN TRIP", "CURRENT TRIP",
     "TX-VCC DELAY", "TX-BIAS DELAY", "TX ACTIVE",
     "TX-VCC ACTIVE", "TX-BIAS ACTIVE", "FAN ACTIVE", "TRIP ACTIVE",
@@ -443,7 +443,7 @@ void service_settings_save(void) {
 }
 
 void show_menu_page(void) {
-    const char *label = g_menu_labels[g_menu_page];
+    const char *label = "";
     unsigned int value = 0;
     unsigned char setting_index;
     unsigned char *setting;
@@ -454,6 +454,7 @@ void show_menu_page(void) {
 
     if (g_menu_page >= MENU_PAGE_SWR1_TRIP) {
         setting_index = (unsigned char)(g_menu_page - MENU_PAGE_SWR1_TRIP);
+        label = g_setting_menu_labels[setting_index];
         setting = (unsigned char *)&g_thresholds + g_menu_setting_offsets[setting_index];
         value = g_menu_setting_types[setting_index] == MENU_SETTING_U16 ? *(unsigned int *)setting : *setting;
         if (g_menu_page == MENU_PAGE_TEMP_B_VALUE) {
