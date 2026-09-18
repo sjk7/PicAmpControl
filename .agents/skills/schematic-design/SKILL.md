@@ -298,7 +298,9 @@ These are generation constraints, not merely post-processing checks:
 **Write serialization rule:** Never run two MCP write operations against the
 same KiCad file in parallel. All placement, wiring, label, property, sheet,
 and cleanup writes must be sequential; parallel writes can corrupt or lose
-edits in the byte-preserving read-modify-write path.
+edits in the byte-preserving read-modify-write path. Never use
+`parallel`/`multi_tool_use` for KiCad writes; parallelism is allowed only for
+read-only inspection calls.
 
 **Reading / inspection:**
 - `get_schematic_summary` — get item counts for a sheet
