@@ -195,6 +195,12 @@ Y < 175mm.
    the IC with clear separation from the body and pins.
 - Treat the IC name area above the body as a protected routing envelope;
    wires and labels must route around it, never through its text.
+- Hierarchical sheet bounding boxes must remain clear of the page title block
+   and bottom-right reserved area; keep their bottom edge above that area and
+   verify the clearance in the exported schematic view.
+- After every placement or hierarchy change, inspect the rendered export for
+   overlapping labels, sheet pins, text, or title-block clearance before
+   committing the change.
 
 ## MCP Tools for This Skill
 
