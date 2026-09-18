@@ -59,6 +59,11 @@ regenerated.
 The checked-in `.vscode/mcp.json` points to `generated/mcp-final`. Do not open
 the similarly named legacy schematic directly under `generated/`.
 
+After hierarchy changes, inspect the active root's labels and sheet list before
+committing. Any labels left from the former flat layout are stale artifacts.
+Export the active `mcp-final` root and every changed child sheet; do not use an
+export from a legacy or probe project as the visual check.
+
 ## Troubleshooting
 
 - Server not in `MCP: List Servers`: reload the VS Code window

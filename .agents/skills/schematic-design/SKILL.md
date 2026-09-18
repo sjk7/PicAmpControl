@@ -203,6 +203,17 @@ Y < 175mm.
    then resize and move the sheet block to a deliberate functional location.
 - Sheet-pin labels must be wholly inside the sheet box or wholly outside it;
    never let a label or pin number straddle the sheet border.
+- Component reference/value fields and connector labels must not cross pins,
+   symbol bodies, or one another. Use a short in-body value and place the
+   full descriptive name beside or above the component when needed.
+- When moving circuitry into a child sheet, remove obsolete root labels and
+   wires; never leave duplicate old labels behind at the former coordinates.
+- After hierarchy changes, list the root labels and sheet pins and compare
+   them with the active hierarchy. Any label belonging only to the old flat
+   layout is a stale-artifact failure and must be removed before export.
+- Render the active root and each changed child sheet, not a similarly named
+   legacy file elsewhere in the workspace. Confirm the rendered view has no
+   duplicate text blocks, stale labels, or overlapping sheet-pin text.
 - Structural hierarchy validation is not visual validation. A successful
    `validate_hierarchy` does not approve overlapping labels, text, or sheet
    graphics; export PDF/SVG and inspect the rendered geometry before commit.
