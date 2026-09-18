@@ -229,6 +229,8 @@ Y < 175mm.
    Reference and value fields must have clear, non-overlapping field zones.
 - Reference/value fields must also clear the symbol body and graphics by a
    positive margin; touching an outline is a visual failure, not a pass.
+- Resistor, diode, and protection-device values must clear every rendered
+   connection segment; never place a value across a pin or wire.
 - The page title block and its reserved area are protected keep-outs. No
    connector/header, sheet box, component, wire, label, or annotation may
    enter or overlap that region.
@@ -262,8 +264,8 @@ Y < 175mm.
 These are generation constraints, not merely post-processing checks:
 
 - The rendered gate measures SVG text bounding boxes and checks text-to-text
-   intersections, long free-text inside symbol rectangles, and header/sheet
-   text entering the A4 title-block reservation.
+   intersections, text-to-wire intersections, long free-text inside symbol
+   rectangles, and header/sheet text entering the A4 title-block reservation.
 - Identical SVG text nodes at the exact same bounds may be a renderer duplicate
    and are ignored by the gate; identical text at different bounds remains a
    real duplicate-field failure.

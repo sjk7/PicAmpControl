@@ -98,6 +98,31 @@ foreach ($circle in $svg.SelectNodes('//svg:circle', $namespaces)) {
     }
 }
 
+# Check visible text against short rendered wire/graphic segments. Long page
+# frames are ignored; local pin and connection segments are not.
+foreach ($path in $svg.SelectNodes('//svg:path', $namespaces)) {
+    $style = ($path.style, $path.ParentNode.style | Where-Object { $_ }) -join ' '
+    if ($style -notmatch '#840000') { continue }
+    $numbers = [regex]::Matches($path.d, '[-+]?\d*\.?\d+') | ForEach-Object { [double]$_.Value }
+    for ($index = 0; $index + 3 -lt $numbers.Count; $index += 2) {
+        $x1 = $numbers[$index]; $y1 = $numbers[$index + 1]
+        $x2 = $numbers[$index + 2]; $y2 = $numbers[$index + 3]
+        if ([math]::Abs($x2 - $x1) + [math]::Abs($y2 - $y1) -gt 20) { continue }
+        $left = [math]::Min($x1, $x2) - 0.25
+        $right = [math]::Max($x1, $x2) + 0.25
+        $top = [math]::Min($y1, $y2) - 0.25
+        $bottom = [math]::Max($y1, $y2) + 0.25
+        foreach ($item in $texts) {
+            $isPinToken = $item.Text -match '^(\d+|[+-]|B[0-2]|VDD|VSS|MCLR|RE3|R[ABC]\d(?:/.*)?|RC\d(?:/.*)?)$'
+            if ($isPinToken) { continue }
+            if ($item.Right -gt $left -and $item.Left -lt $right -and
+                $item.Bottom -gt $top -and $item.Top -lt $bottom) {
+                $overlaps += "'$($item.Text)' overlaps a rendered wire segment"
+            }
+        }
+    }
+}
+
 # A4 title block and its reserved drawing area.
 $titleBlock = @{ Left = 177.0; Top = 166.0; Right = 285.0; Bottom = 198.0 }
 foreach ($item in $texts) {
