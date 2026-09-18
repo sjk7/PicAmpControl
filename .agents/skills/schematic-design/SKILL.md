@@ -201,6 +201,16 @@ Y < 175mm.
 - Place decoupling capacitors visually adjacent to the IC they serve
 - Add `PWR_FLAG` on every power net that would otherwise trigger
   "power pin not driven" ERC errors
+- HARD RULE, confirmed crash cause in this repo (see
+  `/memories/repo/kicad-cli-crash.md`): if the target net already has a
+  `PWR_FLAG` from an earlier `add_power_symbol` call, the next
+  `wire_pins_to_net` call onto that same net MUST pass
+  `auto_pwr_flag=False`. Leaving the default `auto_pwr_flag=True` adds a
+  second `PWR_FLAG` symbol whose entry is missing from the schematic's
+  top-level `symbol_instances` list, and that mismatch crashes
+  `kicad-cli.exe` (exit code -1073741819 / 0xC0000005) on every later ERC
+  and export call for that file. Only let it default to True the first
+  time a given power net is wired, when no PWR_FLAG exists for it yet.
 - Use `auto_pwr_flag=False` in wire_pins_to_net when:
   - The net will later receive an output pin via connect_pins
   - The net already has a power source on another sheet (hierarchical designs)

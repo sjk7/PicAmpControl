@@ -1287,6 +1287,25 @@
 			(footprint "")
 		)
 )
+	(wire
+	(pts
+		(xy 190.5 124.46) (xy 190.5 121.92)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "9e26831c-2cf3-4342-94d1-8ff39813d8af")
+)
+	(label "+5V"
+	(at 190.5 121.92 90)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "8694bf36-f07a-42ae-996d-8173c537e907")
+)
 	(sheet_instances
 		(path "/"
 			(page "1")
