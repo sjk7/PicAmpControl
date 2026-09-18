@@ -226,6 +226,9 @@ Y < 175mm.
 - All visible text must read left-to-right with rotation 0. Never rotate
    references, values, resistor names, labels, or annotations to follow a
    vertical component; move the text instead.
+- Never rotate a component merely to orient its text. Component rotation is
+   an electrical/layout decision that changes pin geometry; move or regenerate
+   the text fields independently while preserving the verified pin orientation.
 - Free-text annotations must never be placed inside a symbol body; generate
    them beside or above the owning symbol with measured clearance. Only the
    symbol's intentionally owned pin-name/number fields may occupy its body.
