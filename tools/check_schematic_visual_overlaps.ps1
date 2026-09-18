@@ -47,6 +47,28 @@ for ($first = 0; $first -lt $texts.Count; $first++) {
     }
 }
 
+# Catch long free-text annotations placed on top of a symbol body. Short
+# pin names and fields are handled by the text-to-text and pin checks; a
+# descriptive annotation inside a component rectangle is always suspect.
+foreach ($rect in $svg.SelectNodes('//svg:rect', $namespaces)) {
+    $style = $rect.ParentNode.style
+    if (-not $style -or $style -notmatch '#840000') { continue }
+    $rectLeft = [double]$rect.x
+    $rectTop = [double]$rect.y
+    $rectRight = $rectLeft + [double]$rect.width
+    $rectBottom = $rectTop + [double]$rect.height
+    if ($rect.width -gt 100 -or $rect.height -gt 100) { continue }
+
+    foreach ($item in $texts) {
+        if ($item.Text -notmatch '\s' -and $item.Text.Length -lt 8) { continue }
+        $insideBody = $item.Right -gt $rectLeft -and $item.Left -lt $rectRight -and
+            $item.Bottom -gt $rectTop -and $item.Top -lt $rectBottom
+        if ($insideBody) {
+            $overlaps += "'$($item.Text)' overlaps a symbol body rectangle"
+        }
+    }
+}
+
 # A4 title block and its reserved drawing area.
 $titleBlock = @{ Left = 177.0; Top = 166.0; Right = 285.0; Bottom = 198.0 }
 foreach ($item in $texts) {

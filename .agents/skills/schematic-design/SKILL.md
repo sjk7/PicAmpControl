@@ -220,6 +220,10 @@ Y < 175mm.
 - No visible text may overlap any pin, wire, symbol body, sheet border, pin
    number, other text, or title-block element. This is a hard failure, not a
    cosmetic warning.
+- Free-text annotations must never be placed inside a symbol body; generate
+   them beside or above the owning symbol with measured clearance. Only the
+   symbol's intentionally owned reference/value/pin fields may occupy its
+   body, and those fields must not overlap one another or pin graphics.
 - The page title block and its reserved area are protected keep-outs. No
    connector/header, sheet box, component, wire, label, or annotation may
    enter or overlap that region.
