@@ -700,7 +700,7 @@
       (uuid 04506735-b3a6-598c-b6fe-cba008cd8e0d))
     (instances
       (project "SKiDL-Generated"
-        (path "/1bbe9d5f-3fba-4b26-b038-cadb36f9032d/1515956d-950e-50fb-a850-78278e328eb4"
+        (path "/e1659184-23bd-4bc5-bdbf-61c862f0adc0/1515956d-950e-50fb-a850-78278e328eb4"
           (reference "U3")
           (unit 1)))))
   (global_label "BAND_160M"
@@ -710,7 +710,7 @@
       (font
         (size 1.27 1.27))
       (justify right))
-    (uuid 16969580-e98e-5a31-8aa5-202663327918))
+    (uuid b699ea80-8e9a-5a70-aa72-4ad8b9c7500c))
   (global_label "BAND_80M"
     (shape bidirectional)
     (at 133.35 101.6 180)
@@ -726,7 +726,7 @@
       (font
         (size 1.27 1.27))
       (justify right))
-    (uuid 81f741f6-c4f3-56d1-b8a5-e1a80d19d46c))
+    (uuid 32d86405-c5cf-54ee-9f62-0990bed1c496))
   (global_label "BAND_20M"
     (shape bidirectional)
     (at 133.35 106.68 180)
@@ -734,7 +734,7 @@
       (font
         (size 1.27 1.27))
       (justify right))
-    (uuid 24f84735-ca7a-57f0-97c1-4ad16851f1e2))
+    (uuid 798eda56-2970-515d-9b6d-d5b2f6d18f25))
   (global_label "BAND_15M"
     (shape bidirectional)
     (at 133.35 109.22 180)
@@ -742,7 +742,7 @@
       (font
         (size 1.27 1.27))
       (justify right))
-    (uuid 405e16ac-8b2c-5658-8f1d-97a0f96fd1ce))
+    (uuid 78848c57-ece0-576b-9627-56a364bc875a))
   (global_label "BAND_10M"
     (shape bidirectional)
     (at 133.35 111.76 180)
@@ -758,7 +758,7 @@
       (font
         (size 1.27 1.27))
       (justify right))
-    (uuid c31d4d6b-dddb-5063-9084-657a7b3d2274))
+    (uuid e2713510-6e0c-5386-a92d-a70485a6231d))
   (symbol
     (lib_id "power:GND")
     (at 143.51 121.92 0.0)
@@ -846,7 +846,7 @@
       (font
         (size 1.27 1.27))
       (justify left))
-    (uuid 3a564b31-e54c-52e9-bf4c-c3d6ffaaf211))
+    (uuid 517ec44b-9958-54d7-95cc-a9033b24569c))
   (global_label "RELAY_80M_C"
     (shape bidirectional)
     (at 153.67 101.6 0)
@@ -862,7 +862,7 @@
       (font
         (size 1.27 1.27))
       (justify left))
-    (uuid ced90415-1490-581d-af3a-6fe5c9835cdb))
+    (uuid 86f435f1-4418-5e6d-b942-9dbfec5533e3))
   (global_label "RELAY_20M_C"
     (shape bidirectional)
     (at 153.67 106.68 0)
@@ -870,7 +870,7 @@
       (font
         (size 1.27 1.27))
       (justify left))
-    (uuid 2975d356-bd5c-580e-9775-914fd5a18ef4))
+    (uuid db52de6f-e994-5c2b-aca2-b963dda94459))
   (global_label "RELAY_15M_C"
     (shape bidirectional)
     (at 153.67 109.22 0)
@@ -878,7 +878,7 @@
       (font
         (size 1.27 1.27))
       (justify left))
-    (uuid 6bb16ad2-b1a8-5685-bdf3-b3718675cb8a))
+    (uuid eeb20179-f860-5253-b4a4-f616e8418213))
   (global_label "RELAY_10M_C"
     (shape bidirectional)
     (at 153.67 111.76 0)
@@ -894,10 +894,10 @@
       (font
         (size 1.27 1.27))
       (justify left))
-    (uuid a5a2fd8a-591c-531b-b428-591bdae55c79))
+    (uuid abd77ec2-3d3d-521f-a05b-75cd335f34a2))
   (no_connect
     (at 133.35 116.84)
-    (uuid d5462326-51a5-5cab-bb09-85235d2f25d2))
+    (uuid 6aeb8c81-6723-544b-b2d9-a4fb9ac279b4))
   (no_connect
     (at 153.67 116.84)
-    (uuid 2674444c-8a8d-52a2-a97b-e45ed88567a2)))
+    (uuid d281f8e6-db75-5ca8-96cb-75e56939d5e2)))

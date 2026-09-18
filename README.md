@@ -22,6 +22,7 @@ The project is in a working firmware-validation stage:
 - ADC input protection guidance: [docs/hardware/adc-input-protection-guidance.md](docs/hardware/adc-input-protection-guidance.md)
 - LPF band-select relay netlist and schematic notes: [docs/hardware/lpf-band-select-netlist.md](docs/hardware/lpf-band-select-netlist.md)
 - LPF band decoder KiCad schematic: [docs/hardware/lpf_band_decoder.kicad_sch](docs/hardware/lpf_band_decoder.kicad_sch)
+- Schematic workflow (KiCad MCP skill setup and usage): [docs/hardware/schematic-workflow.md](docs/hardware/schematic-workflow.md)
 - Bench validation procedure: [docs/hardware/bench-validation.md](docs/hardware/bench-validation.md)
 - Firmware entry point: [firmware/src/main.c](firmware/src/main.c)
 - Pin definitions: [firmware/include/pin_map.h](firmware/include/pin_map.h)

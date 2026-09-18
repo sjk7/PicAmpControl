@@ -115,8 +115,9 @@ def structured_layout(output_dir: Path) -> int:
             if "Value" in component.properties:
                 component.properties["Value"]["at"] = [x, y + 5.0, 0]
             moves += 1
-    for wire in list(schematic.wires):
-        schematic.remove_wire(wire.uuid)
+    # Avoid GUID-based wire cleanup here: the KiCad API can report stale UUIDs after
+    # a file reload or partial rewrite, so the generator should prefer regenerating the
+    # topology from source metadata instead of deleting wires by dead object IDs.
     connections = [
         ("U1", "26", "Q1", "G"),
         ("Q1", "D", "FAN1", "2"),

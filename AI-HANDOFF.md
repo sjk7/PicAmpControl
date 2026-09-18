@@ -62,6 +62,7 @@
 - Hardware map: `docs/hardware/PIC16F18855_pin_map.md`
 - Display/menu diagram links are in `README.md`.
 - Frequency-counter handoff: `docs/frequency-counter-next-steps.md`
+- Schematic workflow (KiCad MCP skill, setup, troubleshooting): `docs/hardware/schematic-workflow.md`
 - Operator UI is a single EC11-style rotary encoder: RC2=A, RB0=B, RB6=push switch, all active-low/common-to-ground with pull-ups. The LPF band decoder uses only RA4/RA6/RA7 because 3 bits cover OFF plus seven bands.
 
 ## Deferred frequency-counter work
@@ -80,3 +81,4 @@
 4. Run the single suite before modifying simulator behavior.
 5. Keep generated outputs in the existing `sim/csv` and `sim/graphs` directories.
 6. Commit and push verified changes promptly.
+7. For any schematic work, read `docs/hardware/schematic-workflow.md` first and use the `schematic-design` skill; never hand-edit `.kicad_sch` files or run `kicad-cli` directly.
