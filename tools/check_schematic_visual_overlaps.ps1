@@ -60,7 +60,8 @@ foreach ($rect in $svg.SelectNodes('//svg:rect', $namespaces)) {
     if ($rect.width -gt 100 -or $rect.height -gt 100) { continue }
 
     foreach ($item in $texts) {
-        if ($item.Text -notmatch '\s' -and $item.Text.Length -lt 8) { continue }
+        $isPinToken = $item.Text -match '^(\d+|[+-]|B[0-2]|VDD|VSS|MCLR|RE3|R[ABC]\d(?:/.*)?|RC\d(?:/.*)?)$'
+        if ($isPinToken) { continue }
         $insideBody = $item.Right -gt $rectLeft -and $item.Left -lt $rectRight -and
             $item.Bottom -gt $rectTop -and $item.Top -lt $rectBottom
         if ($insideBody) {

@@ -222,8 +222,8 @@ Y < 175mm.
    cosmetic warning.
 - Free-text annotations must never be placed inside a symbol body; generate
    them beside or above the owning symbol with measured clearance. Only the
-   symbol's intentionally owned reference/value/pin fields may occupy its
-   body, and those fields must not overlap one another or pin graphics.
+   symbol's intentionally owned pin-name/number fields may occupy its body.
+   Reference and value fields must have clear, non-overlapping field zones.
 - The page title block and its reserved area are protected keep-outs. No
    connector/header, sheet box, component, wire, label, or annotation may
    enter or overlap that region.
@@ -269,6 +269,8 @@ These are generation constraints, not merely post-processing checks:
    hierarchy block; inspect the active root and changed child sheets only.
 - A rendered overlap failure blocks commit, ERC handoff, and PCB-layout work
    until the geometry is corrected and the same rendered check passes.
+- Every new visual-gate failure must be converted into a durable generation
+   rule here before the corresponding schematic repair is accepted.
 - Whenever a new SVG visual export is generated, immediately refresh/open that
    exact active-root SVG in the current VS Code Insiders window so the user can
    inspect the same artifact used by the visual check.
