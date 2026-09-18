@@ -198,6 +198,9 @@ Y < 175mm.
 - Hierarchical sheet bounding boxes must remain clear of the page title block
    and bottom-right reserved area; keep their bottom edge above that area and
    verify the clearance in the exported schematic view.
+- Size each hierarchical sheet to its actual pin/text envelope plus a small
+   clearance margin; never retain a large default rectangle after its pin
+   count or contents change.
 - Never accept the default pin/label positions produced by an automatic
    hierarchy helper without inspection. Spread labels to clear text boxes,
    then resize and move the sheet block to a deliberate functional location.
