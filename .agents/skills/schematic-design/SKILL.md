@@ -231,6 +231,9 @@ Y < 175mm.
 - Never rotate a component merely to orient its text. Component rotation is
    an electrical/layout decision that changes pin geometry; move or regenerate
    the text fields independently while preserving the verified pin orientation.
+- When moving a component, move its reference and value fields with it. Never
+   leave an orphaned `U4`, `7805`, resistor name, or other owned field at the
+   former coordinates; the rendered visual check must fail if that happens.
 - Free-text annotations must never be placed inside a symbol body; generate
    them beside or above the owning symbol with measured clearance. Only the
    symbol's intentionally owned pin-name/number fields may occupy its body.
