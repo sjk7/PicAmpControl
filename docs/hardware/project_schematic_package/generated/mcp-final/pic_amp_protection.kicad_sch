@@ -1297,6 +1297,26 @@
 	)
 	(uuid "9e26831c-2cf3-4342-94d1-8ff39813d8af")
 )
+	(wire
+	(pts
+		(xy 187.96 175.26) (xy 187.96 177.8)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "fff3c1b7-e340-4dd9-be0b-8d6a8c93914f")
+)
+	(wire
+	(pts
+		(xy 193.04 175.26) (xy 193.04 177.8)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "3f4a703b-a5b6-4198-a838-952bf44bb7bb")
+)
 	(label "+5V"
 	(at 190.5 121.92 90)
 	(effects
@@ -1305,6 +1325,24 @@
 		)
 	)
 	(uuid "8694bf36-f07a-42ae-996d-8173c537e907")
+)
+	(label "GND"
+	(at 187.96 177.8 270)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "9e4b8ad6-25ff-4feb-ba0a-0c2d6e7a423e")
+)
+	(label "GND"
+	(at 193.04 177.8 270)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "fb31eca4-63ba-4b05-a81c-af8778ec7fad")
 )
 	(sheet_instances
 		(path "/"
