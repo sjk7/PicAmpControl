@@ -220,6 +220,9 @@ Y < 175mm.
 - No visible text may overlap any pin, wire, symbol body, sheet border, pin
    number, other text, or title-block element. This is a hard failure, not a
    cosmetic warning.
+- The page title block and its reserved area are protected keep-outs. No
+   connector/header, sheet box, component, wire, label, or annotation may
+   enter or overlap that region.
 - Connector values that do not fit beside their pins must be hidden or blank;
    place the descriptive connector name above or beside the pin field with
    measured clearance.

@@ -47,6 +47,19 @@ for ($first = 0; $first -lt $texts.Count; $first++) {
     }
 }
 
+# A4 title block and its reserved drawing area.
+$titleBlock = @{ Left = 177.0; Top = 166.0; Right = 285.0; Bottom = 198.0 }
+foreach ($item in $texts) {
+    $isHeaderOrSheetText = $item.Text -match '^(J\d|LCD|PTT|ENC|TX|SWR|ADC|FAN|ANALOG|SENSE|band_change)'
+    $touchesTitleBlock = $item.Right -gt $titleBlock.Left -and
+        $item.Left -lt $titleBlock.Right -and
+        $item.Bottom -gt $titleBlock.Top -and
+        $item.Top -lt $titleBlock.Bottom
+    if ($isHeaderOrSheetText -and $touchesTitleBlock) {
+        $overlaps += "'$($item.Text)' enters the reserved title-block area"
+    }
+}
+
 if ($overlaps.Count -gt 0) {
     Write-Error ("Visual overlap check failed with {0} collision(s):`n{1}" -f $overlaps.Count, ($overlaps -join "`n"))
     exit 1
