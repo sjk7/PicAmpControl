@@ -238,6 +238,17 @@ Y < 175mm.
   verifying with `kicad-cli sch erc` that the violation count is
   unchanged. Only keep a real label when it does actual work (a net
   spanning a distance with no direct wire, or crossing sheets).
+- HARD RULE: never use a bare `GND` text net label as a ground
+  connection. Always place a proper `power:GND` symbol instead (this
+  matches the general schematic geometry rule elsewhere in this file:
+  "use the proper `power:GND` symbol for every ground connection; do not
+  use a visible `GND` net label as a substitute"). Only one `PWR_FLAG` is
+  needed for the whole GND net across the sheet, not one per GND symbol
+  instance — see the "one PWR_FLAG per net" finding above. When a pin is
+  close to an existing same-net power/decoupling component, prefer a
+  direct `connect_pins` wire over adding a new label or a new power
+  symbol; only add a new `power:GND`/`power:+5V` symbol when the pin is
+  genuinely far from any existing point on that net.
 
 ## Naming
 
