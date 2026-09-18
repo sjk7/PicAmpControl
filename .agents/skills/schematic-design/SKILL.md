@@ -276,6 +276,18 @@ Y < 175mm.
    power symbol through a symbol body or over its graphics.
 - Route wires around complete symbol bodies, pins, text fields, labels, and
    their clearance margins. Never route through a component or its text.
+- HARD RULE, explicitly banned: a wire segment may NEVER cross, enter, or
+   pass through ANY component's body — including passive-component
+   graphics like capacitor plates, not just IC/connector rectangles. A
+   corner/bend point in a routed path must never land on a component's
+   geometric placement origin (its center) if that origin sits between
+   the component's own plates/pins — always bend at a point outside the
+   component's full graphical envelope, or route directly to the actual
+   pin coordinate first before turning. If a wire's straight-line path
+   between two real connection points would cross a component sitting on
+   that line (e.g. a decoupling cap placed midway along a supply rail),
+   detour the wire around that component's envelope, or route via the
+   component's own already-connected pin instead of a pass-through line.
 - Keep the IC reference and value inside the body when they fit; otherwise
    place them directly above the body without overlapping pin names.
 - IC name text and pin-name text must never overlap. First move the IC name
