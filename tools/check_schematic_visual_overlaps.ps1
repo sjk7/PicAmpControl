@@ -68,6 +68,13 @@ foreach ($rect in $svg.SelectNodes('//svg:rect', $namespaces)) {
         if ($insideBody) {
             $overlaps += "'$($item.Text)' overlaps a symbol body rectangle"
         }
+        $isConnectorField = $item.Text -match '^(J\d+|FAN|LCD|PTT|ENC|TX|SWR|ADC|NTC)$'
+        $nearConnectorBody = $isConnectorField -and
+            $item.Right -gt ($rectLeft - 8) -and $item.Left -lt ($rectRight + 8) -and
+            $item.Bottom -gt ($rectTop - 5) -and $item.Top -lt ($rectBottom + 5)
+        if ($nearConnectorBody) {
+            $overlaps += "'$($item.Text)' is too close to a connector body"
+        }
     }
 }
 

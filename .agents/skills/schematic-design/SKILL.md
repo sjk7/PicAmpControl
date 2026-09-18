@@ -194,6 +194,9 @@ Y < 175mm.
 - Use the proper `power:GND` symbol for every ground connection; do not use a
    visible `GND` net label as a substitute. Hide the redundant ground-name
    text when the power symbol already identifies the net.
+- Power symbols and their fields must be outside component bodies. Connect
+   them from the relevant pin with a short clear wire stub; never place a
+   power symbol through a symbol body or over its graphics.
 - Route wires around complete symbol bodies, pins, text fields, labels, and
    their clearance margins. Never route through a component or its text.
 - Keep the IC reference and value inside the body when they fit; otherwise
@@ -232,6 +235,8 @@ Y < 175mm.
 - Connector values that do not fit beside their pins must be hidden or blank;
    place the descriptive connector name above or beside the pin field with
    measured clearance.
+- Connector designators and values must clear the connector body and pin
+   field by a positive margin; being just outside the rectangle is not enough.
 - When moving circuitry into a child sheet, remove obsolete root labels and
    wires; never leave duplicate old labels behind at the former coordinates.
 - After hierarchy changes, list the root labels and sheet pins and compare
