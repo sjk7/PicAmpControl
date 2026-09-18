@@ -4,7 +4,7 @@
 
 - Repository: `PicAmpControl`
 - Branch: `main`
-- Latest pushed commit: `2884824` (`Synchronize docs diagrams and scenario traces`)
+- Latest pushed commit: `ef14ddf` (`Create validated MCP schematic foundation`)
 - A user change exists in `.vscode/tasks.json`; do not revert or include it unless explicitly requested.
 - After verified changes, build, commit, and push.
 
@@ -63,6 +63,7 @@
 - Display/menu diagram links are in `README.md`.
 - Frequency-counter handoff: `docs/frequency-counter-next-steps.md`
 - Schematic workflow (KiCad MCP skill, setup, troubleshooting): `docs/hardware/schematic-workflow.md`
+- Active schematic project: `docs/hardware/project_schematic_package/generated/mcp-final/pic_amp_protection.kicad_sch`
 - Operator UI is a single EC11-style rotary encoder: RC2=A, RB0=B, RB6=push switch, all active-low/common-to-ground with pull-ups. The LPF band decoder uses only RA4/RA6/RA7 because 3 bits cover OFF plus seven bands.
 
 ## Deferred frequency-counter work
@@ -82,3 +83,4 @@
 5. Keep generated outputs in the existing `sim/csv` and `sim/graphs` directories.
 6. Commit and push verified changes promptly.
 7. For any schematic work, read `docs/hardware/schematic-workflow.md` first and use the `schematic-design` skill; never hand-edit `.kicad_sch` files or run `kicad-cli` directly.
+8. On a new machine, run `powershell -File tools\setup_schematic_skill.ps1`, start `kicad` from `MCP: List Servers`, and use only `generated/mcp-final`.

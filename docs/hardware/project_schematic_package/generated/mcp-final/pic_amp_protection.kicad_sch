@@ -4397,6 +4397,476 @@
 			)
 		)
 		(embedded_fonts no)
+	)
+		(symbol "Relay:Relay_SPST-NO"
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "K"
+			(at 11.43 3.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "Relay_SPST-NO"
+			(at 11.43 1.27 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 11.43 -1.27 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Relay SPST, normally open, EN50005"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "1P1T 1-Form-A single pole throw NO"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "Relay?SPST*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "Relay_SPST-NO_0_0"
+			(polyline
+				(pts
+					(xy 7.62 5.08) (xy 7.62 2.54) (xy 6.985 3.175) (xy 7.62 3.81)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "Relay_SPST-NO_0_1"
+			(rectangle
+				(start -10.16 5.08)
+				(end 10.16 -5.08)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type background)
+				)
+			)
+			(rectangle
+				(start -8.255 1.905)
+				(end -1.905 -1.905)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -7.62 -1.905) (xy -2.54 1.905)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -5.08 5.08) (xy -5.08 1.905)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -5.08 -5.08) (xy -5.08 -1.905)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.905 0) (xy -1.27 0)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -0.635 0) (xy 0 0)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.635 0) (xy 1.27 0)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.905 0) (xy 2.54 0)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 3.175 0) (xy 3.81 0)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 5.08 -2.54) (xy 3.175 3.81)
+				)
+				(stroke
+					(width 0.508)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 5.08 -2.54) (xy 5.08 -5.08)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "Relay_SPST-NO_1_1"
+			(pin passive line
+				(at -5.08 7.62 270)
+				(length 2.54)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "A1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at -5.08 -7.62 90)
+				(length 2.54)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "A2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 5.08 -7.62 90)
+				(length 2.54)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "13"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 7.62 7.62 270)
+				(length 2.54)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "14"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+		(symbol "Device:D"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 1.016)
+			(hide yes)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "D"
+			(at 0 2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "D"
+			(at 0 -2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Diode"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Sim.Device" "D"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Sim.Pins" "1=K 2=A"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "diode"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "TO-???* *_Diode_* *SingleDiode* D_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "D_0_1"
+			(polyline
+				(pts
+					(xy -1.27 1.27) (xy -1.27 -1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 1.27) (xy 1.27 -1.27) (xy -1.27 0) (xy 1.27 1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.27 0) (xy -1.27 0)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "D_1_1"
+			(pin passive line
+				(at -3.81 0 0)
+				(length 2.54)
+				(name "K"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 3.81 0 180)
+				(length 2.54)
+				(name "A"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
 	))
 	(symbol
 	(lib_name "4xxx_IEEE:4514")
@@ -4767,6 +5237,874 @@
 		)
 	)
 )
+	(symbol
+	(lib_name "Relay:Relay_SPST-NO")
+	(lib_id "Relay:Relay_SPST-NO")
+	(at 30.48 144.78 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "b79ec903-e143-4f75-9899-3a3ede06d9cd")
+	(property "Reference" "K1"
+		(at 30.48 140.97 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "160m LPF"
+		(at 30.48 148.59 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 30.48 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 30.48 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "13"
+	(uuid "6babc862-2608-4145-a41a-088255cc97f5")
+)
+	(pin "14"
+	(uuid "a7752732-184d-4ad5-9ff7-83b4bf3d6c8f")
+)
+	(pin "A1"
+	(uuid "16664401-7f75-42fe-8db2-acdc01fc1bce")
+)
+	(pin "A2"
+	(uuid "49782cf4-c1b5-4cc3-9b96-ac6af39d1f7d")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "K1")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Relay:Relay_SPST-NO")
+	(lib_id "Relay:Relay_SPST-NO")
+	(at 69.85 144.78 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "27c27d4b-c930-4a3e-9289-971873a59c34")
+	(property "Reference" "K2"
+		(at 69.85 140.97 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "80m LPF"
+		(at 69.85 148.59 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 69.85 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 69.85 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "13"
+	(uuid "988043e6-3401-48b8-aa8f-f147d5bef07f")
+)
+	(pin "14"
+	(uuid "3c9d71b5-dc78-44a3-bbb9-ef8feb834b03")
+)
+	(pin "A1"
+	(uuid "ff1862c4-a98b-4f47-95e4-d629436afb13")
+)
+	(pin "A2"
+	(uuid "b6740dec-647d-4524-b747-d59f7acfe51a")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "K2")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Relay:Relay_SPST-NO")
+	(lib_id "Relay:Relay_SPST-NO")
+	(at 110.49 144.78 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "7886af39-188b-40d1-b38a-18646e43f69a")
+	(property "Reference" "K3"
+		(at 110.49 140.97 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "40m LPF"
+		(at 110.49 148.59 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 110.49 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 110.49 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "13"
+	(uuid "364f9d7c-b4c8-4a8c-ba6f-a03c0d8a58c7")
+)
+	(pin "14"
+	(uuid "da380e82-f8e6-4b5b-96ef-078af9c2aaa2")
+)
+	(pin "A1"
+	(uuid "5d8b1a9d-1922-4c7a-ab33-7f923d046b51")
+)
+	(pin "A2"
+	(uuid "a98f5f52-f968-4388-90ad-559cf27fd672")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "K3")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Relay:Relay_SPST-NO")
+	(lib_id "Relay:Relay_SPST-NO")
+	(at 149.86 144.78 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "135e362f-2b82-4ba1-b58c-d7e0c3ed1d0c")
+	(property "Reference" "K4"
+		(at 149.86 140.97 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "20m LPF"
+		(at 149.86 148.59 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 149.86 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 149.86 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "13"
+	(uuid "a0e687d9-24b0-41b2-b411-5783cb32f131")
+)
+	(pin "14"
+	(uuid "725b174c-395d-4d82-83c8-0b83dc90cb76")
+)
+	(pin "A1"
+	(uuid "9b9078f6-2d4d-41c7-a41d-1a1e8dc62d0d")
+)
+	(pin "A2"
+	(uuid "bef975c0-806f-41bd-a652-eb284495788c")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "K4")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Relay:Relay_SPST-NO")
+	(lib_id "Relay:Relay_SPST-NO")
+	(at 190.5 144.78 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "12bb7259-7c59-41a3-8993-948793e2d6df")
+	(property "Reference" "K5"
+		(at 190.5 140.97 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "15m LPF"
+		(at 190.5 148.59 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 190.5 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 190.5 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "13"
+	(uuid "727d9d49-82f9-4be1-9e57-bfb80dae4739")
+)
+	(pin "14"
+	(uuid "69193aa1-f2ca-41e5-b624-b625b0f64140")
+)
+	(pin "A1"
+	(uuid "91e295fa-0705-4422-acd3-22a6b1b30599")
+)
+	(pin "A2"
+	(uuid "839b0fea-52bf-47ed-b5d2-9f35fcff91c7")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "K5")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Relay:Relay_SPST-NO")
+	(lib_id "Relay:Relay_SPST-NO")
+	(at 229.87 144.78 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "9066ec7c-b801-4cfb-9000-8be2c6aa2375")
+	(property "Reference" "K6"
+		(at 229.87 140.97 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "10m LPF"
+		(at 229.87 148.59 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 229.87 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 229.87 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "13"
+	(uuid "aa689ab8-3fe6-40d7-a7f9-f9a46e8f7371")
+)
+	(pin "14"
+	(uuid "f2330ce2-cb13-4571-acaf-63679e76fea5")
+)
+	(pin "A1"
+	(uuid "cbba1cc9-d908-44e5-b73e-b2ecc44b53e3")
+)
+	(pin "A2"
+	(uuid "97a2cd0a-955a-4436-a3ad-231f1060191c")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "K6")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Relay:Relay_SPST-NO")
+	(lib_id "Relay:Relay_SPST-NO")
+	(at 270.51 144.78 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "63688a73-c052-44ff-ae12-8da30d3c7f30")
+	(property "Reference" "K7"
+		(at 270.51 140.97 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "6m LPF"
+		(at 270.51 148.59 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 270.51 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 270.51 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "13"
+	(uuid "ae2f4a48-ebd8-42ab-8852-2c2d25ce3b3c")
+)
+	(pin "14"
+	(uuid "def42989-4779-44dd-b9a1-4a643ddf2872")
+)
+	(pin "A1"
+	(uuid "8763cd79-5171-4d07-b48f-59a0c1c18238")
+)
+	(pin "A2"
+	(uuid "8b7eff7f-a02f-404e-bdbd-e5976e9b6fe0")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "K7")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Device:D")
+	(lib_id "Device:D")
+	(at 30.48 115.57 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "a517fa2d-2adb-469b-b436-ff72bd2b61b2")
+	(property "Reference" "D1"
+		(at 30.48 111.76 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "1N4007 K1"
+		(at 30.48 119.38 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 30.48 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 30.48 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "6fa7f38c-780c-46a5-8771-91c48fd7bc95")
+)
+	(pin "2"
+	(uuid "8d04edee-fb70-4ff5-8049-b0df334fa4dd")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "D1")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Device:D")
+	(lib_id "Device:D")
+	(at 69.85 115.57 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "218ad3c5-9367-4acf-8a94-3a7d6d41a3e5")
+	(property "Reference" "D2"
+		(at 69.85 111.76 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "1N4007 K2"
+		(at 69.85 119.38 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 69.85 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 69.85 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "75ee1b6c-90d2-4988-b3c5-275609e568f7")
+)
+	(pin "2"
+	(uuid "44061c35-f5f9-4ef5-bd7e-9c098244f960")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "D2")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Device:D")
+	(lib_id "Device:D")
+	(at 110.49 115.57 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "87a95a3f-6f32-4338-a383-9ec73e1d0974")
+	(property "Reference" "D3"
+		(at 110.49 111.76 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "1N4007 K3"
+		(at 110.49 119.38 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 110.49 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 110.49 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "a2a79e3c-0102-49a7-9240-5f545d8dbdec")
+)
+	(pin "2"
+	(uuid "07c7d950-068e-4e68-92c6-5cbaf43229fc")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "D3")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Device:D")
+	(lib_id "Device:D")
+	(at 149.86 115.57 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "ba19beb4-83f1-4cab-a00a-f0435214dc56")
+	(property "Reference" "D4"
+		(at 149.86 111.76 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "1N4007 K4"
+		(at 149.86 119.38 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 149.86 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 149.86 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "a4a1fa25-6171-4d82-9a8a-5b66d297bc91")
+)
+	(pin "2"
+	(uuid "6f8faa9d-0689-4aee-943f-9ea538f14a4b")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "D4")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Device:D")
+	(lib_id "Device:D")
+	(at 190.5 115.57 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "821409d7-d9b2-4f19-9f12-dbc02b158254")
+	(property "Reference" "D5"
+		(at 190.5 111.76 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "1N4007 K5"
+		(at 190.5 119.38 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 190.5 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 190.5 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "2dd4a777-cc58-42d9-b4ad-ef53d9053049")
+)
+	(pin "2"
+	(uuid "3c36005c-385c-4bbd-8d06-7c51fafbc18f")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "D5")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Device:D")
+	(lib_id "Device:D")
+	(at 229.87 115.57 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "bf7b42c5-d6af-4c34-bf40-95d44a98247d")
+	(property "Reference" "D6"
+		(at 229.87 111.76 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "1N4007 K6"
+		(at 229.87 119.38 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 229.87 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 229.87 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "c2df63ce-4615-4c07-8279-cc5ec74acd87")
+)
+	(pin "2"
+	(uuid "e91aad08-f7ed-45cd-b831-2ab7d9c7258c")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "D6")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Device:D")
+	(lib_id "Device:D")
+	(at 270.51 115.57 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "49b78238-e24a-4758-8140-ecfc71720bc3")
+	(property "Reference" "D7"
+		(at 270.51 111.76 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "1N4007 K7"
+		(at 270.51 119.38 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 270.51 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 270.51 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "49ace97a-f132-4103-860d-0861d887965b")
+)
+	(pin "2"
+	(uuid "8bef0afc-a55e-4881-855e-ad0a4ba46694")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "D7")
+				(unit 1)
+			)
+		)
+	)
+)
 	(symbol_instances
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/b5bf65e9-1389-48b8-93e2-1cf4c4220d38"
 			(reference "U2")
@@ -4784,6 +6122,90 @@
 			(reference "U1")
 			(unit 1)
 			(value "MCU")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/b79ec903-e143-4f75-9899-3a3ede06d9cd"
+			(reference "K1")
+			(unit 1)
+			(value "160m LPF")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/27c27d4b-c930-4a3e-9289-971873a59c34"
+			(reference "K2")
+			(unit 1)
+			(value "80m LPF")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/7886af39-188b-40d1-b38a-18646e43f69a"
+			(reference "K3")
+			(unit 1)
+			(value "40m LPF")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/135e362f-2b82-4ba1-b58c-d7e0c3ed1d0c"
+			(reference "K4")
+			(unit 1)
+			(value "20m LPF")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/12bb7259-7c59-41a3-8993-948793e2d6df"
+			(reference "K5")
+			(unit 1)
+			(value "15m LPF")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/9066ec7c-b801-4cfb-9000-8be2c6aa2375"
+			(reference "K6")
+			(unit 1)
+			(value "10m LPF")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/63688a73-c052-44ff-ae12-8da30d3c7f30"
+			(reference "K7")
+			(unit 1)
+			(value "6m LPF")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/a517fa2d-2adb-469b-b436-ff72bd2b61b2"
+			(reference "D1")
+			(unit 1)
+			(value "1N4007 K1")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/218ad3c5-9367-4acf-8a94-3a7d6d41a3e5"
+			(reference "D2")
+			(unit 1)
+			(value "1N4007 K2")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/87a95a3f-6f32-4338-a383-9ec73e1d0974"
+			(reference "D3")
+			(unit 1)
+			(value "1N4007 K3")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/ba19beb4-83f1-4cab-a00a-f0435214dc56"
+			(reference "D4")
+			(unit 1)
+			(value "1N4007 K4")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/821409d7-d9b2-4f19-9f12-dbc02b158254"
+			(reference "D5")
+			(unit 1)
+			(value "1N4007 K5")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/bf7b42c5-d6af-4c34-bf40-95d44a98247d"
+			(reference "D6")
+			(unit 1)
+			(value "1N4007 K6")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/49b78238-e24a-4758-8140-ecfc71720bc3"
+			(reference "D7")
+			(unit 1)
+			(value "1N4007 K7")
 			(footprint "")
 		)
 )

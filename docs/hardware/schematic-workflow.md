@@ -14,8 +14,8 @@ schematic in this repository.
   reading/writing `.kicad_sch`/`.kicad_pcb`/`.kicad_sym` files, running
   ERC/DRC, and exporting.
 - **Target schematic:**
-  `docs/hardware/project_schematic_package/generated/pic_amp_protection.kicad_sch`
-  (root sheet; child sheets are referenced from it).
+  `docs/hardware/project_schematic_package/generated/mcp-final/pic_amp_protection.kicad_sch`
+  (the MCP-created project root).
 
 There is no legacy generator to run. The component and connection tables under
 `docs/hardware/project_schematic_package/` are reference inputs for planning.
@@ -45,6 +45,8 @@ regenerated.
    It checks/installs Node.js (must already be present), the
    `schematic-design` skill, `uv`/`uvx`, `kicad-cli`, and writes
    `.vscode\mcp.json`.
+  On another Windows machine, run this from the repository root after
+  installing KiCad 9.x or 10.x.
 3. Start the MCP server in VS Code:
    - Command Palette → `MCP: List Servers` → `kicad` → `Start`.
    - Accept the trust prompt if this is the first start.
@@ -53,6 +55,9 @@ regenerated.
      decoupling cap to U1."
    - "Use the `schematic-design` skill in plan mode to execute
      `specs/schematic-plan.md`."
+
+The checked-in `.vscode/mcp.json` points to `generated/mcp-final`. Do not open
+the similarly named legacy schematic directly under `generated/`.
 
 ## Troubleshooting
 
