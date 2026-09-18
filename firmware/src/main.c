@@ -137,7 +137,6 @@ static volatile bool g_settings_dirty = false;
 static unsigned int g_settings_save_delay_ms = 0;
 static volatile unsigned char g_adc_scan_index = 0;
 static volatile unsigned char g_adc_active_index = 0;
-static volatile bool g_overdrive_priority_slot = false;
 /* Defaults until the first real ADC scan completes for each channel: 0 (idle,
    no fault) for power/current/overdrive/drain, and a mid-scale ~2.5V reading
    for temp (raw 0 would otherwise map to a false 150C thermal trip). */
@@ -288,21 +287,15 @@ void __interrupt() timer0_isr(void) {
 
     }
 
-    /* Prioritize overdrive on alternating ticks (~2 ms) while preserving a slower
-       round-robin scan for the other seven ADC channels. */
+    /* Refresh every trip ADC on the same bounded cadence. At one channel per
+       1 ms tick, any ADC-based trip input is at most one 8-channel scan old. */
     if (tick && ADCON0bits.GO_nDONE == 0) {
-        if (!g_overdrive_priority_slot) {
-            g_adc_active_index = 6;
-            ADPCH = ADC_OVERDRIVE_CHANNEL;
-        } else {
-            g_adc_active_index = g_adc_scan_index;
-            ADPCH = g_adc_scan_channels[g_adc_scan_index];
-            g_adc_scan_index++;
-            if (g_adc_scan_index >= 8) {
-                g_adc_scan_index = 0;
-            }
+        g_adc_active_index = g_adc_scan_index;
+        ADPCH = g_adc_scan_channels[g_adc_scan_index];
+        g_adc_scan_index++;
+        if (g_adc_scan_index >= 8) {
+            g_adc_scan_index = 0;
         }
-        g_overdrive_priority_slot = !g_overdrive_priority_slot;
         ADCON0bits.GO_nDONE = 1;
     }
 

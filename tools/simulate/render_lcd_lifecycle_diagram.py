@@ -6,8 +6,9 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, Rectangle
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = REPO_ROOT / "_build" / "My_Pic_Project" / "sim" / "graphs" / "lcd_lifecycle_16x2.png"
-FAULT_OUTPUT = REPO_ROOT / "_build" / "My_Pic_Project" / "sim" / "graphs" / "lcd_fault_screens_16x2.png"
+LCD_GRAPH_DIR = REPO_ROOT / "_build" / "My_Pic_Project" / "sim" / "graphs" / "lcd"
+OUTPUT = LCD_GRAPH_DIR / "lcd_lifecycle_16x2.png"
+FAULT_OUTPUT = LCD_GRAPH_DIR / "lcd_fault_screens_16x2.png"
 
 PANELS = [
     ("BOOT / EEPROM", "P=   0W SWR=1.0", "----------------", "Loaded saved home page; example STATUS page"),
@@ -58,14 +59,16 @@ def lcd_panel(ax, x, y, title, line1, line2, note, accent):
 
 def render_page(panels, output, title, accent_default):
     rows = (len(panels) + 1) // 2
-    fig, ax = plt.subplots(figsize=(18, max(8, rows * 2.7)))
+    row_step = 3.05
+    top_y = 1.0 + (rows - 1) * row_step
+    fig, ax = plt.subplots(figsize=(18, max(10, rows * 3.15)))
     ax.set_xlim(0, 16)
-    ax.set_ylim(0, rows * 2.8 + 1)
+    ax.set_ylim(0, top_y + 2.65)
     ax.axis("off")
     fig.patch.set_facecolor("white")
     ax.set_title(title, fontsize=16, pad=18)
 
-    positions = [(0.55 + (index % 2) * 7.85, rows * 2.55 - (index // 2) * 2.55)
+    positions = [(0.55 + (index % 2) * 7.85, top_y - (index // 2) * row_step)
                  for index in range(len(panels))]
     for index, ((panel_title, line1, line2, note), (x, y)) in enumerate(zip(panels, positions)):
         accent = "#b71c1c" if panel_title.startswith("TRIP") else accent_default

@@ -4,6 +4,17 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-18 — ADC trip sources now share the fastest bounded scan cadence
+
+SWR/current/drain/temperature ADC faults were not all refreshed at the same rate:
+the ADC scheduler gave overdrive an alternating priority slot while every other
+trip channel waited on the slower round-robin path. That made non-overdrive trips
+slower to observe than necessary once the expensive RF chain was already in TX.
+Fix: the scheduler now advances through all eight ADC protection channels once per
+1 ms tick, giving every ADC-based trip source the same ~8 ms maximum sample-age
+bound. The trip logic still latches immediately once a trip-worthy sample is seen;
+the change removes the unequal pre-trip sampling delay.
+
 ## 2026-09-15 — ADC ISR self-re-arm starved the main loop of CPU time
 
 Found via MPLAB X simulation (see Ai-Notes.txt "Simulation" section): with PTT

@@ -175,11 +175,11 @@ def build_script(trip_name=None, marker=None) -> str:
         if trip_name != "CURRENT":
             for pin, voltage in trip_inputs[trip_name]:
                 lines.append(f"write pin {pin} {voltage:.3f}v")
-            for _ in range(10):
+            for _ in range(40):
                 lines.append("Stepi 8000")
                 sample()
             for _ in range(10):  # show the latched trip state for another 50ms
-                lines.append("Stepi 400000")
+                lines.append("Stepi 40000")
                 sample()
         if safe_inputs is None:
             safe_inputs = {
@@ -430,6 +430,50 @@ def write_trace_csv(samples, trace_name, csv_dir):
     return csv_path
 
 
+def assign_event_label_lanes(events, x_min, x_max):
+    lanes = []
+    placed = []
+    span = max(1.0, x_max - x_min)
+    for event_time, event_label, color in sorted(events, key=lambda event: event[0]):
+        text = f"{event_label} @ {event_time:.1f} ms"
+        half_width = max(span * 0.035, len(text) * span / 180.0)
+        start = event_time - half_width
+        end = event_time + half_width
+        for lane_index, lane_end in enumerate(lanes):
+            if start > lane_end:
+                lanes[lane_index] = end
+                break
+        else:
+            lane_index = len(lanes)
+            lanes.append(end)
+        placed.append((event_time, text, color, lane_index))
+    return placed, len(lanes)
+
+
+def draw_event_labels_after_layout(fig, axes, events, x_min, x_max):
+    placed, lane_count = assign_event_label_lanes(events, x_min, x_max)
+    if not placed:
+        return 0
+    ax = axes[0]
+    fig.text(0.5, 0.948,
+             "Stacked lanes mean events share the same or nearby timestamp; red shading marks active lockout windows.",
+             ha="center", va="top", fontsize=7, color="#546e7a")
+    y_start = 0.915
+    y_step = 0.026
+    for event_time, text, color, lane_index in placed:
+        x_display = ax.transData.transform((event_time, 0))[0]
+        x_figure = fig.transFigure.inverted().transform((x_display, 0))[0]
+        x_fraction = (event_time - x_min) / max(1.0, x_max - x_min)
+        align = "left" if x_fraction < 0.08 else "right" if x_fraction > 0.92 else "center"
+        fig.text(x_figure, y_start - lane_index * y_step, text,
+                 ha=align, va="bottom", fontsize=7, color=color)
+    return lane_count
+
+
+def trace_plot_top(lane_count):
+    return max(0.55, 0.88 - lane_count * 0.03)
+
+
 def write_trace_graph(samples, trip_name, trace_name, graph_dir):
     try:
         import matplotlib.pyplot as plt
@@ -506,15 +550,13 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir):
         events += [(trip_time, "TX_VCC HIGH (immediate)", "red"),
                    (shutdown_complete_time, "RELAYS HIGH (+5 ms)", "red"),
                    (shutdown_complete_time, "TX_BIAS HIGH (+5 ms)", "red")]
-    for index, (event_time, event_label, color) in enumerate(events):
-        fig.text(0.02, 0.93 - index * 0.035,
-                 f"{event_label} @ {event_time:.1f} ms",
-                 ha="left", va="top", fontsize=7, color=color)
     axes[0].set_xlim(0, times[-1])
     axes[-1].set_xlabel("time (ms, approx)")
     title = f"PTT sequencing with {trip_name} trip (simulated)" if trip_name else "PTT assert/release sequencing (simulated)"
-    fig.suptitle(title)
-    fig.tight_layout(rect=(0, 0, 1, max(0.55, 0.93 - len(events) * 0.035)))
+    fig.suptitle(title, y=0.985)
+    _placed, lane_count = assign_event_label_lanes(events, times[0], times[-1])
+    fig.tight_layout(rect=(0, 0, 1, trace_plot_top(lane_count)))
+    draw_event_labels_after_layout(fig, axes, events, times[0], times[-1])
     graph_path = graph_dir / f"{trace_name}.png"
     fig.savefig(graph_path, dpi=120)
     plt.close(fig)
@@ -689,22 +731,20 @@ def main():
     for marker_time, marker_label in lifecycle:
         axes[0].axvline(marker_time, color="steelblue", linestyle="-.", alpha=0.45)
     events = [(time, label, "steelblue") for time, label in lifecycle]
-    events += [(times[0], reason, "red") for _start, _end, reason in block_spans]
+    events += [(start, reason, "red") for start, _end, reason in block_spans]
     if trip_name in TRIP_NAMES:
         events += [(trip_time, "TX_VCC HIGH (immediate)", "red"),
                    (shutdown_complete_time, "RELAYS HIGH (+5 ms)", "red"),
                    (shutdown_complete_time, "TX_BIAS HIGH (+5 ms)", "red")]
-    for event_index, (event_time, event_label, color) in enumerate(events):
-        fig.text(0.02, 0.93 - event_index * 0.035,
-                 f"{event_label} @ {event_time:.1f} ms",
-                 ha="left", va="top", fontsize=7, color=color)
     axes[0].set_xlim(0, times[-1])
     axes[-1].set_xlabel("time (ms, approx)")
     title = ("PTT sequencing with SWR1 1.5:1 no-trip (simulated)" if trip_name == "SWR1_1P5"
              else f"PTT sequencing with {trip_name} trip (simulated)" if trip_name
              else "PTT assert/release sequencing (simulated)")
-    fig.suptitle(title)
-    fig.tight_layout(rect=(0, 0, 1, max(0.55, 0.93 - len(events) * 0.035)))
+    fig.suptitle(title, y=0.985)
+    _placed, lane_count = assign_event_label_lanes(events, times[0], times[-1])
+    fig.tight_layout(rect=(0, 0, 1, trace_plot_top(lane_count)))
+    draw_event_labels_after_layout(fig, axes, events, times[0], times[-1])
     png_path = graph_dir / f"{trace_name}.png"
     fig.savefig(png_path, dpi=120)
     print(f"Wrote {png_path}")

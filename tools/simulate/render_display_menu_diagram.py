@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = REPO_ROOT / "_build" / "My_Pic_Project" / "sim" / "graphs" / "display_menu_state_diagram.png"
+OUTPUT = REPO_ROOT / "_build" / "My_Pic_Project" / "sim" / "graphs" / "lcd" / "display_menu_state_diagram.png"
 
 
 def box(ax, x, y, width, height, text, color):
