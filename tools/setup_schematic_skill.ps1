@@ -104,8 +104,9 @@ try {
     $outDir = Join-Path $repoRoot 'out'
 
     $env = [ordered]@{
-        KICAD_SCH_PATH   = '${workspaceFolder}\docs\hardware\project_schematic_package\generated\pic_amp_protection.kicad_sch'
-        KICAD_OUTPUT_DIR = '${workspaceFolder}\out'
+        KICAD_SCH_PATH        = '${workspaceFolder}\docs\hardware\project_schematic_package\generated\pic_amp_protection.kicad_sch'
+        KICAD_OUTPUT_DIR      = '${workspaceFolder}\out'
+        KICAD_DOCUMENTS_HOME  = '${workspaceFolder}\out\kicad-cli-home'
     }
     if ($kicadCliPath) {
         $env.Insert(0, 'KICAD_CLI_PATH', $kicadCliPath)

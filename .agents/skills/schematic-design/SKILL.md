@@ -5,12 +5,46 @@ description: >
   modifying an existing schematic (modification mode).
 ---
 
+<FIRST-RULE>
+"kicad-cli died at startup ... Controlled Folder Access" is a MISLEADING
+error message from the MCP server. Do not assume Defender or
+`KICAD_DOCUMENTS_HOME` is the cause without verifying first. Confirmed in
+this repo: the same crash (exit code -1073741819 / 0xC0000005, an access
+violation) reproduces when calling `kicad-cli.exe` directly on the same
+file, with or without `KICAD_DOCUMENTS_HOME` set — it is a real kicad-cli
+9.0.2 crash triggered by something in the schematic file's content, most
+likely duplicate `PWR_FLAG` symbols from combining `add_power_symbol` with
+`wire_pins_to_net`'s default `auto_pwr_flag=True` on the same net. Before
+chasing environment/Defender settings, verify by running
+`kicad-cli.exe sch erc <file>` directly in a terminal against the exact
+failing file. See `/memories/repo/kicad-cli-crash.md` for the full
+investigation.
+</FIRST-RULE>
+
+<COMMIT-OFTEN-RULE>
+Commit the schematic project (`git add` the `generated/mcp-final` folder,
+commit, push) after every step that leaves the file in a known-good,
+verified state — e.g. right after a placement or wiring step passes ERC
+directly via `kicad-cli.exe sch erc <file>`. Do not wait until the whole
+schematic is finished. A bad MCP write can silently corrupt the file in a
+way that only shows up several steps later (see the ERC/export crash in
+`/memories/repo/kicad-cli-crash.md`); frequent commits mean a bisection
+or recovery only has to roll back one small step instead of redoing
+everything.
+</COMMIT-OFTEN-RULE>
+
 <CRITICAL-RULE>
 NEVER use the Read, Write, or Edit tools on KiCad files (.kicad_sch,
 .kicad_pcb, .kicad_sym, .kicad_mod, .kicad_pro, .kicad_prl). ALL
 KiCad file manipulation MUST go through the kicad MCP tools. NEVER
 run kicad-cli commands via Bash. If an MCP tool returns an error, try
 different parameters — do NOT fall back to manual file editing.
+
+SCHEMATIC-ONLY HARD RULE: This workflow is for circuit diagrams only. Do
+not create, use, or suggest PCB layout, gerber, 3D render, footprint, or
+board-export tasks unless the user explicitly requests PCB layout. For this
+project, all active work stays in the schematic domain: symbol placement,
+net wiring, labels, ERC, and SVG review of the circuit diagram.
 
 EVERY KiCad operation has a corresponding MCP tool. Do NOT claim a
 tool does not exist without first listing all available tools. Key
