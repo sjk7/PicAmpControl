@@ -893,6 +893,145 @@
 			)
 		)
 		(embedded_fonts no)
+	)
+		(symbol "Device:C"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0.254)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "C"
+			(at 0.635 2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "C"
+			(at 0.635 -2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 0.9652 -3.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "cap capacitor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "C_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "C_0_1"
+			(polyline
+				(pts
+					(xy -2.032 0.762) (xy 2.032 0.762)
+				)
+				(stroke
+					(width 0.508)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.032 -0.762) (xy 2.032 -0.762)
+				)
+				(stroke
+					(width 0.508)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "C_1_1"
+			(pin passive line
+				(at 0 3.81 270)
+				(length 2.794)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 -3.81 90)
+				(length 2.794)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
 	))
 	(symbol
 	(lib_name "PIC16F18855_I_SP_COMPACT")
@@ -1255,6 +1394,65 @@
 		)
 	)
 )
+	(symbol
+	(lib_name "Device:C")
+	(lib_id "Device:C")
+	(at 160.02 124.46 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "3db2363a-c752-4b04-a003-c627a8c3bc07")
+	(property "Reference" "C1"
+		(at 160.02 120.65 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "100nF"
+		(at 160.02 128.27 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 160.02 124.46 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 160.02 124.46 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "c708d5f2-c3fb-4450-80dc-b9856811d4e3")
+)
+	(pin "2"
+	(uuid "db88aa59-b90c-44b5-a881-f98800dc3db7")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08"
+				(reference "C1")
+				(unit 1)
+			)
+		)
+	)
+)
 	(symbol_instances
 		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/e1bbe5ad-06fc-4f47-a4cb-114d0ffd9878"
 			(reference "U1")
@@ -1284,6 +1482,12 @@
 			(reference "#FLG02")
 			(unit 1)
 			(value "PWR_FLAG")
+			(footprint "")
+		)
+		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/3db2363a-c752-4b04-a003-c627a8c3bc07"
+			(reference "C1")
+			(unit 1)
+			(value "100nF")
 			(footprint "")
 		)
 )
@@ -1317,6 +1521,26 @@
 	)
 	(uuid "3f4a703b-a5b6-4198-a838-952bf44bb7bb")
 )
+	(wire
+	(pts
+		(xy 160.02 120.65) (xy 160.02 118.11)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "4ff22681-ccd4-4fc7-bdeb-e34151f61475")
+)
+	(wire
+	(pts
+		(xy 160.02 128.27) (xy 160.02 130.81)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "0b228067-9b18-429c-9d1b-af8dba6f03e4")
+)
 	(label "+5V"
 	(at 190.5 121.92 90)
 	(effects
@@ -1343,6 +1567,24 @@
 		)
 	)
 	(uuid "fb31eca4-63ba-4b05-a81c-af8778ec7fad")
+)
+	(label "+5V"
+	(at 160.02 118.11 90)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "a5b047b7-845c-4e82-9900-dd4b29bbf254")
+)
+	(label "GND"
+	(at 160.02 130.81 270)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "8b7a5f5a-7a6a-4ee4-8a9f-3abbde9b329d")
 )
 	(sheet_instances
 		(path "/"
