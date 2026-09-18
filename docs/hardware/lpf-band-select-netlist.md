@@ -2,15 +2,15 @@
 
 ## Purpose
 
-The PIC16F18855 uses four spare GPIOs as a coarse 4-bit band-select bus. The selected band is decoded outside the MCU and used to energize the correct low-pass-filter relay. This keeps relay coil current off the MCU pins and provides a clean, stiff energy source for the relay pull-in.
+The PIC16F18855 uses three GPIOs as a coarse 3-bit band-select bus. The selected band is decoded outside the MCU and used to energize the correct low-pass-filter relay. This keeps relay coil current off the MCU pins and provides a clean, stiff energy source for the relay pull-in. A 3-bit code covers OFF plus the seven LPF bands; the decoder's fourth address input is tied low.
 
 ## Recommended hardware parts
 
-- PIC16F18855 spare bus:
+- PIC16F18855 band-select bus:
   - RA4 = B0
   - RA6 = B1
   - RA7 = B2
-  - RB6 = B3
+    - decoder B3/A3 tied to GND
 - U1 = 74HC4514 or 74HC154-style decoder, active-high preferred
 - U2 = ULN2803A or equivalent 8-channel low-side driver
 - K1..K7 = 12 V relay coils, one per LPF band
@@ -20,17 +20,16 @@ The PIC16F18855 uses four spare GPIOs as a coarse 4-bit band-select bus. The sel
 
 ## Band code table
 
-| Band | B3 | B2 | B1 | B0 | Binary value |
-|---|---:|---:|---:|---:|---:|
-| Off / default | 0 | 0 | 0 | 0 | 0x0 |
-| 160m | 0 | 0 | 0 | 1 | 0x1 |
-| 80m | 0 | 0 | 1 | 0 | 0x2 |
-| 40m | 0 | 0 | 1 | 1 | 0x3 |
-| 20m | 0 | 1 | 0 | 0 | 0x4 |
-| 15m | 0 | 1 | 0 | 1 | 0x5 |
-| 10m | 0 | 1 | 1 | 0 | 0x6 |
-| 6m | 0 | 1 | 1 | 1 | 0x7 |
-| Reserved | 1 | x | x | x | 0x8-0xF |
+| Band | B2 | B1 | B0 | Binary value |
+|---|---:|---:|---:|---:|
+| Off / default | 0 | 0 | 0 | 0x0 |
+| 160m | 0 | 0 | 1 | 0x1 |
+| 80m | 0 | 1 | 0 | 0x2 |
+| 40m | 0 | 1 | 1 | 0x3 |
+| 20m | 1 | 0 | 0 | 0x4 |
+| 15m | 1 | 0 | 1 | 0x5 |
+| 10m | 1 | 1 | 0 | 0x6 |
+| 6m | 1 | 1 | 1 | 0x7 |
 
 ## Netlist
 
@@ -39,14 +38,13 @@ The PIC16F18855 uses four spare GPIOs as a coarse 4-bit band-select bus. The sel
 - NET PIC_B0 = RA4
 - NET PIC_B1 = RA6
 - NET PIC_B2 = RA7
-- NET PIC_B3 = RB6
 
 ### Decoder side
 
 - U1.A0 = NET PIC_B0
 - U1.A1 = NET PIC_B1
 - U1.A2 = NET PIC_B2
-- U1.A3 = NET PIC_B3
+- U1.A3 = GND
 - U1.VCC = +5 V logic rail
 - U1.GND = GND
 - U1.EN = GND, unless a separate enable is required in the final design

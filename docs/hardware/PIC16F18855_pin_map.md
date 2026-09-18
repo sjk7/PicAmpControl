@@ -25,14 +25,14 @@ schematic/netlist/PCB need these physical numbers to be correct.
 | 3 | RA1 | ADC_SWR1_REF | Input | Pre-filter SWR reflected power ADC |
 | 4 | RA2 | ADC_SWR2_FWD | Input | Post-filter SWR forward power ADC |
 | 5 | RA3 | ADC_SWR2_REF | Input | Post-filter SWR reflected power ADC |
-| 6 | RA4 | unused | Input | Reserved; not an ADC channel in this design |
+| 6 | RA4 | OUTPUT_FILTER_BAND_0 | Output | LPF band decoder bit 0 |
 | 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC (AN5) |
 | 8 | VSS | GND | Power | Ground return |
-| 9 | RA7 | SPARE_3 | Input | Freed by the internal oscillator; available for future use |
-| 10 | RA6 | SPARE_2 | Input | Freed by the internal oscillator; available for future use |
+| 9 | RA7 | OUTPUT_FILTER_BAND_2 | Output | LPF band decoder bit 2 |
+| 10 | RA6 | OUTPUT_FILTER_BAND_1 | Output | LPF band decoder bit 1 |
 | 11 | RC0 | INPUT_PTT | Input | Transmit request / key-down input |
 | 12 | RC1 | OUTPUT_COMP_RESET | Output | Active-low 10 ms comparator-latch reset pulse on PTT entry |
-| 13 | RC2 | INPUT_MENU_NEXT | Input | Config-menu page select switch |
+| 13 | RC2 | INPUT_ENCODER_A | Input | EC11 rotary encoder A phase |
 | 14 | RC3 | OUTPUT_LCD_I2C_SCL | Output | LCD backpack clock line |
 | 15 | RC4 | OUTPUT_LCD_I2C_SDA | Output | LCD backpack data line |
 | 16 | RC5 | OUTPUT_TX | Output | First TX sequencing driver |
@@ -40,13 +40,13 @@ schematic/netlist/PCB need these physical numbers to be correct.
 | 18 | RC7 | OUTPUT_TX_BIAS | Output | Final TX sequencing driver |
 | 19 | VSS | GND | Power | Ground return |
 | 20 | VDD | +5 V | Power | Decouple locally per datasheet |
-| 21 | RB0 | INPUT_MENU_ADJUST | Input | Menu adjust: short press increase, hold decrease |
+| 21 | RB0 | INPUT_ENCODER_B | Input | EC11 rotary encoder B phase |
 | 22 | RB1 | ADC_CURRENT | Input | WCS1700 current ADC (AN9), provisional 70 A full scale |
 | 23 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC (AN10) |
 | 24 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC (AN11) |
 | 25 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
 | 26 | RB5 | OUTPUT_FAN_PWM | Output | 12 V fan low-side MOSFET control; confirm hardware-PWM alternate-function routing |
-| 27 | RB6 | INPUT_SPARE_4 | Input | Freed spare input |
+| 27 | RB6 | INPUT_ENCODER_SWITCH | Input | EC11 rotary encoder push switch |
 | 28 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
 
 ## Functional grouping
@@ -83,10 +83,11 @@ The selected fan topology is a 12 V two-wire fan with a low-side logic-level N-M
 
 - PTT_IN: RC0
 - COMP_RESET: RC1
-- MENU_NEXT: RC2
-- MENU_ADJUST: RB0
+- ENCODER_A: RC2
+- ENCODER_B: RB0
+- ENCODER_SWITCH: RB6
 
-The menu switches are normally open and active-low, wired from the input pin to ground. RB0 uses a PORTB weak pull-up; RC2 needs an external pull-up resistor. The firmware accepts menu input only while PTT is inactive. RB1 remains dedicated to the WCS1700 current ADC.
+The EC11-style rotary encoder is the only front-panel user control. Encoder A, B, and push-switch contacts are normally open/common-to-ground and read active-low with pull-ups. In normal display mode, rotation selects the home display page and a short press enters settings. In settings mode, rotation edits the shown value, short press advances to the next saved setting, and long press exits to the saved home page. On a trip screen, a long press clears/re-arms the latched fault when the live fault condition is safe. Setting edits are locked out while PTT is active. RB1 remains dedicated to the WCS1700 current ADC.
 
 ### Comparator board interface
 
@@ -105,6 +106,7 @@ The SWR protection channels are not required in hardware because each SWR pair i
 - This map intentionally keeps the 1602 display on the PIC hardware I2C pins and does not use the LCD on a parallel bus.
 - The LCD backpack is assumed to be a common PCF8574-style I2C adapter board; I2C is implemented in firmware on RC3/RC4.
 - The LCD backpack may have its own I2C pull-ups; avoid overly strong parallel pull-ups and target a combined bus pull-up resistance of approximately 4.7-10 kOhm.
+- The LPF band decoder uses RA4/RA6/RA7 as a 3-bit bus; tie the external decoder's fourth address input low if a 4-to-16 decoder is fitted.
 - Overdrive and drain sense nodes are split after their scaling/protection networks: one branch feeds the external comparator and the other feeds the designated ADC input. Neither raw high voltage nor unconditioned RF detector output may reach the PIC.
 - The ADC uses VDD as its reference and accepts conversion inputs from 0 to VDD. VDD must be maintained at 5.0 V for the specified scales. The input-power detector/divider must map 31.62 V peak at the 50-ohm input to 5.0 V at RB2. The drain divider must map 300 V to 5.0 V at RB3. Every analogue path needs a series resistor and clamps so the PIC input stays between VSS and VDD under normal operation.
 - The comparator board is deliberately separate from the PIC so that the critical analog faults are hardware-protected before the MCU state machine can act.

@@ -1,0 +1,43 @@
+From,To,Net,Notes
+J1.1,+12V_All,+12V,Relay/Fan supply
+J2.1,+5V_All,+5V,Logic
+U1.Vdd,+5V_All,+5V,Power
+U1.Vss,GND_All,GND,Power
+U2.Vcc,+5V_All,+5V,Power
+U2.GND,GND_All,GND,Power
+U3.Vcc,+5V_All,+5V,Power
+U3.GND,GND_All,GND,Power
+C1.1,+5V_All,+5V,Decoupling (MCU)
+C1.2,GND_All,GND
+C2.1,+5V_All,+5V,Decoupling (Decoder)
+C2.2,GND_All,GND
+C3.1,+5V_All,+5V,Decoupling (Driver)
+C3.2,GND_All,GND
+U1.RA4,U2.A0,B0,LPF band-select bus bit 0
+U1.RA6,U2.A1,B1,LPF band-select bus bit 1
+U1.RA7,U2.A2,B2,LPF band-select bus bit 2
+GND_All,U2.A3,B3,Decoder upper address tied low
+U2.Y0,U3.IN1,BAND_160M
+U2.Y1,U3.IN2,BAND_80M
+U2.Y2,U3.IN3,BAND_40M
+U2.Y3,U3.IN4,BAND_20M
+U2.Y4,U3.IN5,BAND_15M
+U2.Y5,U3.IN6,BAND_10M
+U2.Y6,U3.IN7,BAND_6M
+U3.OUT1,K1.1,COIL_160M
+U3.OUT2,K2.1,COIL_80M
+U3.OUT3,K3.1,COIL_40M
+U3.OUT4,K4.1,COIL_20M
+U3.OUT5,K5.1,COIL_15M
+U3.OUT6,K6.1,COIL_10M
+U3.OUT7,K7.1,COIL_6M
+K1.2,+12V_All,+12V
+K2.2,+12V_All,+12V
+K3.2,+12V_All,+12V
+K4.2,+12V_All,+12V
+K5.2,+12V_All,+12V
+K6.2,+12V_All,+12V
+K7.2,+12V_All,+12V
+D1 across K1 (cathode to +12V, anode to OUT),,FLYBACK,
+D2 across K2 as above,,FLYBACK,
+... (more per section, see architecture/netlist)

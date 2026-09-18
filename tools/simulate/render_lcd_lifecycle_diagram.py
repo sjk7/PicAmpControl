@@ -41,26 +41,26 @@ NORMAL_PANELS = [
     ("PTT_COMPLETE", "PTT COMPLETE    ", "TX ACTIVE       ", "Transient normal TX confirmation; no trip is latched"),
 ]
 SETTINGS_PANELS = [
-    ("01 NEXT", "S1 SWR TRIP    ", "3.0:1           ", "ADJUST changes SWR1 trip threshold"),
-    ("02 NEXT", "S2 SWR TRIP    ", "2.0:1           ", "ADJUST changes SWR2 trip threshold"),
-    ("03 NEXT", "S1 FWD MAX     ", "1500W           ", "ADJUST changes SWR1 forward full scale"),
-    ("04 NEXT", "S2 FWD MAX     ", "1500W           ", "ADJUST changes SWR2 forward full scale"),
-    ("05 NEXT", "NTC B VALUE    ", "3950C           ", "ADJUST cycles NTC profile"),
-    ("06 NEXT", "TEMP TRIP      ", "100C            ", "ADJUST changes thermal trip point"),
-    ("07 NEXT", "INPUT TRIP     ", "10.0W           ", "ADJUST changes overdrive trip point"),
-    ("08 NEXT", "DRAIN TRIP     ", "150V            ", "ADJUST changes drain voltage trip point"),
-    ("09 NEXT", "CURRENT TRIP   ", " 40A            ", "ADJUST changes current trip point"),
-    ("10 NEXT", "TX-VCC DELAY   ", "  20ms          ", "ADJUST changes RELAYS to TX_VCC delay"),
-    ("11 NEXT", "TX-BIAS DELAY  ", "  20ms          ", "ADJUST changes TX_VCC to TX_BIAS delay"),
-    ("12 NEXT", "TX ACTIVE      ", "LOW             ", "ADJUST toggles TX output polarity"),
-    ("13 NEXT", "TX-VCC ACTIVE  ", "LOW             ", "ADJUST toggles TX_VCC output polarity"),
-    ("14 NEXT", "TX-BIAS ACTIVE ", "LOW             ", "ADJUST toggles TX_BIAS output polarity"),
-    ("15 NEXT", "FAN ACTIVE     ", "LOW             ", "ADJUST toggles fan output polarity"),
-    ("16 NEXT", "TRIP ACTIVE    ", "LOW             ", "ADJUST toggles trip-status output polarity"),
-    ("17 NEXT", "POWER DISPLAY  ", "PEP             ", "ADJUST toggles STATUS power mode"),
-    ("18 NEXT", "NET POWER      ", "FWD             ", "ADJUST toggles forward/net power display"),
-    ("19 NEXT", "PEAK HOLD      ", "1200ms          ", "ADJUST changes saved peak hold time"),
-    ("20 NEXT", "PEAK DECAY     ", " 100ms          ", "ADJUST changes saved peak decay interval"),
+    ("01 PRESS", "S1 SWR TRIP    ", "3.0:1           ", "Rotate changes SWR1 trip threshold"),
+    ("02 PRESS", "S2 SWR TRIP    ", "2.0:1           ", "Rotate changes SWR2 trip threshold"),
+    ("03 PRESS", "S1 FWD MAX     ", "1500W           ", "Rotate changes SWR1 forward full scale"),
+    ("04 PRESS", "S2 FWD MAX     ", "1500W           ", "Rotate changes SWR2 forward full scale"),
+    ("05 PRESS", "NTC B VALUE    ", "3950C           ", "Rotate cycles NTC profile"),
+    ("06 PRESS", "TEMP TRIP      ", "100C            ", "Rotate changes thermal trip point"),
+    ("07 PRESS", "INPUT TRIP     ", "10.0W           ", "Rotate changes overdrive trip point"),
+    ("08 PRESS", "DRAIN TRIP     ", "150V            ", "Rotate changes drain voltage trip point"),
+    ("09 PRESS", "CURRENT TRIP   ", " 40A            ", "Rotate changes current trip point"),
+    ("10 PRESS", "TX-VCC DELAY   ", "  20ms          ", "Rotate changes RELAYS to TX_VCC delay"),
+    ("11 PRESS", "TX-BIAS DELAY  ", "  20ms          ", "Rotate changes TX_VCC to TX_BIAS delay"),
+    ("12 PRESS", "TX ACTIVE      ", "LOW             ", "Rotate toggles TX output polarity"),
+    ("13 PRESS", "TX-VCC ACTIVE  ", "LOW             ", "Rotate toggles TX_VCC output polarity"),
+    ("14 PRESS", "TX-BIAS ACTIVE ", "LOW             ", "Rotate toggles TX_BIAS output polarity"),
+    ("15 PRESS", "FAN ACTIVE     ", "LOW             ", "Rotate toggles fan output polarity"),
+    ("16 PRESS", "TRIP ACTIVE    ", "LOW             ", "Rotate toggles trip-status output polarity"),
+    ("17 PRESS", "POWER DISPLAY  ", "PEP             ", "Rotate toggles STATUS power mode"),
+    ("18 PRESS", "NET POWER      ", "FWD             ", "Rotate toggles forward/net power display"),
+    ("19 PRESS", "PEAK HOLD      ", "1200ms          ", "Rotate changes saved peak hold time"),
+    ("20 PRESS", "PEAK DECAY     ", " 100ms          ", "Rotate changes saved peak decay interval"),
 ]
 
 
@@ -139,9 +139,9 @@ def render_page(panels, output, title, accent_default,
 
 def render_settings_navigation(plt):
     render_page(SETTINGS_PANELS, SETTINGS_OUTPUT,
-                "PIC AmpControl settings navigation: NEXT advances, ADJUST edits, idle returns home",
+                "PIC AmpControl settings navigation: press advances, rotate edits, hold exits",
                 "#6a1b9a",
-                "NEXT steps through these saved settings in order; ADJUST changes the shown value; idle timeout returns to the saved home page.",
+                "Short press steps through saved settings; rotate edits the shown value; long press or idle timeout returns to the saved home page.",
                 "#6a1b9a", columns=4, snake=True)
 
 

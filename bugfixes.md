@@ -4,6 +4,16 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-18 — Front-panel menu now uses a single EC11 rotary encoder
+
+The two-switch menu model became awkward as the normal display pages and saved
+settings grew. It also did not match the selected front-panel actuator. Fix: the
+firmware now treats RC2/RB0/RB6 as EC11 encoder A/B/push inputs. Rotation selects
+normal display pages or edits the active setting, short press enters/advances
+settings, and long press exits settings or clears a trip latch. RB6 was freed by
+reducing the LPF band decoder bus to the required 3 bits; OFF plus seven bands fit
+in codes 0-7, so the external decoder's fourth address input is tied low.
+
 ## 2026-09-18 — Peak displays now hold briefly, then decay smoothly
 
 The PEP and current-meter pages are likely operator home pages, but the previous
@@ -202,7 +212,7 @@ were fixed in the same commit since the tables had to be rewritten anyway.
    `unsigned int` (a millisecond delay, 0-1000 ms), but its table entry was tagged BOOL.
    This meant pressing "increase" on the TX-BIAS DELAY menu page toggled the low byte
    of the delay value on/off instead of incrementing it — the intended 5 ms step logic
-   further down in `adjust_selected_threshold()` was unreachable dead code for this page.
+   further down in the setting-adjust path was unreachable dead code for this page.
    Fix: retagged as `MENU_SETTING_U16`.
 
 3. **`power_display_pep` misclassified as `MENU_SETTING_U8`.** The struct field is

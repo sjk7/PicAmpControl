@@ -62,7 +62,7 @@
 - Hardware map: `docs/hardware/PIC16F18855_pin_map.md`
 - Display/menu diagram links are in `README.md`.
 - Frequency-counter handoff: `docs/frequency-counter-next-steps.md`
-- Spare GPIOs: RA4, RA6, RA7, RB6. RB6 is used only as a simulator marker by the Python trace tool.
+- Operator UI is a single EC11-style rotary encoder: RC2=A, RB0=B, RB6=push switch, all active-low/common-to-ground with pull-ups. The LPF band decoder uses only RA4/RA6/RA7 because 3 bits cover OFF plus seven bands.
 
 ## Deferred frequency-counter work
 

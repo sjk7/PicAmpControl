@@ -1,0 +1,44 @@
+(kicad_sch
+  (version 20230129)
+  (generator "AI-MPLAB-AGENT")
+  (uuid "00000000-0000-1000-8000-000000000abc")
+  (paper "A4")
+  (title_block (title "LPF Band Decoder Skeleton"))
+
+  ; PIC16F18855 MCU
+  (symbol (lib_id "Device:Microchip_PIC16F18855") (at 30 100 0)
+    (property "Reference" "U1" (at 24 118 0))
+    (property "Value" "PIC16F18855" (at 24 120 0)))
+  ; 74HC4514 decoder
+  (symbol (lib_id "74xx:74HC4514") (at 70 100 0)
+    (property "Reference" "U2" (at 70 118 0))
+    (property "Value" "74HC4514" (at 70 120 0)))
+  ; ULN2803A driver
+  (symbol (lib_id "Interface_ULN:ULN2803A") (at 110 100 0)
+    (property "Reference" "U3" (at 110 118 0))
+    (property "Value" "ULN2803A" (at 110 120 0)))
+  ; Relays
+  (symbol (lib_id "Relay:Relay_SPST") (at 160 70 0) (property "Reference" "K1") (property "Value" "RELAY_160m"))
+  (symbol (lib_id "Relay:Relay_SPST") (at 160 80 0) (property "Reference" "K2") (property "Value" "RELAY_80m"))
+  (symbol (lib_id "Relay:Relay_SPST") (at 160 90 0) (property "Reference" "K3") (property "Value" "RELAY_40m"))
+  (symbol (lib_id "Relay:Relay_SPST") (at 160 100 0) (property "Reference" "K4") (property "Value" "RELAY_20m"))
+  (symbol (lib_id "Relay:Relay_SPST") (at 160 110 0) (property "Reference" "K5") (property "Value" "RELAY_15m"))
+  (symbol (lib_id "Relay:Relay_SPST") (at 160 120 0) (property "Reference" "K6") (property "Value" "RELAY_10m"))
+  (symbol (lib_id "Relay:Relay_SPST") (at 160 130 0) (property "Reference" "K7") (property "Value" "RELAY_6m"))
+  ; Flyback diodes
+  (symbol (lib_id "Device:D") (at 175 70 0) (property "Reference" "D1") (property "Value" "1N4007"))
+  (symbol (lib_id "Device:D") (at 175 80 0) (property "Reference" "D2") (property "Value" "1N4007"))
+  (symbol (lib_id "Device:D") (at 175 90 0) (property "Reference" "D3") (property "Value" "1N4007"))
+  (symbol (lib_id "Device:D") (at 175 100 0) (property "Reference" "D4") (property "Value" "1N4007"))
+  (symbol (lib_id "Device:D") (at 175 110 0) (property "Reference" "D5") (property "Value" "1N4007"))
+  (symbol (lib_id "Device:D") (at 175 120 0) (property "Reference" "D6") (property "Value" "1N4007"))
+  (symbol (lib_id "Device:D") (at 175 130 0) (property "Reference" "D7") (property "Value" "1N4007"))
+  ; Pull-up and decoupling
+  (symbol (lib_id "Device:R") (at 25 120 90) (property "Reference" "R1") (property "Value" "10k"))
+  (symbol (lib_id "Device:C") (at 35 120 0) (property "Reference" "C1") (property "Value" "100nF"))
+  (symbol (lib_id "Device:C") (at 75 120 0) (property "Reference" "C2") (property "Value" "100nF"))
+  (symbol (lib_id "Device:C") (at 115 120 0) (property "Reference" "C3") (property "Value" "100nF"))
+  ; Power connectors
+  (symbol (lib_id "Connector:Conn_01x02") (at 0 70 0) (property "Reference" "J1") (property "Value" "+12V_IN"))
+  (symbol (lib_id "Connector:Conn_01x02") (at 0 130 0) (property "Reference" "J2") (property "Value" "+5V_IN"))
+)

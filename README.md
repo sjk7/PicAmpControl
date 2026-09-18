@@ -141,14 +141,14 @@ schematic/netlist/PCB need these physical numbers to be correct.
 | 3 | RA1 | ADC_SWR1_REF | Input | Pre-filter SWR reflected power ADC |
 | 4 | RA2 | ADC_SWR2_FWD | Input | Post-filter SWR forward power ADC |
 | 5 | RA3 | ADC_SWR2_REF | Input | Post-filter SWR reflected power ADC |
-| 6 | RA4 | unused | Input | Reserved; not an ADC channel in this design |
+| 6 | RA4 | OUTPUT_FILTER_BAND_0 | Output | LPF band decoder bit 0 |
 | 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC (AN5) |
 | 8 | VSS | GND | Power | Ground return |
-| 9 | RA7 | SPARE_3 | Input | Freed by the internal oscillator; available for future use |
-| 10 | RA6 | SPARE_2 | Input | Freed by the internal oscillator; available for future use |
+| 9 | RA7 | OUTPUT_FILTER_BAND_2 | Output | LPF band decoder bit 2 |
+| 10 | RA6 | OUTPUT_FILTER_BAND_1 | Output | LPF band decoder bit 1 |
 | 11 | RC0 | INPUT_PTT | Input | Transmit request / key-down input |
 | 12 | RC1 | OUTPUT_COMP_RESET | Output | Active-low 10 ms comparator-latch reset pulse on PTT entry |
-| 13 | RC2 | INPUT_MENU_NEXT | Input | Config-menu page select switch |
+| 13 | RC2 | INPUT_ENCODER_A | Input | EC11 rotary encoder A phase |
 | 14 | RC3 | OUTPUT_LCD_I2C_SCL | Output | LCD backpack clock line |
 | 15 | RC4 | OUTPUT_LCD_I2C_SDA | Output | LCD backpack data line |
 | 16 | RC5 | OUTPUT_TX | Output | First TX sequencing driver |
@@ -156,13 +156,13 @@ schematic/netlist/PCB need these physical numbers to be correct.
 | 18 | RC7 | OUTPUT_TX_BIAS | Output | Final TX sequencing driver |
 | 19 | VSS | GND | Power | Ground return |
 | 20 | VDD | +5 V | Power | Decouple locally per datasheet |
-| 21 | RB0 | INPUT_MENU_ADJUST | Input | Menu adjust: short press increase, hold decrease |
+| 21 | RB0 | INPUT_ENCODER_B | Input | EC11 rotary encoder B phase |
 | 22 | RB1 | ADC_CURRENT | Input | WCS1700 current ADC (AN9), 2.5 V center, 0-5 V = -70 to +70 A |
 | 23 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC (AN10) |
 | 24 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC (AN11) |
 | 25 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
 | 26 | RB5 | OUTPUT_FAN_PWM | Output | 12 V fan low-side MOSFET control; confirm hardware-PWM alternate-function routing |
-| 27 | RB6 | INPUT_SPARE_4 | Input | Freed spare input |
+| 27 | RB6 | INPUT_ENCODER_SWITCH | Input | EC11 rotary encoder push switch |
 | 28 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
 
 ## Current hardware assumptions
@@ -174,7 +174,7 @@ schematic/netlist/PCB need these physical numbers to be correct.
 - SWR measurement pairs: two ADC pairs are required, one before and one after the low-pass filter bank, each with forward and reflected inputs
 - ADC wiring: RA0-RA3, RA5, RB1, RB2, and RB3 directly sample the two SWR pairs, temperature, current, overdrive, and drain voltage; no external analog multiplexer is fitted
 - Operator control: INPUT_PTT
-- Configuration controls: INPUT_MENU_NEXT and INPUT_MENU_ADJUST; each switch is active-low and is available only while not transmitting
+- User control: one EC11-style rotary encoder with active-low A/B contacts on RC2/RB0 and push switch on RB6
 - Sequencing outputs: OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS
 - Status output: OUTPUT_TRIP_STATUS
 - Current sensor: buffered WCS1700 output centered at 2.5 V; positive current rises toward 5 V and negative current falls toward 0 V
@@ -201,15 +201,15 @@ The same logic is used for each pair and each sensor trips independently. A sing
 
 ## User configuration
 
-The 1602 display config menu uses two active-low, normally-open switches wired from the menu input pins to ground. RC2 selects the displayed configuration page. RB0 is the adjust button: a short press increases the selected value; holding it for 500 ms then decreases the value repeatedly every 100 ms. A button action is accepted only while PTT is inactive, so a threshold cannot change during transmit. RB1 remains dedicated to the WCS1700 current ADC.
+The 1602 display config menu uses one EC11-style rotary encoder wired active-low/common-to-ground. RC2 reads encoder A, RB0 reads encoder B, and RB6 reads the push switch. In normal display mode, rotation selects the saved home display page and a short press enters settings. In settings mode, rotation edits the current value, short press advances to the next saved setting, and long press exits back to the saved home page. On a trip screen, a long press clears/re-arms the latched fault when the live fault condition is safe. Setting edits are accepted only while PTT is inactive, so a threshold cannot change during transmit. RB1 remains dedicated to the WCS1700 current ADC.
 
 The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adjustable from 0 to 1000 ms in 5 ms steps, each defaulting to 20 ms. The active electrical level for OUTPUT_TX, OUTPUT_TX_VCC, OUTPUT_TX_BIAS, OUTPUT_FAN_PWM, and OUTPUT_TRIP_STATUS is selectable as LOW or HIGH, with LOW as the default. The power display can show forward power or net power (`forward - reflected`); forward-only is the default. LCD I2C polarity is not configurable because its open-drain signalling is defined by the I2C bus.
 
-All menu settings and the selected display page are saved to the PIC's internal EEPROM at each operator change. The stored record includes a magic value, format version, and checksum. At power-up the record is restored only when valid; a missing, incompatible, or corrupted record loads the compiled safe defaults and the primary status page.
+All menu settings and the selected display page are saved to the PIC's internal EEPROM. The stored record includes a magic value, format version, and checksum. At power-up the record is restored only when valid; a missing, incompatible, or corrupted record loads the compiled safe defaults and the PEP/temperature home page.
 
 Menu changes mark the settings record dirty rather than writing immediately. After a 100 ms quiet period, firmware writes the record only while PTT is inactive, no software fault is latched, and the hardware overcurrent input is clear. This coalesces rapid button presses and keeps EEPROM write latency out of the immediate protection decision path.
 
-The default status screen displays post-filter forward power. Its primary readout can be selected as RMS or PEP, and the optional NET POWER setting subtracts post-filter reflected power from that display. The second row is a full-width PEP bar referenced to the configured post-filter maximum power. A second status page shows `PEP ------------` with the temperature in degrees C on the next row. PEP is held and decays by one watt at a configurable 50-2000 ms interval; the default is 500 ms.
+The default home screen displays PEP with a shortened `|`/`.` peak bar and temperature in degrees C. Additional normal pages show PEP/RMS plus two-decimal SWR, SWR1/SWR2 detail, and current with peak hold. Peak hold and peak decay are user settings saved in EEPROM; factory defaults are 1200 ms hold and 100 ms decay interval.
 
 The menu makes these firmware trip thresholds available to the operator:
 
@@ -389,7 +389,7 @@ The following items remain to be finalized before the design is considered compl
 5. Build and validate the selected 12 V low-side logic-level MOSFET fan drive, its PWM-capable output routing, and its temperature schedule.
 6. Calibrate the two SWR bridges, 10 W input detector, and 300 V drain divider against traceable measurements at the regulated 5.0 V rail, including the RMS/PEP display and PEP-bar response.
 7. Verify that every conditioned ADC input stays between VSS and VDD, including fault/transient tests with the specified external clamps and series resistance.
-8. Validate the shared software-I2C LCD interface, internal EEPROM settings persistence, menu switches, 10 ms PTT-triggered comparator reset pulse, settings restore, and interrupted-power recovery on the final PCB.
+8. Validate the shared software-I2C LCD interface, internal EEPROM settings persistence, rotary encoder UI, 10 ms PTT-triggered comparator reset pulse, settings restore, and interrupted-power recovery on the final PCB.
 9. Configure the required self-hosted runner variables, run the GitHub Actions build workflow, and confirm the uploaded firmware artifact before using the manual release workflow.
 10. Review the final PCB against the pin map and update the design documentation for any wiring changes before fabrication.
 11. Revisit the full board schematic (sensor conditioning, comparator board, LCD/EEPROM bus, power) once component values are bench-confirmed.

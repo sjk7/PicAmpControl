@@ -30,7 +30,7 @@ Build a PIC16F18855-I/SP-based linear amplifier protection controller that monit
    - fan-speed control from temperature
    - trip thresholds
    - PTT input for transmit-cycle arming
-   - two-switch LCD configuration menu
+   - single rotary-encoder LCD configuration menu
 
 ## Protection strategy
 
@@ -51,17 +51,17 @@ SWR protection is computed locally for each sensing point:
 
 This allows each SWR monitor to act independently and gives a clear, local protection decision at each stage.
 
-SWR protection is computed entirely in firmware from the forward and reflected ADC readings at each RF point; no dedicated SWR comparator hardware is used, and those input pins are assigned to configuration-menu switches instead.
+SWR protection is computed entirely in firmware from the forward and reflected ADC readings at each RF point; no dedicated SWR comparator hardware is used.
 
 Eight planned measurements are wired directly to ADC-capable pins: RA0-RA3 for the two SWR pairs, RA5 for temperature, RB1 for current, RB2 for overdrive, and RB3 for drain voltage. No external analog multiplexer is required; the PIC selects the dedicated ADC channels sequentially.
 
 ## User threshold configuration
 
-The LCD configuration menu uses two active-low switches: `INPUT_MENU_NEXT` on RC2 and `INPUT_MENU_ADJUST` on RB0. A short adjust press increases the selected value; holding it for 500 ms then decreases the value repeatedly every 100 ms. The operator can select and adjust an independent SWR trip ratio for each detector pair, from 1.1:1 to 5.0:1 in 0.1:1 steps. The pre-filter default is 3:1 and the post-filter default is 2:1. Each bridge has one forward full-scale setting from 500 W to 2500 W in 100 W steps, defaulting to 1500 W; its paired reflected reading uses that same setting. Temperature uses selectable B3435, B3950, or B4250 10 kOhm NTC profiles, defaulting to B3950, with a trip setting from 0 C to 150 C. Input power is adjustable from 0.0 W to 10.0 W in 0.1 W steps and defaults to a 10.0 W trip. Drain voltage is adjustable from 0 V to 300 V in 1 V steps and defaults to a 150 V trip. Changes are locked out during transmit. RB1 remains a spare input.
+The LCD configuration menu uses one EC11-style active-low rotary encoder: `INPUT_ENCODER_A` on RC2, `INPUT_ENCODER_B` on RB0, and `INPUT_ENCODER_SWITCH` on RB6. In normal display mode, rotation selects the home display page and a short press enters settings. In settings mode, rotation edits the current value, short press advances to the next saved setting, and long press exits back to the saved home page. On a trip screen, a long press clears/re-arms the latched fault when the live fault condition is safe. The operator can select and adjust an independent SWR trip ratio for each detector pair, from 1.1:1 to 5.0:1 in 0.1:1 steps. The pre-filter default is 3:1 and the post-filter default is 2:1. Each bridge has one forward full-scale setting from 500 W to 2500 W in 100 W steps, defaulting to 1500 W; its paired reflected reading uses that same setting. Temperature uses selectable B3435, B3950, or B4250 10 kOhm NTC profiles, defaulting to B3950, with a trip setting from 0 C to 150 C. Input power is adjustable from 0.0 W to 10.0 W in 0.1 W steps and defaults to a 10.0 W trip. Drain voltage is adjustable from 0 V to 300 V in 1 V steps and defaults to a 150 V trip. Setting edits are locked out during transmit. RB1 remains dedicated to current sensing.
 
 The operator can also configure the TX-to-VCC and VCC-to-bias sequencing delays from 0 to 1000 ms in 5 ms steps; both default to 20 ms. Each operational output can be configured active-low or active-high, with active-low as the default: TX, TX_VCC, TX_BIAS, fan, and trip. LCD I2C signalling remains fixed as open-drain bus logic and is driven by the dedicated software-I2C module.
 
-The status pages refresh every 100 ms from the post-filter forward-power ADC reading. The primary page presents a smoothed RMS or PEP peak-hold value on row one and a full-width PEP bar on row two. A second page presents `PEP ------------` on row one with temperature in degrees C on row two. The common bar renderer uses `-` for measured PEP and `.` for unused capacity, filling all remaining horizontal columns after each label. The PEP hold decays by one watt per configured interval, adjustable from 50 to 2000 ms and defaulting to 500 ms.
+The status pages refresh every 100 ms from the post-filter forward-power ADC reading. The default home page presents PEP with a shortened `|`/`.` peak bar and temperature in degrees C. Additional normal pages show PEP/RMS plus two-decimal SWR, SWR1/SWR2 detail, and current with peak hold. Peak hold and peak decay are user settings saved in EEPROM; factory defaults are 1200 ms hold and 100 ms decay interval.
 
 The software trip comparison follows the displayed ratio rather than a raw ADC limit. For a configured ratio $S$, it trips when the paired measurements satisfy $R(S+1)^2 \geq F(S-1)^2$, where $F$ is forward power and $R$ is reflected power. Each bridge's single forward full-scale setting converts both its forward and reflected ADC results to physical power before this comparison. This is the standard SWR relationship expressed without floating-point arithmetic. The forward sample must exceed a small noise floor before this comparison can trip.
 

@@ -17,7 +17,7 @@
 
 // Control inputs
 #define INPUT_PTT PORTCbits.RC0
-#define INPUT_MENU_NEXT PORTCbits.RC2
+#define INPUT_ENCODER_A PORTCbits.RC2
 
 // Comparator latch reset output.
 #define OUTPUT_COMP_RESET PORTCbits.RC1
@@ -32,16 +32,15 @@
 #define ADC_OVERDRIVE_CHANNEL 10
 #define ADC_DRAIN_PEAK_CHANNEL 11
 
-// Menu controls, comparator inputs, and status lines
-#define INPUT_MENU_INCREASE PORTBbits.RB0
-#define INPUT_MENU_ADJUST INPUT_MENU_INCREASE
+// Rotary encoder UI, comparator inputs, and status lines
+#define INPUT_ENCODER_B PORTBbits.RB0
 // RB1 is ADC_CURRENT_CHANNEL (analog input, see above) - not a digital pin.
 #define INPUT_OVERCURRENT_FAULT PORTBbits.RB4
 #define OUTPUT_FAN_PWM PORTBbits.RB5
 #define OUTPUT_FILTER_BAND_0 PORTAbits.RA4
 #define OUTPUT_FILTER_BAND_1 PORTAbits.RA6
 #define OUTPUT_FILTER_BAND_2 PORTAbits.RA7
-#define OUTPUT_FILTER_BAND_3 PORTBbits.RB6
+#define INPUT_ENCODER_SWITCH PORTBbits.RB6
 #define OUTPUT_TRIP_STATUS PORTBbits.RB7
 
 #endif

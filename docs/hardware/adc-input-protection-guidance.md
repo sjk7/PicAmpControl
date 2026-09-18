@@ -45,7 +45,7 @@ Small-signal Schottky diodes are not energy absorbers. For `RB2`, `RB3`, PTT wir
 
 - `RC0 / INPUT_PTT`: If PTT leaves the board or comes from an open-collector, open-drain, long-cable, or non-5 V source, add series resistance and suitable clamping or use a level translator. A pull-up alone is not overvoltage protection.
 - `RB4 / INPUT_OVERCURRENT_FAULT`: A clean 0-5 V push-pull comparator output does not need this ADC protection network. Protect the interface if the comparator output is exposed to cable transients or can exceed the PIC rails.
-- `RC2` and `RB0` local menu switches: No zener is required for the local switches. Optional series resistance is an ESD/EMI design choice.
+- `RC2`, `RB0`, and `RB6` rotary encoder contacts: No zener is required for a local PCB-mounted encoder. If the encoder is panel-wired, add modest series resistance and ESD/EMI protection appropriate for the cable run.
 - `RC3/RC4` I2C: Do not use zeners as a substitute for the required I2C pull-ups. See [pull-up-resistor-guidance.md](pull-up-resistor-guidance.md).
 - `MCLR/VPP`: Follow the reset and ICSP protection recommendations; do not add an arbitrary clamp that interferes with programming or reset timing.
 - `RC1`, `RC5-RC7`, and `RB5`: Protect external driver interfaces according to their loads. The fan gate uses a gate resistor and pull-down, not this ADC network.

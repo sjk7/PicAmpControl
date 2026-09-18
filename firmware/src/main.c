@@ -23,6 +23,11 @@ typedef enum {
 } system_state_t;
 
 typedef enum {
+    UI_MODE_HOME = 0,
+    UI_MODE_SETTINGS
+} ui_mode_t;
+
+typedef enum {
     BAND_NONE = 0,
     BAND_160M,
     BAND_80M,
@@ -107,6 +112,9 @@ typedef struct {
 #define PEAK_DECAY_DEFAULT_MS 100U
 #define PEAK_DECAY_MIN_MS 50U
 #define PEAK_DECAY_SHIFT 5U
+#define ENCODER_LONG_PRESS_MS 1200U
+#define ENCODER_FAULT_CLEAR_MS 1500U
+#define ENCODER_ROTATION_LOCKOUT_MS 5U
 
 static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
@@ -119,6 +127,7 @@ static volatile bool g_comparator_reset_active = false;
 static volatile unsigned char g_comparator_reset_elapsed_ms = 0;
 static volatile menu_page_t g_menu_page = MENU_PAGE_POWER_TEMPERATURE;
 static volatile menu_page_t g_saved_user_menu_page = MENU_PAGE_POWER_TEMPERATURE;
+static ui_mode_t g_ui_mode = UI_MODE_HOME;
 static volatile bool g_transient_menu_display = false;
 static volatile bool g_boot_message_active = false;
 static volatile bool g_ptt_complete_display_active = false;
@@ -248,7 +257,6 @@ void set_filter_band(filter_band_t band) {
     OUTPUT_FILTER_BAND_0 = (code >> 0) & 1U;
     OUTPUT_FILTER_BAND_1 = (code >> 1) & 1U;
     OUTPUT_FILTER_BAND_2 = (code >> 2) & 1U;
-    OUTPUT_FILTER_BAND_3 = (code >> 3) & 1U;
 }
 
 void set_tx_output(bool active) {
@@ -328,6 +336,7 @@ void timer0_init(void) {
 }
 
 unsigned int temperature_c(unsigned int raw);
+bool is_live_menu_page(menu_page_t page);
 
 void lcd_write_spaces(unsigned char count) {
     while (count > 0) {
@@ -429,7 +438,7 @@ void save_settings(void) {
 
     record[0] = SETTINGS_MAGIC;
     record[1] = SETTINGS_VERSION;
-    record[2] = (unsigned char)g_menu_page;
+    record[2] = (unsigned char)g_saved_user_menu_page;
     for (index = 0; index < sizeof(protection_thresholds_t); index++) {
         record[index + 3] = settings_bytes[index];
     }
@@ -691,7 +700,10 @@ void handle_ptt_transition(bool ptt_asserted) {
     if (ptt_asserted) {
         g_ptt_active = true;
         if (!g_transient_menu_display) {
-            g_saved_user_menu_page = g_menu_page;
+            if (is_live_menu_page(g_menu_page)) {
+                g_saved_user_menu_page = g_menu_page;
+            }
+            g_ui_mode = UI_MODE_HOME;
             g_transient_menu_display = true;
             g_menu_page = MENU_PAGE_STATUS;
             g_menu_changed = true;
@@ -816,7 +828,52 @@ unsigned int current_amperes(unsigned int raw) {
                           CURRENT_SENSOR_POSITIVE_COUNTS);
 }
 
-void adjust_selected_threshold(bool increase) {
+bool is_live_menu_page(menu_page_t page) {
+    return page < MENU_PAGE_SWR1_TRIP;
+}
+
+void step_home_page(bool clockwise) {
+    if (clockwise) {
+        g_menu_page = (menu_page_t)(g_menu_page + 1);
+        if (!is_live_menu_page(g_menu_page)) {
+            g_menu_page = MENU_PAGE_STATUS;
+        }
+    } else if (g_menu_page == MENU_PAGE_STATUS) {
+        g_menu_page = MENU_PAGE_CURRENT_METER;
+    } else {
+        g_menu_page = (menu_page_t)(g_menu_page - 1);
+    }
+
+    g_saved_user_menu_page = g_menu_page;
+    g_menu_changed = true;
+    mark_settings_dirty();
+}
+
+void step_settings_page(void) {
+    if (g_menu_page < MENU_PAGE_SWR1_TRIP || g_menu_page >= MENU_PAGE_PEAK_DECAY_MS) {
+        g_menu_page = MENU_PAGE_SWR1_TRIP;
+    } else {
+        g_menu_page = (menu_page_t)(g_menu_page + 1);
+    }
+    g_menu_changed = true;
+}
+
+void enter_settings(void) {
+    if (!g_ptt_active) {
+        g_ui_mode = UI_MODE_SETTINGS;
+        g_menu_page = MENU_PAGE_SWR1_TRIP;
+        g_menu_changed = true;
+    }
+}
+
+void exit_settings(void) {
+    g_ui_mode = UI_MODE_HOME;
+    g_menu_page = g_saved_user_menu_page;
+    g_menu_changed = true;
+    mark_settings_dirty();
+}
+
+void adjust_selected_setting(bool increase) {
     unsigned char setting_index;
     unsigned char *selected_u8;
     unsigned int *selected_u16;
@@ -907,6 +964,47 @@ void adjust_selected_threshold(bool increase) {
         *selected_u16 += 10;
     } else if (!increase && *selected_u16 > 10) {
         *selected_u16 -= 10;
+    }
+}
+
+void handle_encoder_rotation(bool clockwise) {
+    if (g_state == STATE_TRIP || g_transient_menu_display) {
+        return;
+    }
+    if (g_ui_mode == UI_MODE_SETTINGS) {
+        if (!g_ptt_active) {
+            adjust_selected_setting(clockwise);
+            g_menu_changed = true;
+            mark_settings_dirty();
+        }
+    } else if (is_live_menu_page(g_menu_page)) {
+        step_home_page(clockwise);
+    }
+}
+
+void handle_encoder_short_press(void) {
+    if (g_state == STATE_TRIP || g_transient_menu_display) {
+        return;
+    }
+    if (g_ui_mode == UI_MODE_SETTINGS) {
+        step_settings_page();
+    } else {
+        enter_settings();
+    }
+}
+
+void handle_encoder_long_press(void) {
+    if (g_state == STATE_TRIP) {
+        clear_fault_latches();
+        g_ui_mode = UI_MODE_HOME;
+        g_menu_page = g_saved_user_menu_page;
+        g_menu_changed = true;
+    } else if (g_ui_mode == UI_MODE_SETTINGS) {
+        exit_settings();
+    } else if (is_live_menu_page(g_menu_page)) {
+        g_saved_user_menu_page = g_menu_page;
+        g_menu_changed = true;
+        mark_settings_dirty();
     }
 }
 
@@ -1032,71 +1130,52 @@ void update_tx_sequence(void) {
 }
 
 void poll_menu_inputs(unsigned int elapsed_ms) {
-    static bool next_was_pressed = false;
-    static bool adjust_was_pressed = false;
-    static unsigned int adjust_hold_ms = 0;
-    static unsigned int adjust_repeat_ms = 0;
-    static unsigned int fault_clear_hold_ms = 0;
-    bool next_pressed = (INPUT_MENU_NEXT == 0);
-    bool adjust_pressed = (INPUT_MENU_ADJUST == 0);
+    static bool button_was_pressed = false;
+    static bool long_press_reported = false;
+    static bool encoder_a_was_high = true;
+    static unsigned int encoder_rotation_lockout_ms = 0;
+    static unsigned int button_hold_ms = 0;
+    bool button_pressed = (INPUT_ENCODER_SWITCH == 0);
+    bool encoder_a_high = (INPUT_ENCODER_A != 0);
+    bool user_activity = false;
 
-    /* A fault latch only otherwise clears on the next PTT re-arm (see
-       handle_ptt_transition()); a long press of the adjust button gives an
-       operator a way to clear it from the front panel without keying up. */
-    if (g_state == STATE_TRIP && adjust_pressed) {
-        fault_clear_hold_ms += elapsed_ms;
-        if (fault_clear_hold_ms >= 1500) {
-            clear_fault_latches();
-            g_menu_changed = true;
-            fault_clear_hold_ms = 0;
-        }
+    if (encoder_rotation_lockout_ms > elapsed_ms) {
+        encoder_rotation_lockout_ms -= elapsed_ms;
     } else {
-        fault_clear_hold_ms = 0;
+        encoder_rotation_lockout_ms = 0;
     }
 
-    if (!g_ptt_active) {
-        if (next_pressed && !next_was_pressed) {
-            g_menu_page = (menu_page_t)((g_menu_page + 1) % MENU_PAGE_COUNT);
-            g_menu_changed = true;
-            mark_settings_dirty();
-        }
-        if (adjust_pressed && !adjust_was_pressed) {
-            adjust_selected_threshold(true);
-            g_menu_changed = true;
-            mark_settings_dirty();
-        }
-        if (adjust_pressed && adjust_was_pressed) {
-            adjust_hold_ms += elapsed_ms;
-            if (adjust_hold_ms >= 500) {
-                adjust_repeat_ms += elapsed_ms;
-                while (adjust_repeat_ms >= 100) {
-                    adjust_selected_threshold(false);
-                    g_menu_changed = true;
-                    mark_settings_dirty();
-                    adjust_repeat_ms -= 100;
-                }
-            }
-        } else if (!adjust_pressed) {
-            adjust_hold_ms = 0;
-            adjust_repeat_ms = 0;
+    if (encoder_rotation_lockout_ms == 0 && encoder_a_was_high && !encoder_a_high) {
+        handle_encoder_rotation(INPUT_ENCODER_B != 0);
+        encoder_rotation_lockout_ms = ENCODER_ROTATION_LOCKOUT_MS;
+        user_activity = true;
+    }
+    encoder_a_was_high = encoder_a_high;
+
+    if (button_pressed) {
+        button_hold_ms += elapsed_ms;
+        if (!long_press_reported &&
+            button_hold_ms >= (g_state == STATE_TRIP ? ENCODER_FAULT_CLEAR_MS : ENCODER_LONG_PRESS_MS)) {
+            handle_encoder_long_press();
+            long_press_reported = true;
+            user_activity = true;
         }
     } else {
-        adjust_hold_ms = 0;
-        adjust_repeat_ms = 0;
+        if (button_was_pressed && !long_press_reported) {
+            handle_encoder_short_press();
+            user_activity = true;
+        }
+        button_hold_ms = 0;
+        long_press_reported = false;
     }
+    button_was_pressed = button_pressed;
 
-    next_was_pressed = next_pressed;
-    adjust_was_pressed = adjust_pressed;
-
-    /* Auto-return to the live status page after sitting idle on a config page,
-       so a forgotten menu screen doesn't hide the live power/trip readout. */
-    if (next_pressed || adjust_pressed) {
+    if (user_activity) {
         g_menu_idle_ms = 0;
-    } else if (g_menu_page >= MENU_PAGE_SWR1_TRIP) {
+    } else if (g_ui_mode == UI_MODE_SETTINGS) {
         g_menu_idle_ms += elapsed_ms;
         if (g_menu_idle_ms >= MENU_IDLE_TIMEOUT_MS) {
-            g_menu_page = MENU_PAGE_STATUS;
-            g_menu_changed = true;
+            exit_settings();
             g_menu_idle_ms = 0;
         }
     } else {
@@ -1208,6 +1287,7 @@ int main(void) {
     WPUCbits.WPUC0 = 1;
     TRISCbits.TRISC1 = 0;
     TRISCbits.TRISC2 = 1;
+    WPUCbits.WPUC2 = 1;
     TRISCbits.TRISC3 = 1;
     TRISCbits.TRISC4 = 1;
     TRISCbits.TRISC5 = 0;
@@ -1215,9 +1295,9 @@ int main(void) {
     TRISCbits.TRISC7 = 0;
 
     TRISB = 0x5F;
-    TRISBbits.TRISB6 = 0;
+    TRISBbits.TRISB6 = 1;
     PORTB = 0x00;
-    WPUB = 0x03;
+    WPUB = 0x43;
 
     set_filter_band(BAND_NONE);
     set_tx_output(false);

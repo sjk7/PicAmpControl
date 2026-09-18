@@ -1,0 +1,332 @@
+# asg (Annotated Schematic Generator) input for Linear Amplifier Protection Board
+# Run (from project root):
+#   asg docs/hardware/project_schematic_package/project_schematic.asg.yaml
+
+board: Linear Amplifier Protection System
+revision: 1.0
+power:
+  - name: +5V
+    voltage: 5
+  - name: +12V
+    voltage: 12
+  - name: GND
+    voltage: 0
+
+parts:
+  # MCU
+  - ref: U1
+    device: PIC16F18855
+    pins:
+      - name: Vdd
+        net: +5V
+      - name: Vss
+        net: GND
+      - name: MCLR
+        net: MCLR
+      - name: RB0
+        net: B0
+      - name: RB1
+        net: B1
+      - name: RB2
+        net: B2
+      - name: RB3
+        net: B3
+      - name: RB5
+        net: FAN_PWM
+      - name: RC2
+        net: MENU_NEXT
+      - name: RC3
+        net: I2C_SCL
+      - name: RC4
+        net: I2C_SDA
+      - name: RA0
+        net: FWD_ADC1
+      - name: RA1
+        net: REF_ADC1
+      - name: RA2
+        net: FWD_ADC2
+      - name: RA3
+        net: REF_ADC2
+      - name: RB1
+        net: OVERCURRENT_ADC
+      - name: RB2
+        net: OVERDRIVE_ADC
+      - name: RB3
+        net: DRAIN_ADC
+      - name: RA5
+        net: TEMP_NTC
+
+  # Basic circuit support
+  - ref: R1
+    device: R
+    value: 10k
+    pins:
+      - name: 1
+        net: +5V
+      - name: 2
+        net: MCLR
+  - ref: C1
+    device: C
+    value: 100nF
+    pins:
+      - name: 1
+        net: +5V
+      - name: 2
+        net: GND
+  - ref: C2
+    device: C
+    value: 100nF
+    pins:
+      - name: 1
+        net: +5V
+      - name: 2
+        net: GND
+  - ref: C3
+    device: C
+    value: 100nF
+    pins:
+      - name: 1
+        net: +5V
+      - name: 2
+        net: GND
+
+  # Band decoder
+  - ref: U2
+    device: 74HC4514
+    pins:
+      - name: VCC
+        net: +5V
+      - name: GND
+        net: GND
+      - name: A0
+        net: B0
+      - name: A1
+        net: B1
+      - name: A2
+        net: B2
+      - name: A3
+        net: B3
+      - name: Y0
+        net: BAND_160M
+      - name: Y1
+        net: BAND_80M
+      - name: Y2
+        net: BAND_40M
+      - name: Y3
+        net: BAND_20M
+      - name: Y4
+        net: BAND_15M
+      - name: Y5
+        net: BAND_10M
+      - name: Y6
+        net: BAND_6M
+
+  # Relay driver
+  - ref: U3
+    device: ULN2803A
+    pins:
+      - name: IN1
+        net: BAND_160M
+      - name: IN2
+        net: BAND_80M
+      - name: IN3
+        net: BAND_40M
+      - name: IN4
+        net: BAND_20M
+      - name: IN5
+        net: BAND_15M
+      - name: IN6
+        net: BAND_10M
+      - name: IN7
+        net: BAND_6M
+      - name: OUT1
+        net: RELAY_160M_C
+      - name: OUT2
+        net: RELAY_80M_C
+      - name: OUT3
+        net: RELAY_40M_C
+      - name: OUT4
+        net: RELAY_20M_C
+      - name: OUT5
+        net: RELAY_15M_C
+      - name: OUT6
+        net: RELAY_10M_C
+      - name: OUT7
+        net: RELAY_6M_C
+      - name: GND
+        net: GND
+      - name: COM
+        net: +12V
+
+  # Relays/bank
+  - ref: K1
+    device: Relay_SPST
+    value: 160m
+    pins:
+      - name: 1
+        net: RELAY_160M_C
+      - name: 2
+        net: +12V
+  - ref: K2
+    device: Relay_SPST
+    value: 80m
+    pins:
+      - name: 1
+        net: RELAY_80M_C
+      - name: 2
+        net: +12V
+  - ref: K3
+    device: Relay_SPST
+    value: 40m
+    pins:
+      - name: 1
+        net: RELAY_40M_C
+      - name: 2
+        net: +12V
+  - ref: K4
+    device: Relay_SPST
+    value: 20m
+    pins:
+      - name: 1
+        net: RELAY_20M_C
+      - name: 2
+        net: +12V
+  - ref: K5
+    device: Relay_SPST
+    value: 15m
+    pins:
+      - name: 1
+        net: RELAY_15M_C
+      - name: 2
+        net: +12V
+  - ref: K6
+    device: Relay_SPST
+    value: 10m
+    pins:
+      - name: 1
+        net: RELAY_10M_C
+      - name: 2
+        net: +12V
+  - ref: K7
+    device: Relay_SPST
+    value: 6m
+    pins:
+      - name: 1
+        net: RELAY_6M_C
+      - name: 2
+        net: +12V
+
+  # Flyback protection
+  - ref: D1
+    device: D
+    value: 1N4007
+    pins:
+      - name: A
+        net: RELAY_160M_C
+      - name: K
+        net: +12V
+  - ref: D2
+    device: D
+    value: 1N4007
+    pins:
+      - name: A
+        net: RELAY_80M_C
+      - name: K
+        net: +12V
+  - ref: D3
+    device: D
+    value: 1N4007
+    pins:
+      - name: A
+        net: RELAY_40M_C
+      - name: K
+        net: +12V
+  - ref: D4
+    device: D
+    value: 1N4007
+    pins:
+      - name: A
+        net: RELAY_20M_C
+      - name: K
+        net: +12V
+  - ref: D5
+    device: D
+    value: 1N4007
+    pins:
+      - name: A
+        net: RELAY_15M_C
+      - name: K
+        net: +12V
+  - ref: D6
+    device: D
+    value: 1N4007
+    pins:
+      - name: A
+        net: RELAY_10M_C
+      - name: K
+        net: +12V
+  - ref: D7
+    device: D
+    value: 1N4007
+    pins:
+      - name: A
+        net: RELAY_6M_C
+      - name: K
+        net: +12V
+
+  # Fan/PWM
+  - ref: Q1
+    device: NMOS_TO220
+    pins:
+      - name: G
+        net: FAN_PWM
+      - name: D
+        net: FAN-
+      - name: S
+        net: GND
+  - ref: FAN1
+    device: Fan
+    pins:
+      - name: +
+        net: +12V
+      - name: -
+        net: FAN-
+
+  # Temp sense
+  - ref: RN1
+    device: NTC_10k
+    pins:
+      - name: 1
+        net: +5V
+      - name: 2
+        net: TEMP_NTC
+
+  # Menu and LCD
+  - ref: MENU1
+    device: Button
+    value: NEXT
+    pins:
+      - name: 1
+        net: MENU_NEXT
+      - name: 2
+        net: GND
+  - ref: MENU2
+    device: Button
+    value: ADJUST
+    pins:
+      - name: 1
+        net: MENU_ADJUST
+      - name: 2
+        net: GND
+  - ref: J3
+    device: Conn_01x04
+    value: LCD_I2C
+    pins:
+      - name: 1
+        net: +5V
+      - name: 2
+        net: GND
+      - name: 3
+        net: I2C_SDA
+      - name: 4
+        net: I2C_SCL
