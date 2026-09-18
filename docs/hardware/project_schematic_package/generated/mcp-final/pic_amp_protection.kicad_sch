@@ -2197,118 +2197,6 @@
 	)
 )
 	(symbol
-	(lib_name "PWR_FLAG")
-	(lib_id "power:PWR_FLAG")
-	(at 199.39 105.41 0)
-	(unit 1)
-	(exclude_from_sim no)
-	(in_bom yes)
-	(on_board yes)
-	(dnp no)
-	(uuid "497b6e4e-797d-488f-a90a-a14919de3cac")
-	(property "Reference" "#FLG01"
-		(at 199.39 101.6 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-		)
-	)
-	(property "Value" "PWR_FLAG"
-		(at 199.39 109.22 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-		)
-	)
-	(property "Footprint" ""
-		(at 199.39 105.41 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(hide yes)
-		)
-	)
-	(property "Datasheet" "~"
-		(at 199.39 105.41 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(hide yes)
-		)
-	)
-	(pin "1"
-	(uuid "f8ec30e6-97a5-43db-97f8-eab15a4ef5a8")
-)
-	(instances
-		(project "pic_amp_protection"
-			(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08"
-				(reference "#FLG01")
-				(unit 1)
-			)
-		)
-	)
-)
-	(symbol
-	(lib_name "power:+5V")
-	(lib_id "power:+5V")
-	(at 190.5 105.41 0)
-	(unit 1)
-	(exclude_from_sim no)
-	(in_bom yes)
-	(on_board yes)
-	(dnp no)
-	(uuid "e7980035-f80b-4f75-820c-f6a2586681f3")
-	(property "Reference" "#PWR01"
-		(at 190.5 101.6 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-		)
-	)
-	(property "Value" "+5V"
-		(at 190.5 109.22 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-		)
-	)
-	(property "Footprint" ""
-		(at 190.5 105.41 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(hide yes)
-		)
-	)
-	(property "Datasheet" "~"
-		(at 190.5 105.41 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(hide yes)
-		)
-	)
-	(pin "1"
-	(uuid "76ed8dcd-b9fa-431a-8d74-e7ea41ccaa2b")
-)
-	(instances
-		(project "pic_amp_protection"
-			(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08"
-				(reference "#PWR01")
-				(unit 1)
-			)
-		)
-	)
-)
-	(symbol
 	(lib_name "power:GND")
 	(lib_id "power:GND")
 	(at 170.18 185.42 0)
@@ -2830,6 +2718,62 @@
 		)
 	)
 )
+	(symbol
+	(lib_name "power:GND")
+	(lib_id "power:GND")
+	(at 190.5 80.01 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "6d0901fc-c8c5-42cd-925f-df9bebbcdbd2")
+	(property "Reference" "#PWR06"
+		(at 190.5 76.2 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "GND"
+		(at 190.5 83.82 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 190.5 80.01 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 190.5 80.01 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "c0bf3a96-4e6f-4a54-8a8b-a274f9a6ca70")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08"
+				(reference "#PWR06")
+				(unit 1)
+			)
+		)
+	)
+)
 	(symbol_instances
 		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/3db2363a-c752-4b04-a003-c627a8c3bc07"
 			(reference "C1")
@@ -2841,18 +2785,6 @@
 			(reference "U1")
 			(unit 1)
 			(value "PIC16F18855-I/SP")
-			(footprint "")
-		)
-		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/497b6e4e-797d-488f-a90a-a14919de3cac"
-			(reference "#FLG01")
-			(unit 1)
-			(value "PWR_FLAG")
-			(footprint "")
-		)
-		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/e7980035-f80b-4f75-820c-f6a2586681f3"
-			(reference "#PWR01")
-			(unit 1)
-			(value "+5V")
 			(footprint "")
 		)
 		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/d4a00100-68d8-4f4e-bf48-1a9948d4da1a"
@@ -2909,6 +2841,12 @@
 			(value "GND")
 			(footprint "")
 		)
+		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/6d0901fc-c8c5-42cd-925f-df9bebbcdbd2"
+			(reference "#PWR06")
+			(unit 1)
+			(value "GND")
+			(footprint "")
+		)
 )
 	(wire
 	(pts
@@ -2919,26 +2857,6 @@
 		(type default)
 	)
 	(uuid "4ff22681-ccd4-4fc7-bdeb-e34151f61475")
-)
-	(wire
-	(pts
-		(xy 190.5 105.41) (xy 190.5 124.46)
-	)
-	(stroke
-		(width 0)
-		(type default)
-	)
-	(uuid "a2ffb419-5959-4758-a91a-8fdd9050e4c6")
-)
-	(wire
-	(pts
-		(xy 199.39 105.41) (xy 190.5 105.41)
-	)
-	(stroke
-		(width 0)
-		(type default)
-	)
-	(uuid "dc4e8155-60b9-4cbd-92a2-a70159cecb34")
 )
 	(wire
 	(pts
@@ -3042,36 +2960,6 @@
 )
 	(wire
 	(pts
-		(xy 190.5 67.31) (xy 190.5 69.85)
-	)
-	(stroke
-		(width 0)
-		(type default)
-	)
-	(uuid "ddc789ce-e94a-4455-8974-6fb4956f2a2e")
-)
-	(wire
-	(pts
-		(xy 170.18 63.5) (xy 170.18 66.04)
-	)
-	(stroke
-		(width 0)
-		(type default)
-	)
-	(uuid "cfa06c7c-73f5-4d6e-a004-8d49495010f5")
-)
-	(wire
-	(pts
-		(xy 209.55 63.5) (xy 209.55 66.04)
-	)
-	(stroke
-		(width 0)
-		(type default)
-	)
-	(uuid "e6d1de7a-b19b-4136-be95-b173c378ac5c")
-)
-	(wire
-	(pts
 		(xy 198.12 59.69) (xy 200.66 59.69)
 	)
 	(stroke
@@ -3160,6 +3048,76 @@
 	)
 	(uuid "85bd017d-d449-4203-9af9-b9d418c99f97")
 )
+	(wire
+	(pts
+		(xy 190.5 67.31) (xy 190.5 80.01)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "0af18eba-63c9-43d3-8ab1-3ca5485de835")
+)
+	(wire
+	(pts
+		(xy 170.18 63.5) (xy 190.5 63.5)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "6de645da-4ebc-4b64-b5d3-07930f5abd62")
+)
+	(wire
+	(pts
+		(xy 190.5 63.5) (xy 190.5 80.01)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "80fbfb26-8ba3-43a9-beed-0b288f62e414")
+)
+	(wire
+	(pts
+		(xy 209.55 63.5) (xy 190.5 63.5)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "9471beef-7f02-41eb-b374-895cbf32a9df")
+)
+	(wire
+	(pts
+		(xy 190.5 63.5) (xy 190.5 80.01)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "65703664-f87f-4982-9674-c74cd4d1f068")
+)
+	(wire
+	(pts
+		(xy 190.5 124.46) (xy 160.02 124.46)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "8af482be-6cc6-4f11-8f29-55ac0f23c1de")
+)
+	(wire
+	(pts
+		(xy 160.02 124.46) (xy 160.02 120.65)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "b3469a52-33fc-4a4f-945f-cc95dae98c62")
+)
 	(label "+5V"
 	(at 160.02 118.11 90)
 	(effects
@@ -3168,33 +3126,6 @@
 		)
 	)
 	(uuid "a5b047b7-845c-4e82-9900-dd4b29bbf254")
-)
-	(label "GND"
-	(at 190.5 69.85 270)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "85dc176d-65ca-492b-bed4-a3b5239961eb")
-)
-	(label "GND"
-	(at 170.18 66.04 270)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "d3de2347-ae56-4b82-84c1-3da1cc3ae840")
-)
-	(label "GND"
-	(at 209.55 66.04 270)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "2f462043-3f02-4029-ada6-9ac8d404b8c1")
 )
 	(label "+5V"
 	(at 200.66 59.69 0)
