@@ -2292,15 +2292,6 @@
 	)
 	(uuid "8b7a5f5a-7a6a-4ee4-8a9f-3abbde9b329d")
 )
-	(label "Net-(#PWR01-1)"
-	(at 190.5 105.41 0)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "1b033a9f-23ca-4321-8387-ca983893b705")
-)
 	(sheet_instances
 		(path "/"
 			(page "1")

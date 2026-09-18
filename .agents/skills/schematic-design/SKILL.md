@@ -33,6 +33,20 @@ or recovery only has to roll back one small step instead of redoing
 everything.
 </COMMIT-OFTEN-RULE>
 
+<LEARN-FROM-THE-GATE-RULE>
+`/memories/repo/visual-gate-lessons.md` is a living, growing file of every
+visual-gate failure category ever hit in this repo, written as a
+generation rule (not a log). It MUST be read before placing or wiring any
+new power symbol, decoupling cap, or IC symbol variant, so known
+overlap/rotation/clearance mistakes are avoided on the FIRST attempt
+instead of being fixed after the gate fails again. Every time the gate
+(`tools/check_schematic_visual_overlaps.ps1`) reports a NEW category of
+failure not already covered in that file, add a rule for it there before
+making the next placement — do not just patch the one instance that
+failed and move on. This is how the gate's feedback compounds into fewer
+failures over time instead of repeating the same class of mistake.
+</LEARN-FROM-THE-GATE-RULE>
+
 <CRITICAL-RULE>
 NEVER use the Read, Write, or Edit tools on KiCad files (.kicad_sch,
 .kicad_pcb, .kicad_sym, .kicad_mod, .kicad_pro, .kicad_prl). ALL
@@ -216,6 +230,14 @@ Y < 175mm.
   - The net already has a power source on another sheet (hierarchical designs)
   - You plan to manually control PWR_FLAG placement
 - PWR_FLAG is only needed on nets with power_in pins and NO power_out/output pins
+- HARD RULE: the user does not want visible net-name labels cluttering
+  direct point-to-point wiring. `connect_pins` frequently auto-inserts a
+  visible `Net-(...)` label at one of the pins even when a direct wire
+  already fully defines the connection. After every `connect_pins` call,
+  check `list_schematic_labels` and remove any such auto-generated label,
+  verifying with `kicad-cli sch erc` that the violation count is
+  unchanged. Only keep a real label when it does actual work (a net
+  spanning a distance with no direct wire, or crossing sheets).
 
 ## Naming
 
