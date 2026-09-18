@@ -2958,15 +2958,15 @@
 	(symbol
 	(lib_name "PWR_FLAG")
 	(lib_id "power:PWR_FLAG")
-	(at 149.86 49.53 0)
+	(at 134.62 49.53 0)
 	(unit 1)
 	(exclude_from_sim no)
 	(in_bom yes)
 	(on_board yes)
 	(dnp no)
-	(uuid "96b1d58a-6b62-48cb-aa36-d500a97c7b0a")
+	(uuid "216b59fd-eb00-4afc-8928-8d1af0bdb506")
 	(property "Reference" "#FLG01"
-		(at 149.86 45.72 0)
+		(at 134.62 45.72 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2974,7 +2974,7 @@
 		)
 	)
 	(property "Value" "PWR_FLAG"
-		(at 149.86 53.34 0)
+		(at 134.62 53.34 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2982,7 +2982,7 @@
 		)
 	)
 	(property "Footprint" ""
-		(at 149.86 49.53 0)
+		(at 134.62 49.53 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2991,7 +2991,7 @@
 		)
 	)
 	(property "Datasheet" "~"
-		(at 149.86 49.53 0)
+		(at 134.62 49.53 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -3000,7 +3000,7 @@
 		)
 	)
 	(pin "1"
-	(uuid "de3f34ac-ac5a-4906-a5ee-37d1f4ba29c7")
+	(uuid "c397b84a-5890-4640-9f74-b91e53981550")
 )
 	(instances
 		(project "pic_amp_protection"
@@ -3090,7 +3090,7 @@
 			(value "+12V")
 			(footprint "")
 		)
-		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/96b1d58a-6b62-48cb-aa36-d500a97c7b0a"
+		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/216b59fd-eb00-4afc-8928-8d1af0bdb506"
 			(reference "#FLG01")
 			(unit 1)
 			(value "PWR_FLAG")
@@ -3386,6 +3386,16 @@
 		(type default)
 	)
 	(uuid "e16112ce-ce0d-4a16-bd87-1ee732e9fe9e")
+)
+	(wire
+	(pts
+		(xy 134.62 49.53) (xy 149.86 49.53)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "ad6ac87d-328b-4e0f-b559-5a0d508834e3")
 )
 	(label "+5V"
 	(at 160.02 118.11 90)
