@@ -792,6 +792,107 @@
 			)
 		)
 		(embedded_fonts no)
+	)
+		(symbol "power:GND"
+		(power)
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0)
+			(hide yes)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "#PWR"
+			(at 0 -6.35 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 0 -3.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "global power"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "GND_0_1"
+			(polyline
+				(pts
+					(xy 0 0) (xy 0 -1.27) (xy 1.27 -1.27) (xy 0 -2.54) (xy -1.27 -1.27) (xy 0 -1.27)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "GND_1_1"
+			(pin power_in line
+				(at 0 0 270)
+				(length 0)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
 	))
 	(symbol
 	(lib_name "PIC16F18855_I_SP_COMPACT")
@@ -1042,6 +1143,118 @@
 		)
 	)
 )
+	(symbol
+	(lib_name "power:GND")
+	(lib_id "power:GND")
+	(at 185.42 177.8 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "3191b2b6-3bb4-40f0-b285-4ba2837e0667")
+	(property "Reference" "#PWR02"
+		(at 185.42 173.99 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "GND"
+		(at 185.42 181.61 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 185.42 177.8 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 185.42 177.8 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "355fb0a6-84c9-4700-b54c-2704b2c16caa")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08"
+				(reference "#PWR02")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "PWR_FLAG")
+	(lib_id "power:PWR_FLAG")
+	(at 185.42 177.8 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "0c1242ac-e3aa-43ed-8a73-ca8afeba4ae9")
+	(property "Reference" "#FLG02"
+		(at 185.42 173.99 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "PWR_FLAG"
+		(at 185.42 181.61 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 185.42 177.8 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 185.42 177.8 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "645f6da6-298e-488b-9a33-9b1139def516")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08"
+				(reference "#FLG02")
+				(unit 1)
+			)
+		)
+	)
+)
 	(symbol_instances
 		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/e1bbe5ad-06fc-4f47-a4cb-114d0ffd9878"
 			(reference "U1")
@@ -1057,6 +1270,18 @@
 		)
 		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/897bf177-bda4-43de-9bb7-d52f3ebba95c"
 			(reference "#FLG01")
+			(unit 1)
+			(value "PWR_FLAG")
+			(footprint "")
+		)
+		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/3191b2b6-3bb4-40f0-b285-4ba2837e0667"
+			(reference "#PWR02")
+			(unit 1)
+			(value "GND")
+			(footprint "")
+		)
+		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/0c1242ac-e3aa-43ed-8a73-ca8afeba4ae9"
+			(reference "#FLG02")
 			(unit 1)
 			(value "PWR_FLAG")
 			(footprint "")
