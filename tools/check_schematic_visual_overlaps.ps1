@@ -24,12 +24,22 @@ foreach ($node in $svg.SelectNodes('//svg:text', $namespaces)) {
         default { $left = $x; $right = $x + $width }
     }
 
+    $rotated = $false
+    $ancestor = $node
+    while ($ancestor) {
+        if ($ancestor.transform -match 'rotate\((-?\d+(?:\.\d+)?)') {
+            if ([math]::Abs([double]$Matches[1]) -gt 0.01) { $rotated = $true }
+        }
+        $ancestor = $ancestor.ParentNode
+    }
+
     $texts += [pscustomobject]@{
         Text = $text
         Left = $left
         Right = $right
         Top = $y - $fontSize
         Bottom = $y + ($fontSize * 0.25)
+        Rotated = $rotated
     }
 }
 
@@ -120,6 +130,12 @@ foreach ($path in $svg.SelectNodes('//svg:path', $namespaces)) {
                 $overlaps += "'$($item.Text)' overlaps a rendered wire segment"
             }
         }
+    }
+}
+
+foreach ($item in $texts) {
+    if ($item.Rotated) {
+        $overlaps += "'$($item.Text)' is rotated; visible text must read left-to-right"
     }
 }
 

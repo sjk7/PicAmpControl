@@ -223,6 +223,9 @@ Y < 175mm.
 - No visible text may overlap any pin, wire, symbol body, sheet border, pin
    number, other text, or title-block element. This is a hard failure, not a
    cosmetic warning.
+- All visible text must read left-to-right with rotation 0. Never rotate
+   references, values, resistor names, labels, or annotations to follow a
+   vertical component; move the text instead.
 - Free-text annotations must never be placed inside a symbol body; generate
    them beside or above the owning symbol with measured clearance. Only the
    symbol's intentionally owned pin-name/number fields may occupy its body.
