@@ -201,6 +201,8 @@ Y < 175mm.
 - Never accept the default pin/label positions produced by an automatic
    hierarchy helper without inspection. Spread labels to clear text boxes,
    then resize and move the sheet block to a deliberate functional location.
+- Sheet-pin labels must be wholly inside the sheet box or wholly outside it;
+   never let a label or pin number straddle the sheet border.
 - Structural hierarchy validation is not visual validation. A successful
    `validate_hierarchy` does not approve overlapping labels, text, or sheet
    graphics; export PDF/SVG and inspect the rendered geometry before commit.
