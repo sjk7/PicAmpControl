@@ -180,14 +180,19 @@ Y < 175mm.
 - Active-low signals: suffix with `_N` (e.g., RESET_N, CS_N)
 - Do not use generic names like NET1 or WIRE3
 
-## Custom IC Geometry
+## General Layout and Visual Geometry
 
-- The inner end of every custom IC pin graphic must touch the IC body edge;
+- The inner end of every IC pin graphic must touch the IC body edge;
    never leave a visible gap between a pin and its body.
-- Keep visible pin names inside the IC body with clearance for the longest
+- Keep visible pin names inside their symbol body with clearance for the longest
    name, using the smallest inward offset that avoids the body edge. Adjust
    pin-name offset and body geometry together; do not leave excessive blank
    space between pin names and the body edge.
+- All visible text, including references, values, labels, annotations, pin
+   names, pin numbers, and sheet text, is a keep-out area. No wire, symbol,
+   boundary, or other text may pass through it.
+- Route wires around complete symbol bodies, pins, text fields, labels, and
+   their clearance margins. Never route through a component or its text.
 - Keep the IC reference and value inside the body when they fit; otherwise
    place them directly above the body without overlapping pin names.
 - IC name text and pin-name text must never overlap. First move the IC name

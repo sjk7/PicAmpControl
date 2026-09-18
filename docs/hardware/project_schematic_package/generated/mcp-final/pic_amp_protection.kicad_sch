@@ -5296,6 +5296,760 @@
 			)
 		)
 		(embedded_fonts no)
+	)
+		(symbol "Device:Q_NMOS"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0)
+			(hide yes)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "Q"
+			(at 5.08 1.27 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "Q_NMOS"
+			(at 5.08 -1.27 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 5.08 2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "N-MOSFET transistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "NMOS N-MOS"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "Q_NMOS_0_1"
+			(polyline
+				(pts
+					(xy 0.254 1.905) (xy 0.254 -1.905)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.254 0) (xy -2.54 0)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.762 2.286) (xy 0.762 1.27)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.762 0.508) (xy 0.762 -0.508)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.762 -1.27) (xy 0.762 -2.286)
+				)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0.762 -1.778) (xy 3.302 -1.778) (xy 3.302 1.778) (xy 0.762 1.778)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 1.016 0) (xy 2.032 0.381) (xy 2.032 -0.381) (xy 1.016 0)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type outline)
+				)
+			)
+			(circle
+				(center 1.651 0)
+				(radius 2.794)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 2.54 2.54) (xy 2.54 1.778)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(circle
+				(center 2.54 1.778)
+				(radius 0.254)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type outline)
+				)
+			)
+			(circle
+				(center 2.54 -1.778)
+				(radius 0.254)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type outline)
+				)
+			)
+			(polyline
+				(pts
+					(xy 2.54 -2.54) (xy 2.54 0) (xy 0.762 0)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 2.921 0.381) (xy 3.683 0.381)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 3.302 0.381) (xy 2.921 -0.254) (xy 3.683 -0.254) (xy 3.302 0.381)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "Q_NMOS_1_1"
+			(pin input line
+				(at -5.08 0 0)
+				(length 2.54)
+				(name "G"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "G"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 2.54 5.08 270)
+				(length 2.54)
+				(name "D"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "D"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 2.54 -5.08 90)
+				(length 2.54)
+				(name "S"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "S"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+		(symbol "Motor:Fan"
+		(pin_names
+			(offset 0)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "M"
+			(at 2.54 5.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "Fan"
+			(at 2.54 -2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(property "Footprint" ""
+			(at 0 0.254 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0.254 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Fan"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "Fan Motor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "PinHeader*P2.54mm* TerminalBlock*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "Fan_0_1"
+			(arc
+				(start 0 3.81)
+				(mid -0.0015 0.9048)
+				(end -2.54 -0.508)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0 4.572) (xy 0 5.08)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0 4.2672) (xy 0 4.6228)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(circle
+				(center 0 1.016)
+				(radius 3.2512)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(arc
+				(start -2.54 -0.508)
+				(mid 0 1.0618)
+				(end 2.54 -0.508)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0 -2.2352) (xy 0 -2.6416)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy 0 -5.08) (xy 0 -4.572)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(arc
+				(start 2.54 -0.508)
+				(mid 0.047 0.9315)
+				(end 0 3.81)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "Fan_1_1"
+			(pin passive line
+				(at 0 7.62 270)
+				(length 2.54)
+				(name "+"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 -5.08 90)
+				(length 2.54)
+				(name "-"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+		(symbol "Device:Thermistor_NTC"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "TH"
+			(at -4.445 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "Thermistor_NTC"
+			(at 3.175 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 0 1.27 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 1.27 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Temperature dependent resistor, negative temperature coefficient"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "thermistor NTC resistor sensor RTD"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "*NTC* *Thermistor* PIN?ARRAY* bornier* *Terminal?Block* R_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "Thermistor_NTC_0_1"
+			(arc
+				(start -3.175 2.413)
+				(mid -3.0506 2.3165)
+				(end -3.048 2.159)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(arc
+				(start -3.048 2.794)
+				(mid -2.9736 2.9736)
+				(end -2.794 3.048)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(arc
+				(start -2.794 3.048)
+				(mid -2.6144 2.9736)
+				(end -2.54 2.794)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(arc
+				(start -2.794 2.54)
+				(mid -2.9736 2.6144)
+				(end -3.048 2.794)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(arc
+				(start -2.794 1.905)
+				(mid -2.9736 1.9794)
+				(end -3.048 2.159)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(arc
+				(start -2.54 2.159)
+				(mid -2.6144 1.9794)
+				(end -2.794 1.905)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(arc
+				(start -2.159 2.794)
+				(mid -2.434 2.5608)
+				(end -2.794 2.54)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.54 2.159) (xy -2.54 2.794)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.54 -3.683) (xy -2.54 -1.397) (xy -2.794 -2.159) (xy -2.286 -2.159) (xy -2.54 -1.397) (xy -2.54 -1.651)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type outline)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.778 2.54) (xy -1.778 1.524) (xy 1.778 -1.524) (xy 1.778 -2.54)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -1.778 -1.397) (xy -1.778 -3.683) (xy -2.032 -2.921) (xy -1.524 -2.921) (xy -1.778 -3.683)
+					(xy -1.778 -3.429)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type outline)
+				)
+			)
+			(rectangle
+				(start -1.016 2.54)
+				(end 1.016 -2.54)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "Thermistor_NTC_1_1"
+			(pin passive line
+				(at 0 3.81 270)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 -3.81 90)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
 	))
 	(symbol
 	(lib_name "PIC16F18855_I_SP_COMPACT")
@@ -5830,6 +6584,186 @@
 		)
 	)
 )
+	(symbol
+	(lib_name "Device:Q_NMOS")
+	(lib_id "Device:Q_NMOS")
+	(at 124.46 175.26 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "ae8322cd-063c-4048-b5c1-562472c376b4")
+	(property "Reference" "Q1"
+		(at 124.46 171.45 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "FAN"
+		(at 124.46 179.07 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 124.46 175.26 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 124.46 175.26 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "D"
+	(uuid "d9aec88d-86df-4519-9221-f03968e19806")
+)
+	(pin "G"
+	(uuid "80ad1ee7-bdf2-4916-b050-52e34b17b353")
+)
+	(pin "S"
+	(uuid "1b125d47-fa8f-4d07-9cb8-492993daecb0")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "Q1")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Motor:Fan")
+	(lib_id "Motor:Fan")
+	(at 175.26 175.26 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "51fb0cd4-174c-4bb0-a385-e7f0c1e0c609")
+	(property "Reference" "FAN1"
+		(at 175.26 171.45 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "FAN"
+		(at 175.26 179.07 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 175.26 175.26 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 175.26 175.26 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "53914068-a59a-4eda-bcdd-0e58e2022a9b")
+)
+	(pin "2"
+	(uuid "7b10a34f-1c48-48f1-985e-341dd6250c1f")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "FAN1")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "Device:Thermistor_NTC")
+	(lib_id "Device:Thermistor_NTC")
+	(at 80.01 175.26 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "d2dbc960-7afb-4861-9cf1-b80fadb396d5")
+	(property "Reference" "RN1"
+		(at 80.01 171.45 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "NTC"
+		(at 80.01 179.07 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 80.01 175.26 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 80.01 175.26 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "250166c6-8108-4f34-bc8d-3ab395318a89")
+)
+	(pin "2"
+	(uuid "ca86fb7c-fdcf-40a8-b4b0-c976aa96c5a2")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "RN1")
+				(unit 1)
+			)
+		)
+	)
+)
 	(symbol_instances
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/feb0a468-8191-4b22-9d2c-bcba9fc7fc40"
 			(reference "U1")
@@ -5939,6 +6873,24 @@
 			(value "ULN2803A")
 			(footprint "")
 		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/ae8322cd-063c-4048-b5c1-562472c376b4"
+			(reference "Q1")
+			(unit 1)
+			(value "FAN")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/51fb0cd4-174c-4bb0-a385-e7f0c1e0c609"
+			(reference "FAN1")
+			(unit 1)
+			(value "FAN")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/d2dbc960-7afb-4861-9cf1-b80fadb396d5"
+			(reference "RN1")
+			(unit 1)
+			(value "NTC")
+			(footprint "")
+		)
 )
 	(text "PIC16F18855-I/SP"
 	(at 80 65 0)
@@ -6003,6 +6955,33 @@
 	)
 	(uuid "39564f4a-fc33-4cd5-b90d-b82cfc0f5938")
 )
+	(text "FAN MOSFET"
+	(at 124 164 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "83134950-c853-4013-becd-ec7bb31f187b")
+)
+	(text "12V FAN"
+	(at 175 164 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "eaaa9828-fa1b-4591-b1d0-c707f3e4ce11")
+)
+	(text "10k NTC"
+	(at 80 164 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "375277e2-bb44-429e-8eb7-eb214aed78f6")
+)
 	(wire
 	(pts
 		(xy 250.19 72.39) (xy 247.65 72.39)
@@ -6033,6 +7012,96 @@
 	)
 	(uuid "b7a40709-073f-4fb1-a94c-b228552acb1d")
 )
+	(wire
+	(pts
+		(xy 100.33 110.49) (xy 102.87 110.49)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "09f5a19b-5db2-4517-b690-1c76ca11e6f8")
+)
+	(wire
+	(pts
+		(xy 119.38 175.26) (xy 116.84 175.26)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "24b226cc-191d-49c0-aa1f-472e953e14fc")
+)
+	(wire
+	(pts
+		(xy 127 170.18) (xy 127 167.64)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "9c407bbd-21a3-4ee0-8f12-69211e88edb2")
+)
+	(wire
+	(pts
+		(xy 175.26 180.34) (xy 175.26 182.88)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "bdfd672b-87de-409e-b2ff-2324999c12ff")
+)
+	(wire
+	(pts
+		(xy 175.26 167.64) (xy 175.26 165.1)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "b1b63eaa-6241-4767-89dd-134db6ca1d4f")
+)
+	(wire
+	(pts
+		(xy 127 180.34) (xy 127 182.88)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "8280a8db-3588-44a3-b9a3-3a7609e77e2d")
+)
+	(wire
+	(pts
+		(xy 100.33 87.63) (xy 102.87 87.63)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "f8b2a9d7-cfc4-4c40-8080-5fb4fe4d80f4")
+)
+	(wire
+	(pts
+		(xy 80.01 171.45) (xy 80.01 168.91)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "f754ecc8-63c4-4d60-b1b5-5b26b2e41e99")
+)
+	(wire
+	(pts
+		(xy 80.01 179.07) (xy 80.01 181.61)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "a0dc49c9-fdfc-4878-9c49-73821231df6b")
+)
 	(label "B0"
 	(at 247.65 72.39 180)
 	(effects
@@ -6059,6 +7128,87 @@
 		)
 	)
 	(uuid "331b4186-b960-4319-93ef-0628da99e55d")
+)
+	(label "FAN_PWM"
+	(at 102.87 110.49 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "c45b6b6a-4573-4705-8a9b-a8aaa43ba011")
+)
+	(label "FAN_PWM"
+	(at 116.84 175.26 180)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "69c4d43d-fbd1-492f-8e99-2963425c022f")
+)
+	(label "FAN_LOW"
+	(at 127 167.64 90)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "f0949980-9064-4e06-aad0-665352fc788d")
+)
+	(label "FAN_LOW"
+	(at 175.26 182.88 270)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "125931b6-23ef-479b-8f23-65fa55baa751")
+)
+	(label "+12V"
+	(at 175.26 165.1 90)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "ade3be11-fedf-46ff-a1c6-b952e3d6d5cb")
+)
+	(label "GND"
+	(at 127 182.88 270)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "9896c067-2802-4d05-83b7-02698af924f2")
+)
+	(label "TEMP_ADC"
+	(at 102.87 87.63 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "ca87e235-f2f6-47af-9186-5f8f0c768689")
+)
+	(label "TEMP_ADC"
+	(at 80.01 168.91 90)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "8b9dd1f1-35b6-4535-bf7e-57c914f99124")
+)
+	(label "+5V"
+	(at 80.01 181.61 270)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "8d07b87f-ded8-4915-a5a0-c3de2df218e6")
 )
 	(sheet
 	(at 260 70)
