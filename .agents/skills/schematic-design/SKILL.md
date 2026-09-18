@@ -250,6 +250,20 @@ Y < 175mm.
    overlapping labels, sheet pins, text, or title-block clearance before
    committing the change.
 
+## Visual Acceptance Rules
+
+These are generation constraints, not merely post-processing checks:
+
+- No two visible text boxes may intersect, including duplicate reference,
+   value, pin-name, pin-number, label, annotation, or sheet text.
+- No descriptive free-text annotation may enter a symbol body rectangle.
+- Connector/header names and sheet text must remain outside title-block and
+   reserved-page areas.
+- Do not leave duplicate text or labels behind after moving a component or
+   hierarchy block; inspect the active root and changed child sheets only.
+- A rendered overlap failure blocks commit, ERC handoff, and PCB-layout work
+   until the geometry is corrected and the same rendered check passes.
+
 ## MCP Tools for This Skill
 
 **Write serialization rule:** Never run two MCP write operations against the
