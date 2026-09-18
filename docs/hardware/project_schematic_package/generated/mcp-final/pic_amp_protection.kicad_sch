@@ -5938,8 +5938,8 @@
 	(uuid "4ca6027c-a5e6-44e3-ba89-797fa9b09f03")
 )
 	(sheet
-	(at 230 70)
-	(size 38.1 25.4)
+	(at 250 70)
+	(size 25.4 25.4)
 	(fields_autoplaced yes)
 	(stroke
 		(width 0.1)
@@ -5950,7 +5950,7 @@
 	)
 	(uuid "66194545-7c0e-4ce0-a254-d0c89aad8641")
 	(property "Sheetname" "band_change"
-		(at 230 68.73 0)
+		(at 250 68.73 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5958,7 +5958,7 @@
 		)
 	)
 	(property "Sheetfile" "band_change.kicad_sch"
-		(at 230 81.43 0)
+		(at 250 81.43 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5966,7 +5966,7 @@
 		)
 	)
 	(pin "BAND_B0" input
-	(at 230 72.54 180)
+	(at 250 72.54 180)
 	(effects
 		(font
 			(size 1.27 1.27)
@@ -5975,7 +5975,7 @@
 	(uuid "8b76606d-5ceb-4701-aaaa-1998ba79d4be")
 )
 	(pin "BAND_B1" input
-	(at 230 75.08 180)
+	(at 250 75.08 180)
 	(effects
 		(font
 			(size 1.27 1.27)
@@ -5984,7 +5984,7 @@
 	(uuid "cfbffaf1-1655-4679-904c-5d8374517fcf")
 )
 	(pin "BAND_B2" input
-	(at 230 77.62 180)
+	(at 250 77.62 180)
 	(effects
 		(font
 			(size 1.27 1.27)
