@@ -89,17 +89,102 @@ def validate_with_kicad(schematic: Path) -> None:
 
 
 def structured_layout(output_dir: Path) -> int:
-    """Move components with the KiCad API so connectivity remains topology-safe."""
+    """Place and route MCU-local components through the structured KiCad API."""
     from kicad_sch_api import load_schematic
 
     path = output_dir / "pic_amp_protection_mcu_control1.kicad_sch"
     schematic = load_schematic(str(path))
     moves = 0
-    targets = {"Q1": (178.0, 102.0), "FAN1": (178.0, 82.0)}
+    targets = {
+        "U1": (140.0, 100.0),
+        "R1": (95.0, 100.0),
+        "C1": (115.0, 55.0),
+        "C2": (130.0, 55.0),
+        "C3": (145.0, 55.0),
+        "RN1": (185.0, 85.0),
+        "J3": (90.0, 135.0),
+        "Q1": (190.0, 125.0),
+        "FAN1": (220.0, 105.0),
+    }
     for component in schematic.components:
         if component.reference in targets:
             component.move(*targets[component.reference])
+            x, y = targets[component.reference]
+            if "Reference" in component.properties:
+                component.properties["Reference"]["at"] = [x, y - 5.0, 0]
+            if "Value" in component.properties:
+                component.properties["Value"]["at"] = [x, y + 5.0, 0]
             moves += 1
+    for wire in list(schematic.wires):
+        schematic.remove_wire(wire.uuid)
+    connections = [
+        ("U1", "26", "Q1", "G"),
+        ("Q1", "D", "FAN1", "2"),
+        ("Q1", "S", "#PWR002", "1"),
+        ("FAN1", "1", "#PWR008", "1"),
+        ("U1", "7", "RN1", "2"),
+        ("RN1", "1", "#PWR001", "1"),
+        ("U1", "15", "J3", "3"),
+        ("U1", "14", "J3", "4"),
+        ("J3", "1", "#PWR001", "1"),
+        ("J3", "2", "#PWR002", "1"),
+        ("U1", "20", "#PWR001", "1"),
+        ("U1", "8", "#PWR002", "1"),
+        ("U1", "19", "#PWR002", "1"),
+        ("R1", "1", "#PWR001", "1"),
+        ("R1", "2", "U1", "1"),
+        ("C1", "1", "#PWR001", "1"),
+        ("C1", "2", "#PWR004", "1"),
+        ("C2", "1", "#PWR001", "1"),
+        ("C2", "2", "#PWR005", "1"),
+        ("C3", "1", "#PWR001", "1"),
+        ("C3", "2", "#PWR006", "1"),
+    ]
+    for first_ref, first_pin, second_ref, second_pin in connections:
+        schematic.auto_route_pins(
+            first_ref,
+            first_pin,
+            second_ref,
+            second_pin,
+            routing_strategy="manhattan",
+        )
+    external_pins = {
+        "1": "RESET",
+        "2": "SWR1_FWD_ADC",
+        "3": "SWR1_REF_ADC",
+        "4": "SWR2_FWD_ADC",
+        "5": "SWR2_REF_ADC",
+        "6": "BAND_B0",
+        "9": "BAND_B2",
+        "10": "BAND_B1",
+        "11": "PTT_IN",
+        "12": "COMP_RESET",
+        "13": "ENCODER_A",
+        "14": "I2C_SCL",
+        "15": "I2C_SDA",
+        "16": "TX_OUT",
+        "17": "TX_VCC",
+        "18": "TX_BIAS",
+        "21": "ENCODER_B",
+        "22": "CURRENT_ADC",
+        "23": "OVERDRIVE_ADC",
+        "24": "DRAIN_PEAK_ADC",
+        "25": "OVERCURRENT_FAULT",
+        "26": "FAN_PWM",
+        "27": "ENCODER_SWITCH",
+        "28": "TRIP_STATUS",
+    }
+    u1 = next(component for component in schematic.components if component.reference == "U1")
+    for pin_number, net_name in external_pins.items():
+        position = schematic.get_component_pin_position("U1", pin_number)
+        if position is None:
+            continue
+        if position.x < u1.position.x:
+            endpoint = (position.x - 10.0, position.y)
+        else:
+            endpoint = (position.x + 10.0, position.y)
+        schematic.add_wire_to_pin(endpoint, "U1", pin_number)
+        schematic.add_global_label(net_name, endpoint, shape="bidirectional")
     if moves:
         schematic.save(str(path))
     return moves

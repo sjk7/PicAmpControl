@@ -2,7 +2,7 @@
   (version 20230409)
   (generator "skidl")
   (generator_version "2.3.0")
-  (uuid d61bc15e-84d8-4f6a-aa49-f72cca060f2c)
+  (uuid 1bbe9d5f-3fba-4b26-b038-cadb36f9032d)
   (paper "A4")
   (title_block
     (title "Linear Amplifier Protection System")
@@ -40,7 +40,7 @@
           (size 1.27 1.27))
         (justify left top))))
   (sheet
-    (at 135.38 107.95)
+    (at 135.38 85.09)
     (size 26.42 17.78)
     (exclude_from_sim no)
     (in_bom yes)
@@ -54,13 +54,13 @@
       (color 0 0 0 0.0))
     (uuid eb4033e4-6b61-5064-95e1-3b15fdd49a48)
     (property "Sheetname" "band_decoder1"
-      (at 135.38 107.24 0)
+      (at 135.38 84.38 0)
       (effects
         (font
           (size 1.27 1.27))
         (justify left bottom)))
     (property "Sheetfile" "pic_amp_protection_band_decoder1.kicad_sch"
-      (at 135.38 126.31 0)
+      (at 135.38 103.45 0)
       (effects
         (font
           (size 1.27 1.27))
@@ -92,7 +92,7 @@
           (size 1.27 1.27))
         (justify left top))))
   (sheet
-    (at 135.89 85.09)
+    (at 135.89 107.95)
     (size 25.4 17.78)
     (exclude_from_sim no)
     (in_bom yes)
@@ -106,13 +106,13 @@
       (color 0 0 0 0.0))
     (uuid c4a3044c-dd41-5d49-bcfd-834238b4aeb6)
     (property "Sheetname" "relay_bank1"
-      (at 135.89 84.38 0)
+      (at 135.89 107.24 0)
       (effects
         (font
           (size 1.27 1.27))
         (justify left bottom)))
     (property "Sheetfile" "pic_amp_protection_relay_bank1.kicad_sch"
-      (at 135.89 103.45 0)
+      (at 135.89 126.31 0)
       (effects
         (font
           (size 1.27 1.27))

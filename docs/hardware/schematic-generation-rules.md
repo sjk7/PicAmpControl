@@ -42,7 +42,12 @@ These rules apply to every generated KiCad schematic in this repository.
 - IC bodies should show only the designator and IC name/value.
 - Keep the designator and name inside the IC body when they fit.
 - If they do not fit, place them directly above the IC, centered and clear of pins.
+- Preserve enough right-side margin for the full IC name/value to remain readable; never let the name be clipped by the body edge, pin field, or nearby wire/label.
+- When pin numbers are shown inside an IC body, reserve a clear right-side margin so the numbers remain legible and do not collide with the IC name or pin wires.
 - Hide pin-name annotations when they make the IC body unreadable; pin identity remains available in KiCad and the netlist.
+- Use the physical pin numbers from the device datasheet and verified KiCad package symbol as the authoritative pin mapping. Do not infer connectivity from pin-name order alone.
+- For every IC, lay out physical pin numbers sequentially around the symbol with pin 1 at the upper-left, pin 2 directly below pin 1, pin 3 directly below pin 2, and so on down that side before continuing around the package. Follow the datasheet/package orientation consistently.
+- Exception: when a matching built-in KiCad symbol exists, use the built-in symbol rather than creating a custom visual pin arrangement. In that case, verify its physical pin numbers and connectivity against the datasheet/package and preserve KiCad's native symbol geometry.
 - Use real KiCad 9 symbol mappings and explicit footprints. Do not silently substitute a different device with incompatible pins.
 
 ## Intentional No-Connects
