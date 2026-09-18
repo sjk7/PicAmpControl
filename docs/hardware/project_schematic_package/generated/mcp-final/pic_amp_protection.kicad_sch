@@ -5715,7 +5715,7 @@
 			)
 		)
 	)
-	(property "Value" ""
+	(property "Value" "SWR"
 		(at 270.51 58.42 0)
 		(effects
 			(font
@@ -5783,7 +5783,7 @@
 			)
 		)
 	)
-	(property "Value" ""
+	(property "Value" "ADC"
 		(at 270.51 104.14 0)
 		(effects
 			(font
@@ -5864,13 +5864,13 @@
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/21002750-df35-408f-8851-d10448b6e861"
 			(reference "J7")
 			(unit 1)
-			(value "")
+			(value "SWR")
 			(footprint "")
 		)
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/2da9c001-c03c-4194-a7fd-9ce584f6fb36"
 			(reference "J8")
 			(unit 1)
-			(value "")
+			(value "ADC")
 			(footprint "")
 		)
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/057bca75-b93c-4825-865e-c4eec1dd9fad/f2712c01-f881-4e22-bc80-f1c9bf2955b5"
@@ -5949,23 +5949,59 @@
 	)
 	(uuid "4ca6027c-a5e6-44e3-ba89-797fa9b09f03")
 )
-	(text "SWR SENSE"
+	(text "J3 LCD"
+	(at 35 174 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "951f6004-90b5-4dab-85b8-a46272a1b973")
+)
+	(text "J4 PTT"
+	(at 245 154 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "ea7919ce-df59-424e-8221-9d40bc860848")
+)
+	(text "J5 ENC"
+	(at 245 171 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "2d25f9d7-eba9-420b-b7f2-555e5de9bcb5")
+)
+	(text "J6 TX"
+	(at 245 188 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "f80920e0-e9a5-47cd-9553-8835533d74d5")
+)
+	(text "J7 SWR SENSE"
 	(at 270 42 0)
 	(effects
 		(font
 			(size 1.27 1.27)
 		)
 	)
-	(uuid "cc769e35-32f3-4e5a-84ff-c064353c780d")
+	(uuid "138ff299-f994-4888-9df6-bdcfef52348f")
 )
-	(text "ANALOG SENSE"
+	(text "J8 ANALOG SENSE"
 	(at 270 117 0)
 	(effects
 		(font
 			(size 1.27 1.27)
 		)
 	)
-	(uuid "9bc499d6-8eef-4417-b11f-9b03da5c50ad")
+	(uuid "39564f4a-fc33-4cd5-b90d-b82cfc0f5938")
 )
 	(wire
 	(pts
