@@ -1047,7 +1047,7 @@
 )
 	(hierarchical_label "BAND_B1"
 	(shape input)
-	(at 25.4 30.48 180)
+	(at 25.4 38.1 180)
 	(effects
 		(font
 			(size 1.27 1.27)
@@ -1057,7 +1057,7 @@
 )
 	(hierarchical_label "BAND_B2"
 	(shape input)
-	(at 25.4 35.56 180)
+	(at 25.4 50.8 180)
 	(effects
 		(font
 			(size 1.27 1.27)
