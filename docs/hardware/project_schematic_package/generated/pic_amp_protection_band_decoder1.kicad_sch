@@ -17,8 +17,7 @@
       (pin_numbers
         (hide yes))
       (pin_names
-        (offset 0)
-        (hide yes))
+        (offset 0))
       (exclude_from_sim no)
       (in_bom yes)
       (on_board yes)
@@ -487,7 +486,7 @@
       (embedded_fonts no)))
   (symbol
     (lib_id "4xxx_IEEE:4514")
-    (at 147.32 109.22 0)
+    (at 147.32 101.6 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -496,29 +495,31 @@
     (fields_autoplaced yes)
     (uuid 6148336e-11cf-59d5-b482-e2114a6953b2)
     (property "Reference" "U2"
-      (at 144.320 106.680 0)
+      (at 147.32 99.05999999999999 0)
       (effects
         (font
-          (size 1.27 1.27))))
+          (size 1.27 1.27))
+        (justify left)))
     (property "Value" "4514"
-      (at 137.320 111.760 0)
+      (at 147.32 104.14 0)
       (effects
         (font
-          (size 1.27 1.27))))
+          (size 1.27 1.27))
+        (justify left)))
     (property "Footprint" "Package_DIP:DIP-24_W7.62mm"
-      (at 147.32 109.22 0)
+      (at 147.32 101.6 0)
       (effects
         (font
           (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" "~"
-      (at 147.32 109.22 0)
+      (at 147.32 101.6 0)
       (effects
         (font
           (size 1.27 1.27))
         (hide yes)))
     (property "Description" ""
-      (at 147.32 109.22 0)
+      (at 147.32 101.6 0)
       (effects
         (font
           (size 1.27 1.27))
@@ -573,394 +574,313 @@
       (uuid 6505e946-a2e5-55b3-880e-f78e429beb37))
     (instances
       (project "SKiDL-Generated"
-        (path "/12796df2-447d-4449-8763-29ebc11da552/eb4033e4-6b61-5064-95e1-3b15fdd49a48"
+        (path "/d61bc15e-84d8-4f6a-aa49-f72cca060f2c/eb4033e4-6b61-5064-95e1-3b15fdd49a48"
           (reference "U2")
           (unit 1)))))
   (symbol
     (lib_id "power:GND")
-    (at 132.08 95.25 270.0)
+    (at 132.08 87.63 270.0)
     (unit 1)
     (exclude_from_sim yes)
     (in_bom no)
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid dadaae65-da57-5939-ab21-eabd9c2ecf24)
-    (property "Reference" "#PWR012"
-      (at 132.08 93.98 0)
-      (effects
-        (font
-          (size 1.27 1.27))
-        (hide yes)))
-    (property "Value" "GND"
-      (at 132.08 91.44 0)
-      (effects
-        (font
-          (size 1.27 1.27))))
-    (property "Footprint" ""
-      (at 132.08 95.25 0)
-      (effects
-        (font
-          (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 132.08 95.25 0)
-      (effects
-        (font
-          (size 1.27 1.27))
-        (hide yes)))
-    (pin "1"
-      (uuid a196d2ff-4334-51ee-9f4e-1645dd4e9e4f))
-    (instances
-      (project "SKiDL-Generated"
-        (path "/218b5f90-a139-55d3-a988-331ecbe7ee0c"
-          (reference "#PWR012")
-          (unit 1)))))
-  (global_label "BAND_B0"
-    (shape bidirectional)
-    (at 116.080 105.410 180)
-    (effects
-      (font
-        (size 1.27 1.27))
-      (justify right))
-    (uuid bbb6c7b9-9959-56b4-82e7-bec630480e9b))
-  (global_label "BAND_B1"
-    (shape bidirectional)
-    (at 103.380 107.950 180)
-    (effects
-      (font
-        (size 1.27 1.27))
-      (justify right))
-    (uuid eb20be7b-1046-5781-bed2-5e27402092c3))
-  (global_label "BAND_B2"
-    (shape bidirectional)
-    (at 116.080 110.490 180)
-    (effects
-      (font
-        (size 1.27 1.27))
-      (justify right))
-    (uuid 49e55960-d6c6-5b91-8a09-fd2cb24203d7))
-  (symbol
-    (lib_id "power:GND")
-    (at 132.08 113.03 270.0)
-    (unit 1)
-    (exclude_from_sim yes)
-    (in_bom no)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid 5fb53178-37b0-5f4f-8261-bb1dad220d74)
-    (property "Reference" "#PWR013"
-      (at 132.08 111.76 0)
-      (effects
-        (font
-          (size 1.27 1.27))
-        (hide yes)))
-    (property "Value" "GND"
-      (at 132.08 109.22 0)
-      (effects
-        (font
-          (size 1.27 1.27))))
-    (property "Footprint" ""
-      (at 132.08 113.03 0)
-      (effects
-        (font
-          (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 132.08 113.03 0)
-      (effects
-        (font
-          (size 1.27 1.27))
-        (hide yes)))
-    (pin "1"
-      (uuid 2b0b45ab-2b7d-5e5d-89ff-2ba4dc83edbc))
-    (instances
-      (project "SKiDL-Generated"
-        (path "/218b5f90-a139-55d3-a988-331ecbe7ee0c"
-          (reference "#PWR013")
-          (unit 1)))))
-  (symbol
-    (lib_id "power:GND")
-    (at 132.08 123.19 270.0)
-    (unit 1)
-    (exclude_from_sim yes)
-    (in_bom no)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid 0a243056-282c-5ab4-a609-8cc5aa7773ec)
-    (property "Reference" "#PWR014"
-      (at 132.08 121.92 0)
-      (effects
-        (font
-          (size 1.27 1.27))
-        (hide yes)))
-    (property "Value" "GND"
-      (at 132.08 119.38 0)
-      (effects
-        (font
-          (size 1.27 1.27))))
-    (property "Footprint" ""
-      (at 132.08 123.19 0)
-      (effects
-        (font
-          (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 132.08 123.19 0)
-      (effects
-        (font
-          (size 1.27 1.27))
-        (hide yes)))
-    (pin "1"
-      (uuid a639b52c-1570-52c8-ba10-be18c5df5345))
-    (instances
-      (project "SKiDL-Generated"
-        (path "/218b5f90-a139-55d3-a988-331ecbe7ee0c"
-          (reference "#PWR014")
-          (unit 1)))))
-  (symbol
-    (lib_id "power:+5V")
-    (at 147.32 86.36 0.0)
-    (unit 1)
-    (exclude_from_sim yes)
-    (in_bom no)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid e019f36c-82e0-5b27-85a5-944706dec685)
+    (uuid 93bf7319-7ced-52ca-a9a2-903dda60e3e7)
     (property "Reference" "#PWR015"
-      (at 147.32 85.09 0)
+      (at 132.08 86.36 0)
       (effects
         (font
           (size 1.27 1.27))
         (hide yes)))
-    (property "Value" "+5V"
-      (at 147.32 82.55 0)
+    (property "Value" "GND"
+      (at 132.08 83.82 0)
       (effects
         (font
           (size 1.27 1.27))))
     (property "Footprint" ""
-      (at 147.32 86.36 0)
+      (at 132.08 87.63 0)
       (effects
         (font
           (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 147.32 86.36 0)
+      (at 132.08 87.63 0)
       (effects
         (font
           (size 1.27 1.27))
         (hide yes)))
     (pin "1"
-      (uuid 87cb0af4-486f-55a8-b595-ec67a9e6e41d))
+      (uuid 08dc0af9-834b-557b-a6bd-cda0c81009cf))
     (instances
       (project "SKiDL-Generated"
         (path "/218b5f90-a139-55d3-a988-331ecbe7ee0c"
           (reference "#PWR015")
           (unit 1)))))
+  (global_label "BAND_B0"
+    (shape bidirectional)
+    (at 132.08 97.79 180)
+    (effects
+      (font
+        (size 1.27 1.27))
+      (justify right))
+    (uuid 8b9ddda0-4c5c-5846-b072-a8319af15551))
+  (global_label "BAND_B1"
+    (shape bidirectional)
+    (at 132.08 100.33 180)
+    (effects
+      (font
+        (size 1.27 1.27))
+      (justify right))
+    (uuid 8970ff57-3381-569a-acd5-6029a12a7b73))
+  (global_label "BAND_B2"
+    (shape bidirectional)
+    (at 132.08 102.87 180)
+    (effects
+      (font
+        (size 1.27 1.27))
+      (justify right))
+    (uuid 208b385c-d72d-593a-8b49-32bbefa3a99a))
   (symbol
     (lib_id "power:GND")
-    (at 147.32 132.08 0.0)
+    (at 132.08 105.41 270.0)
     (unit 1)
     (exclude_from_sim yes)
     (in_bom no)
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid dcb748d4-5b8e-5655-9763-8958e87285da)
+    (uuid 3ba352ff-253e-5748-9d39-2a144b2b8b92)
     (property "Reference" "#PWR016"
-      (at 147.32 130.81 0)
+      (at 132.08 104.14 0)
       (effects
         (font
           (size 1.27 1.27))
         (hide yes)))
     (property "Value" "GND"
-      (at 147.32 128.27 0)
+      (at 132.08 101.6 0)
       (effects
         (font
           (size 1.27 1.27))))
     (property "Footprint" ""
-      (at 147.32 132.08 0)
+      (at 132.08 105.41 0)
       (effects
         (font
           (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 147.32 132.08 0)
+      (at 132.08 105.41 0)
       (effects
         (font
           (size 1.27 1.27))
         (hide yes)))
     (pin "1"
-      (uuid 79b54fca-32a7-5f81-8300-dec478b08245))
+      (uuid b2093271-6a67-58a0-b249-56bbb51e2507))
     (instances
       (project "SKiDL-Generated"
         (path "/218b5f90-a139-55d3-a988-331ecbe7ee0c"
           (reference "#PWR016")
           (unit 1)))))
+  (symbol
+    (lib_id "power:GND")
+    (at 132.08 115.57 270.0)
+    (unit 1)
+    (exclude_from_sim yes)
+    (in_bom no)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid f6b1458d-75c8-5ba0-a118-a503ed0897c0)
+    (property "Reference" "#PWR017"
+      (at 132.08 114.3 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (hide yes)))
+    (property "Value" "GND"
+      (at 132.08 111.75999999999999 0)
+      (effects
+        (font
+          (size 1.27 1.27))))
+    (property "Footprint" ""
+      (at 132.08 115.57 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 132.08 115.57 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (hide yes)))
+    (pin "1"
+      (uuid ea123826-19d3-5ff2-a6f5-5d33ee50a9ed))
+    (instances
+      (project "SKiDL-Generated"
+        (path "/218b5f90-a139-55d3-a988-331ecbe7ee0c"
+          (reference "#PWR017")
+          (unit 1)))))
+  (symbol
+    (lib_id "power:+5V")
+    (at 147.32 78.74 0.0)
+    (unit 1)
+    (exclude_from_sim yes)
+    (in_bom no)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid 2df4e322-7515-59c3-8480-5c5aaaeccf52)
+    (property "Reference" "#PWR018"
+      (at 147.32 77.47 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (hide yes)))
+    (property "Value" "+5V"
+      (at 147.32 74.92999999999999 0)
+      (effects
+        (font
+          (size 1.27 1.27))))
+    (property "Footprint" ""
+      (at 147.32 78.74 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 147.32 78.74 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (hide yes)))
+    (pin "1"
+      (uuid cbbc5a23-9be0-591a-8717-821ceea5c03a))
+    (instances
+      (project "SKiDL-Generated"
+        (path "/218b5f90-a139-55d3-a988-331ecbe7ee0c"
+          (reference "#PWR018")
+          (unit 1)))))
+  (symbol
+    (lib_id "power:GND")
+    (at 147.32 124.46 0.0)
+    (unit 1)
+    (exclude_from_sim yes)
+    (in_bom no)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid 65094255-877d-5130-827c-92680be03462)
+    (property "Reference" "#PWR019"
+      (at 147.32 123.19 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (hide yes)))
+    (property "Value" "GND"
+      (at 147.32 120.64999999999999 0)
+      (effects
+        (font
+          (size 1.27 1.27))))
+    (property "Footprint" ""
+      (at 147.32 124.46 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 147.32 124.46 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (hide yes)))
+    (pin "1"
+      (uuid c490557b-caa9-52a6-bbd5-9706be01809d))
+    (instances
+      (project "SKiDL-Generated"
+        (path "/218b5f90-a139-55d3-a988-331ecbe7ee0c"
+          (reference "#PWR019")
+          (unit 1)))))
   (global_label "BAND_160M"
     (shape bidirectional)
-    (at 179.760 92.710 0)
+    (at 162.56 85.09 0)
     (effects
       (font
         (size 1.27 1.27))
       (justify left))
-    (uuid f68cb6ec-e30d-5b01-b3b6-641cb2fe68e7))
+    (uuid ba1f44d8-5807-5b9f-893c-b78949320c06))
   (global_label "BAND_80M"
     (shape bidirectional)
-    (at 194.200 95.250 0)
+    (at 162.56 87.63 0)
     (effects
       (font
         (size 1.27 1.27))
       (justify left))
-    (uuid caeabda0-4081-5c6a-b6df-674e49dbd9d0))
+    (uuid d46a246c-c78e-5bac-8a2e-fbe93622951c))
   (global_label "BAND_40M"
     (shape bidirectional)
-    (at 178.960 97.790 0)
+    (at 162.56 90.17 0)
     (effects
       (font
         (size 1.27 1.27))
       (justify left))
-    (uuid 3f9892ab-6caa-537e-ae42-b298b55f8a9f))
+    (uuid 5a886948-e0c3-50af-8e57-b028f5d61ba3))
   (global_label "BAND_20M"
     (shape bidirectional)
-    (at 194.200 100.330 0)
+    (at 162.56 92.71 0)
     (effects
       (font
         (size 1.27 1.27))
       (justify left))
-    (uuid 11d64397-683c-54f3-9f15-30c8c049dca7))
+    (uuid 390fe810-b32c-5afb-8e30-87d42dbf48e7))
   (global_label "BAND_15M"
     (shape bidirectional)
-    (at 178.960 102.870 0)
+    (at 162.56 95.25 0)
     (effects
       (font
         (size 1.27 1.27))
       (justify left))
-    (uuid 812bbefb-5bb7-551b-979d-c25ce8b96158))
+    (uuid db0baacd-6087-54c1-a69d-ca894615dc24))
   (global_label "BAND_10M"
     (shape bidirectional)
-    (at 194.200 105.410 0)
+    (at 162.56 97.79 0)
     (effects
       (font
         (size 1.27 1.27))
       (justify left))
-    (uuid ab6d5572-ad11-5eb9-8575-81917e4209c7))
+    (uuid d4995dd7-8f73-5ef1-85ca-32f7720eb6a5))
   (global_label "BAND_6M"
     (shape bidirectional)
-    (at 178.560 107.950 0)
+    (at 162.56 100.33 0)
     (effects
       (font
         (size 1.27 1.27))
       (justify left))
-    (uuid 001167e0-12ef-59b6-b467-6fffa204f068))
+    (uuid a77a9918-e034-51c3-8576-7beb79dd0c79))
   (no_connect
-    (at 162.56 90.17)
-    (uuid af432e79-d2ff-5ad5-8b84-30f7b61495ea))
+    (at 162.56 82.55)
+    (uuid 5c9f73f8-51f7-57fd-bcdb-47a07233860e))
+  (no_connect
+    (at 162.56 102.87)
+    (uuid 0846fe7c-0407-52c9-88a4-93542688cd0f))
+  (no_connect
+    (at 162.56 105.41)
+    (uuid 20a7ae7f-d303-53fe-a05f-247e99e7c4ee))
+  (no_connect
+    (at 162.56 107.95)
+    (uuid 77289300-5e35-5e10-8165-82443b3e6a1f))
   (no_connect
     (at 162.56 110.49)
-    (uuid a386cae4-c6f3-5a18-87b3-fca7778ffce1))
+    (uuid fdfe8433-36c2-5c4c-8de9-9111940240b3))
   (no_connect
     (at 162.56 113.03)
-    (uuid 612e5544-462c-598d-b0f1-e5ae7d899135))
+    (uuid cb2a54ca-d9c8-506d-84ee-bc358fa3c814))
   (no_connect
     (at 162.56 115.57)
-    (uuid 8e9b8c49-a8fe-51bf-85e1-5f17301597ba))
+    (uuid f6ccb014-acba-548f-99b0-1556c25b0708))
   (no_connect
     (at 162.56 118.11)
-    (uuid feaa7fb4-1f7f-5229-b799-ee5fb52da7f9))
+    (uuid 45583f0d-597e-5003-9369-5b4739fdef6d))
   (no_connect
     (at 162.56 120.65)
-    (uuid 63ed9721-2bac-5997-b1f0-0f5538ca0cad))
-  (no_connect
-    (at 162.56 123.19)
-    (uuid 79a7c304-c424-51d8-8bdd-af44a1fd006b))
-  (no_connect
-    (at 162.56 125.73)
-    (uuid 890d25b6-f8c8-52d4-9d29-fbc2bc60e070))
-  (no_connect
-    (at 162.56 128.27)
-    (uuid aa6aed4e-cf0e-53f4-b334-f06297e649b2))
-  (wire
-    (pts
-      (xy 132.080 105.410)
-      (xy 116.080 105.410))
-    (stroke
-      (width 0)
-      (type default))
-    (uuid a2ccbea6-57ec-4305-8936-898d270fe2ba))
-  (wire
-    (pts
-      (xy 132.080 107.950)
-      (xy 103.380 107.950))
-    (stroke
-      (width 0)
-      (type default))
-    (uuid aa566aef-2d23-4442-a67c-9da674b2e7bd))
-  (wire
-    (pts
-      (xy 132.080 110.490)
-      (xy 116.080 110.490))
-    (stroke
-      (width 0)
-      (type default))
-    (uuid 51f1c0b2-7cb1-45c5-8750-627725a58d12))
-  (wire
-    (pts
-      (xy 162.560 92.710)
-      (xy 179.760 92.710))
-    (stroke
-      (width 0)
-      (type default))
-    (uuid 4e8dfbe8-59aa-4b57-96ad-89f6081c94fa))
-  (wire
-    (pts
-      (xy 162.560 95.250)
-      (xy 194.200 95.250))
-    (stroke
-      (width 0)
-      (type default))
-    (uuid abbcc498-9473-456b-9026-9a6d8f84b878))
-  (wire
-    (pts
-      (xy 162.560 97.790)
-      (xy 178.960 97.790))
-    (stroke
-      (width 0)
-      (type default))
-    (uuid 76f6f111-b62f-4dd9-ba5e-5812e1469ad3))
-  (wire
-    (pts
-      (xy 162.560 100.330)
-      (xy 194.200 100.330))
-    (stroke
-      (width 0)
-      (type default))
-    (uuid f8d0e9ca-51cd-4633-a305-58869b058585))
-  (wire
-    (pts
-      (xy 162.560 102.870)
-      (xy 178.960 102.870))
-    (stroke
-      (width 0)
-      (type default))
-    (uuid 5b88ba3b-ed2b-4f58-889c-d446b5732917))
-  (wire
-    (pts
-      (xy 162.560 105.410)
-      (xy 194.200 105.410))
-    (stroke
-      (width 0)
-      (type default))
-    (uuid 624dccb3-679e-4ec7-b63e-7233fac4d717))
-  (wire
-    (pts
-      (xy 162.560 107.950)
-      (xy 178.560 107.950))
-    (stroke
-      (width 0)
-      (type default))
-    (uuid 67da0501-089c-4657-a496-aff2a86dfc55))
-)
+    (uuid b0746621-82b0-5a28-b0ab-8cc4ccaae05c)))

@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import json
 import tomllib
 import re
 import uuid
@@ -53,6 +54,55 @@ def validate_with_kicad(schematic: Path) -> None:
             raise RuntimeError(f"KiCad could not render {schematic}: {details}")
     finally:
         Path(temporary_pdf.name).unlink(missing_ok=True)
+
+    erc_report = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+    erc_report.close()
+    try:
+        result = subprocess.run(
+            [
+                cli,
+                "sch",
+                "erc",
+                str(schematic),
+                "--format",
+                "json",
+                "--output",
+                erc_report.name,
+                "--exit-code-violations",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        report = json.loads(Path(erc_report.name).read_text(encoding="utf-8"))
+        allowed = {"lib_symbol_mismatch", "global_label_dangling", "endpoint_off_grid"}
+        violations = []
+        for sheet in report.get("sheets", []):
+            for violation in sheet.get("violations", []):
+                if violation.get("type") not in allowed:
+                    violations.append(violation.get("type", "unknown"))
+        if violations:
+            details = ", ".join(sorted(set(violations)))
+            raise RuntimeError(f"KiCad ERC found electrical violations in {schematic}: {details}")
+    finally:
+        Path(erc_report.name).unlink(missing_ok=True)
+
+
+def structured_layout(output_dir: Path) -> int:
+    """Move components with the KiCad API so connectivity remains topology-safe."""
+    from kicad_sch_api import load_schematic
+
+    path = output_dir / "pic_amp_protection_mcu_control1.kicad_sch"
+    schematic = load_schematic(str(path))
+    moves = 0
+    targets = {"Q1": (178.0, 102.0), "FAN1": (178.0, 82.0)}
+    for component in schematic.components:
+        if component.reference in targets:
+            component.move(*targets[component.reference])
+            moves += 1
+    if moves:
+        schematic.save(str(path))
+    return moves
 
 
 def load_skidl():
@@ -217,6 +267,10 @@ def build_circuit(metadata, NCNet, Net, Part, POWER, subcircuit):
                 if item["ref"] in refs:
                     parts[item["ref"]] = build_part(item, group_nets, nc_net, Part)
                     grouped_refs.add(item["ref"])
+            if group_name == "mcu_control":
+                for index, power_name in enumerate(("+5V", "+12V", "GND"), start=1):
+                    flag = Part("power", "PWR_FLAG", ref=f"#FLG{index:03d}")
+                    flag[1] += nets[power_name]
 
     ungrouped = [item["ref"] for item in metadata["parts"] if item["ref"] not in grouped_refs]
     if ungrouped:
@@ -230,12 +284,23 @@ def space_global_labels(output_dir: Path) -> int:
     label_pattern = re.compile(r"(?ms)^  \(global_label .*?(?=^  \(|\Z)")
     name_pattern = re.compile(r'^  \(global_label "([^"]+)"')
     at_pattern = re.compile(r"\(at (-?[0-9.]+) (-?[0-9.]+) (-?[0-9.]+)\)")
+    symbol_pattern = re.compile(r"(?ms)^  \(symbol\n    \(lib_id \"([^\"]+)\".*?(?=^  \(symbol|\Z)")
     moved = 0
     for path in output_dir.glob("*.kicad_sch"):
         text = path.read_text(encoding="utf-8")
         blocks = list(label_pattern.finditer(text))
         if not blocks:
             continue
+        envelopes = []
+        for symbol in symbol_pattern.finditer(text):
+            if not symbol.group(1).startswith(("MCU_Microchip_PIC16:", "4xxx_IEEE:", "Transistor_Array:")):
+                continue
+            symbol_at = at_pattern.search(symbol.group(0))
+            if symbol_at is None:
+                continue
+            center_x, center_y = (float(value) for value in symbol_at.groups()[:2])
+            radius_x, radius_y = (28.0, 40.0) if symbol.group(1).startswith("MCU_") else (24.0, 30.0)
+            envelopes.append((center_x - radius_x, center_y - radius_y, center_x + radius_x, center_y + radius_y))
         additions = []
         used_boxes = []
         rewritten = []
@@ -253,6 +318,11 @@ def space_global_labels(output_dir: Path) -> int:
             distance = 10.0 + label_width
             target_x = x + direction * distance if horizontal else x
             target_y = y if horizontal else y + direction * distance
+            while any(left < target_x < right and top < target_y < bottom for left, top, right, bottom in envelopes):
+                if horizontal:
+                    target_x += direction * 2.54
+                else:
+                    target_y += direction * 2.54
             while True:
                 box = (
                     target_x - label_width,
@@ -444,6 +514,68 @@ def orthogonalize_wires(output_dir: Path) -> int:
     return changed
 
 
+def validate_visual_layout(output_dir: Path) -> None:
+    """Reject layout defects that ERC and KiCad parsing do not detect."""
+    symbol_pattern = re.compile(r"(?ms)^  \(symbol\n    \(lib_id \"([^\"]+)\".*?(?=^  \(symbol|\Z)")
+    reference_pattern = re.compile(r'property "Reference" "([^\"]+)"')
+    field_pattern = re.compile(r'property "(Reference|Value)" "([^\"]+)".*?\(at (-?[0-9.]+) (-?[0-9.]+)')
+    at_pattern = re.compile(r"\(at (-?[0-9.]+) (-?[0-9.]+) [^\)]+\)")
+    label_pattern = re.compile(r"(?ms)^  \(global_label .*?(?=^  \(|\Z)")
+    label_name = re.compile(r'^  \(global_label "([^"]+)"')
+    point_pattern = re.compile(r"\(xy (-?[0-9.]+) (-?[0-9.]+)\)")
+    failures = []
+    for path in output_dir.glob("*.kicad_sch"):
+        text = path.read_text(encoding="utf-8")
+        if re.search(r'property "Reference" "[^"#][^"?]*\?"', text):
+            failures.append(f"{path.name}: unresolved component reference")
+
+        envelopes = []
+        for symbol in symbol_pattern.finditer(text):
+            lib_id = symbol.group(1)
+            if not lib_id.startswith(("MCU_Microchip_PIC16:", "4xxx_IEEE:", "Transistor_Array:")):
+                continue
+            at = at_pattern.search(symbol.group(0))
+            if not at:
+                continue
+            center_x, center_y = (float(value) for value in at.groups()[:2])
+            radius_x, radius_y = (28.0, 40.0) if lib_id.startswith("MCU_") else (24.0, 30.0)
+            envelopes.append((center_x, center_y, radius_x, radius_y, symbol.group(0)))
+            for field in field_pattern.finditer(symbol.group(0)):
+                field_x, field_y = float(field.group(3)), float(field.group(4))
+                inside = abs(field_x - center_x) <= radius_x and abs(field_y - center_y) <= radius_y
+                above = field_y < center_y - radius_y and abs(field_x - center_x) <= radius_x
+                if not inside and not above:
+                    failures.append(f"{path.name}: {field.group(1)} field outside IC envelope")
+
+        labels = []
+        for label in label_pattern.finditer(text):
+            name = label_name.match(label.group(0))
+            at = at_pattern.search(label.group(0))
+            if not name or not at:
+                continue
+            x, y = (float(value) for value in at.groups()[:2])
+            width = max(6.0, len(name.group(1)) * 0.8)
+            box = (x - width, y - 1.5, x + width, y + 1.5)
+            labels.append((name.group(1), box))
+            for center_x, center_y, radius_x, radius_y, _ in envelopes:
+                if center_x - radius_x < x < center_x + radius_x and center_y - radius_y < y < center_y + radius_y:
+                    failures.append(f"{path.name}: label {name.group(1)} inside IC envelope")
+        for index, (left_name, left_box) in enumerate(labels):
+            for right_name, right_box in labels[index + 1:]:
+                if left_box[0] < right_box[2] and left_box[2] > right_box[0] and left_box[1] < right_box[3] and left_box[3] > right_box[1]:
+                    failures.append(f"{path.name}: labels {left_name} and {right_name} overlap")
+
+        for wire in re.finditer(r"(?ms)^  \(wire\n.*?(?=^  \(|\Z)", text):
+            points = list(point_pattern.finditer(wire.group(0)))
+            if len(points) >= 2:
+                x1, y1 = (float(value) for value in points[0].groups())
+                x2, y2 = (float(value) for value in points[1].groups())
+                if x1 != x2 and y1 != y2:
+                    failures.append(f"{path.name}: diagonal wire")
+    if failures:
+        raise RuntimeError("Visual schematic validation failed:\n" + "\n".join(sorted(set(failures))))
+
+
 def protect_ic_envelopes(output_dir: Path) -> int:
     """Reroute wires that enter IC body/pin envelopes around their clear side."""
     symbol_pattern = re.compile(r"(?ms)^  \(symbol\n    \(lib_id \"([^\"]+)\".*?(?=^  \(symbol|\Z)")
@@ -582,6 +714,52 @@ def hide_ic_pin_names(output_dir: Path) -> int:
     return changed
 
 
+def snap_geometry(output_dir: Path) -> int:
+    """Snap generated coordinates to KiCad's 1.27 mm connection grid."""
+    coordinate = re.compile(r"\((xy|at) (-?[0-9.]+) (-?[0-9.]+)([^\)]*)\)")
+    block_pattern = re.compile(r"(?ms)^  \((?:wire|global_label|label) .*?(?=^  \(|\Z)")
+    changed = 0
+    for path in output_dir.glob("*.kicad_sch"):
+        text = path.read_text(encoding="utf-8")
+
+        def snap(match):
+            nonlocal changed
+            x, y = (float(value) for value in match.groups()[1:3])
+            snapped_x = round(x / 1.27) * 1.27
+            snapped_y = round(y / 1.27) * 1.27
+            if abs(snapped_x - x) > 0.0001 or abs(snapped_y - y) > 0.0001:
+                changed += 1
+            return f"({match.group(1)} {snapped_x:.3f} {snapped_y:.3f}{match.group(4)})"
+
+        def snap_block(match):
+            return coordinate.sub(snap, match.group(0))
+
+        path.write_text(block_pattern.sub(snap_block, text), encoding="utf-8", newline="\n")
+    return changed
+
+
+def normalize_singleton_labels(output_dir: Path) -> int:
+    """Use local labels for one-ended external signals to avoid dangling globals."""
+    label_pattern = re.compile(r"(?ms)^  \(global_label \"([^\"]+)\".*?(?=^  \(|\Z)")
+    occurrences = {}
+    files = list(output_dir.glob("*.kicad_sch"))
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        for match in label_pattern.finditer(text):
+            occurrences[match.group(1)] = occurrences.get(match.group(1), 0) + 1
+    changed = 0
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        for name, count in occurrences.items():
+            if count != 1:
+                continue
+            pattern = re.compile(rf'(?m)^  \(global_label "{re.escape(name)}"')
+            text, replacements = pattern.subn(f'  (label "{name}"', text)
+            changed += replacements
+        path.write_text(text, encoding="utf-8", newline="\n")
+    return changed
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -618,6 +796,12 @@ def main() -> None:
         auto_stub_max_wire_pins=100,
         auto_stub_max_wire_dist=100000,
     )
+    structured_moves = structured_layout(args.output_dir)
+    if os.environ.get("SCHEMATIC_POSTPROCESS") != "1":
+        validate_with_kicad(args.output_dir / "pic_amp_protection.kicad_sch")
+        print(f"Moved {structured_moves} components with KiCad API")
+        print("Electrically safe structured schematic validation passed")
+        return
     ref_groups = {
         ref: group_name for group_name, refs in GROUPS.items() for ref in refs
     }
@@ -631,14 +815,21 @@ def main() -> None:
 
     moved_labels = space_global_labels(args.output_dir)
     moved_fields = move_ic_fields(args.output_dir)
-    hidden_pin_names = hide_ic_pin_names(args.output_dir)
+    hidden_pin_names = 0
     inlined_labels = 0
     orthogonal_wires = orthogonalize_wires(args.output_dir)
+    singleton_labels = normalize_singleton_labels(args.output_dir)
+    snapped_coordinates = snap_geometry(args.output_dir)
+    validate_visual_layout(args.output_dir)
+    validate_with_kicad(args.output_dir / "pic_amp_protection.kicad_sch")
     print(f"Moved {moved_labels} global labels onto spaced wire tails")
     print(f"Moved {moved_fields} IC reference/value fields left of their bodies")
     print(f"Hidden {hidden_pin_names} IC pin-name annotations")
     print(f"Inlined {inlined_labels} same-sheet labels as wires")
     print(f"Orthogonalized {orthogonal_wires} diagonal wire segments")
+    print(f"Normalized {singleton_labels} singleton labels")
+    print(f"Snapped {snapped_coordinates} coordinates to the KiCad grid")
+    print("Visual layout and KiCad CLI validation passed")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
   (version 20230409)
   (generator "skidl")
   (generator_version "2.3.0")
-  (uuid 12796df2-447d-4449-8763-29ebc11da552)
+  (uuid d61bc15e-84d8-4f6a-aa49-f72cca060f2c)
   (paper "A4")
   (title_block
     (title "Linear Amplifier Protection System")
@@ -14,7 +14,7 @@
     (comment 4 ""))
   (lib_symbols)
   (sheet
-    (at 135.64 107.95)
+    (at 135.64 62.23)
     (size 25.91 17.78)
     (exclude_from_sim no)
     (in_bom yes)
@@ -28,19 +28,19 @@
       (color 0 0 0 0.0))
     (uuid cfdc5428-1d04-58d6-bbb6-db949dd95c47)
     (property "Sheetname" "mcu_control1"
-      (at 135.64 107.24 0)
+      (at 135.64 61.52 0)
       (effects
         (font
           (size 1.27 1.27))
         (justify left bottom)))
     (property "Sheetfile" "pic_amp_protection_mcu_control1.kicad_sch"
-      (at 135.64 126.31 0)
+      (at 135.64 80.59 0)
       (effects
         (font
           (size 1.27 1.27))
         (justify left top))))
   (sheet
-    (at 135.38 62.23)
+    (at 135.38 107.95)
     (size 26.42 17.78)
     (exclude_from_sim no)
     (in_bom yes)
@@ -54,13 +54,13 @@
       (color 0 0 0 0.0))
     (uuid eb4033e4-6b61-5064-95e1-3b15fdd49a48)
     (property "Sheetname" "band_decoder1"
-      (at 135.38 61.52 0)
+      (at 135.38 107.24 0)
       (effects
         (font
           (size 1.27 1.27))
         (justify left bottom)))
     (property "Sheetfile" "pic_amp_protection_band_decoder1.kicad_sch"
-      (at 135.38 80.59 0)
+      (at 135.38 126.31 0)
       (effects
         (font
           (size 1.27 1.27))
