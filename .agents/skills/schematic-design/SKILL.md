@@ -224,6 +224,8 @@ Y < 175mm.
    them beside or above the owning symbol with measured clearance. Only the
    symbol's intentionally owned pin-name/number fields may occupy its body.
    Reference and value fields must have clear, non-overlapping field zones.
+- Reference/value fields must also clear the symbol body and graphics by a
+   positive margin; touching an outline is a visual failure, not a pass.
 - The page title block and its reserved area are protected keep-outs. No
    connector/header, sheet box, component, wire, label, or annotation may
    enter or overlap that region.

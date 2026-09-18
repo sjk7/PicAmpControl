@@ -53,10 +53,11 @@ for ($first = 0; $first -lt $texts.Count; $first++) {
 foreach ($rect in $svg.SelectNodes('//svg:rect', $namespaces)) {
     $style = $rect.ParentNode.style
     if (-not $style -or $style -notmatch '#840000') { continue }
-    $rectLeft = [double]$rect.x
-    $rectTop = [double]$rect.y
-    $rectRight = $rectLeft + [double]$rect.width
-    $rectBottom = $rectTop + [double]$rect.height
+    $clearance = 0.5
+    $rectLeft = [double]$rect.x - $clearance
+    $rectTop = [double]$rect.y - $clearance
+    $rectRight = [double]$rect.x + [double]$rect.width + $clearance
+    $rectBottom = [double]$rect.y + [double]$rect.height + $clearance
     if ($rect.width -gt 100 -or $rect.height -gt 100) { continue }
 
     foreach ($item in $texts) {
@@ -66,6 +67,26 @@ foreach ($rect in $svg.SelectNodes('//svg:rect', $namespaces)) {
             $item.Bottom -gt $rectTop -and $item.Top -lt $rectBottom
         if ($insideBody) {
             $overlaps += "'$($item.Text)' overlaps a symbol body rectangle"
+        }
+    }
+}
+
+foreach ($circle in $svg.SelectNodes('//svg:circle', $namespaces)) {
+    $style = $circle.ParentNode.style
+    if (-not $style -or $style -notmatch '#840000') { continue }
+    $clearance = 0.5
+    $circleLeft = [double]$circle.cx - [double]$circle.r - $clearance
+    $circleTop = [double]$circle.cy - [double]$circle.r - $clearance
+    $circleRight = [double]$circle.cx + [double]$circle.r + $clearance
+    $circleBottom = [double]$circle.cy + [double]$circle.r + $clearance
+
+    foreach ($item in $texts) {
+        $isPinToken = $item.Text -match '^(\d+|[+-]|B[0-2]|VDD|VSS|MCLR|RE3|R[ABC]\d(?:/.*)?|RC\d(?:/.*)?)$'
+        if ($isPinToken) { continue }
+        $nearBody = $item.Right -gt $circleLeft -and $item.Left -lt $circleRight -and
+            $item.Bottom -gt $circleTop -and $item.Top -lt $circleBottom
+        if ($nearBody) {
+            $overlaps += "'$($item.Text)' overlaps a symbol body circle"
         }
     }
 }
