@@ -1875,6 +1875,130 @@
 			)
 		)
 		(embedded_fonts no)
+	)
+		(symbol "Device:R"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "R"
+			(at 2.032 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "R"
+			(at 0 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at -1.778 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "R res resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "R_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "R_0_1"
+			(rectangle
+				(start -1.016 -2.54)
+				(end 1.016 2.54)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "R_1_1"
+			(pin passive line
+				(at 0 3.81 270)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 -3.81 90)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
 	))
 	(symbol
 	(lib_name "Device:C")
@@ -2591,6 +2715,65 @@
 		)
 	)
 )
+	(symbol
+	(lib_name "Device:R")
+	(lib_id "Device:R")
+	(at 149.86 115.57 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "3beaeb34-b8c1-4ecb-b540-11bbf7aaf665")
+	(property "Reference" "R1"
+		(at 149.86 111.76 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "10k"
+		(at 149.86 119.38 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 149.86 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 149.86 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "795d1e0e-4021-43dc-9cbb-8d467b47561a")
+)
+	(pin "2"
+	(uuid "0ab4813e-e924-4bf9-8b1e-fca630e25dac")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08"
+				(reference "R1")
+				(unit 1)
+			)
+		)
+	)
+)
 	(symbol_instances
 		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/3db2363a-c752-4b04-a003-c627a8c3bc07"
 			(reference "C1")
@@ -2656,6 +2839,12 @@
 			(reference "#FLG02")
 			(unit 1)
 			(value "PWR_FLAG")
+			(footprint "")
+		)
+		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/3beaeb34-b8c1-4ecb-b540-11bbf7aaf665"
+			(reference "R1")
+			(unit 1)
+			(value "10k")
 			(footprint "")
 		)
 )
@@ -2859,6 +3048,36 @@
 	)
 	(uuid "b798ec3e-7766-4495-95d5-0a28d738eec1")
 )
+	(wire
+	(pts
+		(xy 149.86 111.76) (xy 149.86 109.22)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "52f18df5-0793-4c91-90ad-15cddd8411fa")
+)
+	(wire
+	(pts
+		(xy 149.86 119.38) (xy 170.18 119.38)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "4110fd53-1eb1-43aa-a7a7-0dd1f36ea3bb")
+)
+	(wire
+	(pts
+		(xy 170.18 119.38) (xy 170.18 129.54)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "89f5d76c-f127-4a51-b1c1-a642c8fd5d87")
+)
 	(label "+5V"
 	(at 160.02 118.11 90)
 	(effects
@@ -2930,6 +3149,15 @@
 		)
 	)
 	(uuid "9985d05e-a909-4cb2-be3a-99055d061cc0")
+)
+	(label "+5V"
+	(at 149.86 109.22 90)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "840216a9-26da-45d7-9d8b-c9e716a66999")
 )
 	(sheet_instances
 		(path "/"
