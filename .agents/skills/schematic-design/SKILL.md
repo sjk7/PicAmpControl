@@ -254,6 +254,12 @@ Y < 175mm.
 
 These are generation constraints, not merely post-processing checks:
 
+- The rendered gate measures SVG text bounding boxes and checks text-to-text
+   intersections, long free-text inside symbol rectangles, and header/sheet
+   text entering the A4 title-block reservation.
+- Identical SVG text nodes at the exact same bounds may be a renderer duplicate
+   and are ignored by the gate; identical text at different bounds remains a
+   real duplicate-field failure.
 - No two visible text boxes may intersect, including duplicate reference,
    value, pin-name, pin-number, label, annotation, or sheet text.
 - No descriptive free-text annotation may enter a symbol body rectangle.
