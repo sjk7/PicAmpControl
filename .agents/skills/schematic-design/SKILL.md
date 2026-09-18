@@ -244,11 +244,24 @@ Y < 175mm.
   "use the proper `power:GND` symbol for every ground connection; do not
   use a visible `GND` net label as a substitute"). Only one `PWR_FLAG` is
   needed for the whole GND net across the sheet, not one per GND symbol
-  instance — see the "one PWR_FLAG per net" finding above. When a pin is
-  close to an existing same-net power/decoupling component, prefer a
-  direct `connect_pins` wire over adding a new label or a new power
-  symbol; only add a new `power:GND`/`power:+5V` symbol when the pin is
-  genuinely far from any existing point on that net.
+  instance — see the "one PWR_FLAG per net" finding above.
+- CORRECTED HARD RULE (supersedes an earlier, wrong version of this
+  rule): give EVERY ground/power pin its own dedicated local
+  `power:GND`/`power:+5V`/etc. symbol placed 2-5mm away with a single
+  short stub wire — do NOT route a wire across the sheet to reach an
+  existing power symbol elsewhere, and do NOT build a shared bus linking
+  several components' ground pins together before reaching one power
+  symbol. Separate power-symbol instances of the same net name do not
+  need to be wired to each other; KiCad unifies them by name project-wide
+  from a single `PWR_FLAG`. This local-only approach is simpler and
+  avoids the wire-through-component and doubling-back routing failures
+  that a shared/bussed approach produces. See
+  `/memories/repo/visual-gate-lessons.md` for the full correction and the
+  reference schematic that demonstrates it.
+- Hide the `Value` text on every power symbol (GND/+5V/+12V/etc.) once a
+  tool supports setting field visibility; hidden text can never overlap
+  anything. No current MCP tool exposes this — treat it as a target
+  end-state, not something to fake via repositioning.
 
 ## Naming
 
