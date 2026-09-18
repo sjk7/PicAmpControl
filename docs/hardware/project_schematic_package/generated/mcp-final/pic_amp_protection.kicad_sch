@@ -1903,15 +1903,15 @@
 	(symbol
 	(lib_name "power:GND")
 	(lib_id "power:GND")
-	(at 187.96 185.42 0)
+	(at 170.18 185.42 0)
 	(unit 1)
 	(exclude_from_sim no)
 	(in_bom yes)
 	(on_board yes)
 	(dnp no)
-	(uuid "b4959cf6-9263-4b97-8be7-d6f924bec036")
+	(uuid "d4a00100-68d8-4f4e-bf48-1a9948d4da1a")
 	(property "Reference" "#PWR03"
-		(at 187.96 181.61 0)
+		(at 170.18 181.61 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -1919,7 +1919,7 @@
 		)
 	)
 	(property "Value" "GND"
-		(at 187.96 189.23 0)
+		(at 170.18 189.23 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -1927,7 +1927,7 @@
 		)
 	)
 	(property "Footprint" ""
-		(at 187.96 185.42 0)
+		(at 170.18 185.42 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -1936,7 +1936,7 @@
 		)
 	)
 	(property "Datasheet" "~"
-		(at 187.96 185.42 0)
+		(at 170.18 185.42 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -1945,7 +1945,7 @@
 		)
 	)
 	(pin "1"
-	(uuid "3d09a545-b484-42c5-96c3-9d82721f761e")
+	(uuid "21af6f37-0c5a-445c-a6f8-5bc890310b05")
 )
 	(instances
 		(project "pic_amp_protection"
@@ -1959,15 +1959,15 @@
 	(symbol
 	(lib_name "PWR_FLAG")
 	(lib_id "power:PWR_FLAG")
-	(at 187.96 185.42 0)
+	(at 170.18 185.42 0)
 	(unit 1)
 	(exclude_from_sim no)
 	(in_bom yes)
 	(on_board yes)
 	(dnp no)
-	(uuid "468c4070-742e-481a-ae8e-088db6fc0b9f")
+	(uuid "8872b656-bd93-4047-9e77-ff5961dff5f1")
 	(property "Reference" "#FLG02"
-		(at 187.96 181.61 0)
+		(at 170.18 181.61 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -1975,7 +1975,7 @@
 		)
 	)
 	(property "Value" "PWR_FLAG"
-		(at 187.96 189.23 0)
+		(at 170.18 189.23 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -1983,7 +1983,7 @@
 		)
 	)
 	(property "Footprint" ""
-		(at 187.96 185.42 0)
+		(at 170.18 185.42 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -1992,7 +1992,7 @@
 		)
 	)
 	(property "Datasheet" "~"
-		(at 187.96 185.42 0)
+		(at 170.18 185.42 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2001,7 +2001,7 @@
 		)
 	)
 	(pin "1"
-	(uuid "b526e9e3-de4c-4f16-aa7e-da1c87c8e786")
+	(uuid "9c4c5eac-926c-4b8f-81e7-1dc10b6b328c")
 )
 	(instances
 		(project "pic_amp_protection"
@@ -2015,15 +2015,15 @@
 	(symbol
 	(lib_name "power:GND")
 	(lib_id "power:GND")
-	(at 193.04 185.42 0)
+	(at 214.63 185.42 0)
 	(unit 1)
 	(exclude_from_sim no)
 	(in_bom yes)
 	(on_board yes)
 	(dnp no)
-	(uuid "e5c094a9-ca00-47d0-9c6f-2e1af0313c1a")
+	(uuid "14660dc0-7976-41f2-a5f8-d301d395480a")
 	(property "Reference" "#PWR04"
-		(at 193.04 181.61 0)
+		(at 214.63 181.61 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2031,7 +2031,7 @@
 		)
 	)
 	(property "Value" "GND"
-		(at 193.04 189.23 0)
+		(at 214.63 189.23 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2039,7 +2039,7 @@
 		)
 	)
 	(property "Footprint" ""
-		(at 193.04 185.42 0)
+		(at 214.63 185.42 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2048,7 +2048,7 @@
 		)
 	)
 	(property "Datasheet" "~"
-		(at 193.04 185.42 0)
+		(at 214.63 185.42 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2057,7 +2057,7 @@
 		)
 	)
 	(pin "1"
-	(uuid "9ed16357-d4f5-4c7e-9b67-b422156680a5")
+	(uuid "bdcb236a-24dc-49bc-bd8d-e47064924242")
 )
 	(instances
 		(project "pic_amp_protection"
@@ -2071,15 +2071,15 @@
 	(symbol
 	(lib_name "PWR_FLAG")
 	(lib_id "power:PWR_FLAG")
-	(at 193.04 185.42 0)
+	(at 214.63 185.42 0)
 	(unit 1)
 	(exclude_from_sim no)
 	(in_bom yes)
 	(on_board yes)
 	(dnp no)
-	(uuid "fd4826ce-8a17-4255-9233-757a4e4fdb0f")
+	(uuid "6c47bd4e-ac80-4728-85d3-0bde004e435e")
 	(property "Reference" "#FLG03"
-		(at 193.04 181.61 0)
+		(at 214.63 181.61 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2087,7 +2087,7 @@
 		)
 	)
 	(property "Value" "PWR_FLAG"
-		(at 193.04 189.23 0)
+		(at 214.63 189.23 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2095,7 +2095,7 @@
 		)
 	)
 	(property "Footprint" ""
-		(at 193.04 185.42 0)
+		(at 214.63 185.42 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2104,7 +2104,7 @@
 		)
 	)
 	(property "Datasheet" "~"
-		(at 193.04 185.42 0)
+		(at 214.63 185.42 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2113,7 +2113,7 @@
 		)
 	)
 	(pin "1"
-	(uuid "3e611e25-faca-4daf-ba6f-5a8172d58692")
+	(uuid "8cdf1848-3fba-4e0b-971b-793a8c91ebd9")
 )
 	(instances
 		(project "pic_amp_protection"
@@ -2149,25 +2149,25 @@
 			(value "+5V")
 			(footprint "")
 		)
-		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/b4959cf6-9263-4b97-8be7-d6f924bec036"
+		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/d4a00100-68d8-4f4e-bf48-1a9948d4da1a"
 			(reference "#PWR03")
 			(unit 1)
 			(value "GND")
 			(footprint "")
 		)
-		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/468c4070-742e-481a-ae8e-088db6fc0b9f"
+		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/8872b656-bd93-4047-9e77-ff5961dff5f1"
 			(reference "#FLG02")
 			(unit 1)
 			(value "PWR_FLAG")
 			(footprint "")
 		)
-		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/e5c094a9-ca00-47d0-9c6f-2e1af0313c1a"
+		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/14660dc0-7976-41f2-a5f8-d301d395480a"
 			(reference "#PWR04")
 			(unit 1)
 			(value "GND")
 			(footprint "")
 		)
-		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/fd4826ce-8a17-4255-9233-757a4e4fdb0f"
+		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/6c47bd4e-ac80-4728-85d3-0bde004e435e"
 			(reference "#FLG03")
 			(unit 1)
 			(value "PWR_FLAG")
@@ -2216,23 +2216,43 @@
 )
 	(wire
 	(pts
-		(xy 187.96 175.26) (xy 187.96 185.42)
+		(xy 187.96 175.26) (xy 170.18 175.26)
 	)
 	(stroke
 		(width 0)
 		(type default)
 	)
-	(uuid "cdf77987-fa06-43d1-891c-b23a825cc2ea")
+	(uuid "dcaafdd4-0a25-4b35-9a48-6cf7c6802e26")
 )
 	(wire
 	(pts
-		(xy 193.04 175.26) (xy 193.04 185.42)
+		(xy 170.18 175.26) (xy 170.18 185.42)
 	)
 	(stroke
 		(width 0)
 		(type default)
 	)
-	(uuid "e8b91ab5-f5be-4ff1-ad4d-9b9845f11303")
+	(uuid "49b508be-ae37-4dc8-b1d8-2392fbad4e8a")
+)
+	(wire
+	(pts
+		(xy 193.04 175.26) (xy 214.63 175.26)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "c7c88b86-e849-4b64-aacb-e0c40ff90740")
+)
+	(wire
+	(pts
+		(xy 214.63 175.26) (xy 214.63 185.42)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "da13d2e0-4a75-470a-9403-5456d6c81dc8")
 )
 	(label "+5V"
 	(at 160.02 118.11 90)
@@ -2268,7 +2288,7 @@
 			(size 1.27 1.27)
 		)
 	)
-	(uuid "db291564-9686-4dd2-927c-2d89dfc96eaf")
+	(uuid "de1efe2e-85fa-4b75-91d0-b1f68dd25fa5")
 )
 	(label "Net-(U1-19)"
 	(at 193.04 175.26 0)
@@ -2277,7 +2297,7 @@
 			(size 1.27 1.27)
 		)
 	)
-	(uuid "da58aaf7-31d7-4823-b46c-aa4670ef321c")
+	(uuid "bd333ff5-41df-429f-986a-17c6536ddbf9")
 )
 	(sheet_instances
 		(path "/"
