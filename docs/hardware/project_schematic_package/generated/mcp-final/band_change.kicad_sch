@@ -1035,36 +1035,6 @@
 		)
 		(embedded_fonts no)
 	))
-	(hierarchical_label "BAND_B0"
-	(shape input)
-	(at 25.4 25.4 180)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "3edfb0d2-4330-4856-b070-2271e04a00d9")
-)
-	(hierarchical_label "BAND_B1"
-	(shape input)
-	(at 25.4 38.1 180)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "ea0be0a3-3c96-4d83-81f8-cc0b6e2d3a1a")
-)
-	(hierarchical_label "BAND_B2"
-	(shape input)
-	(at 25.4 50.8 180)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "3c0ebd2f-2b43-4cd7-a374-a12036b5adf1")
-)
 	(wire
 	(pts
 		(xy 25.4 25.4) (xy 27.94 25.4)
@@ -1095,6 +1065,36 @@
 	)
 	(uuid "53452d7d-8704-4c89-b503-c4f4fab9c577")
 )
+	(wire
+	(pts
+		(xy 25.4 25.4) (xy 27.94 25.4)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "a96825b1-18c8-4d74-a1ff-5c37cdd60536")
+)
+	(wire
+	(pts
+		(xy 25.4 30.48) (xy 27.94 30.48)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "c3c9efac-f7c1-4f0f-9478-78f90a9da255")
+)
+	(wire
+	(pts
+		(xy 25.4 35.56) (xy 27.94 35.56)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "1049f1d5-c805-43b7-a8a4-834bc2da0589")
+)
 	(label "BAND_B0"
 	(at 27.94 25.4 0)
 	(effects
@@ -1121,6 +1121,33 @@
 		)
 	)
 	(uuid "38a65500-09a3-4c59-bfec-08cf84837757")
+)
+	(label "B0"
+	(at 27.94 25.4 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "b3ea8001-0d4e-4d83-81ca-ee081b2754e1")
+)
+	(label "B1"
+	(at 27.94 30.48 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "e006b1cb-c0d3-4227-8bf1-a105c8b4708d")
+)
+	(label "B2"
+	(at 27.94 35.56 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "58b18991-ccde-4bed-8a81-73d785913457")
 )
 	(symbol
 	(lib_name "4514")
@@ -1365,6 +1392,36 @@
 			)
 		)
 	)
+)
+	(hierarchical_label "B0"
+	(shape input)
+	(at 25.4 25.4 180)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "d014c36a-cc9f-406b-8a12-a126e8059f95")
+)
+	(hierarchical_label "B1"
+	(shape input)
+	(at 25.4 30.48 180)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "d5fa0d2e-6198-4dbe-b64f-8aaee0e1383e")
+)
+	(hierarchical_label "B2"
+	(shape input)
+	(at 25.4 35.56 180)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "50ab7256-4a02-4392-a3ef-168ee8ca5fe5")
 )
 	(sheet_instances
 		(path "/"

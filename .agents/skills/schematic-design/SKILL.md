@@ -212,6 +212,9 @@ Y < 175mm.
 - No visible text may overlap any pin, wire, symbol body, sheet border, pin
    number, other text, or title-block element. This is a hard failure, not a
    cosmetic warning.
+- Connector values that do not fit beside their pins must be hidden or blank;
+   place the descriptive connector name above or beside the pin field with
+   measured clearance.
 - When moving circuitry into a child sheet, remove obsolete root labels and
    wires; never leave duplicate old labels behind at the former coordinates.
 - After hierarchy changes, list the root labels and sheet pins and compare
@@ -223,6 +226,8 @@ Y < 175mm.
 - Render the active root and each changed child sheet, not a similarly named
    legacy file elsewhere in the workspace. Confirm the rendered view has no
    duplicate text blocks, stale labels, or overlapping sheet-pin text.
+- Any rendered overlap is a failed validation even when KiCad CLI loads the
+   file and `validate_hierarchy` reports success.
 - Structural hierarchy validation is not visual validation. A successful
    `validate_hierarchy` does not approve overlapping labels, text, or sheet
    graphics; export PDF/SVG and inspect the rendered geometry before commit.

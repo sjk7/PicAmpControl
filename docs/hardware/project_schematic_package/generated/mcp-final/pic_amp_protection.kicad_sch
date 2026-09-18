@@ -5715,7 +5715,7 @@
 			)
 		)
 	)
-	(property "Value" "SWR"
+	(property "Value" ""
 		(at 270.51 58.42 0)
 		(effects
 			(font
@@ -5783,7 +5783,7 @@
 			)
 		)
 	)
-	(property "Value" "ADC"
+	(property "Value" ""
 		(at 270.51 104.14 0)
 		(effects
 			(font
@@ -5864,13 +5864,13 @@
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/21002750-df35-408f-8851-d10448b6e861"
 			(reference "J7")
 			(unit 1)
-			(value "SWR")
+			(value "")
 			(footprint "")
 		)
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/2da9c001-c03c-4194-a7fd-9ce584f6fb36"
 			(reference "J8")
 			(unit 1)
-			(value "ADC")
+			(value "")
 			(footprint "")
 		)
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/057bca75-b93c-4825-865e-c4eec1dd9fad/f2712c01-f881-4e22-bc80-f1c9bf2955b5"
@@ -5927,6 +5927,18 @@
 			(value "ULN2803A")
 			(footprint "")
 		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/31fdadf7-a534-4a85-9ba3-495bc9e15ecd/315bfe58-d863-4a17-bb4f-cd7295c6dde2"
+			(reference "U2")
+			(unit 1)
+			(value "74HC4514")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/31fdadf7-a534-4a85-9ba3-495bc9e15ecd/3f4089c8-3162-4b11-ae04-58b8143b1803"
+			(reference "U3")
+			(unit 1)
+			(value "ULN2803A")
+			(footprint "")
+		)
 )
 	(text "PIC16F18855-I/SP"
 	(at 80 65 0)
@@ -5937,9 +5949,84 @@
 	)
 	(uuid "4ca6027c-a5e6-44e3-ba89-797fa9b09f03")
 )
+	(text "SWR SENSE"
+	(at 270 42 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "cc769e35-32f3-4e5a-84ff-c064353c780d")
+)
+	(text "ANALOG SENSE"
+	(at 270 117 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "9bc499d6-8eef-4417-b11f-9b03da5c50ad")
+)
+	(wire
+	(pts
+		(xy 250.19 72.39) (xy 247.65 72.39)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "3f42daf7-5884-431c-bf73-3c774732f3bf")
+)
+	(wire
+	(pts
+		(xy 250.19 74.93) (xy 247.65 74.93)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "8395869e-fa71-41fc-80db-f3d85bf56c77")
+)
+	(wire
+	(pts
+		(xy 250.19 77.47) (xy 247.65 77.47)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "b7a40709-073f-4fb1-a94c-b228552acb1d")
+)
+	(label "B0"
+	(at 247.65 72.39 180)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "301d5265-0ceb-4da0-8014-8721c28b47cd")
+)
+	(label "B1"
+	(at 247.65 74.93 180)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "7fc56126-16e8-4f1d-8c54-d0e00c612cb2")
+)
+	(label "B2"
+	(at 247.65 77.47 180)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "331b4186-b960-4319-93ef-0628da99e55d")
+)
 	(sheet
-	(at 250 70)
-	(size 25.4 25.4)
+	(at 260 70)
+	(size 10.16 10.16)
 	(fields_autoplaced yes)
 	(stroke
 		(width 0.1)
@@ -5948,9 +6035,9 @@
 	(fill
 		(color 0 0 0 0.0000)
 	)
-	(uuid "66194545-7c0e-4ce0-a254-d0c89aad8641")
+	(uuid "31fdadf7-a534-4a85-9ba3-495bc9e15ecd")
 	(property "Sheetname" "band_change"
-		(at 250 68.73 0)
+		(at 260 68.73 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5958,43 +6045,43 @@
 		)
 	)
 	(property "Sheetfile" "band_change.kicad_sch"
-		(at 250 81.43 0)
+		(at 260 81.43 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 		)
 	)
-	(pin "BAND_B0" input
-	(at 250 72.54 180)
+	(pin "B0" input
+	(at 260 72.54 180)
 	(effects
 		(font
 			(size 1.27 1.27)
 		)
 	)
-	(uuid "8b76606d-5ceb-4701-aaaa-1998ba79d4be")
+	(uuid "c1c1b967-c9c6-45a2-a212-46f6ff757ace")
 )
-	(pin "BAND_B1" input
-	(at 250 75.08 180)
+	(pin "B1" input
+	(at 260 75.08 180)
 	(effects
 		(font
 			(size 1.27 1.27)
 		)
 	)
-	(uuid "cfbffaf1-1655-4679-904c-5d8374517fcf")
+	(uuid "e41f34f8-25f5-4934-92f0-0ee5599ca133")
 )
-	(pin "BAND_B2" input
-	(at 250 77.62 180)
+	(pin "B2" input
+	(at 260 77.62 180)
 	(effects
 		(font
 			(size 1.27 1.27)
 		)
 	)
-	(uuid "adb4f33c-8eea-4e97-a638-3ab0262c8b5c")
+	(uuid "7e269331-2055-4554-8715-9150b2f7a77b")
 )
 	(instances
 		(project "pic_amp_protection"
-			(path "/5f892659-1480-447d-b5a7-bee1c920df64/66194545-7c0e-4ce0-a254-d0c89aad8641"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64/31fdadf7-a534-4a85-9ba3-495bc9e15ecd"
 				(page "2")
 			)
 		)
