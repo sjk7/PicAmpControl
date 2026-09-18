@@ -5555,7 +5555,7 @@
 			)
 		)
 	)
-	(property "Footprint" ""
+	(property "Footprint" "Package_DIP:DIP-28_W7.62mm"
 		(at 80.01 95.25 0)
 		(effects
 			(font
@@ -6947,7 +6947,7 @@
 			(reference "U1")
 			(unit 1)
 			(value "MCU")
-			(footprint "")
+			(footprint "Package_DIP:DIP-28_W7.62mm")
 		)
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/b79ec903-e143-4f75-9899-3a3ede06d9cd"
 			(reference "K1")
