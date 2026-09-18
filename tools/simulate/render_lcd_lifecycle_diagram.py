@@ -9,6 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LCD_GRAPH_DIR = REPO_ROOT / "_build" / "My_Pic_Project" / "sim" / "graphs" / "lcd"
 OUTPUT = LCD_GRAPH_DIR / "lcd_lifecycle_16x2.png"
 FAULT_OUTPUT = LCD_GRAPH_DIR / "lcd_fault_screens_16x2.png"
+NORMAL_OUTPUT = LCD_GRAPH_DIR / "lcd_normal_screens_16x2.png"
 
 PANELS = [
     ("BOOT / EEPROM", "P=   0W SWR=1.0", "----------------", "Loaded saved home page; example STATUS page"),
@@ -29,6 +30,14 @@ FAULT_PANELS = [
     ("TRIP: OVERDRIVE", "OVDR 11/10W     ", "MAX 10W         ", "Measured overdrive / EEPROM trip limit"),
     ("TRIP: DRAIN", "DRN 151/150V    ", "MAX 150V        ", "Measured drain / EEPROM trip limit; ADC 5 V = 300 V"),
     ("TRIP: ALL-FAULT EXAMPLE", "FAULT: ALL TRIPS", "S1 S2 HW A T O D ", "S1/S2/HW/AMPS/TEMP/OVDR/DRN shorthand"),
+]
+NORMAL_PANELS = [
+    ("TX STATUS: PEP", "P=1125W SWR=1.0", "------------....", "3/4 of 1500 W full scale; STATUS shows post-filter SWR rounded to tenths"),
+    ("TX STATUS: RMS", "R=1125W SWR=1.0", "------------....", "Same STATUS page with RMS mode selected"),
+    ("PEP / TEMPERATURE", "PEP ------------", "TEMP  50C       ", "Live PEP bar plus amplifier temperature"),
+    ("SWR METER", "SWR1    SWR=1.7", "SWR2    SWR=1.0", "SWR2 input is 1.02:1, displayed to the firmware's tenths resolution"),
+    ("CURRENT METER", "A= 30A PK= 30A  ", "------------....", "Current peak follows the live reading and decays with the PEP hold timing"),
+    ("PTT_COMPLETE", "PTT COMPLETE    ", "TX ACTIVE       ", "Transient normal TX confirmation; no trip is latched"),
 ]
 
 
@@ -95,6 +104,7 @@ def render_page(panels, output, title, accent_default):
 def main():
     render_page(PANELS, OUTPUT, "PIC AmpControl LCD lifecycle: exact 16x2 display states", "#1565c0")
     render_page(FAULT_PANELS, FAULT_OUTPUT, "PIC AmpControl LCD fault screens: exact 16x2 examples", "#2e7d32")
+    render_page(NORMAL_PANELS, NORMAL_OUTPUT, "PIC AmpControl normal TX LCD screens: 1125 W, SWR1 1.7:1, SWR2 1.02:1, 50 C", "#1565c0")
 
 
 if __name__ == "__main__":

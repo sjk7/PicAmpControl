@@ -36,6 +36,8 @@ typedef enum {
 typedef enum {
     MENU_PAGE_STATUS = 0,
     MENU_PAGE_POWER_TEMPERATURE,
+    MENU_PAGE_SWR_METER,
+    MENU_PAGE_CURRENT_METER,
     MENU_PAGE_SWR1_TRIP,
     MENU_PAGE_SWR2_TRIP,
     MENU_PAGE_SWR1_FWD_FULL_SCALE,
@@ -81,7 +83,7 @@ typedef struct {
 } protection_thresholds_t;
 
 #define SETTINGS_MAGIC 0xA5
-#define SETTINGS_VERSION 6
+#define SETTINGS_VERSION 7
 #define MENU_SETTING_U8 0
 #define MENU_SETTING_U16 1
 #define MENU_SETTING_BOOL 2
@@ -124,8 +126,10 @@ static unsigned int g_swr1_live_tenths = 10;
 static unsigned int g_swr2_live_tenths = 10;
 static unsigned int g_live_temperature_c = 0;
 static unsigned int g_live_current_a = 0;
+static unsigned int g_current_peak_a = 0;
 static unsigned int g_live_overdrive_mw = 0;
 static unsigned int g_pep_decay_elapsed_ms = 0;
+static unsigned int g_current_peak_decay_elapsed_ms = 0;
 static unsigned int g_status_refresh_ms = 0;
 static unsigned int g_startup_elapsed_ms = 0;
 static volatile unsigned char g_timer_ticks_pending = 0;
@@ -193,7 +197,7 @@ static const unsigned char g_menu_setting_types[] = {
 #define FAN_ACTIVE_HIGH_DEFAULT false
 #define TRIP_ACTIVE_HIGH_DEFAULT false
 static const char *const g_menu_labels[] = {
-    "STATUS", "STATUS", "S1 SWR TRIP", "S2 SWR TRIP", "S1 FWD MAX", "S2 FWD MAX",
+    "STATUS", "STATUS", "SWR METER", "CURRENT METER", "S1 SWR TRIP", "S2 SWR TRIP", "S1 FWD MAX", "S2 FWD MAX",
     "NTC B VALUE", "TEMP TRIP", "INPUT TRIP", "DRAIN TRIP", "CURRENT TRIP",
     "TX-VCC DELAY", "TX-BIAS DELAY", "TX ACTIVE",
     "TX-VCC ACTIVE", "TX-BIAS ACTIVE", "FAN ACTIVE", "TRIP ACTIVE",
@@ -346,7 +350,13 @@ void lcd_write_unsigned_padded(unsigned int value, unsigned char digits) {
 
 void lcd_write_power_bar(unsigned int power_w, unsigned int full_scale_w, unsigned char width) {
     unsigned char bar_segment;
-    unsigned char bar_segments = (unsigned char)(((unsigned long)power_w * width) / full_scale_w);
+    unsigned char bar_segments;
+
+    if (full_scale_w == 0) {
+        full_scale_w = 1;
+    }
+
+    bar_segments = (unsigned char)(((unsigned long)power_w * width) / full_scale_w);
 
     if (bar_segments > width) {
         bar_segments = width;
@@ -533,7 +543,8 @@ void show_menu_page(void) {
         lcd_set_cursor(1, 0);
         lcd_write_power_bar(power_w, g_thresholds.swr2_fwd_full_scale_w, 16);
         return;
-    }    if (g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
+    }
+    if (g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
         unsigned int temp_c_value = temperature_c(ADC_SAMPLE_TEMP);
 
         lcd_set_cursor(0, 0);
@@ -545,6 +556,27 @@ void show_menu_page(void) {
         if (temp_c_value < 10) lcd_write_spaces(1);
         lcd_write_unsigned(temp_c_value);
         lcd_write_byte('C', true);
+        return;
+    }
+    if (g_menu_page == MENU_PAGE_SWR_METER) {
+        lcd_set_cursor(0, 0);
+        lcd_write_text("SWR1 ");
+        lcd_write_swr_right(11, g_swr1_live_tenths);
+        lcd_set_cursor(1, 0);
+        lcd_write_text("SWR2 ");
+        lcd_write_swr_right(11, g_swr2_live_tenths);
+        return;
+    }
+    if (g_menu_page == MENU_PAGE_CURRENT_METER) {
+        lcd_set_cursor(0, 0);
+        lcd_write_text("A=");
+        lcd_write_unsigned_padded(g_live_current_a, 3);
+        lcd_write_text("A PK=");
+        lcd_write_unsigned_padded(g_current_peak_a, 3);
+        lcd_write_byte('A', true);
+        lcd_write_spaces(2);
+        lcd_set_cursor(1, 0);
+        lcd_write_power_bar(g_current_peak_a, g_thresholds.current_trip_a, 16);
         return;
     }
     lcd_set_cursor(0, 0);
@@ -889,6 +921,21 @@ void update_power_decay(unsigned int elapsed_ms) {
     }
 }
 
+void update_current_peak(unsigned int current_a) {
+    if (current_a >= g_current_peak_a) {
+        g_current_peak_a = current_a;
+        g_current_peak_decay_elapsed_ms = 0;
+    }
+}
+
+void update_current_peak_decay(unsigned int elapsed_ms) {
+    g_current_peak_decay_elapsed_ms += elapsed_ms;
+    while (g_current_peak_decay_elapsed_ms >= g_thresholds.pep_decay_ms && g_current_peak_a > 0) {
+        g_current_peak_a--;
+        g_current_peak_decay_elapsed_ms -= g_thresholds.pep_decay_ms;
+    }
+}
+
 void update_tx_sequence(void) {
     if (g_startup_inhibit || g_comparator_reset_active) {
         set_tx_output(false);
@@ -1178,6 +1225,7 @@ int main(void) {
         g_swr1_live_tenths = compute_swr_tenths(swr1_fwd_raw, swr1_ref_raw);
         g_live_temperature_c = temp_c;
         g_live_current_a = current_amperes(current_raw);
+        update_current_peak(g_live_current_a);
         g_live_overdrive_mw = overdrive_power;
 
         bool swr1_fault = swr_trip(swr1_fwd_raw, swr1_ref_raw,
@@ -1245,6 +1293,7 @@ int main(void) {
                 }
             } else {
                 update_power_decay(1);
+                update_current_peak_decay(1);
                 update_tx_sequence();
             }
             if (g_settings_save_delay_ms > 0) {
@@ -1256,7 +1305,10 @@ int main(void) {
         poll_menu_inputs(elapsed_ms);
 
         if (!g_boot_message_active &&
-            (g_menu_page == MENU_PAGE_STATUS || g_menu_page == MENU_PAGE_POWER_TEMPERATURE)) {
+            (g_menu_page == MENU_PAGE_STATUS ||
+             g_menu_page == MENU_PAGE_POWER_TEMPERATURE ||
+             g_menu_page == MENU_PAGE_SWR_METER ||
+             g_menu_page == MENU_PAGE_CURRENT_METER)) {
             if (g_status_refresh_ms >= 100 || g_menu_changed) {
                 show_menu_page();
                 g_status_refresh_ms = 0;

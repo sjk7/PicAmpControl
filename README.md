@@ -29,6 +29,7 @@ The project is in a working firmware-validation stage:
 - LCD driver interface: [firmware/include/lcd_i2c.h](firmware/include/lcd_i2c.h)
 - Display/menu state diagram: [_build/My_Pic_Project/sim/graphs/lcd/display_menu_state_diagram.png](_build/My_Pic_Project/sim/graphs/lcd/display_menu_state_diagram.png)
 - 16x2 LCD lifecycle diagram: [_build/My_Pic_Project/sim/graphs/lcd/lcd_lifecycle_16x2.png](_build/My_Pic_Project/sim/graphs/lcd/lcd_lifecycle_16x2.png)
+- Normal TX LCD screens: [_build/My_Pic_Project/sim/graphs/lcd/lcd_normal_screens_16x2.png](_build/My_Pic_Project/sim/graphs/lcd/lcd_normal_screens_16x2.png)
 - Individual LCD fault screens: [_build/My_Pic_Project/sim/graphs/lcd/lcd_fault_screens_16x2.png](_build/My_Pic_Project/sim/graphs/lcd/lcd_fault_screens_16x2.png)
 - Latest simulator graphs: [_build/My_Pic_Project/sim/graphs/](_build/My_Pic_Project/sim/graphs/)
 - Production CMake project: [cmake/My_Pic_Project/default/CMakeLists.txt](cmake/My_Pic_Project/default/CMakeLists.txt)
@@ -242,7 +243,7 @@ Polarity suffixes are not added to pin names unless a specific signal intentiona
 
 At boot the LCD shows `Booting, please` / `wait.` through the startup-inhibit period, then the saved EEPROM home page is shown. A PTT request temporarily uses the status display and applies the `PTT_RESET_PULSE`. `PTT_COMPLETE` appears for 500 ms only after RELAYS, TX_VCC, and TX_BIAS have all reached their active levels, then the saved home page is restored. A TRIP display always has priority over both transient states and the home page until a valid re-arm clears the fault; temperature is the exception and may recover after its hysteresis band is satisfied.
 
-The [LCD lifecycle diagram](_build/My_Pic_Project/sim/graphs/lcd/lcd_lifecycle_16x2.png) and [individual fault-screen diagram](_build/My_Pic_Project/sim/graphs/lcd/lcd_fault_screens_16x2.png) show the exact 16x2 examples.
+The [LCD lifecycle diagram](_build/My_Pic_Project/sim/graphs/lcd/lcd_lifecycle_16x2.png), [normal TX LCD screen diagram](_build/My_Pic_Project/sim/graphs/lcd/lcd_normal_screens_16x2.png), and [individual fault-screen diagram](_build/My_Pic_Project/sim/graphs/lcd/lcd_fault_screens_16x2.png) show the exact 16x2 examples.
 
 ## Firmware state model
 
