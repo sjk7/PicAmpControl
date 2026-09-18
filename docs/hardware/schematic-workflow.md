@@ -1,8 +1,7 @@
 # Schematic Workflow (KiCad MCP Skill)
 
-This is the current, only-supported way to generate or modify the KiCad
-schematic in this repository. It replaces the old SKiDL/ASG script-based
-generator.
+This is the current and only supported way to generate or modify the KiCad
+schematic in this repository.
 
 ## What we use now
 
@@ -18,9 +17,8 @@ generator.
   `docs/hardware/project_schematic_package/generated/pic_amp_protection.kicad_sch`
   (root sheet; child sheets are referenced from it).
 
-The old generator (SKiDL + ASG + `kicad-sch-api`) is archived, reference-only,
-at [docs/hardware/legacy-schematic-generator/](../hardware/legacy-schematic-generator/README.md).
-Do not use it for new work.
+There is no legacy generator to run. The component and connection tables under
+`docs/hardware/project_schematic_package/` are reference inputs for planning.
 
 ## Rule: never hand-edit KiCad files
 

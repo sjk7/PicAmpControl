@@ -23,9 +23,8 @@ skill and the `mcp-server-kicad` MCP server (see `.vscode/mcp.json`). Do not
 hand-edit `.kicad_sch` files or run `kicad-cli` directly; use the skill's
 MCP tools instead.
 
-The previous SKiDL/ASG-based generator is archived at
-`docs/hardware/legacy-schematic-generator/` for reference only and must not
-be used for new work.
+The previous script-based generator has been removed. The component and
+connection tables in this folder are design inputs for the MCP workflow only.
 
 ---
 

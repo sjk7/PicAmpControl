@@ -1,4 +1,4 @@
-﻿{
+{
     "servers":  {
                     "kicad":  {
                                   "type":  "stdio",
@@ -11,7 +11,7 @@
                                   "cwd":  "${workspaceFolder}",
                                   "env":  {
                                               "KICAD_CLI_PATH":  "C:\\Program Files\\KiCad\\9.0\\bin\\kicad-cli.exe",
-                                              "KICAD_SCH_PATH":  "${workspaceFolder}\\docs\\hardware\\project_schematic_package\\generated\\pic_amp_protection.kicad_sch",
+                                              "KICAD_SCH_PATH":  "${workspaceFolder}\\docs\\hardware\\project_schematic_package\\generated\\mcp-final\\pic_amp_protection.kicad_sch",
                                               "KICAD_OUTPUT_DIR":  "${workspaceFolder}\\out"
                                           }
                               }
