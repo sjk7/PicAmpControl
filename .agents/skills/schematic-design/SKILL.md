@@ -198,6 +198,12 @@ Y < 175mm.
 - Hierarchical sheet bounding boxes must remain clear of the page title block
    and bottom-right reserved area; keep their bottom edge above that area and
    verify the clearance in the exported schematic view.
+- Never accept the default pin/label positions produced by an automatic
+   hierarchy helper without inspection. Spread labels to clear text boxes,
+   then resize and move the sheet block to a deliberate functional location.
+- Structural hierarchy validation is not visual validation. A successful
+   `validate_hierarchy` does not approve overlapping labels, text, or sheet
+   graphics; export PDF/SVG and inspect the rendered geometry before commit.
 - After every placement or hierarchy change, inspect the rendered export for
    overlapping labels, sheet pins, text, or title-block clearance before
    committing the change.
