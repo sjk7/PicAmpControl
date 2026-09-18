@@ -10,16 +10,17 @@ LCD_GRAPH_DIR = REPO_ROOT / "_build" / "My_Pic_Project" / "sim" / "graphs" / "lc
 OUTPUT = LCD_GRAPH_DIR / "lcd_lifecycle_16x2.png"
 FAULT_OUTPUT = LCD_GRAPH_DIR / "lcd_fault_screens_16x2.png"
 NORMAL_OUTPUT = LCD_GRAPH_DIR / "lcd_normal_screens_16x2.png"
+SETTINGS_OUTPUT = LCD_GRAPH_DIR / "settings" / "lcd_settings_navigation_16x2.png"
 
 PANELS = [
-    ("BOOT / EEPROM", "P=   0W SWR=1.0", "----------------", "Loaded saved home page; example STATUS page"),
-    ("HOME PAGE: PEP", "P=   0W SWR=1.0", "----------------", "User-selected home page remains saved"),
-    ("HOME PAGE: TEMP", "PEP ------------", "TEMP  25C", "Other selectable home page example"),
-    ("PTT LOW REQUEST", "P=   0W SWR=1.0", "----------------", "Firmware saves the selected home page; no fault text"),
-    ("PTT RESET PULSE", "P=   0W SWR=1.0", "----------------", "RC1/SETTLE pulses LOW for 10 ms; LCD page is unchanged"),
+    ("BOOT / DEFAULT", "P=   0W ........", "TEMP  25C", "Default home page is the PEP / temperature display"),
+    ("HOME PAGE: PEP", "P=   0W ........", "TEMP  25C", "Default home page remains saved unless the user selects another"),
+    ("HOME PAGE: TEMP", "P=   0W ........", "TEMP  25C", "Other selectable home page example"),
+    ("PTT LOW REQUEST", "P=   0W SWR=1.00", "................", "Firmware saves the selected home page; no fault text"),
+    ("PTT RESET PULSE", "P=   0W SWR=1.00", "................", "RC1/SETTLE pulses LOW for 10 ms; LCD page is unchanged"),
     ("PTT_COMPLETE", "PTT COMPLETE    ", "TX ACTIVE       ", "Shown only after RELAYS, TX_VCC, and TX_BIAS are all active"),
-    ("HOME PAGE RESTORED", "P=   0W SWR=1.0", "----------------", "Restored 500 ms after PTT_COMPLETE"),
-    ("TEMP RECOVERY", "P=   0W SWR=1.0", "----------------", "After hysteresis: comparator reset, then TX can sequence again"),
+    ("HOME PAGE RESTORED", "P=   0W ........", "TEMP  25C", "Restored 500 ms after PTT_COMPLETE"),
+    ("TEMP RECOVERY", "P=   0W ........", "TEMP  25C", "After hysteresis: comparator reset, then TX can sequence again"),
 ]
 FAULT_PANELS = [
     ("TRIP: TEMPERATURE", "TEMP 101/100C   ", "MAX 100C        ", "Measured temperature / EEPROM trip limit"),
@@ -32,12 +33,34 @@ FAULT_PANELS = [
     ("TRIP: ALL-FAULT EXAMPLE", "FAULT: ALL TRIPS", "S1 S2 HW A T O D ", "S1/S2/HW/AMPS/TEMP/OVDR/DRN shorthand"),
 ]
 NORMAL_PANELS = [
-    ("TX STATUS: PEP", "P=1125W SWR=1.0", "------------....", "3/4 of 1500 W full scale; STATUS shows post-filter SWR rounded to tenths"),
-    ("TX STATUS: RMS", "R=1125W SWR=1.0", "------------....", "Same STATUS page with RMS mode selected"),
-    ("PEP / TEMPERATURE", "PEP ------------", "TEMP  50C       ", "Live PEP bar plus amplifier temperature"),
-    ("SWR METER", "SWR1    SWR=1.7", "SWR2    SWR=1.0", "SWR2 input is 1.02:1, displayed to the firmware's tenths resolution"),
-    ("CURRENT METER", "A= 30A PK= 30A  ", "------------....", "Current peak follows the live reading and decays with the PEP hold timing"),
+    ("TX STATUS: PEP", "P=1125W SWR=1.23", "||||||||||||....", "3/4 of 1500 W full scale; STATUS shows post-filter SWR to hundredths"),
+    ("TX STATUS: RMS", "R=1125W SWR=1.23", "||||||||||||....", "Same STATUS page with RMS mode selected"),
+    ("PEP / TEMPERATURE", "P=1125W ||||||..", "TEMP  50C       ", "Peak hold and decay are user settings saved in EEPROM"),
+    ("SWR METER", "SWR1   SWR=1.74", "SWR2   SWR=1.23", "SWR readouts use the firmware's two-decimal display resolution"),
+    ("CURRENT METER", "A= 30A PK= 30A  ", "||||||||||||....", "Peak holds for 1.2 s, then decays smoothly with the configured peak interval"),
     ("PTT_COMPLETE", "PTT COMPLETE    ", "TX ACTIVE       ", "Transient normal TX confirmation; no trip is latched"),
+]
+SETTINGS_PANELS = [
+    ("01 NEXT", "S1 SWR TRIP    ", "3.0:1           ", "ADJUST changes SWR1 trip threshold"),
+    ("02 NEXT", "S2 SWR TRIP    ", "2.0:1           ", "ADJUST changes SWR2 trip threshold"),
+    ("03 NEXT", "S1 FWD MAX     ", "1500W           ", "ADJUST changes SWR1 forward full scale"),
+    ("04 NEXT", "S2 FWD MAX     ", "1500W           ", "ADJUST changes SWR2 forward full scale"),
+    ("05 NEXT", "NTC B VALUE    ", "3950C           ", "ADJUST cycles NTC profile"),
+    ("06 NEXT", "TEMP TRIP      ", "100C            ", "ADJUST changes thermal trip point"),
+    ("07 NEXT", "INPUT TRIP     ", "10.0W           ", "ADJUST changes overdrive trip point"),
+    ("08 NEXT", "DRAIN TRIP     ", "150V            ", "ADJUST changes drain voltage trip point"),
+    ("09 NEXT", "CURRENT TRIP   ", " 40A            ", "ADJUST changes current trip point"),
+    ("10 NEXT", "TX-VCC DELAY   ", "  20ms          ", "ADJUST changes RELAYS to TX_VCC delay"),
+    ("11 NEXT", "TX-BIAS DELAY  ", "  20ms          ", "ADJUST changes TX_VCC to TX_BIAS delay"),
+    ("12 NEXT", "TX ACTIVE      ", "LOW             ", "ADJUST toggles TX output polarity"),
+    ("13 NEXT", "TX-VCC ACTIVE  ", "LOW             ", "ADJUST toggles TX_VCC output polarity"),
+    ("14 NEXT", "TX-BIAS ACTIVE ", "LOW             ", "ADJUST toggles TX_BIAS output polarity"),
+    ("15 NEXT", "FAN ACTIVE     ", "LOW             ", "ADJUST toggles fan output polarity"),
+    ("16 NEXT", "TRIP ACTIVE    ", "LOW             ", "ADJUST toggles trip-status output polarity"),
+    ("17 NEXT", "POWER DISPLAY  ", "PEP             ", "ADJUST toggles STATUS power mode"),
+    ("18 NEXT", "NET POWER      ", "FWD             ", "ADJUST toggles forward/net power display"),
+    ("19 NEXT", "PEAK HOLD      ", "1200ms          ", "ADJUST changes saved peak hold time"),
+    ("20 NEXT", "PEAK DECAY     ", " 100ms          ", "ADJUST changes saved peak decay interval"),
 ]
 
 
@@ -66,34 +89,47 @@ def lcd_panel(ax, x, y, title, line1, line2, note, accent):
     ax.text(x + width / 2, y + 0.14, note, ha="center", va="center", fontsize=7, color="#455a64")
 
 
-def render_page(panels, output, title, accent_default):
-    rows = (len(panels) + 1) // 2
+def render_page(panels, output, title, accent_default,
+                footer_text="TRIP text overrides PTT_COMPLETE and home-page restoration until the fault is cleared.",
+                footer_color="#b71c1c", columns=2, snake=False):
+    rows = (len(panels) + columns - 1) // columns
     row_step = 3.05
+    column_step = 7.85
+    panel_width = 0.39 * 16 + 0.72
     top_y = 1.0 + (rows - 1) * row_step
-    fig, ax = plt.subplots(figsize=(18, max(10, rows * 3.15)))
-    ax.set_xlim(0, 16)
+    x_max = 0.55 + columns * column_step
+    fig, ax = plt.subplots(figsize=(max(18, columns * 8.5), max(10, rows * 3.15)))
+    ax.set_xlim(0, x_max)
     ax.set_ylim(0, top_y + 2.65)
     ax.axis("off")
     fig.patch.set_facecolor("white")
     ax.set_title(title, fontsize=16, pad=18)
 
-    positions = [(0.55 + (index % 2) * 7.85, top_y - (index // 2) * row_step)
-                 for index in range(len(panels))]
+    positions = []
+    for index in range(len(panels)):
+        row = index // columns
+        column = index % columns
+        if snake and row % 2:
+            column = columns - 1 - column
+        positions.append((0.55 + column * column_step, top_y - row * row_step))
     for index, ((panel_title, line1, line2, note), (x, y)) in enumerate(zip(panels, positions)):
         accent = "#b71c1c" if panel_title.startswith("TRIP") else accent_default
         lcd_panel(ax, x, y, panel_title, line1, line2, note, accent)
         if index > 0:
             prev_x, prev_y = positions[index - 1]
-            if index % 2:
-                start = (prev_x + 7.2, prev_y + 1.02)
-                end = (x, y + 0.86)
+            if y == prev_y:
+                if x > prev_x:
+                    start = (prev_x + panel_width, prev_y + 1.02)
+                    end = (x, y + 1.02)
+                else:
+                    start = (prev_x, prev_y + 1.02)
+                    end = (x + panel_width, y + 1.02)
             else:
-                start = (prev_x + 3.6, prev_y)
-                end = (x + 3.6, y + 2.05)
+                start = (prev_x + panel_width / 2, prev_y)
+                end = (x + panel_width / 2, y + 2.05)
             ax.annotate("", xy=end, xytext=start,
                         arrowprops={"arrowstyle": "-|>", "lw": 1.1, "color": "#607d8b"})
-    ax.text(0.6, 0.35, "TRIP text overrides PTT_COMPLETE and home-page restoration until the fault is cleared.",
-        fontsize=9, color="#b71c1c")
+    ax.text(0.6, 0.35, footer_text, fontsize=9, color=footer_color)
     fig.tight_layout()
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output, dpi=150, bbox_inches="tight")
@@ -101,10 +137,19 @@ def render_page(panels, output, title, accent_default):
     print(f"Wrote {output}")
 
 
+def render_settings_navigation(plt):
+    render_page(SETTINGS_PANELS, SETTINGS_OUTPUT,
+                "PIC AmpControl settings navigation: NEXT advances, ADJUST edits, idle returns home",
+                "#6a1b9a",
+                "NEXT steps through these saved settings in order; ADJUST changes the shown value; idle timeout returns to the saved home page.",
+                "#6a1b9a", columns=4, snake=True)
+
+
 def main():
     render_page(PANELS, OUTPUT, "PIC AmpControl LCD lifecycle: exact 16x2 display states", "#1565c0")
     render_page(FAULT_PANELS, FAULT_OUTPUT, "PIC AmpControl LCD fault screens: exact 16x2 examples", "#2e7d32")
-    render_page(NORMAL_PANELS, NORMAL_OUTPUT, "PIC AmpControl normal TX LCD screens: 1125 W, SWR1 1.7:1, SWR2 1.02:1, 50 C", "#1565c0")
+    render_page(NORMAL_PANELS, NORMAL_OUTPUT, "PIC AmpControl normal TX LCD screens: 1125 W, SWR1 1.74:1, SWR2 1.23:1, 50 C", "#1565c0")
+    render_settings_navigation(plt)
 
 
 if __name__ == "__main__":

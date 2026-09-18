@@ -4,6 +4,25 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-18 — Peak displays now hold briefly, then decay smoothly
+
+The PEP and current-meter pages are likely operator home pages, but the previous
+peak behavior decayed by one display unit per configured interval with no explicit
+hold. At the old 500 ms default this made PEP linger for minutes; at short intervals
+it still looked mechanically linear. Fix: both peak displays now hold the captured
+peak for the configured peak-hold interval, then decay by about 3% per configured
+peak-decay interval with a minimum one-unit step. Both settings are stored in the
+versioned EEPROM record. The default home page is now the PEP/temperature display;
+factory defaults are 1.2 s hold and 100 ms decay interval.
+
+## 2026-09-18 — Normal SWR displays use the available second decimal place
+
+The STATUS and SWR meter pages had enough 16x2 LCD space for `SWR=1.02`, but the
+display path rounded live SWR to tenths and left the top-right STATUS cell blank.
+Fix: the display-only SWR calculation now carries hundredths, and the normal/trip
+SWR render helper prints two fractional digits. Trip thresholds and trip decisions
+remain in tenths and keep using the existing integer threshold comparison.
+
 ## 2026-09-18 — ADC trip sources now share the fastest bounded scan cadence
 
 SWR/current/drain/temperature ADC faults were not all refreshed at the same rate:
@@ -120,14 +139,14 @@ Two follow-ups to the STATUS page requested after the PEP/RMS-label fix below:
    the bar now uses the same `power_w` (PEP or RMS, per `power_display_pep`) as the
    numeric reading.
 2. Added a live SWR reading, right-justified on row 0 (`lcd_write_swr_right()`).
-   `compute_swr_tenths()` derives it from the post-filter forward/reflected ADC
+   The display-only SWR calculation derives it from the post-filter forward/reflected ADC
    samples using the standard power-based relation
    `SWR = (1 + sqrt(Pr/Pf)) / (1 - sqrt(Pr/Pf))`, via a fixed-point integer square
    root (`isqrt32()`) since this part has no FPU. Display-only - trip logic still
    uses the existing threshold comparison in `swr_trip()`, unchanged.
 
 Row 0 layout is now `P=nnnnW` or `R=nnnnW` (mode is now a single-letter prefix
-instead of a trailing `" PEP"`/`" RMS"`) followed by right-justified `SWR=X.X`,
+instead of a trailing `" PEP"`/`" RMS"`) followed by right-justified `SWR=X.XX`,
 filling all 16 columns.
 
 ## 2026-09-12 — Dead "SWR=" label on the STATUS page (found in review)

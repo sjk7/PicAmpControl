@@ -30,6 +30,7 @@ The project is in a working firmware-validation stage:
 - Display/menu state diagram: [_build/My_Pic_Project/sim/graphs/lcd/display_menu_state_diagram.png](_build/My_Pic_Project/sim/graphs/lcd/display_menu_state_diagram.png)
 - 16x2 LCD lifecycle diagram: [_build/My_Pic_Project/sim/graphs/lcd/lcd_lifecycle_16x2.png](_build/My_Pic_Project/sim/graphs/lcd/lcd_lifecycle_16x2.png)
 - Normal TX LCD screens: [_build/My_Pic_Project/sim/graphs/lcd/lcd_normal_screens_16x2.png](_build/My_Pic_Project/sim/graphs/lcd/lcd_normal_screens_16x2.png)
+- User settings navigation: [_build/My_Pic_Project/sim/graphs/lcd/settings/lcd_settings_navigation_16x2.png](_build/My_Pic_Project/sim/graphs/lcd/settings/lcd_settings_navigation_16x2.png)
 - Individual LCD fault screens: [_build/My_Pic_Project/sim/graphs/lcd/lcd_fault_screens_16x2.png](_build/My_Pic_Project/sim/graphs/lcd/lcd_fault_screens_16x2.png)
 - Latest simulator graphs: [_build/My_Pic_Project/sim/graphs/](_build/My_Pic_Project/sim/graphs/)
 - Production CMake project: [cmake/My_Pic_Project/default/CMakeLists.txt](cmake/My_Pic_Project/default/CMakeLists.txt)

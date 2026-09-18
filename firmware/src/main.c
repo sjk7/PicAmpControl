@@ -56,7 +56,8 @@ typedef enum {
     MENU_PAGE_TRIP_ACTIVE_HIGH,
     MENU_PAGE_POWER_DISPLAY_MODE,
     MENU_PAGE_NET_POWER,
-    MENU_PAGE_PEP_DECAY_MS,
+    MENU_PAGE_PEAK_HOLD_MS,
+    MENU_PAGE_PEAK_DECAY_MS,
     MENU_PAGE_COUNT
 } menu_page_t;
 
@@ -79,11 +80,12 @@ typedef struct {
     bool trip_active_high;
     bool power_display_pep;
     bool net_power_display;
-    unsigned int pep_decay_ms;
+    unsigned int peak_hold_ms;
+    unsigned int peak_decay_ms;
 } protection_thresholds_t;
 
 #define SETTINGS_MAGIC 0xA5
-#define SETTINGS_VERSION 7
+#define SETTINGS_VERSION 9
 #define MENU_SETTING_U8 0
 #define MENU_SETTING_U16 1
 #define MENU_SETTING_BOOL 2
@@ -101,6 +103,10 @@ typedef struct {
 #define CURRENT_SENSOR_ZERO_RAW 512U
 #define CURRENT_SENSOR_POSITIVE_COUNTS 511U
 #define CURRENT_SENSOR_FULL_SCALE_A 70U
+#define PEAK_HOLD_DEFAULT_MS 1200U
+#define PEAK_DECAY_DEFAULT_MS 100U
+#define PEAK_DECAY_MIN_MS 50U
+#define PEAK_DECAY_SHIFT 5U
 
 static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
@@ -111,8 +117,8 @@ static volatile bool g_ptt_active = false;
 static volatile bool g_startup_inhibit = true;
 static volatile bool g_comparator_reset_active = false;
 static volatile unsigned char g_comparator_reset_elapsed_ms = 0;
-static volatile menu_page_t g_menu_page = MENU_PAGE_STATUS;
-static volatile menu_page_t g_saved_user_menu_page = MENU_PAGE_STATUS;
+static volatile menu_page_t g_menu_page = MENU_PAGE_POWER_TEMPERATURE;
+static volatile menu_page_t g_saved_user_menu_page = MENU_PAGE_POWER_TEMPERATURE;
 static volatile bool g_transient_menu_display = false;
 static volatile bool g_boot_message_active = false;
 static volatile bool g_ptt_complete_display_active = false;
@@ -122,8 +128,8 @@ static unsigned int g_sequence_elapsed_ms = 0;
 static unsigned char g_sequence_stage = 0;
 static unsigned int g_post_fwd_rms_w = 0;
 static unsigned int g_post_fwd_pep_w = 0;
-static unsigned int g_swr1_live_tenths = 10;
-static unsigned int g_swr2_live_tenths = 10;
+static unsigned int g_swr1_live_hundredths = 100;
+static unsigned int g_swr2_live_hundredths = 100;
 static unsigned int g_live_temperature_c = 0;
 static unsigned int g_live_current_a = 0;
 static unsigned int g_current_peak_a = 0;
@@ -182,14 +188,15 @@ static const unsigned char g_menu_setting_offsets[] = {
     offsetof(protection_thresholds_t, trip_active_high),
     offsetof(protection_thresholds_t, power_display_pep),
     offsetof(protection_thresholds_t, net_power_display),
-    offsetof(protection_thresholds_t, pep_decay_ms)
+    offsetof(protection_thresholds_t, peak_hold_ms),
+    offsetof(protection_thresholds_t, peak_decay_ms)
 };
 static const unsigned char g_menu_setting_types[] = {
     MENU_SETTING_U8, MENU_SETTING_U8, MENU_SETTING_U16, MENU_SETTING_U16,
     MENU_SETTING_U8, MENU_SETTING_U16, MENU_SETTING_U8, MENU_SETTING_U16,
     MENU_SETTING_U16, MENU_SETTING_U16, MENU_SETTING_U16, MENU_SETTING_BOOL,
     MENU_SETTING_BOOL, MENU_SETTING_BOOL, MENU_SETTING_BOOL, MENU_SETTING_BOOL,
-    MENU_SETTING_BOOL, MENU_SETTING_BOOL, MENU_SETTING_U16
+    MENU_SETTING_BOOL, MENU_SETTING_BOOL, MENU_SETTING_U16, MENU_SETTING_U16
 };
 #define TX_ACTIVE_HIGH_DEFAULT false
 #define TX_VCC_ACTIVE_HIGH_DEFAULT false
@@ -201,7 +208,7 @@ static const char *const g_setting_menu_labels[] = {
     "NTC B VALUE", "TEMP TRIP", "INPUT TRIP", "DRAIN TRIP", "CURRENT TRIP",
     "TX-VCC DELAY", "TX-BIAS DELAY", "TX ACTIVE",
     "TX-VCC ACTIVE", "TX-BIAS ACTIVE", "FAN ACTIVE", "TRIP ACTIVE",
-    "POWER DISPLAY", "NET POWER", "PEP DECAY"
+    "POWER DISPLAY", "NET POWER", "PEAK HOLD", "PEAK DECAY"
 };
 static protection_thresholds_t g_thresholds = {
     30, 20,
@@ -216,7 +223,7 @@ static protection_thresholds_t g_thresholds = {
     TX_BIAS_ACTIVE_HIGH_DEFAULT,
     FAN_ACTIVE_HIGH_DEFAULT,
     TRIP_ACTIVE_HIGH_DEFAULT,
-    true, false, 500
+    true, false, PEAK_HOLD_DEFAULT_MS, PEAK_DECAY_DEFAULT_MS
 };
 
 bool output_level(bool active, bool active_high) {
@@ -363,13 +370,14 @@ void lcd_write_power_bar(unsigned int power_w, unsigned int full_scale_w, unsign
     }
 
     for (bar_segment = 0; bar_segment < width; bar_segment++) {
-        lcd_write_byte(bar_segment < bar_segments ? '-' : '.', true);
+        lcd_write_byte(bar_segment < bar_segments ? '|' : '.', true);
     }
 }
 
-void lcd_write_swr_right(unsigned char field_width, unsigned int swr_tenths) {
-    unsigned int whole = swr_tenths / 10;
-    unsigned char text_len = (unsigned char)(4 + (whole >= 10 ? 2 : 1) + 2);
+void lcd_write_swr_right(unsigned char field_width, unsigned int swr_hundredths) {
+    unsigned int whole = swr_hundredths / 100U;
+    unsigned int fraction = swr_hundredths % 100U;
+    unsigned char text_len = (unsigned char)(4 + (whole >= 10 ? 2 : 1) + 3);
 
     while (field_width > text_len) {
         lcd_write_byte(' ', true);
@@ -378,7 +386,7 @@ void lcd_write_swr_right(unsigned char field_width, unsigned int swr_tenths) {
     lcd_write_text("SWR=");
     lcd_write_unsigned(whole);
     lcd_write_byte('.', true);
-    lcd_write_unsigned((unsigned int)(swr_tenths % 10));
+    lcd_write_unsigned_padded(fraction, 2);
 }
 
 unsigned char settings_checksum(menu_page_t page, const protection_thresholds_t *settings) {
@@ -409,8 +417,8 @@ void load_settings(void) {
         g_menu_page = (menu_page_t)header[2];
         g_saved_user_menu_page = g_menu_page;
     } else {
-        g_menu_page = MENU_PAGE_STATUS;
-        g_saved_user_menu_page = MENU_PAGE_STATUS;
+        g_menu_page = MENU_PAGE_POWER_TEMPERATURE;
+        g_saved_user_menu_page = MENU_PAGE_POWER_TEMPERATURE;
     }
 }
 
@@ -488,21 +496,21 @@ void show_menu_page(void) {
             lcd_write_unsigned(g_thresholds.temp_trip_c);
             lcd_write_byte('C', true);
         } else if (g_trip_reason & TRIP_REASON_SWR1) {
-            if (g_swr1_live_tenths >= 100) {
+            if (g_swr1_live_hundredths >= 1000) {
                 lcd_write_text("FLTR?? CHECK LPF");
             } else {
                 lcd_write_text("SWR1 ");
-                lcd_write_swr_right(11, g_swr1_live_tenths);
+                lcd_write_swr_right(11, g_swr1_live_hundredths);
                 lcd_set_cursor(1, 0);
                 lcd_write_text("MAX ");
-                lcd_write_swr_right(11, (unsigned int)g_thresholds.swr1_trip_tenths);
+                lcd_write_swr_right(11, (unsigned int)g_thresholds.swr1_trip_tenths * 10U);
             }
         } else if (g_trip_reason & TRIP_REASON_SWR2) {
             lcd_write_text("SWR2 ");
-            lcd_write_swr_right(11, g_swr2_live_tenths);
+            lcd_write_swr_right(11, g_swr2_live_hundredths);
             lcd_set_cursor(1, 0);
             lcd_write_text("MAX ");
-            lcd_write_swr_right(11, (unsigned int)g_thresholds.swr2_trip_tenths);
+            lcd_write_swr_right(11, (unsigned int)g_thresholds.swr2_trip_tenths * 10U);
         } else if (g_trip_reason & TRIP_REASON_CURRENT) {
             lcd_write_text("AMPS ");
             lcd_write_unsigned(g_live_current_a);
@@ -540,7 +548,7 @@ void show_menu_page(void) {
         if (power_w < 10) lcd_write_spaces(1);
         lcd_write_unsigned(power_w);
         lcd_write_byte('W', true);
-        lcd_write_swr_right(9, g_swr2_live_tenths);
+        lcd_write_swr_right(9, g_swr2_live_hundredths);
         lcd_set_cursor(1, 0);
         lcd_write_power_bar(power_w, g_thresholds.swr2_fwd_full_scale_w, 16);
         return;
@@ -549,8 +557,10 @@ void show_menu_page(void) {
         unsigned int temp_c_value = temperature_c(ADC_SAMPLE_TEMP);
 
         lcd_set_cursor(0, 0);
-        lcd_write_text("PEP ");
-        lcd_write_power_bar(g_post_fwd_pep_w, g_thresholds.swr2_fwd_full_scale_w, 12);
+        lcd_write_text("P=");
+        lcd_write_unsigned_padded(g_post_fwd_pep_w, 4);
+        lcd_write_text("W ");
+        lcd_write_power_bar(g_post_fwd_pep_w, g_thresholds.swr2_fwd_full_scale_w, 8);
         lcd_set_cursor(1, 0);
         lcd_write_text("TEMP ");
         if (temp_c_value < 100) lcd_write_spaces(1);
@@ -562,10 +572,10 @@ void show_menu_page(void) {
     if (g_menu_page == MENU_PAGE_SWR_METER) {
         lcd_set_cursor(0, 0);
         lcd_write_text("SWR1 ");
-        lcd_write_swr_right(11, g_swr1_live_tenths);
+        lcd_write_swr_right(11, g_swr1_live_hundredths);
         lcd_set_cursor(1, 0);
         lcd_write_text("SWR2 ");
-        lcd_write_swr_right(11, g_swr2_live_tenths);
+        lcd_write_swr_right(11, g_swr2_live_hundredths);
         return;
     }
     if (g_menu_page == MENU_PAGE_CURRENT_METER) {
@@ -610,7 +620,7 @@ void show_menu_page(void) {
     } else if (g_menu_page == MENU_PAGE_TX_VCC_DELAY || g_menu_page == MENU_PAGE_TX_BIAS_DELAY) {
         lcd_write_unsigned_padded(value, 4);
         lcd_write_text("ms");
-    } else if (g_menu_page == MENU_PAGE_PEP_DECAY_MS) {
+    } else if (g_menu_page == MENU_PAGE_PEAK_HOLD_MS || g_menu_page == MENU_PAGE_PEAK_DECAY_MS) {
         lcd_write_unsigned_padded(value, 4);
         lcd_write_text("ms");
     } else if (g_menu_page == MENU_PAGE_POWER_DISPLAY_MODE) {
@@ -743,16 +753,16 @@ unsigned int isqrt32(unsigned long value) {
 }
 
 /* Power-based SWR: forward/reflected ADC samples are proportional to power, so
-   SWR = (1 + sqrt(Pr/Pf)) / (1 - sqrt(Pr/Pf)), computed here in fixed-point
-   tenths since this part has no FPU/sqrt(). Display-only; not used for trips. */
-unsigned int compute_swr_tenths(unsigned int forward_raw, unsigned int reflected_raw) {
+    SWR = (1 + sqrt(Pr/Pf)) / (1 - sqrt(Pr/Pf)), computed here in fixed-point
+    hundredths since this part has no FPU/sqrt(). Display-only; not used for trips. */
+unsigned int compute_swr_hundredths(unsigned int forward_raw, unsigned int reflected_raw) {
     unsigned long ratio_scaled;
     unsigned int sqrt_ratio;
     unsigned int denominator;
-    unsigned long swr_tenths;
+    unsigned long swr_hundredths;
 
     if (forward_raw < 10) {
-        return 10;
+        return 100;
     }
 
     ratio_scaled = ((unsigned long)reflected_raw * 1000000UL) / forward_raw;
@@ -762,11 +772,11 @@ unsigned int compute_swr_tenths(unsigned int forward_raw, unsigned int reflected
     }
 
     denominator = (unsigned int)(1000 - sqrt_ratio);
-    swr_tenths = ((unsigned long)(1000 + sqrt_ratio) * 10UL) / denominator;
-    if (swr_tenths > 999) {
-        swr_tenths = 999;
+    swr_hundredths = ((unsigned long)(1000 + sqrt_ratio) * 100UL) / denominator;
+    if (swr_hundredths > 9999) {
+        swr_hundredths = 9999;
     }
-    return (unsigned int)swr_tenths;
+    return (unsigned int)swr_hundredths;
 }
 
 unsigned int drain_voltage(unsigned int raw) {
@@ -811,7 +821,7 @@ void adjust_selected_threshold(bool increase) {
     unsigned char *selected_u8;
     unsigned int *selected_u16;
 
-    if (g_menu_page < MENU_PAGE_SWR1_TRIP || g_menu_page > MENU_PAGE_PEP_DECAY_MS) {
+    if (g_menu_page < MENU_PAGE_SWR1_TRIP || g_menu_page > MENU_PAGE_PEAK_DECAY_MS) {
         return;
     }
 
@@ -862,7 +872,13 @@ void adjust_selected_threshold(bool increase) {
         } else if (!increase && *selected_u16 > 0) {
             *selected_u16 -= 1;
         }
-    } else if (g_menu_page == MENU_PAGE_PEP_DECAY_MS) {
+    } else if (g_menu_page == MENU_PAGE_PEAK_HOLD_MS) {
+        if (increase && *selected_u16 < 5000) {
+            *selected_u16 += 100;
+        } else if (!increase && *selected_u16 > 200) {
+            *selected_u16 -= 100;
+        }
+    } else if (g_menu_page == MENU_PAGE_PEAK_DECAY_MS) {
         if (increase && *selected_u16 < 2000) {
             *selected_u16 += 50;
         } else if (!increase && *selected_u16 > 50) {
@@ -914,11 +930,28 @@ void update_post_filter_power(unsigned int forward_raw, unsigned int reflected_r
     }
 }
 
-void update_power_decay(unsigned int elapsed_ms) {
-    g_pep_decay_elapsed_ms += elapsed_ms;
-    while (g_pep_decay_elapsed_ms >= g_thresholds.pep_decay_ms && g_post_fwd_pep_w > 0) {
-        g_post_fwd_pep_w--;
-        g_pep_decay_elapsed_ms -= g_thresholds.pep_decay_ms;
+void update_peak_decay(unsigned int *peak_value, unsigned int *elapsed_ms, unsigned int tick_ms) {
+    unsigned int decay_step;
+    unsigned int peak_hold_ms = g_thresholds.peak_hold_ms;
+    unsigned int decay_interval_ms = g_thresholds.peak_decay_ms;
+
+    *elapsed_ms += tick_ms;
+    if (*elapsed_ms < peak_hold_ms) {
+        return;
+    }
+    if (decay_interval_ms == 0) {
+        decay_interval_ms = PEAK_DECAY_MIN_MS;
+    }
+    while (*elapsed_ms >= peak_hold_ms + decay_interval_ms && *peak_value > 0) {
+        decay_step = *peak_value >> PEAK_DECAY_SHIFT;
+        if (decay_step == 0) {
+            decay_step = 1;
+        }
+        *peak_value = *peak_value > decay_step ? *peak_value - decay_step : 0;
+        *elapsed_ms -= decay_interval_ms;
+    }
+    if (*peak_value == 0) {
+        *elapsed_ms = peak_hold_ms;
     }
 }
 
@@ -926,14 +959,6 @@ void update_current_peak(unsigned int current_a) {
     if (current_a >= g_current_peak_a) {
         g_current_peak_a = current_a;
         g_current_peak_decay_elapsed_ms = 0;
-    }
-}
-
-void update_current_peak_decay(unsigned int elapsed_ms) {
-    g_current_peak_decay_elapsed_ms += elapsed_ms;
-    while (g_current_peak_decay_elapsed_ms >= g_thresholds.pep_decay_ms && g_current_peak_a > 0) {
-        g_current_peak_a--;
-        g_current_peak_decay_elapsed_ms -= g_thresholds.pep_decay_ms;
     }
 }
 
@@ -1222,8 +1247,8 @@ int main(void) {
         drain_voltage_v = drain_voltage(drain_raw);
         current_raw = ADC_SAMPLE_CURRENT;
         update_post_filter_power(swr2_fwd_raw, swr2_ref_raw);
-        g_swr2_live_tenths = compute_swr_tenths(swr2_fwd_raw, swr2_ref_raw);
-        g_swr1_live_tenths = compute_swr_tenths(swr1_fwd_raw, swr1_ref_raw);
+        g_swr2_live_hundredths = compute_swr_hundredths(swr2_fwd_raw, swr2_ref_raw);
+        g_swr1_live_hundredths = compute_swr_hundredths(swr1_fwd_raw, swr1_ref_raw);
         g_live_temperature_c = temp_c;
         g_live_current_a = current_amperes(current_raw);
         update_current_peak(g_live_current_a);
@@ -1293,8 +1318,8 @@ int main(void) {
                     OUTPUT_COMP_RESET = 1;
                 }
             } else {
-                update_power_decay(1);
-                update_current_peak_decay(1);
+                update_peak_decay(&g_post_fwd_pep_w, &g_pep_decay_elapsed_ms, 1);
+                update_peak_decay(&g_current_peak_a, &g_current_peak_decay_elapsed_ms, 1);
                 update_tx_sequence();
             }
             if (g_settings_save_delay_ms > 0) {

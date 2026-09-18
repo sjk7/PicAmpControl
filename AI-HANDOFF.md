@@ -52,6 +52,7 @@
   - `lcd/display_menu_state_diagram.png`
   - `lcd/lcd_lifecycle_16x2.png`
   - `lcd/lcd_normal_screens_16x2.png`
+  - `lcd/settings/lcd_settings_navigation_16x2.png`
   - `lcd/lcd_fault_screens_16x2.png`
 - Graph event labels are positioned above the waveforms at their event timestamps, using stacked lanes to prevent overlap.
 
