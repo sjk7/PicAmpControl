@@ -282,7 +282,8 @@ These are generation constraints, not merely post-processing checks:
    rule here before the corresponding schematic repair is accepted.
 - Whenever a new SVG visual export is generated, immediately refresh/open that
    exact active-root SVG in the current VS Code Insiders window so the user can
-   inspect the same artifact used by the visual check.
+   inspect the same artifact used by the visual check, whether the check passes
+   or fails.
 
 ## MCP Tools for This Skill
 

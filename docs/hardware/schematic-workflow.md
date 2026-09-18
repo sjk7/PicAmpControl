@@ -60,7 +60,8 @@ The checked-in `.vscode/mcp.json` points to `generated/mcp-final`. Do not open
 the similarly named legacy schematic directly under `generated/`.
 
 Whenever a schematic SVG is exported for review, refresh/open that exact SVG
-in the current VS Code Insiders window; do not rely on a stale preview tab.
+in the current VS Code Insiders window, even when the overlap check fails; do
+not rely on a stale preview tab.
 
 After hierarchy changes, inspect the active root's labels and sheet list before
 committing. Any labels left from the former flat layout are stale artifacts.
