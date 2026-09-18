@@ -139,6 +139,37 @@ foreach ($item in $texts) {
     }
 }
 
+# Hierarchical sheet-pin labels must sit adjacent to the sheet boundary.
+$sheetTitle = $texts | Where-Object { $_.Text -eq 'band_change' } | Select-Object -First 1
+if ($sheetTitle) {
+    $sheetRects = @()
+    foreach ($rect in $svg.SelectNodes('//svg:rect', $namespaces)) {
+        $style = $rect.ParentNode.style
+        if (-not $style -or $style -notmatch '#840000') { continue }
+        $width = [double]$rect.width; $height = [double]$rect.height
+        if ($width -gt 100 -or $height -gt 100) { continue }
+        $left = [double]$rect.x; $top = [double]$rect.y
+        $centerX = $left + ($width / 2); $centerY = $top + ($height / 2)
+        $distance = [math]::Abs($centerX - $sheetTitle.Left) + [math]::Abs($centerY - $sheetTitle.Top)
+        $sheetRects += [pscustomobject]@{ Left = $left; Top = $top; Right = $left + $width; Bottom = $top + $height; Distance = $distance }
+    }
+    $sheetRect = $sheetRects | Sort-Object Distance | Select-Object -First 1
+    if ($sheetRect) {
+        foreach ($item in ($texts | Where-Object { $_.Text -match '^B[0-2]$' })) {
+            $inside = $item.Left -ge $sheetRect.Left -and $item.Right -le $sheetRect.Right -and
+                $item.Top -ge $sheetRect.Top -and $item.Bottom -le $sheetRect.Bottom
+            $outsideLeft = $item.Right -le $sheetRect.Left
+            $outsideRight = $item.Left -ge $sheetRect.Right
+            $distanceToEdge = if ($outsideLeft) { $sheetRect.Left - $item.Right } elseif ($outsideRight) { $item.Left - $sheetRect.Right } else { 999 }
+            if (-not $inside -and -not $outsideLeft -and -not $outsideRight) {
+                $overlaps += "'$($item.Text)' straddles the band_change sheet border"
+            } elseif (($outsideLeft -or $outsideRight) -and $distanceToEdge -gt 5) {
+                $overlaps += "'$($item.Text)' is too far from the band_change sheet border"
+            }
+        }
+    }
+}
+
 # A4 title block and its reserved drawing area.
 $titleBlock = @{ Left = 177.0; Top = 166.0; Right = 285.0; Bottom = 198.0 }
 foreach ($item in $texts) {

@@ -217,6 +217,8 @@ Y < 175mm.
    then resize and move the sheet block to a deliberate functional location.
 - Sheet-pin labels must be wholly inside the sheet box or wholly outside it;
    never let a label or pin number straddle the sheet border.
+- Sheet-pin labels must be adjacent to the sheet edge, with spacing sized to
+   their text boxes; never leave a long gap or stack labels inside the box.
 - Component reference/value fields and connector labels must not cross pins,
    symbol bodies, or one another. Use a short in-body value and place the
    full descriptive name beside or above the component when needed.
