@@ -191,6 +191,9 @@ Y < 175mm.
 - All visible text, including references, values, labels, annotations, pin
    names, pin numbers, and sheet text, is a keep-out area. No wire, symbol,
    boundary, or other text may pass through it.
+- Use the proper `power:GND` symbol for every ground connection; do not use a
+   visible `GND` net label as a substitute. Hide the redundant ground-name
+   text when the power symbol already identifies the net.
 - Route wires around complete symbol bodies, pins, text fields, labels, and
    their clearance margins. Never route through a component or its text.
 - Keep the IC reference and value inside the body when they fit; otherwise

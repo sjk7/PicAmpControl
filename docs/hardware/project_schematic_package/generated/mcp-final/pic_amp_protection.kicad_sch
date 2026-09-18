@@ -6050,6 +6050,208 @@
 			)
 		)
 		(embedded_fonts no)
+	)
+		(symbol "power:GND"
+		(power)
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0)
+			(hide yes)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "#PWR"
+			(at 0 -6.35 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 0 -3.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "global power"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "GND_0_1"
+			(polyline
+				(pts
+					(xy 0 0) (xy 0 -1.27) (xy 1.27 -1.27) (xy 0 -2.54) (xy -1.27 -1.27) (xy 0 -1.27)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "GND_1_1"
+			(pin power_in line
+				(at 0 0 270)
+				(length 0)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+		(symbol "PWR_FLAG"
+		(power)
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0)
+			(hide yes)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "#FLG"
+			(at 0 1.905 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "PWR_FLAG"
+			(at 0 3.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Special symbol for telling ERC where power comes from"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "flag power"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "PWR_FLAG_0_0"
+			(pin power_out line
+				(at 0 0 90)
+				(length 0)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(symbol "PWR_FLAG_0_1"
+			(polyline
+				(pts
+					(xy 0 0) (xy 0 1.27) (xy -1.016 1.905) (xy 0 2.54) (xy 1.016 1.905) (xy 0 1.27)
+				)
+				(stroke
+					(width 0)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(embedded_fonts no)
 	))
 	(symbol
 	(lib_name "PIC16F18855_I_SP_COMPACT")
@@ -6587,7 +6789,7 @@
 	(symbol
 	(lib_name "Device:Q_NMOS")
 	(lib_id "Device:Q_NMOS")
-	(at 124.46 175.26 0)
+	(at 129.54 110.49 0)
 	(unit 1)
 	(exclude_from_sim no)
 	(in_bom yes)
@@ -6764,6 +6966,118 @@
 		)
 	)
 )
+	(symbol
+	(lib_name "power:GND")
+	(lib_id "power:GND")
+	(at 132.08 115.57 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "c068ba2a-ba44-4f70-b69b-ea6285352d5c")
+	(property "Reference" "#PWR041"
+		(at 132.08 111.76 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "GND"
+		(at 132.08 119.38 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 132.08 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 132.08 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "731ac111-6a6a-4f8c-8eda-ed7ba35a0bf4")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "#PWR041")
+				(unit 1)
+			)
+		)
+	)
+)
+	(symbol
+	(lib_name "PWR_FLAG")
+	(lib_id "power:PWR_FLAG")
+	(at 132.08 115.57 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "e1725c76-5408-4270-a43f-a8c7765c4271")
+	(property "Reference" "#FLG01"
+		(at 132.08 111.76 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "PWR_FLAG"
+		(at 132.08 119.38 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 132.08 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 132.08 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "70cfaf1d-2928-40f9-aadc-984a3530a6e3")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/5f892659-1480-447d-b5a7-bee1c920df64"
+				(reference "#FLG01")
+				(unit 1)
+			)
+		)
+	)
+)
 	(symbol_instances
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/feb0a468-8191-4b22-9d2c-bcba9fc7fc40"
 			(reference "U1")
@@ -6891,6 +7205,18 @@
 			(value "NTC")
 			(footprint "")
 		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/c068ba2a-ba44-4f70-b69b-ea6285352d5c"
+			(reference "#PWR041")
+			(unit 1)
+			(value "GND")
+			(footprint "")
+		)
+		(path "/5f892659-1480-447d-b5a7-bee1c920df64/e1725c76-5408-4270-a43f-a8c7765c4271"
+			(reference "#FLG01")
+			(unit 1)
+			(value "PWR_FLAG")
+			(footprint "")
+		)
 )
 	(text "PIC16F18855-I/SP"
 	(at 80 65 0)
@@ -6900,69 +7226,6 @@
 		)
 	)
 	(uuid "4ca6027c-a5e6-44e3-ba89-797fa9b09f03")
-)
-	(text "J3 LCD"
-	(at 35 174 0)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "951f6004-90b5-4dab-85b8-a46272a1b973")
-)
-	(text "J4 PTT"
-	(at 245 154 0)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "ea7919ce-df59-424e-8221-9d40bc860848")
-)
-	(text "J5 ENC"
-	(at 245 171 0)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "2d25f9d7-eba9-420b-b7f2-555e5de9bcb5")
-)
-	(text "J6 TX"
-	(at 245 188 0)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "f80920e0-e9a5-47cd-9553-8835533d74d5")
-)
-	(text "J7 SWR SENSE"
-	(at 270 42 0)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "138ff299-f994-4888-9df6-bdcfef52348f")
-)
-	(text "J8 ANALOG SENSE"
-	(at 270 117 0)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "39564f4a-fc33-4cd5-b90d-b82cfc0f5938")
-)
-	(text "FAN MOSFET"
-	(at 124 164 0)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "83134950-c853-4013-becd-ec7bb31f187b")
 )
 	(text "12V FAN"
 	(at 175 164 0)
@@ -6981,6 +7244,15 @@
 		)
 	)
 	(uuid "375277e2-bb44-429e-8eb7-eb214aed78f6")
+)
+	(text "FAN MOSFET"
+	(at 130 125 0)
+	(effects
+		(font
+			(size 1.27 1.27)
+		)
+	)
+	(uuid "683e6cf2-2bcb-4352-bbb2-2aa6b59dff8b")
 )
 	(wire
 	(pts
@@ -7014,26 +7286,6 @@
 )
 	(wire
 	(pts
-		(xy 100.33 110.49) (xy 102.87 110.49)
-	)
-	(stroke
-		(width 0)
-		(type default)
-	)
-	(uuid "09f5a19b-5db2-4517-b690-1c76ca11e6f8")
-)
-	(wire
-	(pts
-		(xy 119.38 175.26) (xy 116.84 175.26)
-	)
-	(stroke
-		(width 0)
-		(type default)
-	)
-	(uuid "24b226cc-191d-49c0-aa1f-472e953e14fc")
-)
-	(wire
-	(pts
 		(xy 127 170.18) (xy 127 167.64)
 	)
 	(stroke
@@ -7061,16 +7313,6 @@
 		(type default)
 	)
 	(uuid "b1b63eaa-6241-4767-89dd-134db6ca1d4f")
-)
-	(wire
-	(pts
-		(xy 127 180.34) (xy 127 182.88)
-	)
-	(stroke
-		(width 0)
-		(type default)
-	)
-	(uuid "8280a8db-3588-44a3-b9a3-3a7609e77e2d")
 )
 	(wire
 	(pts
@@ -7102,6 +7344,16 @@
 	)
 	(uuid "a0dc49c9-fdfc-4878-9c49-73821231df6b")
 )
+	(wire
+	(pts
+		(xy 100.33 110.49) (xy 124.46 110.49)
+	)
+	(stroke
+		(width 0)
+		(type default)
+	)
+	(uuid "18974d54-2f2b-4d57-8eb3-87b53530e15f")
+)
 	(label "B0"
 	(at 247.65 72.39 180)
 	(effects
@@ -7129,24 +7381,6 @@
 	)
 	(uuid "331b4186-b960-4319-93ef-0628da99e55d")
 )
-	(label "FAN_PWM"
-	(at 102.87 110.49 0)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "c45b6b6a-4573-4705-8a9b-a8aaa43ba011")
-)
-	(label "FAN_PWM"
-	(at 116.84 175.26 180)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "69c4d43d-fbd1-492f-8e99-2963425c022f")
-)
 	(label "FAN_LOW"
 	(at 127 167.64 90)
 	(effects
@@ -7173,15 +7407,6 @@
 		)
 	)
 	(uuid "ade3be11-fedf-46ff-a1c6-b952e3d6d5cb")
-)
-	(label "GND"
-	(at 127 182.88 270)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "9896c067-2802-4d05-83b7-02698af924f2")
 )
 	(label "TEMP_ADC"
 	(at 102.87 87.63 0)
