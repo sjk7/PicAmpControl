@@ -295,6 +295,8 @@ These are generation constraints, not merely post-processing checks:
    exact active-root SVG in the current VS Code Insiders window so the user can
    inspect the same artifact used by the visual check, whether the check passes
    or fails.
+- Whenever the gate diagram is redrawn or regenerated, refresh the VS Code
+   Insiders view again; never leave an older gate image visible.
 
 ## MCP Tools for This Skill
 
