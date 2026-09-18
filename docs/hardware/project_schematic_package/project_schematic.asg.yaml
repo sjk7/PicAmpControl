@@ -1,6 +1,6 @@
-# asg (Annotated Schematic Generator) input for Linear Amplifier Protection Board
-# Run (from project root):
-#   asg docs/hardware/project_schematic_package/project_schematic.asg.yaml
+# Linear Amplifier Protection Board project metadata in YAML form.
+# This file is not input for the Python package named `asg`; that package only
+# accepts SPICE netlists ending in .spc.
 
 board: Linear Amplifier Protection System
 revision: 1.0

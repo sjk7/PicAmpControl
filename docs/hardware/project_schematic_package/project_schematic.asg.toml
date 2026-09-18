@@ -1,0 +1,463 @@
+# Linear Amplifier Protection Board project metadata.
+#
+# This file is not input for the Python package named `asg`. That package
+# accepts SPICE files ending in .spc; it does not parse TOML, YAML, or JSON.
+# Use the component and connection tables in this folder when capturing the
+# schematic in KiCad, or convert a real SPICE source to .spc before using ASG.
+
+board = "Linear Amplifier Protection System"
+revision = "1.0"
+
+[[power]]
+name = "+5V"
+voltage = 5
+
+[[power]]
+name = "+12V"
+voltage = 12
+
+[[power]]
+name = "GND"
+voltage = 0
+
+# COMPONENTS
+[[parts]]
+ref = "U1"
+device = "PIC16F18855"
+  [[parts.pins]]
+  name = "VDD"
+  number = "20"
+  net = "+5V"
+  [[parts.pins]]
+  name = "Vss"
+  number = "8"
+  net = "GND"
+  [[parts.pins]]
+  name = "VSS"
+  number = "19"
+  net = "GND"
+  [[parts.pins]]
+  name = "RE3/~{MCLR}/VPP"
+  number = "1"
+  net = "RESET"
+  [[parts.pins]]
+  name = "RC0"
+  net = "PTT_IN"
+  [[parts.pins]]
+  name = "RC1"
+  net = "COMP_RESET"
+  [[parts.pins]]
+  name = "RC2"
+  net = "ENCODER_A"
+  [[parts.pins]]
+  name = "RC3"
+  net = "I2C_SCL"
+  [[parts.pins]]
+  name = "RC4"
+  net = "I2C_SDA"
+  [[parts.pins]]
+  name = "RC5"
+  net = "TX_OUT"
+  [[parts.pins]]
+  name = "RC6"
+  net = "TX_VCC"
+  [[parts.pins]]
+  name = "RC7"
+  net = "TX_BIAS"
+  [[parts.pins]]
+  name = "RA0"
+  net = "SWR1_FWD_ADC"
+  [[parts.pins]]
+  name = "RA1"
+  net = "SWR1_REF_ADC"
+  [[parts.pins]]
+  name = "RA2"
+  net = "SWR2_FWD_ADC"
+  [[parts.pins]]
+  name = "RA3"
+  net = "SWR2_REF_ADC"
+  [[parts.pins]]
+  name = "RA4"
+  net = "BAND_B0"
+  [[parts.pins]]
+  name = "RA5"
+  net = "TEMP_ADC"
+  [[parts.pins]]
+  name = "RA6"
+  net = "BAND_B1"
+  [[parts.pins]]
+  name = "RA7"
+  net = "BAND_B2"
+  [[parts.pins]]
+  name = "RB0"
+  net = "ENCODER_B"
+  [[parts.pins]]
+  name = "RB1"
+  net = "CURRENT_ADC"
+  [[parts.pins]]
+  name = "RB2"
+  net = "OVERDRIVE_ADC"
+  [[parts.pins]]
+  name = "RB3"
+  net = "DRAIN_PEAK_ADC"
+  [[parts.pins]]
+  name = "RB4"
+  net = "OVERCURRENT_FAULT"
+  [[parts.pins]]
+  name = "RB5"
+  net = "FAN_PWM"
+  [[parts.pins]]
+  name = "RB6/ICSPCLK"
+  net = "ENCODER_SWITCH"
+  [[parts.pins]]
+  name = "RB7/ICSPDAT"
+  net = "TRIP_STATUS"
+
+[[parts]]
+ref = "R1"
+device = "R"
+value = "10k"
+  [[parts.pins]]
+  name = "1"
+  net = "+5V"
+  [[parts.pins]]
+  name = "2"
+  net = "RESET"
+
+[[parts]]
+ref = "C1"
+device = "C"
+value = "100nF"
+  [[parts.pins]]
+  name = "1"
+  net = "+5V"
+  [[parts.pins]]
+  name = "2"
+  net = "GND"
+
+[[parts]]
+ref = "C2"
+device = "C"
+value = "100nF"
+  [[parts.pins]]
+  name = "1"
+  net = "+5V"
+  [[parts.pins]]
+  name = "2"
+  net = "GND"
+
+[[parts]]
+ref = "C3"
+device = "C"
+value = "100nF"
+  [[parts.pins]]
+  name = "1"
+  net = "+5V"
+  [[parts.pins]]
+  name = "2"
+  net = "GND"
+
+# Decoder
+[[parts]]
+ref = "U2"
+device = "74HC4514"
+  [[parts.pins]]
+  name = "Vdd"
+  number = "24"
+  net = "+5V"
+  [[parts.pins]]
+  name = "Vss"
+  number = "12"
+  net = "GND"
+  [[parts.pins]]
+  name = "EL"
+  net = "GND"
+  [[parts.pins]]
+  name = "~{EN}"
+  net = "GND"
+  [[parts.pins]]
+  name = "A0"
+  net = "BAND_B0"
+  [[parts.pins]]
+  name = "A1"
+  net = "BAND_B1"
+  [[parts.pins]]
+  name = "A2"
+  net = "BAND_B2"
+  [[parts.pins]]
+  name = "A3"
+  net = "GND"
+  [[parts.pins]]
+  name = "Q1"
+  net = "BAND_160M"
+  [[parts.pins]]
+  name = "Q2"
+  net = "BAND_80M"
+  [[parts.pins]]
+  name = "Q3"
+  net = "BAND_40M"
+  [[parts.pins]]
+  name = "Q4"
+  net = "BAND_20M"
+  [[parts.pins]]
+  name = "Q5"
+  net = "BAND_15M"
+  [[parts.pins]]
+  name = "Q6"
+  net = "BAND_10M"
+  [[parts.pins]]
+  name = "Q7"
+  net = "BAND_6M"
+  [[parts.pins]]
+  name = "Q0"
+  net = "UNUSED_DECODER_OUTPUT"
+
+# Relay Driver
+[[parts]]
+ref = "U3"
+device = "ULN2803A"
+  [[parts.pins]]
+  name = "I1"
+  net = "BAND_160M"
+  [[parts.pins]]
+  name = "I2"
+  net = "BAND_80M"
+  [[parts.pins]]
+  name = "I3"
+  net = "BAND_40M"
+  [[parts.pins]]
+  name = "I4"
+  net = "BAND_20M"
+  [[parts.pins]]
+  name = "I5"
+  net = "BAND_15M"
+  [[parts.pins]]
+  name = "I6"
+  net = "BAND_10M"
+  [[parts.pins]]
+  name = "I7"
+  net = "BAND_6M"
+  [[parts.pins]]
+  name = "O1"
+  net = "RELAY_160M_C"
+  [[parts.pins]]
+  name = "O2"
+  net = "RELAY_80M_C"
+  [[parts.pins]]
+  name = "O3"
+  net = "RELAY_40M_C"
+  [[parts.pins]]
+  name = "O4"
+  net = "RELAY_20M_C"
+  [[parts.pins]]
+  name = "O5"
+  net = "RELAY_15M_C"
+  [[parts.pins]]
+  name = "O6"
+  net = "RELAY_10M_C"
+  [[parts.pins]]
+  name = "O7"
+  net = "RELAY_6M_C"
+  [[parts.pins]]
+  name = "GND"
+  net = "GND"
+  [[parts.pins]]
+  name = "COM"
+  net = "+12V"
+
+# Relays
+[[parts]]
+ref = "K1"
+device = "Relay_SPST"
+value = "160m"
+  [[parts.pins]]
+  name = "1"
+  net = "RELAY_160M_C"
+  [[parts.pins]]
+  name = "2"
+  net = "+12V"
+[[parts]]
+ref = "K2"
+device = "Relay_SPST"
+value = "80m"
+  [[parts.pins]]
+  name = "1"
+  net = "RELAY_80M_C"
+  [[parts.pins]]
+  name = "2"
+  net = "+12V"
+[[parts]]
+ref = "K3"
+device = "Relay_SPST"
+value = "40m"
+  [[parts.pins]]
+  name = "1"
+  net = "RELAY_40M_C"
+  [[parts.pins]]
+  name = "2"
+  net = "+12V"
+[[parts]]
+ref = "K4"
+device = "Relay_SPST"
+value = "20m"
+  [[parts.pins]]
+  name = "1"
+  net = "RELAY_20M_C"
+  [[parts.pins]]
+  name = "2"
+  net = "+12V"
+[[parts]]
+ref = "K5"
+device = "Relay_SPST"
+value = "15m"
+  [[parts.pins]]
+  name = "1"
+  net = "RELAY_15M_C"
+  [[parts.pins]]
+  name = "2"
+  net = "+12V"
+[[parts]]
+ref = "K6"
+device = "Relay_SPST"
+value = "10m"
+  [[parts.pins]]
+  name = "1"
+  net = "RELAY_10M_C"
+  [[parts.pins]]
+  name = "2"
+  net = "+12V"
+[[parts]]
+ref = "K7"
+device = "Relay_SPST"
+value = "6m"
+  [[parts.pins]]
+  name = "1"
+  net = "RELAY_6M_C"
+  [[parts.pins]]
+  name = "2"
+  net = "+12V"
+
+# Flyback diodes
+[[parts]]
+ref = "D1"
+device = "D"
+value = "1N4007"
+  [[parts.pins]]
+  name = "A"
+  net = "RELAY_160M_C"
+  [[parts.pins]]
+  name = "K"
+  net = "+12V"
+[[parts]]
+ref = "D2"
+device = "D"
+value = "1N4007"
+  [[parts.pins]]
+  name = "A"
+  net = "RELAY_80M_C"
+  [[parts.pins]]
+  name = "K"
+  net = "+12V"
+[[parts]]
+ref = "D3"
+device = "D"
+value = "1N4007"
+  [[parts.pins]]
+  name = "A"
+  net = "RELAY_40M_C"
+  [[parts.pins]]
+  name = "K"
+  net = "+12V"
+[[parts]]
+ref = "D4"
+device = "D"
+value = "1N4007"
+  [[parts.pins]]
+  name = "A"
+  net = "RELAY_20M_C"
+  [[parts.pins]]
+  name = "K"
+  net = "+12V"
+[[parts]]
+ref = "D5"
+device = "D"
+value = "1N4007"
+  [[parts.pins]]
+  name = "A"
+  net = "RELAY_15M_C"
+  [[parts.pins]]
+  name = "K"
+  net = "+12V"
+[[parts]]
+ref = "D6"
+device = "D"
+value = "1N4007"
+  [[parts.pins]]
+  name = "A"
+  net = "RELAY_10M_C"
+  [[parts.pins]]
+  name = "K"
+  net = "+12V"
+[[parts]]
+ref = "D7"
+device = "D"
+value = "1N4007"
+  [[parts.pins]]
+  name = "A"
+  net = "RELAY_6M_C"
+  [[parts.pins]]
+  name = "K"
+  net = "+12V"
+
+# Fan/PWM
+[[parts]]
+ref = "Q1"
+device = "NMOS_TO220"
+  [[parts.pins]]
+  name = "G"
+  net = "FAN_PWM"
+  [[parts.pins]]
+  name = "D"
+  net = "FAN-"
+  [[parts.pins]]
+  name = "S"
+  net = "GND"
+[[parts]]
+ref = "FAN1"
+device = "Fan"
+  [[parts.pins]]
+  name = "+"
+  net = "+12V"
+  [[parts.pins]]
+  name = "-"
+  net = "FAN-"
+
+# Temp sensor
+[[parts]]
+ref = "RN1"
+device = "NTC_10k"
+  [[parts.pins]]
+  name = "1"
+  net = "+5V"
+  [[parts.pins]]
+  name = "2"
+  net = "TEMP_ADC"
+
+# LCD connector
+[[parts]]
+ref = "J3"
+device = "Conn_01x04"
+value = "LCD_I2C"
+  [[parts.pins]]
+  name = "1"
+  net = "+5V"
+  [[parts.pins]]
+  name = "2"
+  net = "GND"
+  [[parts.pins]]
+  name = "3"
+  net = "I2C_SDA"
+  [[parts.pins]]
+  name = "4"
+  net = "I2C_SCL"
+

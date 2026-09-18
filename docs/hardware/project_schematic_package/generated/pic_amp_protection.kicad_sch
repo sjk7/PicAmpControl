@@ -1,0 +1,119 @@
+(kicad_sch
+  (version 20230409)
+  (generator "skidl")
+  (generator_version "2.3.0")
+  (uuid 12796df2-447d-4449-8763-29ebc11da552)
+  (paper "A4")
+  (title_block
+    (title "Linear Amplifier Protection System")
+    (date "2026-09-18")
+    (company "")
+    (comment 1 "Generated with SKiDL")
+    (comment 2 "")
+    (comment 3 "")
+    (comment 4 ""))
+  (lib_symbols)
+  (sheet
+    (at 135.64 107.95)
+    (size 25.91 17.78)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (stroke
+      (width 0.1524)
+      (type solid))
+    (fill
+      (color 0 0 0 0.0))
+    (uuid cfdc5428-1d04-58d6-bbb6-db949dd95c47)
+    (property "Sheetname" "mcu_control1"
+      (at 135.64 107.24 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (justify left bottom)))
+    (property "Sheetfile" "pic_amp_protection_mcu_control1.kicad_sch"
+      (at 135.64 126.31 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (justify left top))))
+  (sheet
+    (at 135.38 62.23)
+    (size 26.42 17.78)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (stroke
+      (width 0.1524)
+      (type solid))
+    (fill
+      (color 0 0 0 0.0))
+    (uuid eb4033e4-6b61-5064-95e1-3b15fdd49a48)
+    (property "Sheetname" "band_decoder1"
+      (at 135.38 61.52 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (justify left bottom)))
+    (property "Sheetfile" "pic_amp_protection_band_decoder1.kicad_sch"
+      (at 135.38 80.59 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (justify left top))))
+  (sheet
+    (at 135.38 130.81)
+    (size 26.42 17.78)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (stroke
+      (width 0.1524)
+      (type solid))
+    (fill
+      (color 0 0 0 0.0))
+    (uuid 1515956d-950e-50fb-a850-78278e328eb4)
+    (property "Sheetname" "relay_driver1"
+      (at 135.38 130.1 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (justify left bottom)))
+    (property "Sheetfile" "pic_amp_protection_relay_driver1.kicad_sch"
+      (at 135.38 149.17 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (justify left top))))
+  (sheet
+    (at 135.89 85.09)
+    (size 25.4 17.78)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (stroke
+      (width 0.1524)
+      (type solid))
+    (fill
+      (color 0 0 0 0.0))
+    (uuid c4a3044c-dd41-5d49-bcfd-834238b4aeb6)
+    (property "Sheetname" "relay_bank1"
+      (at 135.89 84.38 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (justify left bottom)))
+    (property "Sheetfile" "pic_amp_protection_relay_bank1.kicad_sch"
+      (at 135.89 103.45 0)
+      (effects
+        (font
+          (size 1.27 1.27))
+        (justify left top)))))
