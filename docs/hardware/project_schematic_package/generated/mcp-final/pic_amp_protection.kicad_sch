@@ -2877,15 +2877,6 @@
 	)
 	(uuid "8b7a5f5a-7a6a-4ee4-8a9f-3abbde9b329d")
 )
-	(label "Net-(J2-1)"
-	(at 139.7 59.69 0)
-	(effects
-		(font
-			(size 1.27 1.27)
-		)
-	)
-	(uuid "bb3a1f52-0771-4cca-aed3-f46becd7a356")
-)
 	(label "GND"
 	(at 137.16 62.23 180)
 	(effects
