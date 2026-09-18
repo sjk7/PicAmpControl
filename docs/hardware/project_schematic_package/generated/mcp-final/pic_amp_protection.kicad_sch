@@ -5452,7 +5452,7 @@
 			)
 		)
 	)
-	(property "Value" "LCD_I2C"
+	(property "Value" "LCD"
 		(at 35.56 189.23 0)
 		(effects
 			(font
@@ -5517,7 +5517,7 @@
 			)
 		)
 	)
-	(property "Value" "PTT_COMP_IF"
+	(property "Value" "PTT"
 		(at 245.11 168.91 0)
 		(effects
 			(font
@@ -5582,7 +5582,7 @@
 			)
 		)
 	)
-	(property "Value" "ENCODER"
+	(property "Value" "ENC"
 		(at 245.11 185.42 0)
 		(effects
 			(font
@@ -5647,7 +5647,7 @@
 			)
 		)
 	)
-	(property "Value" "TX_SEQ_TRIP"
+	(property "Value" "TX"
 		(at 245.11 203.2 0)
 		(effects
 			(font
@@ -5715,7 +5715,7 @@
 			)
 		)
 	)
-	(property "Value" "SWR_SENSE"
+	(property "Value" "SWR"
 		(at 270.51 58.42 0)
 		(effects
 			(font
@@ -5783,7 +5783,7 @@
 			)
 		)
 	)
-	(property "Value" "ANALOG_SENSE"
+	(property "Value" "ADC"
 		(at 270.51 104.14 0)
 		(effects
 			(font
@@ -5840,37 +5840,37 @@
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/b986055a-0e9c-4f65-b407-25ecf856cb3d"
 			(reference "J3")
 			(unit 1)
-			(value "LCD_I2C")
+			(value "LCD")
 			(footprint "")
 		)
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/f06935ad-664a-4430-8a08-c9b07f051231"
 			(reference "J4")
 			(unit 1)
-			(value "PTT_COMP_IF")
+			(value "PTT")
 			(footprint "")
 		)
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/128900f1-d980-428a-bc85-d1143c2ac9d5"
 			(reference "J5")
 			(unit 1)
-			(value "ENCODER")
+			(value "ENC")
 			(footprint "")
 		)
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/b6bb7f71-20a7-4069-ba71-dfdc112a5da0"
 			(reference "J6")
 			(unit 1)
-			(value "TX_SEQ_TRIP")
+			(value "TX")
 			(footprint "")
 		)
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/21002750-df35-408f-8851-d10448b6e861"
 			(reference "J7")
 			(unit 1)
-			(value "SWR_SENSE")
+			(value "SWR")
 			(footprint "")
 		)
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/2da9c001-c03c-4194-a7fd-9ce584f6fb36"
 			(reference "J8")
 			(unit 1)
-			(value "ANALOG_SENSE")
+			(value "ADC")
 			(footprint "")
 		)
 		(path "/5f892659-1480-447d-b5a7-bee1c920df64/057bca75-b93c-4825-865e-c4eec1dd9fad/f2712c01-f881-4e22-bc80-f1c9bf2955b5"

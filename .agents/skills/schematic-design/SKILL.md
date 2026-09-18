@@ -209,11 +209,17 @@ Y < 175mm.
 - Component reference/value fields and connector labels must not cross pins,
    symbol bodies, or one another. Use a short in-body value and place the
    full descriptive name beside or above the component when needed.
+- No visible text may overlap any pin, wire, symbol body, sheet border, pin
+   number, other text, or title-block element. This is a hard failure, not a
+   cosmetic warning.
 - When moving circuitry into a child sheet, remove obsolete root labels and
    wires; never leave duplicate old labels behind at the former coordinates.
 - After hierarchy changes, list the root labels and sheet pins and compare
    them with the active hierarchy. Any label belonging only to the old flat
    layout is a stale-artifact failure and must be removed before export.
+- A label-only off-board interface boundary should use a 10.16 mm width and
+   only the height required by its pins plus clearance; use short pin names
+   when the full net name would collide with the border or pin numbers.
 - Render the active root and each changed child sheet, not a similarly named
    legacy file elsewhere in the workspace. Confirm the rendered view has no
    duplicate text blocks, stale labels, or overlapping sheet-pin text.
@@ -225,6 +231,11 @@ Y < 175mm.
    committing the change.
 
 ## MCP Tools for This Skill
+
+**Write serialization rule:** Never run two MCP write operations against the
+same KiCad file in parallel. All placement, wiring, label, property, sheet,
+and cleanup writes must be sequential; parallel writes can corrupt or lose
+edits in the byte-preserving read-modify-write path.
 
 **Reading / inspection:**
 - `get_schematic_summary` — get item counts for a sheet
