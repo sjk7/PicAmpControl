@@ -166,20 +166,20 @@ def create_eprj_database(json_path: Path, eprj_path: Path) -> None:
 
 def main():
     json_path = Path('out/picampcontrol_easyeda.json')
-    eprj_path = Path('out/PicAmpControl.eprj')
+    epro_path = Path('out/PicAmpControl.epro')
     
     if not json_path.exists():
         print(f'Error: {json_path} not found')
         return
     
-    create_eprj_database(json_path, eprj_path)
+    create_eprj_database(json_path, epro_path)
     
     # Verify
-    file_size = eprj_path.stat().st_size
+    file_size = epro_path.stat().st_size
     print(f'  Size: {file_size} bytes')
     print()
     print('✓ Ready to open in EasyEDA Pro')
-    print('  File → Open → PicAmpControl.eprj')
+    print('  File → Open → PicAmpControl.epro')
 
 
 if __name__ == '__main__':
