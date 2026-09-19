@@ -29,59 +29,60 @@ def add_sheet_instances_to_schematic(main_sch_path: str, output_path: str = None
         raise ValueError("Cannot find closing paren in schematic")
     
     # Define sheet instances with their positions and pin connections
+    # Relative paths: from docs/hardware/project_schematic_package/generated/mcp-final/ to out/subcircuits/
     sheet_instances = [
         {
             'name': 'ADC_PreFilter',
-            'file': '../../../out/subcircuits/adc_prefilter.kicad_sch',
+            'file': '../../../../../../../../out/subcircuits/adc_prefilter.kicad_sch',
             'x': 320,
             'y': 80,
             'pins': ['+5V', 'GND', 'ADC_FWD_PRE', 'ADC_REFL_PRE']
         },
         {
             'name': 'ADC_PostFilter',
-            'file': '../../../out/subcircuits/adc_postfilter.kicad_sch',
+            'file': '../../../../../../../../out/subcircuits/adc_postfilter.kicad_sch',
             'x': 320,
             'y': 180,
             'pins': ['+5V', 'GND', 'ADC_FWD_POST', 'ADC_REFL_POST']
         },
         {
             'name': 'ADC_Conditioning',
-            'file': '../../../out/subcircuits/adc_conditioning.kicad_sch',
+            'file': '../../../../../../../../out/subcircuits/adc_conditioning.kicad_sch',
             'x': 420,
             'y': 100,
             'pins': ['+5V', 'GND', 'ADC_TEMP', 'ADC_OCP', 'ADC_OD', 'ADC_DRAIN']
         },
         {
             'name': 'Comparator',
-            'file': '../../../out/subcircuits/comparator.kicad_sch',
+            'file': '../../../../../../../../out/subcircuits/comparator.kicad_sch',
             'x': 420,
             'y': 250,
             'pins': ['+5V', 'GND', 'ADC_OCP', 'HARD_FAULT']
         },
         {
             'name': 'DigitalOutputs',
-            'file': '../../../out/subcircuits/digital_outputs.kicad_sch',
+            'file': '../../../../../../../../out/subcircuits/digital_outputs.kicad_sch',
             'x': 320,
             'y': 280,
             'pins': ['+5V', 'GND', 'TX', 'TX_VCC', 'TX_BIAS', 'TRIP']
         },
         {
             'name': 'I2C_Interface',
-            'file': '../../../out/subcircuits/i2c_interface.kicad_sch',
+            'file': '../../../../../../../../out/subcircuits/i2c_interface.kicad_sch',
             'x': 420,
             'y': 320,
             'pins': ['+5V', 'GND', 'I2C_SDA', 'I2C_SCL']
         },
         {
             'name': 'Encoder',
-            'file': '../../../out/subcircuits/encoder.kicad_sch',
+            'file': '../../../../../../../../out/subcircuits/encoder.kicad_sch',
             'x': 180,
             'y': 280,
             'pins': ['+5V', 'GND', 'ENC_A', 'ENC_B', 'ENC_SW']
         },
         {
             'name': 'PTT_Input',
-            'file': '../../../out/subcircuits/ptt_input.kicad_sch',
+            'file': '../../../../../../../../out/subcircuits/ptt_input.kicad_sch',
             'x': 180,
             'y': 360,
             'pins': ['+5V', 'GND', 'PTT_IN']

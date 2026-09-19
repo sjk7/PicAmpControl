@@ -1,0 +1,27 @@
+{
+  "name": "picampcontrol",
+  "version": "1.0.0",
+  "description": "This repository contains the design for a PIC16F18855-I/SP-based linear amplifier protection controller, covering hardware fault protection, safe amplifier enable/disable behavior, operator feedback, and startup/latched fault handling.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://sjk7@github.com/sjk7/PicAmpControl.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/sjk7/PicAmpControl/issues"
+  },
+  "homepage": "https://github.com/sjk7/PicAmpControl#readme",
+  "dependencies": {
+    "@jlceda/pro-api-types": "^0.4.25"
+  }
+}
