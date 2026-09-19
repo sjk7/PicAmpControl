@@ -124,7 +124,7 @@ class SchematicSVGRenderer:
             title: Schematic title
         
         Returns:
-            SVG string
+            SVG string with UTF-8 encoding
         """
         self.svg_elements = []
         
@@ -309,7 +309,7 @@ if __name__ == '__main__':
     if svg_content:
         svg_file = Path('out/picampcontrol_schematic.svg')
         svg_file.parent.mkdir(exist_ok=True)
-        with open(svg_file, 'w') as f:
+        with open(svg_file, 'w', encoding='utf-8') as f:
             f.write(svg_content)
         
         print(f"[OK] Generated: {svg_file}")

@@ -330,15 +330,15 @@ if __name__ == '__main__':
     agent_spec = sch.build_for_easyeda_agent()
     agent_output = Path('out/picampcontrol_easyeda_agent.json')
     agent_output.parent.mkdir(exist_ok=True)
-    with open(agent_output, 'w') as f:
-        json.dump(agent_spec, f, indent=2)
+    with open(agent_output, 'w', encoding='utf-8') as f:
+        json.dump(agent_spec, f, indent=2, ensure_ascii=False)
     print(f"[OK] Generated for easyeda-agent: {agent_output}")
     
     # Output for easyeda-copilot
     copilot_spec = sch.build_for_easyeda_copilot()
     copilot_output = Path('out/picampcontrol_easyeda_copilot.json')
-    with open(copilot_output, 'w') as f:
-        json.dump(copilot_spec, f, indent=2)
+    with open(copilot_output, 'w', encoding='utf-8') as f:
+        json.dump(copilot_spec, f, indent=2, ensure_ascii=False)
     print(f"[OK] Generated for easyeda-copilot: {copilot_output}")
     
     print(f"\n=== Schematic Summary ===")
