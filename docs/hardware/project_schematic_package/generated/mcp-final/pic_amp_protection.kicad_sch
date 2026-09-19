@@ -4729,6 +4729,65 @@
 		)
 	)
 )
+	(symbol
+	(lib_name "Device:R")
+	(lib_id "Device:R")
+	(at 309.88 119.38 0)
+	(unit 1)
+	(exclude_from_sim no)
+	(in_bom yes)
+	(on_board yes)
+	(dnp no)
+	(uuid "bf266dea-c2a1-41cf-a64a-15212db62deb")
+	(property "Reference" "R5"
+		(at 309.88 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Value" "100k"
+		(at 309.88 123.19 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 309.88 119.38 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(property "Datasheet" "~"
+		(at 309.88 119.38 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(hide yes)
+		)
+	)
+	(pin "1"
+	(uuid "741d4f68-d85e-4103-b90a-edb3a4d290db")
+)
+	(pin "2"
+	(uuid "88fb282f-d1ab-4535-9b96-b507b8eb39d2")
+)
+	(instances
+		(project "pic_amp_protection"
+			(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08"
+				(reference "R5")
+				(unit 1)
+			)
+		)
+	)
+)
 	(symbol_instances
 		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/81088229-79fd-476b-9059-e146772666a4"
 			(reference "R2")
@@ -4788,6 +4847,12 @@
 			(reference "#PWR14")
 			(unit 1)
 			(value "+5V")
+			(footprint "")
+		)
+		(path "/8a5f1c10-2087-4dac-b5f6-2b81f7b28d08/bf266dea-c2a1-41cf-a64a-15212db62deb"
+			(reference "R5")
+			(unit 1)
+			(value "100k")
 			(footprint "")
 		)
 )

@@ -1,0 +1,94 @@
+{
+  "intent": {
+    "prompt": "Create a PIC16F18855 microcontroller circuit with 12V input, 5V regulated output via L7805 linear regulator, and NMOS fan driver circuit. MCU pin RB5 controls the fan motor through a 220 ohm series resistor and 5.1V zener clamp protection on the NMOS gate. Include input/output connectors and all necessary decoupling capacitors.",
+    "context": {
+      "board_name": "PicAmpControl",
+      "description": "Fan protection controller for amplifier circuits",
+      "target_mcu": "PIC16F18855-I/SP",
+      "power_supply": "12V DC input"
+    }
+  },
+  "requirements": {
+    "power_input": {
+      "type": "connector",
+      "voltage": "12V",
+      "current": "1A",
+      "description": "12V raw supply input on 2-pin connector"
+    },
+    "microcontroller": {
+      "device": "PIC16F18855-I/SP",
+      "package": "DIP28",
+      "supply_voltage": "5V",
+      "io_count": 28
+    },
+    "power_regulation": {
+      "type": "linear",
+      "regulator": "L7805",
+      "input_voltage": "12V",
+      "output_voltage": "5V",
+      "output_current": "500mA",
+      "input_cap": "100nF",
+      "output_cap": "100nF",
+      "bulk_cap": "10uF"
+    },
+    "fan_control": {
+      "type": "nmos_logic_level",
+      "mcu_pin": "RB5",
+      "gate_resistor": "220R",
+      "gate_clamp": "Zener_5V1",
+      "switched_load_voltage": "12V",
+      "switched_load_current": "500mA"
+    },
+    "connectors": {
+      "input": {
+        "type": "2pin",
+        "voltage": "12V",
+        "designation": "J2"
+      },
+      "output": {
+        "type": "2pin",
+        "voltage": "12V_switched",
+        "designation": "J3"
+      }
+    }
+      },
+      "gate_clamp_diode": {
+        "type": "zener_5v1",
+        "value": "5.1V",
+        "description": "Zener clamp from gate to ground, cathode to gate, anode to ground"
+      },
+      "fan_output": {
+        "type": "connector_J3",
+        "voltage": "12V",
+        "description": "Fan motor output connector, +12V and GND"
+      }
+    },
+    "pull_up_resistors": [
+      {
+        "location": "mcu_misc_pin",
+        "value": "10k",
+        "quantity": 3
+      }
+    ],
+    "connectors": [
+      {
+        "ref": "J2",
+        "type": "2pin_header",
+        "function": "12V_power_input",
+        "pins": ["12V", "GND"]
+      },
+      {
+        "ref": "J3",
+        "type": "2pin_header",
+        "function": "fan_output_12V",
+        "pins": ["12V_switched", "GND"]
+      }
+    ],
+    "electrical_rules": {
+      "mcu_operating_voltage": "5V_regulated",
+      "nmos_gate_logic": "0-5V_logic_signals_only",
+      "zener_protection": "clamp_gate_to_gnd_5v1_cathode_facing_gate",
+      "fan_supply": "12V_unregulated_from_input"
+    }
+  }
+}
