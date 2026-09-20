@@ -71,9 +71,9 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 | Pin | Number | Mode | Signal | Purpose |
 |-----|--------|------|--------|---------|
 | RE0 | 37 | GPIO | (free) | Available |
-| RE1 | 38 | GPIO | (free) | Available |
 | RE2 | 39 | GPIO | (free) | Available |
 | RE3 | 40 | GPIO | (free) | Available |
+| (VREF+) | 38 | Power | ADC Ref | Voltage reference for ADC (see Power & Ground section) |
 
 ## Power & Ground
 
@@ -121,17 +121,18 @@ The following pins are now available for additional features:
 
 - **Port A:** RA4, RA6, RA7 (3 pins freed from band selection removal)
 - **Port B:** RB2, RB3 (2 additional pins)
-- **Port D:** RD0–RD7 (8 pins, entirely new)
-- **Port E:** RE0–RE3 (4 pins, entirely new)
+- **Port D:** RD1–RD7 (7 pins, RD0 used for LCD D7)
+- **Port E:** RE0, RE2, RE3 (3 pins; pin 38 is VREF+ ADC reference)
 
-**Total new GPIO available:** 19 pins
+**Total new GPIO available:** 15 pins (plus potential VREF+ if externalized ADC reference is needed)
 
 ### Possible Future Uses
-- Parallel LCD display (6+ pins: if 4-bit mode adopted in place of I2C)
+- **Filter/Band Selection (3–4 pin encoding):** Use RA4/RA6/RA7 for binary or independent relay control
+- **Frequency Counter / Reference Input:** RB2/RB3 or any Port D pin with Timer/interrupt capability
 - Additional sensor inputs (ADC or digital)
 - Extended relay/switch control logic
 - Serial communication (UART, CAN)
-- Frequency counter / counter input (RA7 / Timer1 external clock already supported)
+- MCLR decoupling if internal reset is insufficient
 
 ## KiCad Symbol Reference
 

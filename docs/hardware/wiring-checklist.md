@@ -93,10 +93,10 @@
 
 | Pin | Signal | Mode | Voltage | Pullup | Component | Notes |
 |-----|--------|------|---------|--------|-----------|-------|
-| 37 | RE0 | NC | — | — | **Leave floating or NC** | Reserved for future expansion; do not connect. |
-| 39 | RE1 | NC | — | — | **Leave floating or NC** | Reserved for future expansion; do not connect. |
-| 40 | RE2 | NC | — | — | **Leave floating or NC** | Reserved for future expansion; do not connect. |
-| 40 | RE3 | NC | — | — | **Leave floating or NC** | Reserved for future expansion; do not connect. |
+| 37 | RE0 | GPIO | 0–3.3V | — | **Spare GPIO** | Available for future expansion; currently unused. |
+| 38 | VREF+ | Power | 3.3V | — | 1µF + 100nF to GND | ADC voltage reference (optional; see decoupling section). |
+| 39 | RE2 | GPIO | 0–3.3V | — | **Spare GPIO** | Available for future expansion; currently unused. |
+| 40 | RE3 | GPIO | 0–3.3V | — | **Spare GPIO** | Available for future expansion; currently unused. |
 
 ---
 
@@ -121,7 +121,11 @@
 
 **Power Supply Bypass:**
 - 100nF ceramic capacitor at each VDD pin (pins 10 & 20) to VSS, placed within 5mm of pins
-- 1µF ceramic + 100nF ceramic on VREF+ (pin 38) → 1µF to GND + 100nF in series to GND
+- **VREF+ decoupling (pin 38, if ADC reference is externalized):**
+  - 1µF ceramic capacitor from VREF+ to VSS (bulk filter)
+  - 100nF ceramic capacitor from VREF+ to VSS (high-frequency bypass)
+  - Place both capacitors within 5mm of pin 38
+  - If ADC uses VDD as reference (typical for 3.3V devices), VREF+ may be unused; tie to VDD via 0Ω jumper or leave floating (check XC8 ADC configuration)
 
 **ADC Input Filtering (all analog pins RA0-RA3, RA5, RB1):**
 - 100nF ceramic capacitor from each ADC pin to GND, placed at the PIC pad
@@ -250,10 +254,81 @@
 - [ ] **TX relays:** 3 FETs (RC5/RC6/RC7) with gate pulldowns and flyback diodes
 - [ ] **Fan PWM:** Single FET on RB5; gate pulled low, 12V fan motor with protection diode
 - [ ] **Trip LED:** Cathode to RB7, anode to VDD via 470Ω
-- [ ] **Unconnected pins:** All Port D (except RD0) and Port E left floating or tied to GND (tie to GND preferred to reduce noise)
+- [ ] **Unconnected pins:** All Port D (except RD0) and unused Port E pins (RE0, RE2, RE3) left floating or tied to GND (tie to GND preferred to reduce noise)
+- [ ] **VREF+ pin (pin 38):** Decoupling capacitors installed; verify if ADC reference is externalized or uses VDD in firmware configuration
 
 ---
 
-**Document Version:** 1.0  
+## Future Expansion Pins
+
+The PIC16F18875 upgrade provides substantial spare GPIO for future features. This section documents available pins and recommended usage patterns.
+
+### **3–4 Band Output (Filter Band Selection)**
+
+If legacy band-selection logic needs to be restored or extended:
+
+**Option 1: Binary Encoding (3 pins → 8 combinations)**
+- Use **RA4, RA6, RA7** (already configured as outputs in current firmware)
+- Encoding: 000 (band 1) through 111 (band 8)
+- Add macros to `pin_map.h`:
+  ```c
+  #define OUTPUT_BAND_B0 PORTAbits.RA4
+  #define OUTPUT_BAND_B1 PORTAbits.RA6
+  #define OUTPUT_BAND_B2 PORTAbits.RA7
+  ```
+- Firmware: Set `TRISA` bits appropriately (currently 0xB0, would change to 0x00 for all outputs)
+- No pullups needed (push-pull CMOS outputs to relay driver)
+
+**Option 2: Individual Band Lines (4 pins → independent relay control)**
+- Use **RA4 + RA6 + RA7 + RB2** or **RB3**
+- Each pin drives one relay independently (one relay per band)
+- No binary encoding needed; firmware sets pins directly
+- Example: Band 1 = RA4 high, Band 2 = RA6 high, etc.
+
+**Recommended:** Option 1 (binary) is more space-efficient; Option 2 if independent relay switching is required.
+
+### **Asynchronous Frequency Counter / Reference Input**
+
+For frequency measurement or reference oscillator application:
+
+**Pin Options:**
+- **RB2** or **RB3**: General-purpose interrupt-capable input pins (IOCB)
+  - Can use `INT1`/`INT2` external interrupt pins if available on this device
+  - Software counter using Timer0 or Timer2 interrupt
+  - Typical: 1–10 MHz measurement range with appropriate prescaler
+  
+- **RD1–RD7**: Additional spare GPIO pins
+  - Could allocate one for external frequency reference input
+  - Or use for multi-pin encoding (frequency band selector, etc.)
+  
+- **RE0, RE2, RE3**: Remaining spare Port E GPIO
+  - Alternative allocation if RB/RD pins are fully committed
+
+**Implementation Approach:**
+- Allocate one pin for frequency input signal (e.g., RB3)
+- Add pullup to VDD (10kΩ) if input is active-low or open-drain
+- Firmware: Configure pin as GPIO input, set up Timer0 or Timer2 to count edge transitions
+- Display counted frequency on LCD via existing display driver
+- Typical capture range: 10 Hz–1 MHz (depends on prescaler and timer resolution)
+
+**Example Macro** (add to `pin_map.h`):
+```c
+#define INPUT_FREQ_COUNTER PORTBbits.RB3   // RB3 = frequency counter input
+```
+
+**Firmware Configuration** (add to `main.c` or new module):
+```c
+// Enable RB3 as input, weak pullup
+TRISBbits.TRISB3 = 1;
+WPUBbits.WPUB3 = 1;  // 10kΩ internal pullup to VDD
+
+// Configure Timer0 for frequency counting (see XC8 Timer0 module docs)
+// Use prescale 1:16 or 1:256 depending on expected frequency range
+```
+
+---
+
+**Document Version:** 1.1  
 **Last Updated:** 2026-09-20  
-**Board Target:** PIC16F18875-I/P, 40-pin PDIP, parallel LCD 16×2 display, RF amplifier protection controller
+**Board Target:** PIC16F18875-I/P, 40-pin PDIP, parallel LCD 16×2 display, RF amplifier protection controller  
+**Expansion Notes:** Band output and frequency counter guidance for future enhancements
