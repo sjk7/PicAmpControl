@@ -128,7 +128,6 @@ The following pins are now available for additional features:
 
 ### Possible Future Uses
 - **Filter/Band Selection (3–4 pin encoding):** Use RA4/RA6/RA7 for binary or independent relay control
-- **Frequency Counter / Reference Input:** RB2/RB3 or any Port D pin with Timer/interrupt capability
 - Additional sensor inputs (ADC or digital)
 - Extended relay/switch control logic
 - Serial communication (UART, CAN)

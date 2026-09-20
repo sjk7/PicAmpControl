@@ -61,18 +61,9 @@
 - Main project documentation: `README.md`
 - Hardware map: `docs/hardware/PIC16F18875_pin_map.md`
 - Display/menu diagram links are in `README.md`.
-- Frequency-counter handoff: `docs/frequency-counter-next-steps.md`
 - Schematic workflow (KiCad MCP skill, setup, troubleshooting): `docs/hardware/schematic-workflow.md`
 - Active schematic project: `docs/hardware/project_schematic_package/generated/mcp-final/pic_amp_protection.kicad_sch`
-- Operator UI is a single EC11-style rotary encoder: RC2=A, RB0=B, RB6=push switch, all active-low/common-to-ground with pull-ups. RA4 and RA6 are available for future band selection; RA7 is available for Timer1 frequency counter input.
-
-## Deferred frequency-counter work
-
-- Do not implement yet unless requested.
-- Recommended architecture: externally condition the overdrive/RF signal into a clean 0-5 V square wave, route it to a spare GPIO through PPS, and count edges with Timer1 during a Timer2-gated interval.
-- Do not count frequency directly from the overdrive ADC; ADC sampling does not preserve zero crossings.
-- Hardware conditioning must include attenuation, limiting/comparator hysteresis, clamps, and a safe 0-5 V output.
-- See `docs/frequency-counter-next-steps.md`.
+- Operator UI is a single EC11-style rotary encoder: RC2=A, RB0=B, RB6=push switch, all active-low/common-to-ground with pull-ups. RA4 and RA6 are available for future band selection.
 
 ## Next-session checklist
 

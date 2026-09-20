@@ -288,48 +288,9 @@ If legacy band-selection logic needs to be restored or extended:
 
 **Recommended:** Option 1 (binary) is more space-efficient; Option 2 if independent relay switching is required.
 
-### **Asynchronous Frequency Counter / Reference Input**
-
-For frequency measurement or reference oscillator application:
-
-**Pin Options:**
-- **RB2** or **RB3**: General-purpose interrupt-capable input pins (IOCB)
-  - Can use `INT1`/`INT2` external interrupt pins if available on this device
-  - Software counter using Timer0 or Timer2 interrupt
-  - Typical: 1–10 MHz measurement range with appropriate prescaler
-  
-- **RD1–RD7**: Additional spare GPIO pins
-  - Could allocate one for external frequency reference input
-  - Or use for multi-pin encoding (frequency band selector, etc.)
-  
-- **RE0, RE2, RE3**: Remaining spare Port E GPIO
-  - Alternative allocation if RB/RD pins are fully committed
-
-**Implementation Approach:**
-- Allocate one pin for frequency input signal (e.g., RB3)
-- Add pullup to VDD (10kΩ) if input is active-low or open-drain
-- Firmware: Configure pin as GPIO input, set up Timer0 or Timer2 to count edge transitions
-- Display counted frequency on LCD via existing display driver
-- Typical capture range: 10 Hz–1 MHz (depends on prescaler and timer resolution)
-
-**Example Macro** (add to `pin_map.h`):
-```c
-#define INPUT_FREQ_COUNTER PORTBbits.RB3   // RB3 = frequency counter input
-```
-
-**Firmware Configuration** (add to `main.c` or new module):
-```c
-// Enable RB3 as input, weak pullup
-TRISBbits.TRISB3 = 1;
-WPUBbits.WPUB3 = 1;  // 10kΩ internal pullup to VDD
-
-// Configure Timer0 for frequency counting (see XC8 Timer0 module docs)
-// Use prescale 1:16 or 1:256 depending on expected frequency range
-```
-
 ---
 
 **Document Version:** 1.1  
 **Last Updated:** 2026-09-20  
 **Board Target:** PIC16F18875-I/P, 40-pin PDIP, parallel LCD 16×2 display, RF amplifier protection controller  
-**Expansion Notes:** Band output and frequency counter guidance for future enhancements
+**Expansion Notes:** Band output and relay control guidance for future enhancements
