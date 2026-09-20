@@ -375,11 +375,18 @@ def run_mdb(mdb_path: Path, script: str, timeout: float = 280) -> str:
                 sys.exit(f"error: mdb timed out after {timeout}s and was killed")
             for reader in readers:
                 reader.join(timeout=2)
+            stderr_tail = "".join(captured["stderr"])[-2000:]
+            debug_file.write(
+                f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_STDERR_TAIL "
+                f"{stderr_tail!r}\n"
+            )
             debug_file.write(
                 f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_EXIT code={proc.returncode} "
                 f"stdout_bytes={byte_counts['stdout']} stderr_bytes={byte_counts['stderr']}\n"
             )
             debug_file.close()
+            if proc.returncode != 0:
+                sys.exit(f"error: mdb exited with code {proc.returncode}; stderr tail: {stderr_tail[-500:]}")
             return "".join(captured["stdout"] + captured["stderr"])
         try:
             stdout, stderr = proc.communicate(timeout=timeout)
