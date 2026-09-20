@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include "../include/pin_map.h"
 #include "../include/lcd_i2c.h"
+#include "../include/freq_counter.h"
 
 #pragma config FEXTOSC = OFF
 #pragma config RSTOSC = HFINT32
@@ -253,6 +254,8 @@ void set_trip_output(bool active) {
 }
 
 void __interrupt() timer0_isr(void) {
+    freq_counter_isr();
+
     bool tick = false;
     if (PIR4bits.TMR2IF != 0) {
         PIR4bits.TMR2IF = 0;
@@ -305,6 +308,9 @@ void timer0_init(void) {
     PIR4bits.TMR2IF = 0;
     PIE4bits.TMR2IE = 1;
     T2CONbits.ON = 1;
+
+    freq_counter_init();
+
     INTCONbits.GIE = 1;
 }
 
@@ -1039,6 +1045,7 @@ void update_tx_sequence(void) {
         set_tx_vcc_output(false);
         set_tx_bias_output(false);
         g_sequence_stage = 0;
+        freq_counter_unlock_band();
         return;
     }
     if (g_fault_latched) {
@@ -1047,6 +1054,7 @@ void update_tx_sequence(void) {
 
     if (g_ptt_active) {
         if (g_sequence_stage == 0) {
+            freq_counter_lock_band();
             set_tx_output(true);
             g_sequence_elapsed_ms = 0;
             g_sequence_stage = 1;
@@ -1091,6 +1099,7 @@ void update_tx_sequence(void) {
         if (g_sequence_elapsed_ms >= g_thresholds.tx_bias_delay_ms) {
             set_tx_bias_output(false);
             g_sequence_stage = 0;
+            freq_counter_unlock_band();
         }
     } else if (g_sequence_stage == 2) {
         set_tx_output(false);
@@ -1099,6 +1108,7 @@ void update_tx_sequence(void) {
     } else if (g_sequence_stage == 1) {
         set_tx_output(false);
         g_sequence_stage = 0;
+        freq_counter_unlock_band();
     }
 }
 
@@ -1377,6 +1387,13 @@ int main(void) {
                 update_peak_decay(&g_current_peak_a, &g_current_peak_decay_elapsed_ms, 1);
                 update_tx_sequence();
             }
+            static unsigned char fc_tick_ms = 0;
+            fc_tick_ms++;
+            if (fc_tick_ms >= 10) {
+                fc_tick_ms = 0;
+                freq_counter_tick_10ms();
+            }
+
             if (g_settings_save_delay_ms > 0) {
                 g_settings_save_delay_ms--;
             }

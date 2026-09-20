@@ -33,7 +33,8 @@ DEVICE = "PIC16F18875"
 STATE_VARS = [
     "g_startup_inhibit", "g_comparator_reset_active", "g_fault_latched", "g_trip_reason",
     "g_ptt_active", "g_sequence_stage", "g_state", "g_trip_shutdown_active",
-    "g_ptt_complete_display_active", "g_transient_menu_display"
+    "g_ptt_complete_display_active", "g_transient_menu_display",
+    "g_fc_status.current_band", "g_fc_status.band_locked", "g_fc_status.frequency_khz"
 ]
 TRIP_REASON_BITS = [
     (0x01, "SWR1"),
@@ -74,7 +75,7 @@ TRIP_ADC_PINS = {
     "OVERDRIVE": ["RB2"], "DRAIN": ["RB3"], "HWFAULT": []
 }
 TRIP_NAMES = {"SWR1", "SWR2", "HWFAULT", "CURRENT", "OVERDRIVE", "DRAIN", "TEMPERATURE"}
-NON_TRIP_NAMES = {"SWR1_1P5"}
+NON_TRIP_NAMES = {"SWR1_1P5", "FREQ_CTR"}
 
 
 def find_mdb() -> Path:
@@ -107,6 +108,57 @@ def build_script(trip_name=None) -> str:
 
     if trip_name == "SWR1_1P5":
         lines[3:5] = ["write pin RA0 5.000v", "write pin RA1 0.200v"]
+    if trip_name == "FREQ_CTR":
+        # --- Finish startup inhibit period (1050ms) ---
+        for _ in range(105):
+            lines.append("Stepi 80000")
+            sample()
+
+        # --- RX mode: Apply 40m band frequency (17484 pulses = ~7000 kHz, BAND_40M = 3) ---
+        for _ in range(5):
+            lines.append("write TMR1L 0x4C")
+            lines.append("write TMR1H 0x44")
+            lines.append("Stepi 80000")
+            sample()
+
+        # --- Assert PTT (pull RC0 low) ---
+        lines.append("write pin RC0 0v")
+        for _ in range(12):
+            lines.append("write TMR1L 0x4C")
+            lines.append("write TMR1H 0x44")
+            lines.append("Stepi 8000")
+            sample()
+        for _ in range(20):
+            lines.append("write TMR1L 0x4C")
+            lines.append("write TMR1H 0x44")
+            lines.append("Stepi 40000")
+            sample()
+
+        # --- TX mode (Stage 3): Try injecting 20m frequency (35000 pulses = ~14000 kHz) ---
+        # Should be IGNORED because band is locked during TX!
+        for _ in range(10):
+            lines.append("write TMR1L 0xA8")
+            lines.append("write TMR1H 0x88")
+            lines.append("Stepi 80000")
+            sample()
+
+        # --- Release PTT (RC0 high) ---
+        lines.append("write pin RC0 5v")
+        for _ in range(30):
+            lines.append("Stepi 40000")
+            sample()
+
+        # --- RX mode again: Apply 20m frequency (35000 pulses = ~14000 kHz) ---
+        # Should now update to 20m band (BAND_20M = 4) because PTT is released!
+        for _ in range(5):
+            lines.append("write TMR1L 0xA8")
+            lines.append("write TMR1H 0x88")
+            lines.append("Stepi 80000")
+            sample()
+
+        lines.append("quit")
+        return "\n".join(lines)
+
     if not temperature_trip:
         # --- Briefly assert PTT during startup; it must have no effect while inhibited ---
         lines.append("write pin RC0 0v")
@@ -133,6 +185,7 @@ def build_script(trip_name=None) -> str:
     for _ in range(100):
         lines.append("Stepi 40000")
         sample()
+
     if trip_name == "SWR1_1P5":
         lines.append("write pin RA0 5.000v")
         lines.append("write pin RA1 0.200v")
@@ -243,7 +296,7 @@ def run_mdb(mdb_path: Path, script: str) -> str:
 
 PRINT_RE = re.compile(r"^(R[A-Z]\d+)\s+\S+\s+(?:(HIGH|LOW)|([\d.]+)V)", re.MULTILINE)
 STEPI_RE = re.compile(r"^Stepi\s+(\d+)")
-VAR_NAME_RE = re.compile(r"^(g_\w+)=$")
+VAR_NAME_RE = re.compile(r"^(g_[\w\.]+)=$")
 
 
 def block_reason(state: dict) -> str | None:
@@ -276,6 +329,13 @@ def validate_sequence(samples) -> None:
     active = active_samples[0][1]
     if (active["RC5"], active["RC6"], active["RC7"]) != (0, 0, 0):
         raise AssertionError("active sequence did not drive RELAYS, TX_VCC, TX_BIAS low")
+
+    # Verify that frequency counter locked the band during stage 3 transmit
+    band_locked_samples = [sample for sample in active_samples
+                           if sample[2].get("g_fc_status.band_locked") == "true"]
+    if not band_locked_samples:
+        raise AssertionError("Frequency counter band was not locked during transmit stage 3")
+
     complete_display = next((sample for sample in samples
                              if sample[2]["g_ptt_complete_display_active"] == "true"), None)
     if complete_display is None or (complete_display[1]["RC5"], complete_display[1]["RC6"], complete_display[1]["RC7"]) != (0, 0, 0):
@@ -292,6 +352,10 @@ def validate_sequence(samples) -> None:
         raise AssertionError("release did not raise TX_VCC second")
     if release_done is None:
         raise AssertionError("release did not raise TX_BIAS last")
+
+    # Verify that frequency counter unlocked after TX sequence completes (stage 0)
+    if release_done[2].get("g_fc_status.band_locked") == "true":
+        raise AssertionError("Frequency counter band remained locked after TX sequence completed")
 
 
 def validate_trip(samples, trip_name) -> None:
@@ -366,6 +430,32 @@ def validate_swr1_1p5(samples) -> None:
     if active_ms < 500:
         raise AssertionError(f"1.5:1 SWR was active for only {active_ms:.1f}ms")
     print(f"SWR1 1.50:1 at 2.000kW PEP: no trip; TX remained active for {active_ms:.1f}ms")
+
+
+def validate_freq_ctr(samples) -> None:
+    if any((block_reason(sample[2]) or "").startswith("FAULT:") for sample in samples):
+        raise AssertionError("Frequency counter test incorrectly tripped")
+
+    # Check 40m band classified (BAND_40M = 3)
+    classified_40m = [s for s in samples if s[2].get("g_fc_status.current_band") == "3"]
+    if not classified_40m:
+        raise AssertionError("Frequency counter failed to classify 40m band")
+
+    # Check band was locked when frequency shifted to 20m (BAND_20M = 4) during TX stage 3
+    tx_20m_injection = [s for s in samples if s[2]["g_ptt_active"] == "true" and s[2]["g_sequence_stage"] == "3" and s[2].get("g_fc_status.frequency_khz") == "13993"]
+    if not tx_20m_injection:
+        raise AssertionError("Frequency counter test did not inject 20m frequency during TX stage 3")
+
+    tx_locked = [s for s in tx_20m_injection if s[2].get("g_fc_status.band_locked") == "true" and s[2].get("g_fc_status.current_band") == "3"]
+    if not tx_locked:
+        raise AssertionError("Frequency counter failed to lock 40m band when 20m frequency was injected during TX stage 3")
+
+    # Check 20m band classified after PTT release in RX mode
+    rx_20m = [s for s in samples if s[2]["g_ptt_active"] == "false" and s[2].get("g_fc_status.current_band") == "4"]
+    if not rx_20m:
+        raise AssertionError("Frequency counter failed to update to 20m band in RX mode after PTT release")
+
+    print("FREQ_CTR test passed: 40m classified, locked during 20m injection in TX, updated to 20m in RX after PTT release")
 
 
 def parse_trace(output: str):
@@ -564,6 +654,8 @@ def main():
     trip_name = "TEMPERATURE" if "--temperature-trip" in sys.argv[1:] else None
     if "--swr1-1p5" in sys.argv[1:]:
         trip_name = "SWR1_1P5"
+    if "--frq-ctr" in sys.argv[1:]:
+        trip_name = "FREQ_CTR"
     if "--trip" in sys.argv[1:]:
         trip_name = sys.argv[sys.argv.index("--trip") + 1].upper()
     if trip_name is not None and trip_name not in TRIP_NAMES | NON_TRIP_NAMES:
@@ -571,7 +663,7 @@ def main():
     temperature_trip = trip_name == "TEMPERATURE"
     if "--suite" in sys.argv[1:]:
         scenario_names = [None, "TEMPERATURE", "SWR1", "SWR2", "HWFAULT",
-                          "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5"]
+                          "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5", "FREQ_CTR"]
         first_script = build_script()
         suite_lines = first_script.splitlines()[:-1]
         for index, scenario in enumerate(scenario_names[1:], 1):
@@ -587,6 +679,8 @@ def main():
         for scenario, (_, scenario_samples) in zip(scenario_names[1:], groups[1:]):
             if scenario == "SWR1_1P5":
                 validate_swr1_1p5(scenario_samples)
+            elif scenario == "FREQ_CTR":
+                validate_freq_ctr(scenario_samples)
             else:
                 validate_trip(scenario_samples, scenario)
         out_dir = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"
@@ -617,6 +711,8 @@ def main():
     if trip_name:
         if trip_name in TRIP_NAMES:
             validate_trip(samples, trip_name)
+        elif trip_name == "FREQ_CTR":
+            validate_freq_ctr(samples)
         else:
             validate_swr1_1p5(samples)
 

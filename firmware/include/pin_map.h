@@ -21,6 +21,7 @@
 // Control inputs
 #define INPUT_PTT PORTCbits.RC0
 #define INPUT_ENCODER_A PORTCbits.RC2
+#define INPUT_FREQ_COUNTER PORTDbits.RD1   // Timer1 frequency counter input (T1CKI via PPS)
 
 // Comparator latch reset output.
 #define OUTPUT_COMP_RESET PORTCbits.RC1

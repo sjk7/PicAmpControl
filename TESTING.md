@@ -56,6 +56,7 @@ The default test suite (`PTT_SequencerAndTripSuite`) runs comprehensive simulati
 - **PTT active-low sequencing**: Normal TX activation and shutdown
 - **Temperature trip**: Thermal protection during transmission
 - **SWR trips**: Standing wave ratio fault detection (SWR1 and SWR2)
+- **Frequency counter band lock**: Timer1 frequency measurement in RX and strict band-locking during TX
 - **Hardware fault**: Comparator-based overcurrent protection
 - **Current trip**: Software-based overcurrent detection
 - **Overdrive trip**: RF overdrive protection
@@ -83,6 +84,7 @@ Available individual tests:
 - `PTT_ActiveLow_StartupAndReleaseSequence`
 - `PTT_TemperatureTrip_InTransmit`
 - `PTT_SWR1_1P5_NoTrip_At2kW`
+- `PTT_FrequencyCounter_BandLock`
 - `PTT_SWR1Trip_InTransmit`
 - `PTT_SWR2Trip_InTransmit`
 - `PTT_HWFAULTTrip_InTransmit`

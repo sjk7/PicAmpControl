@@ -1,11 +1,11 @@
 set_property(TARGET My_Pic_Project_default_default_XC8_compile PROPERTY SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/main.c"
-    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/lcd_parallel.c")
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/lcd_parallel.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/freq_counter.c")
 
-# Only optimize Release builds; -Os after Debug's -O0 would win (last -O flag wins) and
-# defeat breakpoints/symbols needed for simulation and debugging.
-target_compile_options(My_Pic_Project_default_default_XC8_compile PRIVATE "$<$<CONFIG:Release>:-Os>")
-target_link_options(My_Pic_Project_default_image_LRxgA9DB PRIVATE "$<$<CONFIG:Release>:-Os>")
+# Optimize Debug builds with -O1 to avoid XC8 -O0 string section code bloat, and Release with -Os.
+target_compile_options(My_Pic_Project_default_default_XC8_compile PRIVATE "$<$<CONFIG:Debug>:-O1>" "$<$<CONFIG:Release>:-Os>")
+target_link_options(My_Pic_Project_default_image_LRxgA9DB PRIVATE "$<$<CONFIG:Debug>:-O1>" "$<$<CONFIG:Release>:-Os>")
 
 enable_testing()
 find_program(PYTHON_EXECUTABLE NAMES python python3 REQUIRED)
@@ -32,6 +32,11 @@ if (PICAMP_ENABLE_INDIVIDUAL_SIM_TESTS)
         COMMAND "${PYTHON_EXECUTABLE}"
                 "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
                 --swr1-1p5)
+    add_test(
+        NAME PTT_FrequencyCounter_BandLock
+        COMMAND "${PYTHON_EXECUTABLE}"
+                "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
+                --frq-ctr)
     foreach(TRIP_NAME SWR1 SWR2 HWFAULT CURRENT OVERDRIVE DRAIN)
         add_test(
             NAME PTT_${TRIP_NAME}Trip_InTransmit
