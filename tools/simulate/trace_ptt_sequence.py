@@ -108,18 +108,23 @@ def build_script(trip_name=None) -> str:
     if trip_name == "SWR1_1P5":
         lines[3:5] = ["write pin RA0 5.000v", "write pin RA1 0.200v"]
     if trip_name == "TEST_FREQ":
-        # Frequency counter test: verify firmware is ready
-        # NOTE: MDB simulator cannot write Timer1 registers (only supports pin writes).
-        # Real frequency counter testing requires hardware with RF input on RA7.
-        # This test just verifies startup completes and g_selected_band is initialized.
+        # Frequency counter test: verify band selection transitions
+        # NOTE: Firmware SIMULATE_FREQUENCY_COUNTER mode injects test values into Timer1.
+        # The test cycles: 2MHz for 1s (BAND_160M), then 14MHz for 1s (BAND_20M).
+        # This simulates the firmware's frequency measurement + band detection logic.
         
         for _ in range(110):  # ~1.1 seconds startup
             lines.append("Stepi 80000")
             sample()
         
-        # Verify band is initialized (expect BAND_NONE = 0 since no Timer1 input)
-        for _ in range(10):  # Capture a few more samples
-            lines.append("Stepi 40000")
+        # First frequency: 2 MHz (160m band) - capture for ~1 second
+        for _ in range(100):  # 100 * 10ms = 1000ms
+            lines.append("Stepi 80000")
+            sample()
+        
+        # Second frequency: 14 MHz (20m band) - capture for ~1 second
+        for _ in range(100):  # 100 * 10ms = 1000ms
+            lines.append("Stepi 80000")
             sample()
         
         lines.append("quit")
@@ -387,16 +392,16 @@ def validate_swr1_1p5(samples) -> None:
 
 
 def validate_test_freq(samples) -> None:
-    """Verify frequency counter infrastructure is initialized (simulator-limited test).
+    """Verify frequency counter band selection transitions (2MHz→160M, 14MHz→20M).
     
-    NOTE: MDB simulator cannot write Timer1 registers, so full band-selection testing
-    requires real hardware with RF input on RA7. This test verifies the infrastructure
-    is present and firmware startup completes without errors.
+    Firmware SIMULATE_FREQUENCY_COUNTER mode (when enabled with #define) injects 
+    test Timer1 values to simulate 2MHz for 1s, then 14MHz for 1s. This validates
+    the frequency→band logic without requiring actual RF input on RA7.
     """
     if not samples:
         raise AssertionError("No samples captured during TEST_FREQ scenario")
     
-    # Check that g_selected_band is being sampled
+    # Extract g_selected_band values from samples
     bands = []
     for sample in samples:
         if "g_selected_band" in sample[2]:
@@ -408,11 +413,18 @@ def validate_test_freq(samples) -> None:
     if not bands:
         raise AssertionError("g_selected_band not sampled (frequency counter not integrated)")
     
-    # In simulator without Timer1 input, band should stay at 0 (BAND_NONE)
-    if set(bands) != {0}:
-        raise AssertionError(f"Expected BAND_NONE (0) in simulator, got {set(bands)}")
+    # Verify we see both band 1 (160M) and band 4 (20M)
+    unique_bands = set(bands)
+    if 1 not in unique_bands or 4 not in unique_bands:
+        raise AssertionError(f"Expected bands {{1, 4}} for 2MHz→14MHz test, got {unique_bands}")
     
-    print(f"Frequency counter infrastructure test passed (simulator verification only; full test requires real hardware)")
+    # Verify band 4 appears at the end (after 14MHz injection)
+    if bands[-1] != 4:
+        raise AssertionError(f"Expected final band 4 (BAND_20M), got {bands[-1]}")
+    
+    # Count transitions for diagnostics
+    transitions = sum(1 for i in range(1, len(bands)) if bands[i] != bands[i-1])
+    print(f"Frequency counter test passed: bands {unique_bands}, {transitions} transitions detected")
 
 def parse_trace(output: str):
     """Walks the mdb transcript in order, tracking cumulative instruction count and

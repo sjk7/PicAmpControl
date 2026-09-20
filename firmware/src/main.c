@@ -4,6 +4,10 @@
 #include "../include/pin_map.h"
 #include "../include/lcd_i2c.h"
 
+/* Simulator mode: inject test frequency values for MDB testing
+   Set to 1 only during simulator TEST_FREQ scenario testing, 0 for real hardware */
+#define SIMULATE_FREQUENCY_COUNTER 0
+
 #pragma config FEXTOSC = OFF
 #pragma config RSTOSC = HFINT32
 #pragma config WDTE = OFF
@@ -1485,6 +1489,29 @@ int main(void) {
 
         /* Measure frequency counter every 100ms */
         if (g_freq_counter_gate_elapsed_ms >= 100) {
+#if SIMULATE_FREQUENCY_COUNTER
+            /* Inject test values: alternate between 2MHz and 14MHz every second
+               g_freq_counter_hz = TMR1_count * 10000
+               2 MHz test: TMR1 = 200 (200 * 10000 = 2,000,000 Hz = BAND_160M)
+               14 MHz test: TMR1 = 1400 (1400 * 10000 = 14,000,000 Hz = BAND_20M)
+            */
+            static unsigned int test_cycle_ms = 0;
+            test_cycle_ms += 100;
+            if (test_cycle_ms < 1000) {
+                /* First 1 second: simulate 2 MHz (160m band) */
+                TMR1H = 0x00;
+                TMR1L = 0xC8;  /* 200 = 0x00C8 */
+            } else if (test_cycle_ms < 2000) {
+                /* Next 1 second: simulate 14 MHz (20m band) */
+                TMR1H = 0x05;
+                TMR1L = 0x78;  /* 1400 = 0x0578 */
+            } else {
+                /* Restart cycle */
+                test_cycle_ms = 0;
+                TMR1H = 0x00;
+                TMR1L = 0xC8;
+            }
+#endif
             measure_frequency_counter();
             g_freq_counter_gate_elapsed_ms = 0;
         }
