@@ -1499,29 +1499,24 @@ int main(void) {
         /* Measure frequency counter every 100ms */
         if (g_freq_counter_gate_elapsed_ms >= 100) {
 #if SIMULATE_FREQUENCY_COUNTER
-            /* Inject test values: alternate between 2MHz and 14MHz every second
-               g_freq_counter_hz = TMR1_count * 10000
-               2 MHz test: TMR1 = 200 (200 * 10000 = 2,000,000 Hz = BAND_160M)
-               14 MHz test: TMR1 = 1400 (1400 * 10000 = 14,000,000 Hz = BAND_20M)
-            */
+            /* Inject test values directly: alternate between 2MHz and 14MHz every second */
             static unsigned int test_cycle_ms = 0;
             test_cycle_ms += 100;
             if (test_cycle_ms < 1000) {
-                /* First 1 second: simulate 2 MHz (160m band) */
-                TMR1H = 0x00;
-                TMR1L = 0xC8;  /* 200 = 0x00C8 */
+                /* First 1 second: simulate 2 MHz (BAND_160M) */
+                g_freq_counter_hz = 2000000UL;
             } else if (test_cycle_ms < 2000) {
-                /* Next 1 second: simulate 14 MHz (20m band) */
-                TMR1H = 0x05;
-                TMR1L = 0x78;  /* 1400 = 0x0578 */
+                /* Next 1 second: simulate 14 MHz (BAND_20M) */
+                g_freq_counter_hz = 14000000UL;
             } else {
                 /* Restart cycle */
                 test_cycle_ms = 0;
-                TMR1H = 0x00;
-                TMR1L = 0xC8;
+                g_freq_counter_hz = 2000000UL;
             }
-#endif
+            g_selected_band = select_band_from_frequency(g_freq_counter_hz);
+#else
             measure_frequency_counter();
+#endif
             g_freq_counter_gate_elapsed_ms = 0;
         }
 
