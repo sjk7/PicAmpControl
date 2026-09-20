@@ -11,6 +11,7 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -93,6 +94,21 @@ def main():
         )
         PID_FILE.write_text(str(proc.pid))
         log.write(f"[{stamp()}] CHILD pid={proc.pid}\n")
+        stop_heartbeat = threading.Event()
+
+        def heartbeat():
+            previous_mdb_size = 0
+            while not stop_heartbeat.wait(10):
+                mdb_size = mdb_log.stat().st_size if mdb_log.exists() else 0
+                log.write(
+                    f"[{stamp()}] HEARTBEAT elapsed={time.monotonic():.1f} "
+                    f"child_poll={proc.poll()} mdb_bytes={mdb_size} "
+                    f"delta={mdb_size - previous_mdb_size}\n"
+                )
+                previous_mdb_size = mdb_size
+
+        heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
+        heartbeat_thread.start()
         try:
             code = proc.wait(timeout=args.timeout)
         except KeyboardInterrupt:
@@ -104,6 +120,8 @@ def main():
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
             code = proc.wait()
         finally:
+            stop_heartbeat.set()
+            heartbeat_thread.join(timeout=2)
             PID_FILE.unlink(missing_ok=True)
             log.write(f"[{stamp()}] END code={proc.returncode}\n")
     print(f"SUITE_EXIT:{code}")

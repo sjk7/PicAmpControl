@@ -63,13 +63,19 @@ cmake --build _build/My_Pic_Project/release -j4
 
 ## Simulator verification
 
-Run the merged suite with the cleanup-aware launcher. It records its PID, kills a stale prior launcher, owns the MDB process group, and cleans up on timeout or Ctrl-C:
+Run the full merged suite with the cleanup-aware launcher. This is the default test workflow: it records its PID, kills a stale prior launcher, owns the MDB process group, logs raw MDB stderr, records 10-second progress heartbeats, and cleans up on timeout or Ctrl-C:
 
 ```sh
 python3 tools/simulate/run_suite_with_watchdog.py --timeout 180
 ```
 
-For a fast diagnostic run, use one happy band plus the deliberate missing-frequency failure case:
+Use the full five-minute default verification before calling the suite green:
+
+```sh
+python3 tools/simulate/run_suite_with_watchdog.py --timeout 300
+```
+
+For a fast diagnostic run only, use one happy band plus the deliberate missing-frequency failure case:
 
 ```sh
 python3 tools/simulate/run_suite_with_watchdog.py --quick-bands --timeout 180

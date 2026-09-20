@@ -368,6 +368,12 @@ def run_mdb(mdb_path: Path, script: str, timeout: float = 280) -> str:
                 for reader in readers:
                     reader.join(timeout=2)
                 stderr_tail = "".join(captured["stderr"])[-2000:]
+                if stderr_tail:
+                    debug_file.write(
+                        f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_STDERR_TEXT_BEGIN\n"
+                        f"{stderr_tail}\n"
+                        f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_STDERR_TEXT_END\n"
+                    )
                 debug_file.write(
                     f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_STDERR_TAIL "
                     f"bytes={byte_counts['stderr']} tail={stderr_tail!r}\n"
@@ -382,6 +388,11 @@ def run_mdb(mdb_path: Path, script: str, timeout: float = 280) -> str:
                 reader.join(timeout=2)
             stderr_tail = "".join(captured["stderr"])[-2000:]
             if stderr_tail:
+                debug_file.write(
+                    f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_STDERR_TEXT_BEGIN\n"
+                    f"{stderr_tail}\n"
+                    f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_STDERR_TEXT_END\n"
+                )
                 debug_file.write(
                     f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_STDERR_TAIL "
                     f"bytes={byte_counts['stderr']} tail={stderr_tail!r}\n"
