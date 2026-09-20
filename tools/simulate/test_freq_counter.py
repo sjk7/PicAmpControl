@@ -32,7 +32,7 @@ PHASES = [
     ("steady_coarse", "5v", 22, 180000),  # ~495ms
     ("steady_mid", "5v", 402, 20000),  # ~495ms -> ~1500ms, 2.5ms/sample
     ("asserted", "0v", 300, STEP_SIZE),  # PTT pressed
-    ("released", "5v", 100, STEP_SIZE),  # PTT released
+    ("released", "5v", 60, 40000),  # PTT released; 300ms for relay/VCC/bias unwind + reclassify
 ]
 PINS = ["RC1", "RC0", "RC5", "RC6", "RC7"]
 PIN_LABELS = {"RC1": "SETTLE", "RC0": "PTT", "RC5": "RELAYS", "RC6": "TX_VCC", "RC7": "TX_BIAS"}
@@ -64,28 +64,52 @@ def build_script() -> str:
         "write pin RA5 2.5v", "write pin RB1 0v", "write pin RB2 0v", "write pin RB3 0v", "write pin RB4 0v",
         "write pin RC2 5v", "write pin RB0 5v", "write pin RB6 5v"
     ]
+    def sample():
+        for pin in PINS:
+            lines.append(f"print pin {pin}")
+        for var in STATE_VARS:
+            lines.append(f"print {var}")
+
+    # T1CKI (RD1) is a real clock input to Timer1, so a static "write pin" voltage
+    # produces no edges. Emulate the counted pulses by writing TMR1H/TMR1L directly
+    # each step, matching the FREQ_CTR scenario in trace_ptt_sequence.py:
+    #   0x444C = 17484 pulses -> 6993 kHz (BAND_40M)
+    #   0x88A8 = 34984 pulses -> 13993 kHz (BAND_20M)
+    def write_tmr1_40m():
+        lines.append("write TMR1L 0x4C")
+        lines.append("write TMR1H 0x44")
+
+    def write_tmr1_20m():
+        lines.append("write TMR1L 0xA8")
+        lines.append("write TMR1H 0x88")
+
     for phase_name, ptt_level, step_count, step_size in PHASES:
         if phase_name == "steady_coarse":
             lines.append(f"# {phase_name}: PTT={ptt_level}")
-            lines.append(f"stepi {step_count * step_size}")
+            lines.append(f"Stepi {step_count * step_size}")
         elif phase_name == "steady_mid":
-            lines.append(f"# {phase_name}: PTT={ptt_level}, inject 40m (6900kHz) on RD1")
-            lines.append("write pin RD1 2.5v")
+            lines.append(f"# {phase_name}: PTT={ptt_level}, inject 40m (6993kHz) via TMR1")
             for i in range(step_count):
-                lines.extend([f"stepi {step_size}", f"print {' '.join(PINS)}", *[f"print {var}" for var in STATE_VARS]])
+                write_tmr1_40m()
+                lines.append(f"Stepi {step_size}")
+                sample()
         elif phase_name == "asserted":
             lines.append(f"# {phase_name}: PTT={ptt_level}, then inject 20m (13993kHz) during TX stage 3")
             lines.append("write pin RC0 0v")
             for i in range(step_count):
-                if i == 100:
-                    lines.append("write pin RD1 5.0v")
-                lines.extend([f"stepi {step_size}", f"print {' '.join(PINS)}", *[f"print {var}" for var in STATE_VARS]])
+                if i < 100:
+                    write_tmr1_40m()
+                else:
+                    write_tmr1_20m()
+                lines.append(f"Stepi {step_size}")
+                sample()
         elif phase_name == "released":
-            lines.append(f"# {phase_name}: PTT={ptt_level}")
+            lines.append(f"# {phase_name}: PTT={ptt_level}, keep 20m so RX mode re-classifies")
             lines.append("write pin RC0 5v")
-            lines.append("write pin RD1 2.5v")
             for i in range(step_count):
-                lines.extend([f"stepi {step_size}", f"print {' '.join(PINS)}", *[f"print {var}" for var in STATE_VARS]])
+                write_tmr1_20m()
+                lines.append(f"Stepi {step_size}")
+                sample()
     lines.append("quit")
     return "\n".join(lines)
 
