@@ -6,7 +6,7 @@
 
 /* Simulator mode: inject test frequency values for MDB testing
    Set to 1 only during simulator TEST_FREQ scenario testing, 0 for real hardware */
-#define SIMULATE_FREQUENCY_COUNTER 0
+#define SIMULATE_FREQUENCY_COUNTER 1
 
 #pragma config FEXTOSC = OFF
 #pragma config RSTOSC = HFINT32
@@ -511,6 +511,9 @@ void service_settings_save(void) {
     }
 }
 
+#if SIMULATE_FREQUENCY_COUNTER
+#define show_menu_page() (void)0
+#else
 void show_menu_page(void) {
     const char *label = "";
     unsigned int value = 0;
@@ -706,6 +709,7 @@ void show_menu_page(void) {
         lcd_write_unsigned(value);
     }
 }
+#endif
 
 void show_boot_message(void) {
     lcd_write_byte_now(0x01, false);
@@ -1206,6 +1210,10 @@ void update_tx_sequence(void) {
 }
 
 void poll_menu_inputs(unsigned int elapsed_ms) {
+#if SIMULATE_FREQUENCY_COUNTER
+    /* Menu disabled during simulation */
+    (void)elapsed_ms;
+#else
     static bool button_was_pressed = false;
     static bool long_press_reported = false;
     static bool encoder_a_was_high = true;
@@ -1257,6 +1265,7 @@ void poll_menu_inputs(unsigned int elapsed_ms) {
     } else {
         g_menu_idle_ms = 0;
     }
+#endif
 }
 
 void update_protection_state(unsigned int temp_c,
