@@ -4,7 +4,7 @@
 
 - Repository: `PicAmpControl`
 - Branch: `main`
-- Latest pushed commit: `ef14ddf` (`Create validated MCP schematic foundation`)
+- Latest pushed commit: `90c7bf7` (`Remove all EasyEDA/KiCad schematic automation tooling and generated artifacts`)
 - A user change exists in `.vscode/tasks.json`; do not revert or include it unless explicitly requested.
 - After verified changes, build, commit, and push.
 
@@ -64,7 +64,7 @@
 - Frequency-counter handoff: `docs/frequency-counter-next-steps.md`
 - Schematic workflow (KiCad MCP skill, setup, troubleshooting): `docs/hardware/schematic-workflow.md`
 - Active schematic project: `docs/hardware/project_schematic_package/generated/mcp-final/pic_amp_protection.kicad_sch`
-- Operator UI is a single EC11-style rotary encoder: RC2=A, RB0=B, RB6=push switch, all active-low/common-to-ground with pull-ups. The LPF band decoder uses only RA4/RA6/RA7 because 3 bits cover OFF plus seven bands.
+- Operator UI is a single EC11-style rotary encoder: RC2=A, RB0=B, RB6=push switch, all active-low/common-to-ground with pull-ups. RA4 and RA6 are available for future band selection; RA7 is available for Timer1 frequency counter input.
 
 ## Deferred frequency-counter work
 
