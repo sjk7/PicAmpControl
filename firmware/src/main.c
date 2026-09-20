@@ -366,10 +366,10 @@ void timer0_init(void) {
     PIE4bits.TMR2IE = 1;
     T2CONbits.ON = 1;
     
-    /* Timer1: 16-bit counter, Fosc/4 internal clock, 1:1 prescale
+    /* Timer1: 16-bit counter, EXTERNAL clock on RA7 (async mode)
        (Simulator test will drive TMR1L/TMR1H via Python to simulate square wave) */
     T1CONbits.CKPS = 0;   /* 1:1 prescale */
-    T1CONbits.nSYNC = 0;  /* Synchronous (internal clock only) */
+    T1CONbits.nSYNC = 1;  /* Asynchronous mode (external clock on RA7, counts up to >14MHz) */
     T1CONbits.RD16 = 1;   /* 16-bit mode */
     TMR1H = 0;
     TMR1L = 0;
