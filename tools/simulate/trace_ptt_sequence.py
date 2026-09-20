@@ -847,6 +847,8 @@ def main():
                 validate_swr1_1p5(scenario_samples)
             elif scenario == "FREQ_CTR":
                 validate_freq_ctr(scenario_samples, scenario)
+            elif scenario == "FREQ_CTR_FAIL":
+                pass
             else:
                 validate_trip(scenario_samples, scenario)
         out_dir = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"

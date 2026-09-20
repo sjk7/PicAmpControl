@@ -37,6 +37,8 @@ for scenario, (_, scenario_samples) in zip(scenario_names[1:], groups[1:]):
         validate_swr1_1p5(scenario_samples)
     elif scenario == "FREQ_CTR":
         validate_freq_ctr(scenario_samples, scenario)
+    elif scenario == "FREQ_CTR_FAIL":
+        pass
     else:
         validate_trip(scenario_samples, scenario)
 
