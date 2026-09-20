@@ -41,9 +41,16 @@
 // RB1 is ADC_CURRENT_CHANNEL (analog input, see above) - not a digital pin.
 #define INPUT_OVERCURRENT_FAULT PORTBbits.RB4
 #define OUTPUT_FAN_PWM PORTBbits.RB5
-// RA4, RA6, RA7 are now free for future use (previously used for filter band selection)
 #define INPUT_ENCODER_SWITCH PORTBbits.RB6
 #define OUTPUT_TRIP_STATUS PORTBbits.RB7
+
+// Band-select (LPF relay) outputs, one dedicated active-high pin per band.
+#define OUTPUT_BAND_160M PORTDbits.RD2
+#define OUTPUT_BAND_80M  PORTDbits.RD3
+#define OUTPUT_BAND_40M  PORTDbits.RD4
+#define OUTPUT_BAND_20M  PORTDbits.RD5
+#define OUTPUT_BAND_15M  PORTDbits.RD6
+#define OUTPUT_BAND_10M  PORTDbits.RD7
 
 #endif
 

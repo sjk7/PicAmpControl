@@ -5,8 +5,8 @@
 #include <stdbool.h>
 
 typedef enum {
-    BAND_UNKNOWN = 0,
-    BAND_160M,
+    BAND_160M = 1,
+    BAND_UNKNOWN = BAND_160M,
     BAND_80M,
     BAND_40M,
     BAND_20M,

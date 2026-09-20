@@ -25,7 +25,7 @@ static freq_counter_status_t g_fc_status = {
 
 static rf_band_t classify_frequency_khz(unsigned int freq_khz) {
     if (freq_khz < 1000U) {
-        return BAND_UNKNOWN; // Below 1 MHz (no RF or noise)
+        return BAND_160M; // Default to the lowest band when there is no valid RF or noise.
     } else if (freq_khz >= 1500U && freq_khz <= 2750U) {
         return BAND_160M;
     } else if (freq_khz > 2750U && freq_khz <= 5500U) {
@@ -43,10 +43,34 @@ static rf_band_t classify_frequency_khz(unsigned int freq_khz) {
     }
 }
 
+static void update_band_outputs(rf_band_t band) {
+    OUTPUT_BAND_160M = (band == BAND_160M) ? 1 : 0;
+    OUTPUT_BAND_80M  = (band == BAND_80M)  ? 1 : 0;
+    OUTPUT_BAND_40M  = (band == BAND_40M)  ? 1 : 0;
+    OUTPUT_BAND_20M  = (band == BAND_20M)  ? 1 : 0;
+    OUTPUT_BAND_15M  = (band == BAND_15M)  ? 1 : 0;
+    OUTPUT_BAND_10M  = (band == BAND_10M)  ? 1 : 0;
+}
+
 void freq_counter_init(void) {
     // Configure RD1 as digital input for T1CKI
     TRISDbits.TRISD1 = 1;
     ANSELDbits.ANSD1 = 0;
+
+    // RD2-RD7: one digital output per band, driving the LPF relays.
+    ANSELDbits.ANSD2 = 0;
+    ANSELDbits.ANSD3 = 0;
+    ANSELDbits.ANSD4 = 0;
+    ANSELDbits.ANSD5 = 0;
+    ANSELDbits.ANSD6 = 0;
+    ANSELDbits.ANSD7 = 0;
+    TRISDbits.TRISD2 = 0;
+    TRISDbits.TRISD3 = 0;
+    TRISDbits.TRISD4 = 0;
+    TRISDbits.TRISD5 = 0;
+    TRISDbits.TRISD6 = 0;
+    TRISDbits.TRISD7 = 0;
+    update_band_outputs(BAND_UNKNOWN);
 
     // Map T1CKI input to RD1 via PPS (Port D = 0x18 + pin 1 = 0x19)
     T1CKIPPS = 0x19;
@@ -113,6 +137,7 @@ void freq_counter_tick_10ms(void) {
 
     // If band is locked (during transmit), do NOT update current_band or switch relays!
     if (g_fc_status.band_locked) {
+        update_band_outputs(g_fc_status.current_band);
         return;
     }
 
@@ -127,6 +152,8 @@ void freq_counter_tick_10ms(void) {
         g_fc_status.candidate_band = measured_band;
         g_fc_status.stability_count = 1;
     }
+
+    update_band_outputs(g_fc_status.current_band);
 }
 
 void freq_counter_lock_band(void) {

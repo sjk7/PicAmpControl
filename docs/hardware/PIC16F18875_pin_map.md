@@ -59,12 +59,16 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 |-----|--------|------|--------|---------|
 | RD0 | 29 | GPIO Out | OUTPUT_LCD_D7 | Parallel LCD data bit 7 |
 | RD1 | 30 | GPIO In | INPUT_FREQ_COUNTER | Timer1 external clock (T1CKI via PPS), frequency counter input |
-| RD2 | 31 | GPIO | (free) | Available |
-| RD3 | 32 | GPIO | (free) | Available |
-| RD4 | 33 | GPIO | (free) | Available |
-| RD5 | 34 | GPIO | (free) | Available |
-| RD6 | 35 | GPIO | (free) | Available |
-| RD7 | 36 | GPIO | (free) | Available |
+| RD2 | 31 | GPIO | OUTPUT_BAND_160M | Active-high LPF band-select output for 160 m |
+| RD3 | 32 | GPIO | OUTPUT_BAND_80M | Active-high LPF band-select output for 80 m |
+| RD4 | 33 | GPIO | OUTPUT_BAND_40M | Active-high LPF band-select output for 40 m |
+| RD5 | 34 | GPIO | OUTPUT_BAND_20M | Active-high LPF band-select output for 20 m |
+| RD6 | 35 | GPIO | OUTPUT_BAND_15M | Active-high LPF band-select output for 15 m |
+| RD7 | 36 | GPIO | OUTPUT_BAND_10M | Active-high LPF band-select output for 10 m |
+
+> Pull-up notes for Port D:
+> - `RD1 / INPUT_FREQ_COUNTER` is a Timer1 clock input, not a switch input. It should not get a generic pull-up; it needs a valid external clock signal or proper conditioning. If the source is open-circuit or weakly driven, the fix belongs in the signal source/conditioning network, not a random pull-up.
+> - `RD2`-`RD7` are output pins driving the LPF relay/band-select bus and are not meant to be pulled up or read as switches. They are push-pull CMOS outputs; no pull-up/pull-down resistors are required.
 
 ## Port E (New on PIC16F18875)
 

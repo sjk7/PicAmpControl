@@ -1282,8 +1282,9 @@ int main(void) {
     PORTB = 0x00;
     WPUB = 0x43;
 
-    /* Port D for parallel LCD D7 pin */
-    TRISD = 0xFE;  /* RD0 = output (LCD D7), rest inputs */
+    /* Port D for parallel LCD D7 pin; RD1 (freq counter) and RD2-RD7 (band
+       outputs) are configured separately by freq_counter_init(). */
+    TRISD = 0xFE;  /* RD0 = output (LCD D7), rest inputs for now */
 
     set_tx_output(false);
     set_tx_vcc_output(false);
