@@ -1,9 +1,13 @@
 import sys
 from pathlib import Path
-from trace_ptt_sequence import build_script, run_mdb, find_mdb, parse_trace, validate_sequence, validate_trip, validate_swr1_1p5, validate_freq_ctr
+from trace_ptt_sequence import (build_script, run_mdb, find_mdb, parse_trace,
+                                validate_sequence, validate_trip, validate_swr1_1p5,
+                                validate_frequency_ready, validate_band_coverage, validate_freq_ctr,
+                                validate_freq_ctr_failure)
 
 scenario_names = [None, "TEMPERATURE", "SWR1", "SWR2", "HWFAULT",
-                  "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5", "FREQ_CTR"]
+                  "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5", "FREQ_CTR",
+                  "FREQ_CTR_FAIL"]
 
 first_script = build_script()
 suite_lines = first_script.splitlines()[:-1]
@@ -23,11 +27,16 @@ for idx, (m, samples) in enumerate(groups):
     print(f"Index {idx} -> Scenario: {name} (samples: {len(samples)})")
 
 validate_sequence(groups[0][1])
+validate_frequency_ready(groups[0][1], scenario_names[0])
 for scenario, (_, scenario_samples) in zip(scenario_names[1:], groups[1:]):
+    if scenario == "FREQ_CTR_FAIL":
+        validate_freq_ctr_failure(scenario_samples)
+    else:
+        validate_frequency_ready(scenario_samples, scenario)
     if scenario == "SWR1_1P5":
         validate_swr1_1p5(scenario_samples)
     elif scenario == "FREQ_CTR":
-        validate_freq_ctr(scenario_samples)
+        validate_freq_ctr(scenario_samples, scenario)
     else:
         validate_trip(scenario_samples, scenario)
 

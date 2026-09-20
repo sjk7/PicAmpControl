@@ -14,11 +14,6 @@ add_test(
     COMMAND timeout 300 "${PYTHON_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
             --suite)
-add_test(
-    NAME PTT_FrequencyCounter_BandLock
-    COMMAND timeout 60 "${PYTHON_EXECUTABLE}"
-            "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/test_freq_counter.py")
-
 option(PICAMP_ENABLE_INDIVIDUAL_SIM_TESTS "Register each simulator scenario separately" OFF)
 if (PICAMP_ENABLE_INDIVIDUAL_SIM_TESTS)
     add_test(

@@ -23,6 +23,8 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -78,6 +80,14 @@ TRIP_ADC_PINS = {
 }
 TRIP_NAMES = {"SWR1", "SWR2", "HWFAULT", "CURRENT", "OVERDRIVE", "DRAIN", "TEMPERATURE"}
 NON_TRIP_NAMES = {"SWR1_1P5"}
+BAND_TESTS = [
+    ("160m", 1800, 1),
+    ("80m", 3600, 2),
+    ("40m", 7000, 3),
+    ("20m", 14000, 4),
+    ("15m", 21000, 5),
+    ("10m", 25000, 6),
+]
 
 
 def find_mdb() -> Path:
@@ -108,6 +118,27 @@ def build_script(trip_name=None) -> str:
         for var in STATE_VARS:
             lines.append(f"print {var}")
 
+    def write_tmr1_count(freq_khz):
+        total_counts = int(round((freq_khz * 1000.0) / 400.0))
+        if total_counts > 0xFFFF:
+            raise ValueError(f"{freq_khz} kHz cannot be represented by a 16-bit Timer1 write")
+        lines.append(f"write TMR1L 0x{total_counts & 0xFF:02X}")
+        lines.append(f"write TMR1H 0x{(total_counts >> 8) & 0xFF:02X}")
+
+    def band_preflight(all_bands=False):
+        band_tests = BAND_TESTS if all_bands else [("40m", 7000, 3)]
+        for band_name, freq_khz, expected_band in band_tests:
+            lines.append(f"# BAND PREFLIGHT: {band_name} @ {freq_khz} kHz (expected {expected_band})")
+            for _ in range(4):
+                write_tmr1_count(freq_khz)
+                lines.append("Stepi 80000")
+                sample()
+        lines.append("# Restore 40m before scenario PTT stimulus")
+        for _ in range(4):
+            write_tmr1_count(7000)
+            lines.append("Stepi 80000")
+            sample()
+
     if trip_name == "SWR1_1P5":
         lines[3:5] = ["write pin RA0 5.000v", "write pin RA1 0.200v"]
     if trip_name == "FREQ_CTR":
@@ -116,48 +147,49 @@ def build_script(trip_name=None) -> str:
             lines.append("Stepi 80000")
             sample()
 
-        # --- RX mode: Apply 40m band frequency (17484 pulses = ~7000 kHz, BAND_40M = 3) ---
-        for _ in range(5):
-            lines.append("write TMR1L 0x4C")
-            lines.append("write TMR1H 0x44")
+        band_preflight(all_bands=True)
+        for index, (band_name, freq_khz, expected_band) in enumerate(BAND_TESTS):
+            injected_freq_khz = BAND_TESTS[(index + 1) % len(BAND_TESTS)][1]
+            lines.append(f"# TX BAND CHECK: {band_name} @ {freq_khz} kHz, inject {injected_freq_khz} kHz")
+            for _ in range(5):
+                write_tmr1_count(freq_khz)
+                lines.append("Stepi 80000")
+                sample()
+            lines.append("write pin RC0 0v")
+            for _ in range(12):
+                write_tmr1_count(freq_khz)
+                lines.append("Stepi 8000")
+                sample()
+            for _ in range(20):
+                write_tmr1_count(freq_khz)
+                lines.append("Stepi 40000")
+                sample()
+            for _ in range(10):
+                write_tmr1_count(injected_freq_khz)
+                lines.append("Stepi 80000")
+                sample()
+            lines.append("write pin RC0 5v")
+            for _ in range(30):
+                write_tmr1_count(freq_khz)
+                lines.append("Stepi 40000")
+                sample()
+
+        lines.append("quit")
+        return "\n".join(lines)
+
+    if trip_name == "FREQ_CTR_FAIL":
+        for _ in range(105):
             lines.append("Stepi 80000")
             sample()
-
-        # --- Assert PTT (pull RC0 low) ---
+        lines.append("# No Timer1 writes: simulate a missing frequency-counter signal")
         lines.append("write pin RC0 0v")
-        for _ in range(12):
-            lines.append("write TMR1L 0x4C")
-            lines.append("write TMR1H 0x44")
-            lines.append("Stepi 8000")
-            sample()
         for _ in range(20):
-            lines.append("write TMR1L 0x4C")
-            lines.append("write TMR1H 0x44")
-            lines.append("Stepi 40000")
-            sample()
-
-        # --- TX mode (Stage 3): Try injecting 20m frequency (35000 pulses = ~14000 kHz) ---
-        # Should be IGNORED because band is locked during TX!
-        for _ in range(10):
-            lines.append("write TMR1L 0xA8")
-            lines.append("write TMR1H 0x88")
             lines.append("Stepi 80000")
             sample()
-
-        # --- Release PTT (RC0 high) ---
         lines.append("write pin RC0 5v")
-        for _ in range(30):
-            lines.append("Stepi 40000")
-            sample()
-
-        # --- RX mode again: Apply 20m frequency (35000 pulses = ~14000 kHz) ---
-        # Should now update to 20m band (BAND_20M = 4) because PTT is released!
         for _ in range(5):
-            lines.append("write TMR1L 0xA8")
-            lines.append("write TMR1H 0x88")
             lines.append("Stepi 80000")
             sample()
-
         lines.append("quit")
         return "\n".join(lines)
 
@@ -173,6 +205,7 @@ def build_script(trip_name=None) -> str:
     for _ in range(105 if not temperature_trip else 110):
         lines.append("Stepi 80000")  # 10 ms per print
         sample()
+    band_preflight()
     # --- Assert PTT (pull RC0 low), triggering SETTLE high for 10 ms ---
     lines.append("write pin RC0 0v")
     # Fine-grained steps to catch SETTLE high pulse (comparator reset)
@@ -244,10 +277,12 @@ def build_script(trip_name=None) -> str:
             lines.append(f"write pin {pin} {voltage:.3f}v")
         lines.append("write pin RC0 5v")
         for _ in range(10):
+            write_tmr1_count(7000)
             lines.append("Stepi 40000")
             sample()
         lines.append("write pin RC0 0v")
         for _ in range(50):
+            write_tmr1_count(7000)
             lines.append("Stepi 8000")
             sample()
         lines.append("quit")
@@ -295,6 +330,57 @@ def run_mdb(mdb_path: Path, script: str, timeout: float = 280) -> str:
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
             start_new_session=True,
         )
+        debug_path = os.environ.get("PICAMP_MDB_DEBUG_LOG")
+        if debug_path:
+            debug_file = open(debug_path, "a", buffering=1)
+            debug_lock = threading.Lock()
+            captured = {"stdout": [], "stderr": []}
+            byte_counts = {"stdout": 0, "stderr": 0}
+            logged_counts = {"stdout": 0, "stderr": 0}
+
+            def drain_stream(stream_name, stream):
+                for chunk in iter(lambda: stream.read(4096), ""):
+                    captured[stream_name].append(chunk)
+                    byte_counts[stream_name] += len(chunk.encode(errors="replace"))
+                    if byte_counts[stream_name] - logged_counts[stream_name] >= 65536:
+                        logged_counts[stream_name] = byte_counts[stream_name]
+                        with debug_lock:
+                            debug_file.write(
+                                f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] "
+                                f"MDB_OUTPUT stream={stream_name} bytes={byte_counts[stream_name]} "
+                                f"tail={chunk[-240:]!r}\n"
+                            )
+
+            debug_file.write(
+                f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_START pid={proc.pid}\n"
+            )
+            readers = [
+                threading.Thread(target=drain_stream, args=("stdout", proc.stdout), daemon=True),
+                threading.Thread(target=drain_stream, args=("stderr", proc.stderr), daemon=True),
+            ]
+            for reader in readers:
+                reader.start()
+            try:
+                proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                proc.wait()
+                debug_file.write(
+                    f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_TIMEOUT "
+                    f"stdout_bytes={byte_counts['stdout']} stderr_bytes={byte_counts['stderr']}\n"
+                )
+                for reader in readers:
+                    reader.join(timeout=2)
+                debug_file.close()
+                sys.exit(f"error: mdb timed out after {timeout}s and was killed")
+            for reader in readers:
+                reader.join(timeout=2)
+            debug_file.write(
+                f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_EXIT code={proc.returncode} "
+                f"stdout_bytes={byte_counts['stdout']} stderr_bytes={byte_counts['stderr']}\n"
+            )
+            debug_file.close()
+            return "".join(captured["stdout"] + captured["stderr"])
         try:
             stdout, stderr = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -325,6 +411,79 @@ def block_reason(state: dict) -> str | None:
         names = [name for bit, name in TRIP_REASON_BITS if reason_bits & bit]
         return "FAULT: " + "+".join(names) if names else "FAULT: UNKNOWN"
     return None
+
+
+def validate_frequency_ready(samples, scenario_name="unknown") -> None:
+    matches = [
+        sample for sample in samples
+        if sample[2].get("g_fc_status.frequency_khz") == "7000"
+        and sample[2].get("g_fc_status.current_band") == "3"
+    ]
+    if not matches:
+        print(f"FREQ_DEBUG scenario={scenario_name} missing valid 40m precondition", flush=True)
+        raise AssertionError(f"{scenario_name}: frequency counter did not establish valid 40m PTT precondition")
+
+
+def validate_band_coverage(samples, scenario_name="unknown") -> None:
+    for band_name, freq_khz, expected_band in BAND_TESTS:
+        matches = [
+            sample for sample in samples
+            if sample[2].get("g_fc_status.frequency_khz") == str(freq_khz)
+            and sample[2].get("g_fc_status.current_band") == str(expected_band)
+        ]
+        if not matches:
+            observed_pairs = sorted({
+                (sample[2].get("g_fc_status.frequency_khz"),
+                 sample[2].get("g_fc_status.current_band"))
+                for sample in samples
+            })
+            observed_frequency = [
+                (sample[2].get("g_fc_status.frequency_khz"),
+                 sample[2].get("g_fc_status.current_band"),
+                 sample[2].get("g_fc_status.band_locked"),
+                 sample[2].get("g_ptt_active"),
+                 sample[2].get("g_sequence_stage"))
+                for sample in samples
+                if sample[2].get("g_fc_status.frequency_khz") == str(freq_khz)
+            ]
+            print(f"FREQ_DEBUG scenario={scenario_name} samples={len(samples)}", flush=True)
+            print(f"FREQ_DEBUG missing={band_name}@{freq_khz}kHz expected_band={expected_band}", flush=True)
+            print(f"FREQ_DEBUG observed_pairs={observed_pairs}", flush=True)
+            print(f"FREQ_DEBUG matching_frequency_states={observed_frequency}", flush=True)
+            raise AssertionError(
+                f"{scenario_name}: {band_name} band was not classified at {freq_khz} kHz"
+            )
+
+
+def validate_freq_ctr(samples, scenario_name="FREQ_CTR") -> None:
+    validate_band_coverage(samples, scenario_name)
+    for index, (band_name, freq_khz, expected_band) in enumerate(BAND_TESTS):
+        injected_freq_khz = BAND_TESTS[(index + 1) % len(BAND_TESTS)][1]
+        locked_injection = [
+            sample for sample in samples
+            if sample[2].get("g_ptt_active") == "true"
+            and sample[2].get("g_sequence_stage") == "3"
+            and sample[2].get("g_fc_status.band_locked") == "true"
+            and sample[2].get("g_fc_status.current_band") == str(expected_band)
+            and sample[2].get("g_fc_status.frequency_khz") == str(injected_freq_khz)
+        ]
+        if not locked_injection:
+            raise AssertionError(
+                f"{band_name} TX lock failed while injecting {injected_freq_khz} kHz"
+            )
+    print("FREQ_CTR passed: all bands classified and each band stayed locked during TX injection")
+
+
+def validate_freq_ctr_failure(samples) -> None:
+    attempted_tx = [sample for sample in samples if sample[2].get("g_ptt_active") == "true"]
+    if attempted_tx:
+        raise AssertionError("PTT was not canceled when the frequency counter had no valid signal")
+    if any(sample[2].get("g_sequence_stage") != "0" for sample in samples):
+        raise AssertionError("frequency-counter failure left the TX sequence active")
+    if any((sample[1]["RC5"], sample[1]["RC6"], sample[1]["RC7"]) != (1, 1, 1)
+           for sample in samples):
+        raise AssertionError("frequency-counter failure did not keep all TX outputs inactive")
+    print("FREQ_CTR failure passed: missing signal canceled PTT before TX")
 
 
 def validate_sequence(samples) -> None:
@@ -419,6 +578,19 @@ def validate_trip(samples, trip_name) -> None:
                           if sample[2]["g_fault_latched"] == "false" and
                           sample[2]["g_sequence_stage"] == "3"), None)
         if recovered is None:
+            recovery_trace = [
+                (sample[2].get("g_ptt_active"),
+                 sample[2].get("g_fault_latched"),
+                 sample[2].get("g_trip_reason"),
+                 sample[2].get("g_sequence_stage"),
+                 sample[2].get("g_fc_status.frequency_khz"),
+                 sample[2].get("g_fc_status.current_band"),
+                 sample[2].get("g_fc_status.band_locked"),
+                 (sample[1]["RC5"], sample[1]["RC6"], sample[1]["RC7"]),
+                 (sample[3]["RA0"], sample[3]["RA1"]))
+                for sample in samples[samples.index(shutdown_done):]
+            ]
+            print(f"SWR_DEBUG {trip_name} recovery_trace={recovery_trace}", flush=True)
             raise AssertionError(f"{trip_name} did not clear and re-enter TX after a PTT re-arm")
         if trip_name == "CURRENT" and recovered[3]["RB1"] > 2.95:
             raise AssertionError("current re-arm exceeded the 10A limit")
@@ -637,6 +809,8 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir):
 
 def main():
     test_mode = "--test" in sys.argv[1:]
+    if "--quick-bands" in sys.argv[1:]:
+        BAND_TESTS[:] = [("40m", 7000, 3)]
     trip_name = "TEMPERATURE" if "--temperature-trip" in sys.argv[1:] else None
     if "--swr1-1p5" in sys.argv[1:]:
         trip_name = "SWR1_1P5"
@@ -647,7 +821,10 @@ def main():
     temperature_trip = trip_name == "TEMPERATURE"
     if "--suite" in sys.argv[1:]:
         scenario_names = [None, "TEMPERATURE", "SWR1", "SWR2", "HWFAULT",
-                          "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5"]
+                          "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5", "FREQ_CTR",
+                          "FREQ_CTR_FAIL"]
+        if "--quick-bands" in sys.argv[1:]:
+            scenario_names = [None, "FREQ_CTR", "FREQ_CTR_FAIL"]
         first_script = build_script()
         suite_lines = first_script.splitlines()[:-1]
         for index, scenario in enumerate(scenario_names[1:], 1):
@@ -660,9 +837,16 @@ def main():
         if len(groups) != len(scenario_names):
             raise AssertionError(f"suite produced {len(groups)} scenarios, expected {len(scenario_names)}")
         validate_sequence(groups[0][1])
+        validate_frequency_ready(groups[0][1], scenario_names[0])
         for scenario, (_, scenario_samples) in zip(scenario_names[1:], groups[1:]):
+            if scenario == "FREQ_CTR_FAIL":
+                validate_freq_ctr_failure(scenario_samples)
+            else:
+                validate_frequency_ready(scenario_samples, scenario)
             if scenario == "SWR1_1P5":
                 validate_swr1_1p5(scenario_samples)
+            elif scenario == "FREQ_CTR":
+                validate_freq_ctr(scenario_samples, scenario)
             else:
                 validate_trip(scenario_samples, scenario)
         out_dir = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"

@@ -41,6 +41,9 @@ void freq_counter_lock_band(void);
 // Unlock band after transmit returns to RX/Idle
 void freq_counter_unlock_band(void);
 
+// Return true only when the latest measurement is usable for PTT/TX sequencing.
+bool freq_counter_signal_valid(void);
+
 // Get current frequency counter status
 void freq_counter_get_status(freq_counter_status_t *status);
 

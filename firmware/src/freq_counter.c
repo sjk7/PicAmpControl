@@ -165,6 +165,12 @@ void freq_counter_unlock_band(void) {
     g_fc_status.band_locked = false;
 }
 
+bool freq_counter_signal_valid(void) {
+    return g_fc_status.frequency_khz >= 1000U &&
+           g_fc_status.frequency_khz <= 32000U &&
+           g_fc_status.current_band != BAND_OUT_OF_SPEC;
+}
+
 void freq_counter_get_status(freq_counter_status_t *status) {
     if (status != NULL) {
         *status = g_fc_status;

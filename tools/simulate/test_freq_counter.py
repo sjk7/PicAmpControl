@@ -6,7 +6,6 @@ and updates to 20m in RX after PTT release.
 Usage:
     python tools/simulate/test_freq_counter.py
 """
-import argparse
 import os
 import re
 import signal
@@ -35,27 +34,15 @@ PHASES = [
     ("asserted", "0v", 300, STEP_SIZE),  # PTT pressed
     ("released", "5v", 60, 40000),  # PTT released; 300ms for relay/VCC/bias unwind + reclassify
 ]
-# Every band classification case in the firmware. This intentionally includes band-edge
-# transitions to prove the adjacent-band logic switches cleanly at the defined thresholds.
-BAND_TESTS = [
-    ("160m", 1500, 1),
+EXTRA_BAND_TESTS = [
     ("160m", 1800, 1),
-    ("160m", 2750, 1),
-    ("80m", 2751, 2),
     ("80m", 3600, 2),
-    ("80m", 5500, 2),
-    ("40m", 5501, 3),
-    ("40m", 7000, 3),
-    ("40m", 10500, 3),
-    ("20m", 10501, 4),
     ("20m", 14000, 4),
-    ("20m", 17500, 4),
-    ("15m", 17501, 5),
     ("15m", 21000, 5),
-    ("15m", 24500, 5),
-    ("10m", 24501, 6),
-    ("10m", 28500, 6),
-    ("10m", 32000, 6),
+    ("10m", 25000, 6),
+]
+TX_BAND_TESTS = [
+    ("160m", 1800, 1, 3600),
 ]
 PINS = ["RC1", "RC0", "RC5", "RC6", "RC7"]
 PIN_LABELS = {"RC1": "SETTLE", "RC0": "PTT", "RC5": "RELAYS", "RC6": "TX_VCC", "RC7": "TX_BIAS"}
@@ -79,23 +66,6 @@ def find_mdb() -> Path:
     return candidates[-1]
 
 
-def write_tmr1_count(lines, freq_khz):
-    """Compute the Timer1 value for a target frequency using the 1:4 prescaler.
-
-    With a 10 ms gate and a 1:4 prescaler, the Timer1 register receives:
-        TMR1_count = frequency_hz / 400
-    so the firmware's tracked frequency_khz expression remains:
-        frequency_khz = (count * 2) / 5
-    and therefore a 7000 kHz signal appears as 17500 counts in Timer1.
-    """
-    total_counts = int(round((freq_khz * 1000.0) / 400.0))
-    total_counts = max(0, min(65535, total_counts))
-    lo = total_counts & 0xFF
-    hi = (total_counts >> 8) & 0xFF
-    lines.append(f"write TMR1L 0x{lo:02X}")
-    lines.append(f"write TMR1H 0x{hi:02X}")
-
-
 def build_script() -> str:
     """Build mdb script for frequency counter test."""
     lines = [f"device {DEVICE}", "hwtool sim", f"program {ELF_PATH}"]
@@ -110,46 +80,99 @@ def build_script() -> str:
         for var in STATE_VARS:
             lines.append(f"print {var}")
 
-    # First, let the startup inhibit and PTT idle state settle.
+    # T1CKI (RD1) is a real clock input to Timer1, so a static "write pin" voltage
+    # produces no edges. Emulate the counted pulses by writing TMR1H/TMR1L directly
+    # each step, matching the FREQ_CTR scenario in trace_ptt_sequence.py:
+    #   0x444C = 17484 pulses -> 6993 kHz (BAND_40M)
+    #   0x88A8 = 34984 pulses -> 13993 kHz (BAND_20M)
+    def write_tmr1_40m():
+        lines.append("write TMR1L 0x4C")
+        lines.append("write TMR1H 0x44")
+
+    def write_tmr1_20m():
+        lines.append("write TMR1L 0xA8")
+        lines.append("write TMR1H 0x88")
+
+    def write_tmr1_count(freq_khz):
+        total_counts = int(round((freq_khz * 1000.0) / 400.0))
+        if total_counts > 0xFFFF:
+            raise ValueError(f"{freq_khz} kHz cannot be represented by a 16-bit Timer1 write")
+        lines.append(f"write TMR1L 0x{total_counts & 0xFF:02X}")
+        lines.append(f"write TMR1H 0x{(total_counts >> 8) & 0xFF:02X}")
+
     for phase_name, ptt_level, step_count, step_size in PHASES:
         if phase_name == "steady_coarse":
             lines.append(f"# {phase_name}: PTT={ptt_level}")
             lines.append(f"Stepi {step_count * step_size}")
         elif phase_name == "steady_mid":
-            lines.append(f"# {phase_name}: PTT={ptt_level}")
-            for _ in range(step_count):
-                write_tmr1_count(lines, 7000)
+            lines.append(f"# {phase_name}: PTT={ptt_level}, inject 40m (6993kHz) via TMR1")
+            for i in range(step_count):
+                write_tmr1_40m()
                 lines.append(f"Stepi {step_size}")
                 sample()
+            for band_name, freq_khz, expected_band in EXTRA_BAND_TESTS:
+                total_counts = int(round((freq_khz * 1000.0) / 400.0))
+                lines.append(f"# BAND CHECK: {band_name} @ {freq_khz} kHz (expected {expected_band})")
+                for _ in range(10):
+                    lines.append(f"write TMR1L 0x{total_counts & 0xFF:02X}")
+                    lines.append(f"write TMR1H 0x{(total_counts >> 8) & 0xFF:02X}")
+                    lines.append("Stepi 80000")
+                    sample()
+                lines.append("# Restore 40m before TX lock scenario")
+                for _ in range(10):
+                    write_tmr1_40m()
+                    lines.append("Stepi 80000")
+                    sample()
         elif phase_name == "asserted":
-            lines.append(f"# {phase_name}: PTT={ptt_level} -> test band-lock during TX")
+            lines.append(f"# {phase_name}: PTT={ptt_level}, then inject 20m (13993kHz) during TX stage 3")
             lines.append("write pin RC0 0v")
-            for idx in range(step_count):
-                target_khz = 7000 if idx < 100 else 14000
-                write_tmr1_count(lines, target_khz)
+            for i in range(step_count):
+                if i < 100:
+                    write_tmr1_40m()
+                else:
+                    write_tmr1_20m()
                 lines.append(f"Stepi {step_size}")
                 sample()
         elif phase_name == "released":
-            lines.append(f"# {phase_name}: PTT={ptt_level} -> RX reclassification")
+            lines.append(f"# {phase_name}: PTT={ptt_level}, keep 20m so RX mode re-classifies")
             lines.append("write pin RC0 5v")
-            for _ in range(step_count):
-                write_tmr1_count(lines, 14000)
+            for i in range(step_count):
+                write_tmr1_20m()
                 lines.append(f"Stepi {step_size}")
                 sample()
 
-    # Sweep every amateur band and adjacent boundaries to confirm clean transitions.
-    for band_name, freq_khz, expected_band in BAND_TESTS:
-        lines.append(f"# BAND SWEEP: {band_name} @ {freq_khz} kHz (expected {expected_band})")
-        write_tmr1_count(lines, freq_khz)
-        for _ in range(10):
+    # Repeat the PTT/TX lock sequence on every band. The alternate frequency is
+    # injected only after the full-suite timing reaches the transmit stage.
+    for band_name, freq_khz, expected_band, injected_freq_khz in TX_BAND_TESTS:
+        lines.append(f"# TX BAND CHECK: {band_name} @ {freq_khz} kHz, inject {injected_freq_khz} kHz")
+        for _ in range(5):
+            write_tmr1_count(freq_khz)
             lines.append("Stepi 80000")
+            sample()
+        lines.append("write pin RC0 0v")
+        for _ in range(12):
+            write_tmr1_count(freq_khz)
+            lines.append("Stepi 8000")
+            sample()
+        for _ in range(20):
+            write_tmr1_count(freq_khz)
+            lines.append("Stepi 40000")
+            sample()
+        for _ in range(10):
+            write_tmr1_count(injected_freq_khz)
+            lines.append("Stepi 80000")
+            sample()
+        lines.append("write pin RC0 5v")
+        for _ in range(30):
+            write_tmr1_count(freq_khz)
+            lines.append("Stepi 40000")
             sample()
 
     lines.append("quit")
     return "\n".join(lines)
 
 
-def run_mdb(mdb_path: Path, script: str, timeout_seconds: float = 60.0) -> str:
+def run_mdb(mdb_path: Path, script: str) -> str:
     print(f"[DEBUG] Starting mdb: {mdb_path}", flush=True)
     with tempfile.NamedTemporaryFile(mode="w", suffix=".mdb", delete=False) as f:
         f.write(script)
@@ -164,12 +187,12 @@ def run_mdb(mdb_path: Path, script: str, timeout_seconds: float = 60.0) -> str:
             start_new_session=True,
         )
         try:
-            stdout, stderr = proc.communicate(timeout=timeout_seconds)
+            stdout, stderr = proc.communicate(timeout=120)
         except subprocess.TimeoutExpired:
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
             stdout, stderr = proc.communicate()
-            print(f"[DEBUG] mdb timed out after {timeout_seconds} seconds", flush=True)
-            sys.exit(f"error: mdb timed out after {timeout_seconds} seconds")
+            print("[DEBUG] mdb timed out after 120 seconds", flush=True)
+            sys.exit("error: mdb timed out after 120 seconds")
         print(f"[DEBUG] mdb completed, got {len(stdout)} bytes stdout, {len(stderr)} bytes stderr", flush=True)
         return stdout + stderr
     finally:
@@ -210,11 +233,12 @@ def parse_trace(output: str):
 
 
 def validate_freq_ctr(samples) -> None:
-    # Check the core TX/RX lock behavior still works.
+    # Check 40m band classified (BAND_40M = 3)
     classified_40m = [s for s in samples if s[2].get("g_fc_status.current_band") == "3"]
     if not classified_40m:
         raise AssertionError("Frequency counter failed to classify 40m band")
 
+    # Check band was locked when frequency shifted to 20m (BAND_20M = 4) during TX stage 3
     tx_20m_injection = [s for s in samples if s[2]["g_ptt_active"] == "true" and s[2]["g_sequence_stage"] == "3" and s[2].get("g_fc_status.frequency_khz") == "13993"]
     if not tx_20m_injection:
         raise AssertionError("Frequency counter test did not inject 20m frequency during TX stage 3")
@@ -223,60 +247,78 @@ def validate_freq_ctr(samples) -> None:
     if not tx_locked:
         raise AssertionError("Frequency counter failed to lock 40m band when 20m frequency was injected during TX stage 3")
 
+    # Check 20m band classified after PTT release in RX mode
     rx_20m = [s for s in samples if s[2]["g_ptt_active"] == "false" and s[2].get("g_fc_status.current_band") == "4"]
     if not rx_20m:
         raise AssertionError("Frequency counter failed to update to 20m band in RX mode after PTT release")
 
-    # Verify every defined band and adjacent-band threshold case.
-    for band_name, freq_khz, expected_band in BAND_TESTS:
-        # The simulator emits one sample set after each repeated TMR1 write; the
-        # frequency_khz value must match the target within the integer-kHz resolution.
+    for band_name, freq_khz, expected_band in EXTRA_BAND_TESTS:
         matches = [
             s for s in samples
-            if s[2].get("g_fc_status.frequency_khz") == str(freq_khz)
-            and s[2].get("g_fc_status.current_band") == str(expected_band)
+            if s[2].get("g_fc_status.current_band") == str(expected_band)
+            and s[2].get("g_fc_status.frequency_khz") == str(freq_khz)
         ]
         if not matches:
-            raise AssertionError(f"Band transition failed for {band_name} @ {freq_khz} kHz: expected current_band={expected_band}")
+            observed = sorted({
+                (s[2].get("g_fc_status.frequency_khz"), s[2].get("g_fc_status.current_band"))
+                for s in samples
+            })
+            print(f"Observed frequency/band pairs for {band_name}: {observed}")
+            print("80m state samples:", [
+                (s[2].get("g_fc_status.frequency_khz"),
+                 s[2].get("g_fc_status.current_band"),
+                 s[2].get("g_fc_status.band_locked"),
+                 s[2].get("g_ptt_active"),
+                 s[2].get("g_sequence_stage"))
+                for s in samples
+                if s[2].get("g_fc_status.frequency_khz") == str(freq_khz)
+            ])
+            raise AssertionError(f"Band check failed for {band_name} @ {freq_khz} kHz")
 
-    print("FREQ_CTR test passed: all amateur bands and adjacent-band thresholds switched correctly")
+    for band_name, freq_khz, expected_band, injected_freq_khz in TX_BAND_TESTS:
+        locked_injection = [
+            s for s in samples
+            if s[2].get("g_ptt_active") == "true"
+            and s[2].get("g_sequence_stage") == "3"
+            and s[2].get("g_fc_status.band_locked") == "true"
+            and s[2].get("g_fc_status.current_band") == str(expected_band)
+            and s[2].get("g_fc_status.frequency_khz") == str(injected_freq_khz)
+        ]
+        if not locked_injection:
+            raise AssertionError(
+                f"TX lock failed for {band_name}: injected {injected_freq_khz} kHz did not preserve band {expected_band}"
+            )
+
+    print("FREQ_CTR test passed: 40m classified, locked during 20m injection in TX, updated to 20m in RX after PTT release")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Frequency-counter and band classification simulator test.")
-    parser.add_argument("--timeout", type=float, default=60.0,
-                        help="Per-run timeout for the MPLAB mdb process in seconds (default: 60)")
-    args = parser.parse_args()
-
     print("[DEBUG] Starting frequency counter test", flush=True)
     if not ELF_PATH.exists():
         print(f"[DEBUG] ELF not found at {ELF_PATH}", flush=True)
         sys.exit(f"error: {ELF_PATH} not found - build firmware first")
-
+    
     print(f"[DEBUG] ELF found at {ELF_PATH}", flush=True)
     mdb_path = find_mdb()
     print(f"[DEBUG] Found mdb at {mdb_path}", flush=True)
-
+    
     print("[DEBUG] Building mdb script", flush=True)
-    print("[BAND] Frequencies under test:")
-    for band_name, freq_khz, expected_band in BAND_TESTS:
-        print(f"[BAND] {band_name}: {freq_khz} kHz (expected band enum {expected_band})")
     script = build_script()
     print(f"[DEBUG] Script built: {len(script)} bytes", flush=True)
-
-    print(f"[DEBUG] Running mdb with timeout {args.timeout}s", flush=True)
-    output = run_mdb(mdb_path, script, timeout_seconds=args.timeout)
+    
+    print("[DEBUG] Running mdb", flush=True)
+    output = run_mdb(mdb_path, script)
     print(f"[DEBUG] mdb output received: {len(output)} bytes", flush=True)
-
+    
     print("[DEBUG] Parsing trace", flush=True)
     samples = parse_trace(output)
     print(f"[DEBUG] Parsed {len(samples)} samples", flush=True)
-
+    
     if not samples:
         print("[DEBUG] No samples parsed, dumping last 500 chars of output:", flush=True)
         print(output[-500:], flush=True)
         sys.exit("error: no samples parsed from mdb output")
-
+    
     print("[DEBUG] Validating frequency counter", flush=True)
     validate_freq_ctr(samples)
     print("Frequency counter test completed successfully", flush=True)

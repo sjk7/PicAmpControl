@@ -677,6 +677,15 @@ void handle_ptt_transition(bool ptt_asserted) {
     if (g_startup_inhibit)
         return; // Ignore PTT changes until system settles (RC1 low)
     if (ptt_asserted) {
+        if (!freq_counter_signal_valid()) {
+            set_tx_output(false);
+            set_tx_vcc_output(false);
+            set_tx_bias_output(false);
+            g_ptt_active = false;
+            g_sequence_stage = 0;
+            freq_counter_unlock_band();
+            return;
+        }
         g_ptt_active = true;
         if (!g_transient_menu_display) {
             if (is_live_menu_page(g_menu_page)) {
