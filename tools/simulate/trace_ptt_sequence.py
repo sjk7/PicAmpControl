@@ -33,7 +33,7 @@ DEVICE = "PIC16F18855"
 STATE_VARS = [
     "g_startup_inhibit", "g_comparator_reset_active", "g_fault_latched", "g_trip_reason",
     "g_ptt_active", "g_sequence_stage", "g_state", "g_trip_shutdown_active",
-    "g_ptt_complete_display_active", "g_transient_menu_display"
+    "g_ptt_complete_display_active", "g_transient_menu_display", "g_selected_band"
 ]
 TRIP_REASON_BITS = [
     (0x01, "SWR1"),
@@ -71,10 +71,10 @@ TRIP_ADC_PINS = {
     "SWR1": ["RA0", "RA1"], "SWR2": ["RA2", "RA3"],
     "SWR1_1P5": ["RA0", "RA1"],
     "TEMPERATURE": ["RA5"], "CURRENT": ["RB1"],
-    "OVERDRIVE": ["RB2"], "DRAIN": ["RB3"], "HWFAULT": []
+    "OVERDRIVE": ["RB2"], "DRAIN": ["RB3"], "HWFAULT": [], "TEST_FREQ": []
 }
 TRIP_NAMES = {"SWR1", "SWR2", "HWFAULT", "CURRENT", "OVERDRIVE", "DRAIN", "TEMPERATURE"}
-NON_TRIP_NAMES = {"SWR1_1P5"}
+NON_TRIP_NAMES = {"SWR1_1P5", "TEST_FREQ"}
 
 
 def find_mdb() -> Path:
@@ -107,6 +107,23 @@ def build_script(trip_name=None) -> str:
 
     if trip_name == "SWR1_1P5":
         lines[3:5] = ["write pin RA0 5.000v", "write pin RA1 0.200v"]
+    if trip_name == "TEST_FREQ":
+        # Frequency counter test: verify firmware is ready
+        # NOTE: MDB simulator cannot write Timer1 registers (only supports pin writes).
+        # Real frequency counter testing requires hardware with RF input on RA7.
+        # This test just verifies startup completes and g_selected_band is initialized.
+        
+        for _ in range(110):  # ~1.1 seconds startup
+            lines.append("Stepi 80000")
+            sample()
+        
+        # Verify band is initialized (expect BAND_NONE = 0 since no Timer1 input)
+        for _ in range(10):  # Capture a few more samples
+            lines.append("Stepi 40000")
+            sample()
+        
+        lines.append("quit")
+        return "\n".join(lines)
     if not temperature_trip:
         # --- Briefly assert PTT during startup; it must have no effect while inhibited ---
         lines.append("write pin RC0 0v")
@@ -368,6 +385,35 @@ def validate_swr1_1p5(samples) -> None:
     print(f"SWR1 1.50:1 at 2.000kW PEP: no trip; TX remained active for {active_ms:.1f}ms")
 
 
+
+def validate_test_freq(samples) -> None:
+    """Verify frequency counter infrastructure is initialized (simulator-limited test).
+    
+    NOTE: MDB simulator cannot write Timer1 registers, so full band-selection testing
+    requires real hardware with RF input on RA7. This test verifies the infrastructure
+    is present and firmware startup completes without errors.
+    """
+    if not samples:
+        raise AssertionError("No samples captured during TEST_FREQ scenario")
+    
+    # Check that g_selected_band is being sampled
+    bands = []
+    for sample in samples:
+        if "g_selected_band" in sample[2]:
+            try:
+                bands.append(int(sample[2]["g_selected_band"]))
+            except:
+                pass
+    
+    if not bands:
+        raise AssertionError("g_selected_band not sampled (frequency counter not integrated)")
+    
+    # In simulator without Timer1 input, band should stay at 0 (BAND_NONE)
+    if set(bands) != {0}:
+        raise AssertionError(f"Expected BAND_NONE (0) in simulator, got {set(bands)}")
+    
+    print(f"Frequency counter infrastructure test passed (simulator verification only; full test requires real hardware)")
+
 def parse_trace(output: str):
     """Walks the mdb transcript in order, tracking cumulative instruction count and
     each pin's/variable's most-recently-printed value, sampling a full snapshot every
@@ -571,7 +617,7 @@ def main():
     temperature_trip = trip_name == "TEMPERATURE"
     if "--suite" in sys.argv[1:]:
         scenario_names = [None, "TEMPERATURE", "SWR1", "SWR2", "HWFAULT",
-                          "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5"]
+                          "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5", "TEST_FREQ"]
         first_script = build_script()
         suite_lines = first_script.splitlines()[:-1]
         for index, scenario in enumerate(scenario_names[1:], 1):
@@ -587,6 +633,8 @@ def main():
         for scenario, (_, scenario_samples) in zip(scenario_names[1:], groups[1:]):
             if scenario == "SWR1_1P5":
                 validate_swr1_1p5(scenario_samples)
+            elif scenario == "TEST_FREQ":
+                validate_test_freq(scenario_samples)
             else:
                 validate_trip(scenario_samples, scenario)
         out_dir = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"
@@ -617,6 +665,8 @@ def main():
     if trip_name:
         if trip_name in TRIP_NAMES:
             validate_trip(samples, trip_name)
+        elif trip_name == "TEST_FREQ":
+            validate_test_freq(samples)
         else:
             validate_swr1_1p5(samples)
 

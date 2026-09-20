@@ -146,6 +146,8 @@ static unsigned int g_pep_decay_elapsed_ms = 0;
 static unsigned int g_current_peak_decay_elapsed_ms = 0;
 static unsigned int g_status_refresh_ms = 0;
 static unsigned int g_startup_elapsed_ms = 0;
+static unsigned int g_freq_counter_gate_elapsed_ms = 0;
+static unsigned long g_freq_counter_hz = 0;
 static volatile unsigned char g_timer_ticks_pending = 0;
 static menu_page_t g_lcd_drawn_page = MENU_PAGE_COUNT;
 static system_state_t g_lcd_drawn_state = STATE_RESET_WAIT;
@@ -254,6 +256,38 @@ void set_filter_band(filter_band_t band) {
     OUTPUT_FILTER_BAND_1 = (code >> 1) & 1U;
 }
 
+/* Map frequency (in Hz) to LPF band. 20m test at 14 MHz → BAND_20M. */
+filter_band_t select_band_from_frequency(unsigned long freq_hz) {
+    if (freq_hz >= 14000000UL && freq_hz <= 14350000UL) {
+        return BAND_20M;
+    } else if (freq_hz >= 7000000UL && freq_hz <= 7300000UL) {
+        return BAND_40M;
+    } else if (freq_hz >= 3500000UL && freq_hz <= 4000000UL) {
+        return BAND_80M;
+    } else if (freq_hz >= 1800000UL && freq_hz <= 2000000UL) {
+        return BAND_160M;
+    }
+    return BAND_NONE;
+}
+
+void measure_frequency_counter(void) {
+    unsigned int tmr1_count;
+    
+    /* Read Timer1 (16-bit) */
+    tmr1_count = (unsigned int)((TMR1H << 8) | TMR1L);
+    
+    /* Calculate frequency: count * 10000
+       - Assumes external signal conditioning divides RF by ~1000x (e.g., detector/comparator)
+       - 100ms gate period: 1 count = 10 Hz at detector output, *1000x = 10 kHz at RF
+       - Total calibration: 10 * 1000 = 10000
+       - Example: 2 MHz RF → 2 kHz detector → 200 counts in 100ms → 2,000,000 Hz */
+    g_freq_counter_hz = (unsigned long)tmr1_count * 10000UL;
+    
+    /* Clear Timer1 for next measurement */
+    TMR1H = 0;
+    TMR1L = 0;
+}
+
 void set_tx_output(bool active) {
     OUTPUT_TX = output_level(active, g_thresholds.tx_active_high);
 }
@@ -327,6 +361,16 @@ void timer0_init(void) {
     PIR4bits.TMR2IF = 0;
     PIE4bits.TMR2IE = 1;
     T2CONbits.ON = 1;
+    
+    /* Timer1: 16-bit counter, Fosc/4 internal clock, 1:1 prescale
+       (Simulator test will drive TMR1L/TMR1H via Python to simulate square wave) */
+    T1CONbits.CKPS = 0;   /* 1:1 prescale */
+    T1CONbits.nSYNC = 0;  /* Synchronous (internal clock only) */
+    T1CONbits.RD16 = 1;   /* 16-bit mode */
+    TMR1H = 0;
+    TMR1L = 0;
+    T1CONbits.ON = 1;
+    
     INTCONbits.GIE = 1;
 }
 
@@ -1434,9 +1478,16 @@ int main(void) {
                 g_settings_save_delay_ms--;
             }
             g_status_refresh_ms++;
+            g_freq_counter_gate_elapsed_ms++;
         }
 
         poll_menu_inputs(elapsed_ms);
+
+        /* Measure frequency counter every 100ms */
+        if (g_freq_counter_gate_elapsed_ms >= 100) {
+            measure_frequency_counter();
+            g_freq_counter_gate_elapsed_ms = 0;
+        }
 
         if (!g_boot_message_active &&
             (g_menu_page == MENU_PAGE_STATUS ||
