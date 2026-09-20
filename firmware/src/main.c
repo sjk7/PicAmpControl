@@ -27,16 +27,7 @@ typedef enum {
     UI_MODE_SETTINGS
 } ui_mode_t;
 
-typedef enum {
-    BAND_NONE = 0,
-    BAND_160M,
-    BAND_80M,
-    BAND_40M,
-    BAND_20M,
-    BAND_15M,
-    BAND_10M,
-    BAND_6M
-} filter_band_t;
+
 
 typedef enum {
     MENU_PAGE_STATUS = 0,
@@ -239,25 +230,7 @@ bool output_level(bool active, bool active_high) {
     return active_high ? active : !active;
 }
 
-void set_filter_band(filter_band_t band) {
-    unsigned char code = 0;
 
-    switch (band) {
-        case BAND_160M: code = 0x1; break;
-        case BAND_80M:  code = 0x2; break;
-        case BAND_40M:  code = 0x3; break;
-        case BAND_20M:  code = 0x4; break;
-        case BAND_15M:  code = 0x5; break;
-        case BAND_10M:  code = 0x6; break;
-        case BAND_6M:  code = 0x7; break;
-        case BAND_NONE:
-        default:       code = 0x0; break;
-    }
-
-    OUTPUT_FILTER_BAND_0 = (code >> 0) & 1U;
-    OUTPUT_FILTER_BAND_1 = (code >> 1) & 1U;
-    OUTPUT_FILTER_BAND_2 = (code >> 2) & 1U;
-}
 
 void set_tx_output(bool active) {
     OUTPUT_TX = output_level(active, g_thresholds.tx_active_high);
@@ -1299,7 +1272,6 @@ int main(void) {
     PORTB = 0x00;
     WPUB = 0x43;
 
-    set_filter_band(BAND_NONE);
     set_tx_output(false);
     set_tx_vcc_output(false);
     set_tx_bias_output(false);
