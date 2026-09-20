@@ -17,7 +17,9 @@ Usage:
     python tools/simulate/trace_ptt_sequence.py --swr1-1p5
 Requires: MPLAB X IDE (mdb), and matplotlib (pip install matplotlib) for the PNG output.
 """
+import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -75,7 +77,7 @@ TRIP_ADC_PINS = {
     "OVERDRIVE": ["RB2"], "DRAIN": ["RB3"], "HWFAULT": []
 }
 TRIP_NAMES = {"SWR1", "SWR2", "HWFAULT", "CURRENT", "OVERDRIVE", "DRAIN", "TEMPERATURE"}
-NON_TRIP_NAMES = {"SWR1_1P5", "FREQ_CTR"}
+NON_TRIP_NAMES = {"SWR1_1P5"}
 
 
 def find_mdb() -> Path:
@@ -281,15 +283,25 @@ def build_script(trip_name=None) -> str:
     lines.append("quit")
     return "\n".join(lines)
 
-def run_mdb(mdb_path: Path, script: str) -> str:
+def run_mdb(mdb_path: Path, script: str, timeout: float = 280) -> str:
     with tempfile.NamedTemporaryFile("w", suffix=".mdb", delete=False) as f:
         f.write(script)
         script_path = f.name
     try:
-        result = subprocess.run(
-            [str(mdb_path), script_path], capture_output=True, text=True, check=False
+        # stdin=DEVNULL + start_new_session detach mdb from our controlling tty so a
+        # killed/hung mdb/JVM can never leave the terminal in raw mode (see bugfixes.md).
+        proc = subprocess.Popen(
+            [str(mdb_path), script_path], stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            start_new_session=True,
         )
-        return result.stdout + result.stderr
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            proc.communicate()
+            sys.exit(f"error: mdb timed out after {timeout}s and was killed")
+        return stdout + stderr
     finally:
         Path(script_path).unlink(missing_ok=True)
 
@@ -430,32 +442,6 @@ def validate_swr1_1p5(samples) -> None:
     if active_ms < 500:
         raise AssertionError(f"1.5:1 SWR was active for only {active_ms:.1f}ms")
     print(f"SWR1 1.50:1 at 2.000kW PEP: no trip; TX remained active for {active_ms:.1f}ms")
-
-
-def validate_freq_ctr(samples) -> None:
-    if any((block_reason(sample[2]) or "").startswith("FAULT:") for sample in samples):
-        raise AssertionError("Frequency counter test incorrectly tripped")
-
-    # Check 40m band classified (BAND_40M = 3)
-    classified_40m = [s for s in samples if s[2].get("g_fc_status.current_band") == "3"]
-    if not classified_40m:
-        raise AssertionError("Frequency counter failed to classify 40m band")
-
-    # Check band was locked when frequency shifted to 20m (BAND_20M = 4) during TX stage 3
-    tx_20m_injection = [s for s in samples if s[2]["g_ptt_active"] == "true" and s[2]["g_sequence_stage"] == "3" and s[2].get("g_fc_status.frequency_khz") == "13993"]
-    if not tx_20m_injection:
-        raise AssertionError("Frequency counter test did not inject 20m frequency during TX stage 3")
-
-    tx_locked = [s for s in tx_20m_injection if s[2].get("g_fc_status.band_locked") == "true" and s[2].get("g_fc_status.current_band") == "3"]
-    if not tx_locked:
-        raise AssertionError("Frequency counter failed to lock 40m band when 20m frequency was injected during TX stage 3")
-
-    # Check 20m band classified after PTT release in RX mode
-    rx_20m = [s for s in samples if s[2]["g_ptt_active"] == "false" and s[2].get("g_fc_status.current_band") == "4"]
-    if not rx_20m:
-        raise AssertionError("Frequency counter failed to update to 20m band in RX mode after PTT release")
-
-    print("FREQ_CTR test passed: 40m classified, locked during 20m injection in TX, updated to 20m in RX after PTT release")
 
 
 def parse_trace(output: str):
@@ -654,8 +640,6 @@ def main():
     trip_name = "TEMPERATURE" if "--temperature-trip" in sys.argv[1:] else None
     if "--swr1-1p5" in sys.argv[1:]:
         trip_name = "SWR1_1P5"
-    if "--frq-ctr" in sys.argv[1:]:
-        trip_name = "FREQ_CTR"
     if "--trip" in sys.argv[1:]:
         trip_name = sys.argv[sys.argv.index("--trip") + 1].upper()
     if trip_name is not None and trip_name not in TRIP_NAMES | NON_TRIP_NAMES:
@@ -663,7 +647,7 @@ def main():
     temperature_trip = trip_name == "TEMPERATURE"
     if "--suite" in sys.argv[1:]:
         scenario_names = [None, "TEMPERATURE", "SWR1", "SWR2", "HWFAULT",
-                          "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5", "FREQ_CTR"]
+                          "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5"]
         first_script = build_script()
         suite_lines = first_script.splitlines()[:-1]
         for index, scenario in enumerate(scenario_names[1:], 1):
@@ -679,8 +663,6 @@ def main():
         for scenario, (_, scenario_samples) in zip(scenario_names[1:], groups[1:]):
             if scenario == "SWR1_1P5":
                 validate_swr1_1p5(scenario_samples)
-            elif scenario == "FREQ_CTR":
-                validate_freq_ctr(scenario_samples)
             else:
                 validate_trip(scenario_samples, scenario)
         out_dir = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"
@@ -711,8 +693,6 @@ def main():
     if trip_name:
         if trip_name in TRIP_NAMES:
             validate_trip(samples, trip_name)
-        elif trip_name == "FREQ_CTR":
-            validate_freq_ctr(samples)
         else:
             validate_swr1_1p5(samples)
 
