@@ -365,21 +365,27 @@ def run_mdb(mdb_path: Path, script: str, timeout: float = 280) -> str:
             except subprocess.TimeoutExpired:
                 os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
                 proc.wait()
+                for reader in readers:
+                    reader.join(timeout=2)
+                stderr_tail = "".join(captured["stderr"])[-2000:]
+                debug_file.write(
+                    f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_STDERR_TAIL "
+                    f"bytes={byte_counts['stderr']} tail={stderr_tail!r}\n"
+                )
                 debug_file.write(
                     f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_TIMEOUT "
                     f"stdout_bytes={byte_counts['stdout']} stderr_bytes={byte_counts['stderr']}\n"
                 )
-                for reader in readers:
-                    reader.join(timeout=2)
                 debug_file.close()
                 sys.exit(f"error: mdb timed out after {timeout}s and was killed")
             for reader in readers:
                 reader.join(timeout=2)
             stderr_tail = "".join(captured["stderr"])[-2000:]
-            debug_file.write(
-                f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_STDERR_TAIL "
-                f"{stderr_tail!r}\n"
-            )
+            if stderr_tail:
+                debug_file.write(
+                    f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_STDERR_TAIL "
+                    f"bytes={byte_counts['stderr']} tail={stderr_tail!r}\n"
+                )
             debug_file.write(
                 f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_EXIT code={proc.returncode} "
                 f"stdout_bytes={byte_counts['stdout']} stderr_bytes={byte_counts['stderr']}\n"
