@@ -1,6 +1,6 @@
 # Linear Amplifier Protection Controller – Project Schematic Package
 
-This folder collects all project-level resources needed to capture a complete, production-quality schematic for the PIC16F18855-based amplifier protection board.
+This folder collects all project-level resources needed to capture a complete, production-quality schematic for the PIC16F18875-based amplifier protection board.
 
 ## Contents
 - `component_list.csv` and `.md` — full bill of materials and symbols to place

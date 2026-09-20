@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains the design for a PIC16F18855-I/SP-based linear amplifier protection controller, covering hardware fault protection, safe amplifier enable/disable behavior, operator feedback, and startup/latched fault handling.
+This repository contains the design for a PIC16F18875-I/SP-based linear amplifier protection controller, covering hardware fault protection, safe amplifier enable/disable behavior, operator feedback, and startup/latched fault handling.
 
 ## Current project status
 
@@ -17,7 +17,7 @@ The project is in a working firmware-validation stage:
 ## Key documentation
 
 - Architecture overview: [docs/project-architecture.md](docs/project-architecture.md)
-- Hardware pin map: [docs/hardware/PIC16F18855_pin_map.md](docs/hardware/PIC16F18855_pin_map.md)
+- Hardware pin map: [docs/hardware/PIC16F18875_pin_map.md](docs/hardware/PIC16F18875_pin_map.md)
 - Pull-up resistor guidance: [docs/hardware/pull-up-resistor-guidance.md](docs/hardware/pull-up-resistor-guidance.md)
 - ADC input protection guidance: [docs/hardware/adc-input-protection-guidance.md](docs/hardware/adc-input-protection-guidance.md)
 - LPF band-select relay netlist and schematic notes: [docs/hardware/lpf-band-select-netlist.md](docs/hardware/lpf-band-select-netlist.md)
@@ -39,7 +39,7 @@ The project is in a working firmware-validation stage:
 - GitHub Actions auto-release workflow: [.github/workflows/auto-release.yml](.github/workflows/auto-release.yml)
 - GitHub Actions manual release workflow: [.github/workflows/release-firmware.yml](.github/workflows/release-firmware.yml)
 
-The build workflow packages each run's firmware output (`.hex`/`.elf`/`.map`/`.xml`) together with the pin map ([docs/hardware/PIC16F18855_pin_map.md](docs/hardware/PIC16F18855_pin_map.md)) into a single `firmware-<sha>` build artifact, under a `hardware/` subfolder for the pin map. The auto-release workflow publishes a matching release after a successful `main` build; the manual release workflow remains available for re-publishing an older artifact under an existing tag.
+The build workflow packages each run's firmware output (`.hex`/`.elf`/`.map`/`.xml`) together with the pin map ([docs/hardware/PIC16F18875_pin_map.md](docs/hardware/PIC16F18875_pin_map.md)) into a single `firmware-<sha>` build artifact, under a `hardware/` subfolder for the pin map. The auto-release workflow publishes a matching release after a successful `main` build; the manual release workflow remains available for re-publishing an older artifact under an existing tag.
 
 ## Design direction
 
@@ -76,7 +76,7 @@ flowchart LR
         COMP_RESET["Comparator latch reset"]
     end
 
-    subgraph MCU["PIC16F18855-I/SP controller"]
+    subgraph MCU["PIC16F18875-I/SP controller"]
         PTT["INPUT_PTT\nTransmit request"]
         RESET["OUTPUT_COMP_RESET\nComparator reset"]
         HARD["INPUT_OVERCURRENT_FAULT\nHardware overcurrent fault"]
@@ -130,7 +130,7 @@ flowchart LR
 This is the current approved signal map for the protection controller. The 1602 LCD backpack uses the software-I2C bus on RC3/RC4. Menu settings persist in the PIC's internal EEPROM; no external EEPROM is required.
 
 Physical pin numbers below are for the 28-pin SPDIP/SOIC package (verified against
-KiCad's `MCU_Microchip_PIC16:PIC16F18855-xSO` symbol, which shares the same
+KiCad's `MCU_Microchip_PIC16:PIC16F18875-xSO` symbol, which shares the same
 electrical pinout as the SPDIP part). Firmware addresses ports/bits by name
 (e.g. `PORTCbits.RC0`), so it is unaffected by physical pin numbering; only the
 schematic/netlist/PCB need these physical numbers to be correct.
@@ -168,7 +168,7 @@ schematic/netlist/PCB need these physical numbers to be correct.
 
 ## Current hardware assumptions
 
-- MCU: PIC16F18855-I/SP
+- MCU: PIC16F18875-I/SP
 - Clock: internal HFINTOSC at 32 MHz (FEXTOSC = OFF, RSTOSC = HFINT32); no external crystal is fitted
 - Display: 1602 LCD with I2C backpack only
 - Protection faults: software-driven SWR, overdrive, drain-voltage, and temperature thresholds, backed by an independent hardware overcurrent comparator

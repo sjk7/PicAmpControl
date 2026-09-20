@@ -10,7 +10,7 @@
 
 ## Firmware
 
-- Target: PIC16F18855-I/SP, XC8, 32 MHz HFINTOSC.
+- Target: PIC16F18875-I/SP, XC8, 32 MHz HFINTOSC.
 - Timer2 drives the approximately 1 ms scheduler tick.
 - ADC is 10-bit, right-justified, VDD-referenced, approximately 4.89 mV/count.
 - ADC channels:
@@ -59,7 +59,7 @@
 ## Documentation
 
 - Main project documentation: `README.md`
-- Hardware map: `docs/hardware/PIC16F18855_pin_map.md`
+- Hardware map: `docs/hardware/PIC16F18875_pin_map.md`
 - Display/menu diagram links are in `README.md`.
 - Frequency-counter handoff: `docs/frequency-counter-next-steps.md`
 - Schematic workflow (KiCad MCP skill, setup, troubleshooting): `docs/hardware/schematic-workflow.md`

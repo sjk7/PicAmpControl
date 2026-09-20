@@ -21,7 +21,7 @@ CI/release workflows change - don't let it go stale.
 - The simulator is still a debugger model, not a substitute for silicon timing. The suite validates state ordering, LCD lifecycle, trip latching, and recovery behavior; bench validation remains required for exact hardware timing.
 
 ## Current design
-This repository is the active PIC16F18855-I/SP linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
+This repository is the active PIC16F18875-I/P linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
 
 ## Firmware
 - Direct ADC inputs monitor two forward/reflected SWR pairs, temperature, WCS1700 current, input power, and drain voltage.
@@ -37,15 +37,15 @@ This repository is the active PIC16F18855-I/SP linear-amplifier protection contr
 - The PEP/temperature and current-meter pages use EEPROM-saved peak hold/decay settings: factory defaults are 1.2 s hold and 100 ms smooth decay interval.
 
 ## Simulation
-- The firmware can be simulated instruction-accurately on the exact PIC16F18855 using MPLAB X's headless `mdb` debugger (gpsim does NOT support this device - its newest PIC16F1 parts are the 1788/1823/1825/1847 family, missing this chip's ADCC/CLC peripherals).
+- The firmware can be simulated instruction-accurately on the exact PIC16F18875 using MPLAB X's headless `mdb` debugger (gpsim does NOT support this device - its newest PIC16F1 parts are the 1788/1823/1825/1847 family, missing this chip's ADCC/CLC peripherals).
 - Cross-platform tooling: macOS uses `tools/simulate/*.sh`, Windows uses `tools/simulate/*.ps1` (same behaviour). `cmake/My_Pic_Project/default/.generated/toolchain.cmake` and `.generated/rule.cmake` auto-detect XC8/DFP pack locations per-OS (macOS: `$HOME/tools/microchip/...`; Windows: `C:/Program Files/Microchip/xc8/...` and `%USERPROFILE%/.mchp_packs`, since `$ENV{HOME}` isn't set on Windows) - no manual cache overrides needed on either OS.
 - IMPORTANT build-flag fix (2026-09-15): `cmake/My_Pic_Project/default/user.cmake` used to unconditionally append `-Os`, which silently overrode the Debug preset's `-O0` (last `-O` flag wins) - so "debug" builds were actually optimized, breaking mdb breakpoints/symbols (tiny functions got inlined, statics got stripped). Now `-Os` only applies via `$<$<CONFIG:Release>:-Os>`. If mdb breakpoints on functions/statics mysteriously don't resolve again, check this file first.
 - macOS setup: `brew install --cask mplabx-ide mplab-xc8`.
 - Windows setup: install the full MPLAB X IDE (not just MPLAB IPE) so `mdb.bat` (under `mplab_platform/bin`) is present. The already-installed VS Code extensions `microchip.mplab-core-da` (Debug Adapter for MPLAB) and `microchip.mplab-data-visualizer` give a GUI debug/scope experience but both ultimately drive the same `mdb`/simulator engine, so scripted simulation doesn't require them.
 - `tools/simulate/build_firmware.sh` (macOS) / `build_firmware.ps1` (Windows) builds firmware locally into `_build/My_Pic_Project/sim` / `out/My_Pic_Project/default.hex`.
-- `tools/simulate/run_sim.sh` / `run_sim.ps1 [scenario.mdb]` builds, then launches `mdb` against device `PIC16F18855` with the hex programmed, filtering the benign `W0106-SIM` TMR1/3/5 warnings (see below) out of the output. With no argument it's an interactive `mdb` session; with a scenario file it runs those commands then exits. `write pin <name> high|low|<N>v` to drive inputs, `print pin <name>` to read outputs, `Stepi <count>` to single-step, `break <function>`/`break <file>:<line>` + `Run`/`Continue`/`Halt` for real breakpoint-based debugging, `Stopwatch [nror]` for real simulated elapsed time. Example scenarios: `tools/simulate/scenarios/boot_smoke.mdb`, `ptt_cycle.mdb`.
+- `tools/simulate/run_sim.sh` / `run_sim.ps1 [scenario.mdb]` builds, then launches `mdb` against device `PIC16F18875` with the hex programmed, filtering the benign `W0106-SIM` TMR1/3/5 warnings (see below) out of the output. With no argument it's an interactive `mdb` session; with a scenario file it runs those commands then exits. `write pin <name> high|low|<N>v` to drive inputs, `print pin <name>` to read outputs, `Stepi <count>` to single-step, `break <function>`/`break <file>:<line>` + `Run`/`Continue`/`Halt` for real breakpoint-based debugging, `Stopwatch [nror]` for real simulated elapsed time. Example scenarios: `tools/simulate/scenarios/boot_smoke.mdb`, `ptt_cycle.mdb`.
 - mdb command files do not support `;`/`#` comment lines - an invalid line aborts the rest of the script, so keep scenario files to plain commands only.
-- A VS Code GUI debug session (breakpoints/variables/watch/registers, no terminal) is available via `.vscode/launch.json`'s "Simulate PicAmpControl (Debug)" config, using `microchip.mplab-core-da` against `Simulator`/`PIC16F18855`. Requires `out/My_Pic_Project/default.elf` to exist (build first). Pin/register live-watch: add `PORTA`/`PORTB`/`PORTC`, `LATA`/`LATB`/`LATC`, `TRISA`/`TRISB`/`TRISC` (or bitfields like `PORTCbits.RC5`) to the Watch panel manually - there is no file-based way to pre-seed Watch expressions.
+- A VS Code GUI debug session (breakpoints/variables/watch/registers, no terminal) is available via `.vscode/launch.json`'s "Simulate PicAmpControl (Debug)" config, using `microchip.mplab-core-da` against `Simulator`/`PIC16F18875`. Requires `out/My_Pic_Project/default.elf` to exist (build first). Pin/register live-watch: add `PORTA`/`PORTB`/`PORTC`, `LATA`/`LATB`/`LATC`, `TRISA`/`TRISB`/`TRISC` (or bitfields like `PORTCbits.RC5`) to the Watch panel manually - there is no file-based way to pre-seed Watch expressions.
 - `main.c` explicitly clears `ANSELC` so RC0/RC3-RC7 operate as digital I/O; keep this initialization when changing the port map.
 - Benign, expected simulator noise: `W0106-SIM: This device only has partial support for TMR1/TMR3/TMR5 peripheral...` on every reset. Firmware never touches T1CON/T3CON/T5CON; this is just `mdb`'s partial clock-source-mux model for those timers at their POR default state, not a real firmware/silicon issue - safe to ignore (already filtered out by run_sim.sh/.ps1).
 - FIXED (2026-09-15, see bugfixes.md): the ADC ISR used to immediately re-arm the next conversion (with a blocking `__delay_us`) right after each conversion completed, entirely inside `timer0_isr()`. In simulation this created a back-to-back interrupt chain that fully starved the main loop - `update_tx_sequence()`/`update_protection_state()` never ran even once after 30+ simulated seconds. Fixed by only re-arming once per Timer0 tick (~1 ms) instead of immediately; verified main-loop breakpoints now hit normally. If future simulation runs show the CPU stuck at the interrupt vector address on every `Halt` with continuous `W0223-ADC` spam, that class of bug is back.
@@ -53,13 +53,13 @@ This repository is the active PIC16F18855-I/SP linear-amplifier protection contr
 - The simulator suite runs nine scenarios in one MDB session and emits per-scenario CSVs and graphs under `_build/My_Pic_Project/sim/csv/` and `_build/My_Pic_Project/sim/graphs/`.
 
 ## References
-- Hardware source of truth: docs/hardware/PIC16F18855_pin_map.md
+- Hardware source of truth: docs/hardware/PIC16F18875_pin_map.md
 - Architecture and safety behaviour: docs/project-architecture.md
 - Firmware entry point: firmware/src/main.c
 - Bug fixes log (update whenever a real bug is found): bugfixes.md
 
 ## CI / release
-- .github/workflows/firmware-build.yml builds on every push/PR to main on a self-hosted Windows runner (XC8 + Ninja) and packages `.hex`/`.elf`/`.map`/`.xml` plus the pin map (docs/hardware/PIC16F18855_pin_map.md) into a `firmware-<sha>` artifact.
+- .github/workflows/firmware-build.yml builds on every push/PR to main on a self-hosted Windows runner (XC8 + Ninja) and packages `.hex`/`.elf`/`.map`/`.xml` plus the pin map (docs/hardware/PIC16F18875_pin_map.md) into a `firmware-<sha>` artifact.
 - .github/workflows/auto-release.yml runs after a successful main build, auto-increments a `v0.0.N` tag, and publishes that artifact as a GitHub Release. This is fully automatic - no manual step needed for a normal push to main.
 - .github/workflows/release-firmware.yml is the manual fallback (workflow_dispatch) to re-publish an older build's artifact under an existing tag.
 

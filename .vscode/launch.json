@@ -7,7 +7,7 @@
       "type": "mplab-core-da",
       "request": "launch",
       "program": "${workspaceFolder}/out/My_Pic_Project/default.elf",
-      "device": "PIC16F18855",
+      "device": "PIC16F18875",
       "tool": "Simulator",
       "stopOnEntry": true
     }

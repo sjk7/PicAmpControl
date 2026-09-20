@@ -3,7 +3,7 @@
 Follow this list (left to right/top to bottom) during schematic assembly. Place, wire, and annotate as each item is completed.
 
 1. **Add power connectors:** Place J1 (+12V) and J2 (+5V)
-2. **Place PIC16F18855 (U1) and decoupling cap (C1) nearby**
+2. **Place PIC16F18875 (U1) and decoupling cap (C1) nearby**
    - Wire Vdd to +5V, Vss to GND, add C1 100nF across Vdd/Vss
    - Place R1 10k from MCLR to +5V
 3. **ADC and analog inputs:** Wire RF bridges, NTC, overcurrent/currentsense dividers to ADC/analog pins

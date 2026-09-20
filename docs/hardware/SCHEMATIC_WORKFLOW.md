@@ -86,7 +86,7 @@ python tools/easyeda_pro_generator.py && python tools/svg_renderer.py && python 
 ```yaml
 instances:
   U1:
-    part_number: "PIC16F18855-I/SP"
+    part_number: "PIC16F18875-I/SP"
     value: ""
     position: [x, y]
   R1:
@@ -103,7 +103,7 @@ instances:
   "components": [
     {
       "uuid": "...",
-      "part_number": "PIC16F18855-I/SP",
+      "part_number": "PIC16F18875-I/SP",
       "designator": "U1",
       "value": "",
       "x": 0.10,

@@ -6,7 +6,7 @@
 - GND blocks
 
 ## 2. MCU & Digital Logic
-- PIC16F18855 (U1)
+- PIC16F18875 (U1)
   - MCLR pull-up (R1)
   - All analog sense, digital out, LCD, I2C, and EC11 encoder wiring
 

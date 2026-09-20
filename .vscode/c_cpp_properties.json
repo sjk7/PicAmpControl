@@ -13,8 +13,8 @@
         "${env:HOME}/.mchp_packs/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8/pic/include"
       ],
       "defines": [
-        "__16F18855__",
-        "_16F18855",
+        "__16F18875__",
+        "_16F18875",
         "__XC8",
         "__XC8_VERSION=4000",
         "__DEBUG=1",

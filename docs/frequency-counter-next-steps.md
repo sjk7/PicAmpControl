@@ -13,7 +13,7 @@ RF sample -> overdrive detector -> RB2/AN10 ADC amplitude
           -> limiter/comparator -> spare GPIO -> Timer1 external clock
 ```
 
-The PIC16F18855 header exposes `T1CKIPPS`, so Timer1 can receive an external clock through PPS. Candidate spare pins are RA6, RA7, or RB6, subject to the final schematic and PPS routing choice. RB6 is currently used only as a simulator scenario marker by the Python trace tool and is not used by firmware hardware behavior.
+The PIC16F18875 header exposes `T1CKIPPS`, so Timer1 can receive an external clock through PPS. Candidate spare pins are RA6, RA7, or RB6, subject to the final schematic and PPS routing choice. RB6 is currently used only as a simulator scenario marker by the Python trace tool and is not used by firmware hardware behavior.
 
 ## Measurement method
 
@@ -65,7 +65,7 @@ This counter is intentionally not a general-purpose RF frequency meter. It is on
 
 The design is limited by several real constraints:
 
-- The PIC16F18855 is not a high-speed frequency-measurement engine. Timer1 counts edges, but it is still a small MCU with limited register width and interrupt overhead.
+- The PIC16F18875 is not a high-speed frequency-measurement engine. Timer1 counts edges, but it is still a small MCU with limited register width and interrupt overhead.
 - The hardware signal must be cleaned by a comparator/limiter stage before it reaches a PIC pin; any analog noise, threshold uncertainty, or ringing will distort the counts.
 - A 100 ms or 1 s gate is good for coarse band categorization, but it does not provide precision across a band. The measurement error is dominated by gate duration and by the fact that the band window is much wider than the exact operating frequency of a signal.
 - The RF source may vary in frequency or drift within a ham band. A band detector only needs to know, for example, whether the signal is around 3.5 MHz, 7 MHz, 14 MHz, 21 MHz, 28 MHz, or 50 MHz, not whether it is exactly 14.200 MHz.
@@ -101,7 +101,7 @@ If a future design needs exact frequency readout, a dedicated measurement subsys
 ## Next implementation steps
 
 1. Confirm the schematic net available for the conditioned frequency signal.
-2. Select the spare GPIO and confirm its `T1CKIPPS` PPS code from the PIC16F18855 datasheet/header.
+2. Select the spare GPIO and confirm its `T1CKIPPS` PPS code from the PIC16F18875 datasheet/header.
 3. Add Timer1 external-clock initialization and a Timer2-gated frequency measurement routine.
 4. Add a frequency display/menu page and low-pass filter selection thresholds.
 5. Add simulator stimulus and a CTest scenario using a digital square-wave input.

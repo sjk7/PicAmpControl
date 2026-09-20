@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a PIC16F18855-I/SP-based linear amplifier protection controller that monitors RF power, SWR, temperature, current, and drain stress, and shuts down the amplifier safely when the system enters a fault condition.
+Build a PIC16F18875-I/SP-based linear amplifier protection controller that monitors RF power, SWR, temperature, current, and drain stress, and shuts down the amplifier safely when the system enters a fault condition.
 
 ## High-level blocks
 
@@ -71,7 +71,7 @@ Overdrive and drain voltage each have a separate, conditioned ADC path. The ADC 
 
 Use a standard low-cost 16x2 or 20x4 character LCD fitted with a PCF8574-based I2C backpack.
 
-The PIC16F18855-I/SP implementation uses a dedicated `lcd_i2c.c` software-I2C module on RC3/RC4. The module owns the PCF8574 transfers and HD44780 character commands; protection and menu logic remain in `main.c`. Settings persist via the PIC's internal EEPROM (256 bytes) using the XC8 `eeprom_read`/`eeprom_write` runtime functions, wrapped by `internal_eeprom_read`/`internal_eeprom_write`. Every operator page or value change stores a versioned, checksummed record. Startup accepts only a valid record and otherwise restores compiled safe defaults. The final PCB validation must include read/write and interrupted-power recovery tests.
+The PIC16F18875-I/SP implementation uses a dedicated `lcd_i2c.c` software-I2C module on RC3/RC4. The module owns the PCF8574 transfers and HD44780 character commands; protection and menu logic remain in `main.c`. Settings persist via the PIC's internal EEPROM (256 bytes) using the XC8 `eeprom_read`/`eeprom_write` runtime functions, wrapped by `internal_eeprom_read`/`internal_eeprom_write`. Every operator page or value change stores a versioned, checksummed record. Startup accepts only a valid record and otherwise restores compiled safe defaults. The final PCB validation must include read/write and interrupted-power recovery tests.
 
 Benefits:
 

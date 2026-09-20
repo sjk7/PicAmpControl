@@ -27,7 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 HEX_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.hex"
 # Loaded instead of the .hex so mdb can resolve C variable names (debug symbols).
 ELF_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.elf"
-DEVICE = "PIC16F18855"
+DEVICE = "PIC16F18875"
 
 # Firmware globals that explain why PTT/TX may be blocked (see main.c).
 STATE_VARS = [

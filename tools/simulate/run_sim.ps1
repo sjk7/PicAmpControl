@@ -14,7 +14,7 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = (Resolve-Path "$PSScriptRoot/../..").Path
 $HexPath = Join-Path $RepoRoot "out/My_Pic_Project/default.hex"
-$Device = "PIC16F18855"
+$Device = "PIC16F18875"
 
 $MdbBat = Get-ChildItem "C:\Program Files\Microchip\MPLABX\*\mplab_platform\bin\mdb.bat" -ErrorAction SilentlyContinue |
     Sort-Object FullName | Select-Object -Last 1

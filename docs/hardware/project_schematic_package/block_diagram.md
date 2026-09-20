@@ -4,7 +4,7 @@
      +12V_IN  +5V_IN
         |        |
         |        |
-      [Fan]    [MCU - PIC16F18855]
+      [Fan]    [MCU - PIC16F18875]
         |        |      | \      | \
    [NMOS]   ADC1..8  |  LCD  EC11 encoder
         |        |      |   |

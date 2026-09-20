@@ -1,10 +1,10 @@
-# PIC16F18855-I/SP Hardware Pin Map
+# PIC16F18875-I/SP Hardware Pin Map
 
-This document captures the current hardware understanding for the PIC16F18855-I/SP and keeps the MCU pin layout tied directly to the amplifier protection design.
+This document captures the current hardware understanding for the PIC16F18875-I/SP and keeps the MCU pin layout tied directly to the amplifier protection design.
 
 ## MCU
 
-- Device: PIC16F18855-I/SP
+- Device: PIC16F18875-I/SP
 - Clock: internal HFINTOSC at 32 MHz (FEXTOSC = OFF, RSTOSC = HFINT32); no external crystal is fitted
 - Core purpose: measure RF power, monitor SWR, control amplifier protection state, and report faults on the LCD
 
@@ -13,7 +13,7 @@ This document captures the current hardware understanding for the PIC16F18855-I/
 This is the current approved signal map for the protection controller. The 1602 LCD backpack uses software I2C on RC3/RC4. Menu settings persist in the PIC's internal EEPROM; no external EEPROM is required.
 
 Physical pin numbers below are for the 28-pin SPDIP/SOIC package (verified against
-KiCad's `MCU_Microchip_PIC16:PIC16F18855-xSO` symbol, which shares the same
+KiCad's `MCU_Microchip_PIC16:PIC16F18875-xSO` symbol, which shares the same
 electrical pinout as the SPDIP part). Firmware addresses ports/bits by name
 (e.g. `PORTCbits.RC0`), so it is unaffected by physical pin numbering; only the
 schematic/netlist/PCB need these physical numbers to be correct.
