@@ -634,7 +634,7 @@ void show_boot_message(void) {
 void adc_init(void) {
     FVRCON = 0x00;
     ANSELA = 0x2F;
-    ANSELA &= ~0x10; /* RA4 is reserved for the coarse LPF band-select bus */
+    ANSELA &= ~0x10; /* RA4 must stay digital: it drives OUTPUT_LCD_RS */
     ANSELB = 0x0E;
     ADCON1 = 0x20;
     ADPCH = 0;

@@ -4,6 +4,28 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-20 — Hardware pin-map doc and sim tests out of sync with actual pinout
+
+`docs/hardware/PIC16F18875_pin_map.md` claimed RA4/RA6/RA7 and RB2/RB3 were free,
+but `pin_map.h`/`lcd_parallel.c` actually use RA4/RA6/RA7/RC3/RC4/RD0 for the
+parallel LCD and RB2/RB3 for ADC_OVERDRIVE/ADC_DRAIN_PEAK (ANSELB=0x0E). Also fixed
+a stale comment in `lcd_parallel.c` (said D5/D6 were RB2/RB3) and in `main.c`'s
+`adc_init()` (said RA4 was reserved for an LPF band-select bus it no longer drives).
+Doc now lists the true free pins: RD2-RD7, RE0/RE2/RE3 (9 pins).
+
+Separately, `tools/simulate/test_freq_counter.py` never worked: it stimulated the
+Timer1 external clock input (RD1/T1CKI) with a static pin voltage, which produces
+no clock edges, so frequency_khz stayed 0 and every band assertion failed. Fixed by
+writing TMR1H/TMR1L directly (same technique as trace_ptt_sequence.py's FREQ_CTR
+scenario) and extending the post-release window so the relay/VCC/bias shutdown
+sequence has time to complete before the band unlocks and reclassifies.
+
+Also: `run_mdb()` in both `trace_ptt_sequence.py` and `test_freq_counter.py`
+inherited our controlling terminal as stdin, so a killed/hung mdb+JVM process
+could leave the shell in raw mode (looked like the terminal was "broken", e.g.
+`ls` producing no visible output). Fixed by using `stdin=DEVNULL` +
+`start_new_session=True` and killing the whole process group on timeout.
+
 ## 2026-09-18 — Front-panel menu now uses a single EC11 rotary encoder
 
 The two-switch menu model became awkward as the normal display pages and saved

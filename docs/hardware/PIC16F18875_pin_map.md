@@ -22,10 +22,10 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 | RA1 | 3 | Analog In | ADC_SWR1_REF | SWR1 reflected detection (sensor preamp output) |
 | RA2 | 4 | Analog In | ADC_SWR2_FWD | SWR2 forward detection (sensor preamp output) |
 | RA3 | 5 | Analog In | ADC_SWR2_REF | SWR2 reflected detection (sensor preamp output) |
-| RA4 | 6 | GPIO | (free) | Reserved for future use (was OUTPUT_FILTER_BAND_0) |
+| RA4 | 6 | GPIO Out | OUTPUT_LCD_RS | Parallel LCD register-select |
 | RA5 | 7 | Analog In | ADC_TEMP | Temperature monitoring (thermistor preamp output) |
-| RA6 | 8 | GPIO | (free) | Reserved for future use (was OUTPUT_FILTER_BAND_1) |
-| RA7 | 9 | GPIO | (free) | Reserved for future use (was OUTPUT_FILTER_BAND_2 / Timer1 external clock) |
+| RA6 | 8 | GPIO Out | OUTPUT_LCD_E | Parallel LCD enable/strobe |
+| RA7 | 9 | GPIO Out | OUTPUT_LCD_D4 | Parallel LCD data bit 4 |
 
 ## Port B (Universal I/O)
 
@@ -33,8 +33,8 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 |-----|--------|------|--------|---------|
 | RB0 | 21 | GPIO In | INPUT_ENCODER_B | Rotary encoder (quadrature phase B) |
 | RB1 | 22 | Analog In | ADC_CURRENT | Drain/collector current measurement (current sense amp) |
-| RB2 | 23 | GPIO | (free) | Available |
-| RB3 | 24 | GPIO | (free) | Available |
+| RB2 | 23 | Analog In | ADC_OVERDRIVE | Overdrive detection input |
+| RB3 | 24 | Analog In | ADC_DRAIN_PEAK | Peak drain stress input |
 | RB4 | 25 | GPIO In | INPUT_OVERCURRENT_FAULT | Comparator latch output (hardware overcurrent trip) |
 | RB5 | 26 | PWM Out | OUTPUT_FAN_PWM | Fan motor PWM (active-high, 5V @ ~8A peak) |
 | RB6 | 27 | GPIO In | INPUT_ENCODER_SWITCH | Rotary encoder switch (push-to-select) |
@@ -47,8 +47,8 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 | RC0 | 11 | GPIO In | INPUT_PTT | Push-to-talk / transmit enable (active-low) |
 | RC1 | 12 | GPIO Out | OUTPUT_COMP_RESET | Comparator (CMP1) latch reset (active-high pulse) |
 | RC2 | 13 | GPIO In | INPUT_ENCODER_A | Rotary encoder (quadrature phase A) |
-| RC3 | 14 | GPIO I/O | OUTPUT_LCD_I2C_SCL | LCD backpack I2C clock (open-drain, 10k pull-up external) |
-| RC4 | 15 | GPIO I/O | OUTPUT_LCD_I2C_SDA | LCD backpack I2C data (open-drain, 10k pull-up external) |
+| RC3 | 14 | GPIO Out | OUTPUT_LCD_D5 | Parallel LCD data bit 5 |
+| RC4 | 15 | GPIO Out | OUTPUT_LCD_D6 | Parallel LCD data bit 6 |
 | RC5 | 16 | GPIO Out | OUTPUT_TX | TX enable / amplifier control (active-low, ~50mA sink) |
 | RC6 | 17 | GPIO Out | OUTPUT_TX_VCC | TX VCC / amplifier supply switch (active-low, ~100mA sink) |
 | RC7 | 18 | GPIO Out | OUTPUT_TX_BIAS | TX bias / amplifier idle condition (active-low, ~50mA sink) |
@@ -57,8 +57,8 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 
 | Pin | Number | Mode | Signal | Purpose |
 |-----|--------|------|--------|---------|
-| RD0 | 29 | GPIO | (free) | Available |
-| RD1 | 30 | GPIO | (free) | Available |
+| RD0 | 29 | GPIO Out | OUTPUT_LCD_D7 | Parallel LCD data bit 7 |
+| RD1 | 30 | GPIO In | INPUT_FREQ_COUNTER | Timer1 external clock (T1CKI via PPS), frequency counter input |
 | RD2 | 31 | GPIO | (free) | Available |
 | RD3 | 32 | GPIO | (free) | Available |
 | RD4 | 33 | GPIO | (free) | Available |
@@ -95,10 +95,8 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 | 3 | RA3 | ADC_SWR2_REF | SWR2 reflected power (sensor preamp 0–5V) |
 | 5 | RA5 | ADC_TEMP | Temperature (thermistor preamp 0–5V → °C via LUT) |
 | 9 | RB1 | ADC_CURRENT | Drain/collector current (current sense amp 0–5V) |
-| 10 | (N/A) | ADC_OVERDRIVE | Overdrive detection (comparator / firmware trip logic) |
-| 11 | (N/A) | ADC_DRAIN_PEAK | Peak drain stress (comparator / firmware trip logic) |
-
-(Channels 10–11 are comparator trip signals, not ADC inputs, but referenced in trip detection firmware.)
+| 10 | RB2 | ADC_OVERDRIVE | Overdrive detection (sensor preamp 0–5V) |
+| 11 | RB3 | ADC_DRAIN_PEAK | Peak drain stress (sensor preamp 0–5V) |
 
 ## Protection / Comparator Inputs
 
@@ -117,17 +115,15 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 
 ## Reserved Pins for Future Expansion
 
-The following pins are now available for additional features:
+The following pins are genuinely free (not claimed by any `pin_map.h` define):
 
-- **Port A:** RA4, RA6, RA7 (3 pins freed from band selection removal)
-- **Port B:** RB2, RB3 (2 additional pins)
-- **Port D:** RD1–RD7 (7 pins, RD0 used for LCD D7)
+- **Port D:** RD2–RD7 (6 pins)
 - **Port E:** RE0, RE2, RE3 (3 pins; pin 38 is VREF+ ADC reference)
 
-**Total new GPIO available:** 15 pins (plus potential VREF+ if externalized ADC reference is needed)
+**Total free GPIO available:** 9 pins (plus potential VREF+ if externalized ADC reference is needed)
 
 ### Possible Future Uses
-- **Filter/Band Selection (3–4 pin encoding):** Use RA4/RA6/RA7 for binary or independent relay control
+- **Filter/Band Selection:** One output pin per RF band (6 bands: 160/80/40/20/15/10m) fits within RD2–RD7 with no bit-encoding needed; RE0/RE2/RE3 remain spare
 - Additional sensor inputs (ADC or digital)
 - Extended relay/switch control logic
 - Serial communication (UART, CAN)
@@ -139,6 +135,6 @@ The design uses KiCad's `MCU_Microchip_PIC16:PIC16F18875-xPDIP40` symbol, which 
 
 ---
 
-**Document Version:** 2.0  
+**Document Version:** 2.1  
 **Last Updated:** 2026-09-20  
 **Device Migration:** PIC16F18855-I/SP (28-pin, 8KB) → PIC16F18875-I/P (40-pin, 16KB)

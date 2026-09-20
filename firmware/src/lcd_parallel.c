@@ -4,7 +4,7 @@
 #include "../include/lcd_i2c.h"
 
 /* Parallel LCD in 4-bit mode using freed pins:
-   RS=RA4, E=RA6, D4=RA7, D5=RB2, D6=RB3, D7=RD0 */
+   RS=RA4, E=RA6, D4=RA7, D5=RC3, D6=RC4, D7=RD0 */
 
 static void lcd_delay_us(unsigned int us) {
     while (us--) {
