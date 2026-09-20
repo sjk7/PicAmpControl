@@ -3,94 +3,47 @@
 #include "../include/pin_map.h"
 #include "../include/lcd_i2c.h"
 
-static void i2c_delay(void) {
-    __delay_us(5);
-}
+/* Parallel LCD in 4-bit mode using freed pins:
+   RS=RA4, E=RA6, D4=RA7, D5=RB2, D6=RB3, D7=RD0 */
 
-static void i2c_scl_low(void) {
-    OUTPUT_LCD_I2C_SCL = 0;
-    TRISCbits.TRISC3 = 0;
-}
-
-static void i2c_scl_release(void) {
-    TRISCbits.TRISC3 = 1;
-}
-
-static void i2c_sda_low(void) {
-    OUTPUT_LCD_I2C_SDA = 0;
-    TRISCbits.TRISC4 = 0;
-}
-
-static void i2c_sda_release(void) {
-    TRISCbits.TRISC4 = 1;
-}
-
-static void i2c_start(void) {
-    i2c_sda_release();
-    i2c_scl_release();
-    i2c_delay();
-    i2c_sda_low();
-    i2c_delay();
-    i2c_scl_low();
-}
-
-static void i2c_stop(void) {
-    i2c_sda_low();
-    i2c_delay();
-    i2c_scl_release();
-    i2c_delay();
-    i2c_sda_release();
-    i2c_delay();
-}
-
-static bool i2c_write_byte(unsigned char value) {
-    unsigned char bit_mask;
-    bool acknowledged;
-
-    for (bit_mask = 0x80; bit_mask != 0; bit_mask >>= 1) {
-        if ((value & bit_mask) != 0) {
-            i2c_sda_release();
-        } else {
-            i2c_sda_low();
-        }
-        i2c_delay();
-        i2c_scl_release();
-        i2c_delay();
-        i2c_scl_low();
+static void lcd_delay_us(unsigned int us) {
+    while (us--) {
+        __delay_us(1);
     }
+}
 
-    i2c_sda_release();
-    i2c_delay();
-    i2c_scl_release();
-    i2c_delay();
-    acknowledged = (OUTPUT_LCD_I2C_SDA == 0);
-    i2c_scl_low();
-    return acknowledged;
+static void lcd_set_data_pins(unsigned char nibble) {
+    OUTPUT_LCD_D4 = (nibble >> 0) & 1U;
+    OUTPUT_LCD_D5 = (nibble >> 1) & 1U;
+    OUTPUT_LCD_D6 = (nibble >> 2) & 1U;
+    OUTPUT_LCD_D7 = (nibble >> 3) & 1U;
+}
+
+static void lcd_pulse_enable(void) {
+    OUTPUT_LCD_E = 1;
+    lcd_delay_us(1);
+    OUTPUT_LCD_E = 0;
+    lcd_delay_us(50);
 }
 
 static void lcd_write_nibble(unsigned char nibble, bool data_mode) {
-    unsigned char expander_data = (unsigned char)((nibble << 4) | 0x08);
-
-    if (data_mode) {
-        expander_data |= 0x01;
-    }
-
-    i2c_write_byte(expander_data | 0x04);
-    i2c_write_byte(expander_data);
+    OUTPUT_LCD_RS = data_mode ? 1 : 0;
+    lcd_delay_us(1);
+    lcd_set_data_pins(nibble);
+    lcd_delay_us(1);
+    lcd_pulse_enable();
 }
 
 void lcd_write_byte_now(unsigned char value, bool data_mode) {
-    i2c_start();
-    i2c_write_byte((unsigned char)(LCD_I2C_ADDRESS << 1));
+    /* High nibble first */
     lcd_write_nibble((unsigned char)(value >> 4), data_mode);
+    /* Low nibble */
     lcd_write_nibble((unsigned char)(value & 0x0F), data_mode);
-    i2c_stop();
+    lcd_delay_us(100);
 }
 
 /* Queue so the main loop can send a few bytes at a time between protection
-   checks instead of blocking for a whole page (~13 ms bit-banged at 5 us/step).
-   56 entries comfortably covers the worst case: the TRIP screen with every
-   fault reason set at once is 49 bytes (13 on row 0 + 36 on row 1). */
+   checks instead of blocking. */
 #define LCD_QUEUE_SIZE 56
 
 typedef struct {
@@ -152,16 +105,50 @@ void lcd_set_cursor(unsigned char row, unsigned char column) {
 }
 
 void lcd_init(void) {
-    i2c_sda_release();
-    i2c_scl_release();
+    /* Initialize all LCD pins as outputs */
+    TRISAbits.TRISA4 = 0;  /* RS */
+    TRISAbits.TRISA6 = 0;  /* E */
+    TRISAbits.TRISA7 = 0;  /* D4 */
+    TRISCbits.TRISC3 = 0;  /* D5 */
+    TRISCbits.TRISC4 = 0;  /* D6 */
+    TRISDbits.TRISD0 = 0;  /* D7 */
+
+    /* Set all pins low initially */
+    OUTPUT_LCD_RS = 0;
+    OUTPUT_LCD_E = 0;
+    OUTPUT_LCD_D4 = 0;
+    OUTPUT_LCD_D5 = 0;
+    OUTPUT_LCD_D6 = 0;
+    OUTPUT_LCD_D7 = 0;
+
     __delay_ms(50);
-    /* One-time startup sequence: send immediately (queue/main loop don't exist yet). */
-    lcd_write_byte_now(0x33, false);
-    lcd_write_byte_now(0x32, false);
-    lcd_write_byte_now(0x28, false);
-    lcd_write_byte_now(0x0C, false);
-    lcd_write_byte_now(0x06, false);
-    lcd_write_byte_now(0x01, false);
+
+    /* 4-bit mode initialization sequence (send as high nibble only) */
+    OUTPUT_LCD_RS = 0;  /* Command mode */
+
+    /* Function set: 8-bit interface (3 times) to ensure 8-bit mode */
+    lcd_set_data_pins(0x3);  /* 0011 */
+    lcd_pulse_enable();
+    __delay_ms(5);
+
+    lcd_set_data_pins(0x3);
+    lcd_pulse_enable();
+    __delay_ms(1);
+
+    lcd_set_data_pins(0x3);
+    lcd_pulse_enable();
+    __delay_ms(1);
+
+    /* Function set: 4-bit interface */
+    lcd_set_data_pins(0x2);  /* 0010 */
+    lcd_pulse_enable();
+    __delay_ms(1);
+
+    /* Now in 4-bit mode; use full bytes */
+    lcd_write_byte_now(0x28, false);  /* Function set: 4-bit, 2 lines, 5x8 font */
+    lcd_write_byte_now(0x0C, false);  /* Display ON, cursor OFF, blink OFF */
+    lcd_write_byte_now(0x06, false);  /* Entry mode: auto-increment address */
+    lcd_write_byte_now(0x01, false);  /* Clear display */
     __delay_ms(2);
 }
 

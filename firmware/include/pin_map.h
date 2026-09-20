@@ -4,11 +4,14 @@
 #include <xc.h>
 
 #define _XTAL_FREQ 32000000UL
-#define LCD_I2C_ADDRESS 0x27
 
-// LCD backpack on the software-I2C bus; settings persist in the PIC's internal EEPROM.
-#define OUTPUT_LCD_I2C_SCL PORTCbits.RC3
-#define OUTPUT_LCD_I2C_SDA PORTCbits.RC4
+// Parallel LCD in 4-bit mode on freed pins (RB2/RB3 are ADC_OVERDRIVE/ADC_DRAIN_PEAK, not free)
+#define OUTPUT_LCD_RS PORTAbits.RA4
+#define OUTPUT_LCD_E PORTAbits.RA6
+#define OUTPUT_LCD_D4 PORTAbits.RA7
+#define OUTPUT_LCD_D5 PORTCbits.RC3
+#define OUTPUT_LCD_D6 PORTCbits.RC4
+#define OUTPUT_LCD_D7 PORTDbits.RD0
 
 // TX sequencing outputs; all are active-low by default.
 #define OUTPUT_TX PORTCbits.RC5

@@ -1261,8 +1261,8 @@ int main(void) {
     TRISCbits.TRISC1 = 0;
     TRISCbits.TRISC2 = 1;
     WPUCbits.WPUC2 = 1;
-    TRISCbits.TRISC3 = 1;
-    TRISCbits.TRISC4 = 1;
+    TRISCbits.TRISC3 = 0;
+    TRISCbits.TRISC4 = 0;
     TRISCbits.TRISC5 = 0;
     TRISCbits.TRISC6 = 0;
     TRISCbits.TRISC7 = 0;
@@ -1271,6 +1271,9 @@ int main(void) {
     TRISBbits.TRISB6 = 1;
     PORTB = 0x00;
     WPUB = 0x43;
+
+    /* Port D for parallel LCD D7 pin */
+    TRISD = 0xFE;  /* RD0 = output (LCD D7), rest inputs */
 
     set_tx_output(false);
     set_tx_vcc_output(false);
