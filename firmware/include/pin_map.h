@@ -39,7 +39,8 @@
 #define OUTPUT_FAN_PWM PORTBbits.RB5
 #define OUTPUT_FILTER_BAND_0 PORTAbits.RA4
 #define OUTPUT_FILTER_BAND_1 PORTAbits.RA6
-#define OUTPUT_FILTER_BAND_2 PORTAbits.RA7
+// RA7 reserved for Timer1 external clock (frequency counter); 2-bit band selector (4 bands)
+#define INPUT_FREQ_COUNTER_TIMER1 PORTAbits.RA7
 #define INPUT_ENCODER_SWITCH PORTBbits.RB6
 #define OUTPUT_TRIP_STATUS PORTBbits.RB7
 

@@ -32,10 +32,7 @@ typedef enum {
     BAND_160M,
     BAND_80M,
     BAND_40M,
-    BAND_20M,
-    BAND_15M,
-    BAND_10M,
-    BAND_6M
+    BAND_20M
 } filter_band_t;
 
 typedef enum {
@@ -43,6 +40,7 @@ typedef enum {
     MENU_PAGE_POWER_TEMPERATURE,
     MENU_PAGE_SWR_METER,
     MENU_PAGE_CURRENT_METER,
+    MENU_PAGE_BAND_SELECT,
     MENU_PAGE_SWR1_TRIP,
     MENU_PAGE_SWR2_TRIP,
     MENU_PAGE_SWR1_FWD_FULL_SCALE,
@@ -127,6 +125,7 @@ static volatile bool g_comparator_reset_active = false;
 static volatile unsigned char g_comparator_reset_elapsed_ms = 0;
 static volatile menu_page_t g_menu_page = MENU_PAGE_POWER_TEMPERATURE;
 static volatile menu_page_t g_saved_user_menu_page = MENU_PAGE_POWER_TEMPERATURE;
+static volatile filter_band_t g_selected_band = BAND_NONE;
 static ui_mode_t g_ui_mode = UI_MODE_HOME;
 static volatile bool g_transient_menu_display = false;
 static volatile bool g_boot_message_active = false;
@@ -247,16 +246,12 @@ void set_filter_band(filter_band_t band) {
         case BAND_80M:  code = 0x2; break;
         case BAND_40M:  code = 0x3; break;
         case BAND_20M:  code = 0x4; break;
-        case BAND_15M:  code = 0x5; break;
-        case BAND_10M:  code = 0x6; break;
-        case BAND_6M:  code = 0x7; break;
         case BAND_NONE:
         default:       code = 0x0; break;
     }
 
     OUTPUT_FILTER_BAND_0 = (code >> 0) & 1U;
     OUTPUT_FILTER_BAND_1 = (code >> 1) & 1U;
-    OUTPUT_FILTER_BAND_2 = (code >> 2) & 1U;
 }
 
 void set_tx_output(bool active) {
@@ -412,6 +407,7 @@ unsigned char settings_checksum(menu_page_t page, const protection_thresholds_t 
 void load_settings(void) {
     unsigned char header[3];
     unsigned char checksum;
+    unsigned char band_byte;
     protection_thresholds_t stored_settings;
 
     if (internal_eeprom_read(0, header, sizeof(header)) &&
@@ -425,14 +421,21 @@ void load_settings(void) {
         g_thresholds = stored_settings;
         g_menu_page = (menu_page_t)header[2];
         g_saved_user_menu_page = g_menu_page;
+        /* Load band selection from EEPROM */
+        if (internal_eeprom_read(sizeof(header) + sizeof(stored_settings) + 1, &band_byte, 1)) {
+            if (band_byte <= BAND_20M) {
+                g_selected_band = (filter_band_t)band_byte;
+            }
+        }
     } else {
         g_menu_page = MENU_PAGE_POWER_TEMPERATURE;
         g_saved_user_menu_page = MENU_PAGE_POWER_TEMPERATURE;
+        g_selected_band = BAND_NONE;
     }
 }
 
 void save_settings(void) {
-    unsigned char record[sizeof(protection_thresholds_t) + 4];
+    unsigned char record[sizeof(protection_thresholds_t) + 5];
     const unsigned char *settings_bytes = (const unsigned char *)&g_thresholds;
     unsigned char index;
 
@@ -443,6 +446,7 @@ void save_settings(void) {
         record[index + 3] = settings_bytes[index];
     }
     record[sizeof(protection_thresholds_t) + 3] = settings_checksum(g_menu_page, &g_thresholds);
+    record[sizeof(protection_thresholds_t) + 4] = (unsigned char)g_selected_band;
     internal_eeprom_write(0, record, sizeof(record));
 }
 
@@ -597,6 +601,18 @@ void show_menu_page(void) {
         lcd_write_spaces(2);
         lcd_set_cursor(1, 0);
         lcd_write_power_bar(g_current_peak_a, g_thresholds.current_trip_a, 16);
+        return;
+    }
+    if (g_menu_page == MENU_PAGE_BAND_SELECT) {
+        const char *band_names[] = {"OFF", "160M", "80M", "40M", "20M"};
+        lcd_set_cursor(0, 0);
+        lcd_write_text("BAND");
+        lcd_set_cursor(1, 0);
+        if (g_selected_band >= 0 && g_selected_band <= 4) {
+            lcd_write_text(band_names[g_selected_band]);
+        } else {
+            lcd_write_text("?");
+        }
         return;
     }
     lcd_set_cursor(0, 0);
@@ -829,7 +845,7 @@ unsigned int current_amperes(unsigned int raw) {
 }
 
 bool is_live_menu_page(menu_page_t page) {
-    return page < MENU_PAGE_SWR1_TRIP;
+    return page < MENU_PAGE_BAND_SELECT;
 }
 
 void step_home_page(bool clockwise) {
@@ -877,6 +893,18 @@ void adjust_selected_setting(bool increase) {
     unsigned char setting_index;
     unsigned char *selected_u8;
     unsigned int *selected_u16;
+
+    if (g_menu_page == MENU_PAGE_BAND_SELECT) {
+        if (increase && g_selected_band < BAND_20M) {
+            g_selected_band = (filter_band_t)(g_selected_band + 1);
+        } else if (!increase && g_selected_band > BAND_NONE) {
+            g_selected_band = (filter_band_t)(g_selected_band - 1);
+        }
+        set_filter_band(g_selected_band);
+        g_menu_changed = true;
+        mark_settings_dirty();
+        return;
+    }
 
     if (g_menu_page < MENU_PAGE_SWR1_TRIP || g_menu_page > MENU_PAGE_PEAK_DECAY_MS) {
         return;

@@ -64,12 +64,13 @@
 - Frequency-counter handoff: `docs/frequency-counter-next-steps.md`
 - Schematic workflow (KiCad MCP skill, setup, troubleshooting): `docs/hardware/schematic-workflow.md`
 - Active schematic project: `docs/hardware/project_schematic_package/generated/mcp-final/pic_amp_protection.kicad_sch`
-- Operator UI is a single EC11-style rotary encoder: RC2=A, RB0=B, RB6=push switch, all active-low/common-to-ground with pull-ups. The LPF band decoder uses only RA4/RA6/RA7 because 3 bits cover OFF plus seven bands.
+- Operator UI is a single EC11-style rotary encoder: RC2=A, RB0=B, RB6=push switch, all active-low/common-to-ground with pull-ups. The LPF band selector uses RA4/RA6 (2-bit, 4 bands: 160m, 80m, 40m, 20m); RA7 is reserved for Timer1 frequency counter input. Band selection is accessible via menu (MENU_PAGE_BAND_SELECT) using encoder rotation; selection is saved to EEPROM.
 
 ## Deferred frequency-counter work
 
-- Do not implement yet unless requested.
-- Recommended architecture: externally condition the overdrive/RF signal into a clean 0-5 V square wave, route it to a spare GPIO through PPS, and count edges with Timer1 during a Timer2-gated interval.
+- Firmware prepared: RA7 pin freed for Timer1 external clock (2-bit band selector in use).
+- Do not implement frequency counter firmware yet unless requested.
+- Recommended architecture: externally condition the overdrive/RF signal into a clean 0-5 V square wave, route it to RA7 through PPS, and count edges with Timer1 during a Timer2-gated interval.
 - Do not count frequency directly from the overdrive ADC; ADC sampling does not preserve zero crossings.
 - Hardware conditioning must include attenuation, limiting/comparator hysteresis, clamps, and a safe 0-5 V output.
 - See `docs/frequency-counter-next-steps.md`.
