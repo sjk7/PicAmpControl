@@ -9,7 +9,7 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 - Program Memory: 16 KB (doubled from 8 KB)
 - RAM: 1024 B (doubled from 512 B)
 - GPIO Pins: ~32 (vs ~24 on PIC16F18855)
-- Oscillator: 32 MHz HFINTOSC
+- Oscillator: 32 MHz HFINTOSC internal (maximum); 20 MHz external if crystal used
 - Compiler: XC8 4.00+
 
 **Pin Compatibility:** The PIC16F18875 extends the PIC16F18855 with additional Port D and Port E pins. All Port A/B/C pin numbers remain identical, ensuring firmware compatibility. Existing peripheral assignments (ADC channels, Timer, UART, I2C, PWM) are preserved.

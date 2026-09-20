@@ -1,7 +1,8 @@
 # PIC16F18875-I/P Wiring Checklist – Pin-by-Pin Build Guide
 
 **Device:** Microchip PIC16F18875-I/P, PDIP-40  
-**Oscillator:** 32 MHz HFINTOSC (internal, no external clock required)  
+**Oscillator:** 32 MHz HFINTOSC internal (maximum for this device); no external clock required  
+**Max Oscillator Frequency:** 32 MHz internal, 20 MHz external (if crystal is used)  
 **Voltage:** 3.3V supply recommended (or 5V with appropriate I/O tolerancing)
 
 ---
