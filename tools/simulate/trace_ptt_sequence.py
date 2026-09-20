@@ -387,8 +387,11 @@ def run_mdb(mdb_path: Path, script: str, timeout: float = 280) -> str:
                     f"bytes={byte_counts['stderr']} tail={stderr_tail!r}\n"
                 )
             debug_file.write(
-                f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_EXIT code={proc.returncode} "
-                f"stdout_bytes={byte_counts['stdout']} stderr_bytes={byte_counts['stderr']}\n"
+                f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_EXIT "
+                f"status={'PASS' if proc.returncode == 0 else 'FAIL'} "
+                f"code={proc.returncode} stdout_bytes={byte_counts['stdout']} "
+                f"stderr_bytes={byte_counts['stderr']} "
+                f"stderr_tail={'logged' if stderr_tail else 'empty'}\n"
             )
             debug_file.close()
             if proc.returncode != 0:
