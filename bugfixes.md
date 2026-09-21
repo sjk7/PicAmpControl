@@ -4,6 +4,28 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-21 — AI-HANDOFF.md duplicated other docs and stated a release behaviour the firmware no longer has
+
+Two AI carry-over files had grown up side by side, `Ai-Notes.txt` and `AI-HANDOFF.md`. Nothing in
+the repository referenced the latter (only this log, and only to record it being wrong), while
+`Ai-Notes.txt` is the declared launch point and is referenced from `run_sim.sh`/`run_sim.ps1`. The
+handoff file was a partial restatement of content that already has canonical homes:
+project-architecture.md (state model, band lockout, sequencing and polarity defaults, encoder UI,
+re-arm rules), the pin map (which it restated as an ADC channel table, against the recorded rule),
+TESTING.md (the CTest options) and README.md (the diagram links).
+
+It also carried a claim the firmware no longer supports: "sequence requests complete their engage
+order even if PTT releases early, then unsequence in order". That was made false by the stage-2
+release fix logged below - a release now unwinds the sequencer in order (TX off first) and releases
+the band only once every TX output is confirmed inactive, so an in-progress engage is aborted rather
+than completed.
+
+Fixed by merging into a single file: `AI-HANDOFF.md` was deleted, the few facts in it that no other
+document held were verified against the firmware and folded into `Ai-Notes.txt` (ADC format and
+scaling, current-sensor scaling and its 40 A default, release ordering), and the stale SHA/working
+tree notes in its handoff section were replaced with "read the current commit from git". The merged
+file explicitly records that a second handoff file must not be recreated.
+
 ## 2026-09-21 — Docs still described the removed EasyEDA/KiCad schematic automation
 
 Commit `90c7bf7` deleted the whole schematic-automation pipeline (generators, `.kicad_sch`
