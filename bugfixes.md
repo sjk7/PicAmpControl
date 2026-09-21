@@ -48,6 +48,37 @@ The harness now keeps the 40m snoop signal present for the whole keyed window. T
 transmission, and it means the baseline scenario now exercises the first-dit decode-and-engage path
 instead of relying on pre-PTT RF leakage.
 
+## 2026-09-21 — Band-selection invariants found the amplifier keying on the 160 m no-signal default
+
+The new I1-I5 invariants (checked over every suite scenario) failed the TEMPERATURE scenario:
+after the thermal trip cleared, the relay selection had followed live RF while unlocked, and with
+no measurement present the classifier reported its no-signal default (160m). Stage 0 then locked
+whatever `current_band` happened to hold, so the amplifier keyed on the 160 m filter while the
+radio was on 40 m. Old firmware had the same hole (it refused PTT only when no band was known *at
+the assertion*, which is not the recovery path).
+
+Fixed by gating keying on an established band: `g_band_established` is set by a live confirmed
+measurement, by the first-dit memory, or by the snoop decode, and is invalidated on PTT release,
+at startup and on a trip recovery (which is the only mid-over path that frees the relay
+selection). Stage 0 now enters bypass-snoop instead of keying when no band is established.
+
+The harness had to model reality for this: the operator keeps the key down through a thermal
+cycle, so `TEMPERATURE` now holds the 40m snoop signal present throughout (see the next entry for
+why a single injection per long step was not enough).
+
+## 2026-09-21 — Sampling aliased with the frequency-counter tick (FREQ_CTR passed standalone, failed in the suite)
+
+`FREQ_CTR` passed on its own but failed inside the merged suite with `80m TX lock failed while
+injecting 1800 kHz`. The firmware resets TMR1 on every 10 ms tick, and the harness sampled on
+10 ms boundaries, so when the two aliased the samples *always* landed before the tick that
+consumed the injected count - the injected reading was never observed, and the assertion failed
+on a stimulus artefact. Standalone runs happened to start at a favourable phase; the suite did
+not.
+
+Fixed by sampling injected counts at 5 ms (every tick window then contains a post-tick sample) and
+by adding `inject_step_hold()`, which re-injects before each 5 ms chunk inside long steps instead
+of injecting once at the start of a 50 ms step.
+
 ## 2026-09-21 — Band/frequency-counter tests were weaker than their labels; Timer1 external clock is not modelled
 
 Audited the band/frequency-counter tests in `tools/simulate/trace_ptt_sequence.py` against the

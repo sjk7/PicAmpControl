@@ -71,7 +71,8 @@ Firmware mechanisms behind them:
   existing state numbering stays stable
 - `g_band_cache_valid`, `g_band_cache_band`, `g_snoop_active`, `g_band_cache_idle_ms`
 - `g_band_settle_active`, `g_band_settle_elapsed_ms`
-- `BAND_CACHE_IDLE_TIMEOUT_MS` (60 s) and `BAND_SETTLE_MS` (20 ms)
+- `g_band_verify_active`, `g_band_verify_mismatch_ms`
+- `BAND_CACHE_IDLE_TIMEOUT_MS` (60 s), `BAND_SETTLE_MS` (20 ms) and `BAND_VERIFY_MS` (20 ms)
 
 `update_protection_state()` re-derives `g_state` every pass, so the **flag** `g_snoop_active`
 is the authoritative snoop indicator, not the enumerated state.
@@ -98,9 +99,35 @@ never an override of a live, confirmed measurement.
   `BAND_SETTLE_MS` so the amplifier is never keyed into a relay that is still moving. The
   normal engage sequence then starts on the decoded band.
 
-The confirmation test is `freq_counter_band_confirmed()`, **not** `freq_counter_signal_valid()`:
+The confirmation test is `freq_counter_band_confirmed()`, which requires the stabilised band to
+match the latest measurement. A weaker "is any frequency in range" test must not be used:
 after silence the 10 ms tick has already classified an empty gate window as 160 m, and that
 stale band must never be cached or locked.
+
+### Verifying a remembered band
+
+Engaging from the memory is a blind decision: at keydown the radio has not started transmitting
+yet, so there is nothing to measure. If the operator changes bands and keys straight away, the
+remembered band is wrong, and the first RF of that transmission would otherwise be amplified
+through the previous band's filter for the whole over.
+
+The remembered band is therefore checked against the **first usable measurement of that
+transmission**, using `freq_counter_measured_band()` (which reports the band being received
+regardless of the lock). While `g_band_verify_active` is set:
+
+- measured band matches the frozen one → the memory is confirmed, verification ends, and the band
+  stays locked for the rest of the TX cycle
+- the measurement is unusable → keep waiting: there is nothing to compare against yet
+- the measured band differs for `BAND_VERIFY_MS` (20 ms) → **fold back**: force bypass, release the
+  band and re-enter bypass-snoop. The snoop path then re-selects the measured band with the
+  amplifier cold, waits for the relay to settle, and re-engages on it
+
+The relay selection never moves while the amplifier is keyed, so a correction always goes through
+bypass first (invariants I1/I5).
+
+This applies **only** to engages that came from the memory. When the counter has already confirmed
+a band from live RF at keydown, that measurement is used directly and the band is frozen for the
+whole cycle - which is the behaviour the merged suite's per-band TX lock test exercises.
 
 ### Cache lifetime
 
@@ -131,7 +158,8 @@ Two CTest tests cover this model:
   band, decode of the first burst and engagement on the decoded band, an instant warm re-key with
   **no RF injected at all**, cache expiry after the inactivity timeout, re-detection of a band
   change, and a hot-switch fault injection that re-keys during the release ramp with a
-  deliberately wrong cached band.
+  deliberately wrong cached band, then a blind cached-band engage that is corrected by the first
+  measurement of the transmission.
 - `PTT_SequencerAndTripSuite` — enforces invariants I1-I5 over **every** scenario in the merged
   suite by post-processing the samples it already takes.
 
@@ -161,11 +189,12 @@ Two limits are worth stating:
 - `BAND_CACHE_IDLE_TIMEOUT_MS` (60 s) — confirm on the bench against typical operator
   band-change habits.
 - `BAND_SETTLE_MS` (20 ms) — confirm against the fitted LPF relay's operate time.
-- If the operator changes bands and keys again within the timeout **and the counter has no live
-  measurement at that moment**, the first RF burst of that transmission is amplified through the
-  previous band's filter. That is the accepted trade-off for an instant engage (clause 3), and the
-  timeout is the mitigation. A live confirmed measurement always wins over the remembered band, so
-  the exposure is limited to the case where the counter genuinely has nothing to say. The
-  alternative, if the bench shows it matters, is to snoop every PTT and accept the bypass delay.
+- If the operator changes bands and keys again within the timeout **and the keydown has no RF to
+  measure**, the first RF of that transmission is amplified through the previous band's filter
+  until the verification above corrects it: `BAND_VERIFY_MS` of measurement/stability plus the
+  snoop confirmation and relay settle (measured ~23 ms to bypass in the simulator, e.g. a
+  fraction of one CW dit at 20 wpm, and the rest of the over is correctly filtered). Confirm on
+  the bench that the correction is not audible. The alternative, if it ever matters, is to snoop
+  every PTT and accept a bypass window on every over instead of only after a band change.
 - How the operator should be told the amplifier is in bypass-snoop on a `MENU_PAGE_STATUS`-style
   screen.

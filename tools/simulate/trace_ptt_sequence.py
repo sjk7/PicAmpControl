@@ -42,7 +42,7 @@ STATE_VARS = [
     "g_ptt_active", "g_sequence_stage", "g_state", "g_trip_shutdown_active",
     "g_ptt_complete_display_active", "g_transient_menu_display",
     "g_fc_status.current_band", "g_fc_status.band_locked", "g_fc_status.frequency_khz",
-    "g_snoop_active"
+    "g_snoop_active", "g_band_established"
 ]
 # STATE_BYPASS_SNOOP in firmware/src/main.c (appended last so existing numbering is stable).
 STATE_BYPASS_SNOOP = 6
@@ -177,6 +177,20 @@ def build_script(trip_name=None) -> str:
             raise ValueError(f"{freq_khz} kHz cannot be represented by a 16-bit Timer1 write")
         lines.append(f"write TMR1L 0x{total_counts & 0xFF:02X}")
         lines.append(f"write TMR1H 0x{(total_counts >> 8) & 0xFF:02X}")
+
+    def inject_step_hold(freq_khz, ms, chunk_ms=5):
+        """Advance `ms` of simulated time with the snoop signal held present throughout.
+
+        A single injection before a long step is not enough: the firmware resets TMR1 on every
+        10 ms tick, so only the first tick of the step would see the injected count and the rest
+        would read an empty gate window, which the classifier reports as its 160m no-signal
+        default. Injecting before each `chunk_ms` chunk keeps the measured band stable for the
+        whole step, exactly as continuous RF would.
+        """
+        for _ in range(ms // chunk_ms):
+            write_tmr1_count(freq_khz)
+            lines.append(f"Stepi {chunk_ms * 8000}")
+        sample()
 
     def band_preflight(all_bands=False):
         band_tests = BAND_TESTS if all_bands else [("40m", 7000, 3)]
@@ -354,26 +368,28 @@ def build_script(trip_name=None) -> str:
         lines.append("quit")
         return "\n".join(lines)
     if temperature_trip:
+        # The operator keeps the key down through the whole thermal cycle, so the radio is
+        # transmitting throughout: keep the 40m snoop signal present so the amplifier can
+        # re-establish the band after the trip clears (it must never key on the classifier's
+        # no-signal default - see docs/first-dit-band-detection.md).
         # Raise the temperature stimulus from 2.5V to 5V over one simulated second.
         for step in range(1, 21):
             voltage = 2.5 + step * 0.125
             lines.append(f"write pin RA5 {voltage:.3f}v")
             if step < 20:
-                lines.append("Stepi 400000")  # 50ms per ramp step
-                sample()
+                inject_step_hold(7000, 50)  # 50ms per ramp step, signal held present
             else:
                 for _ in range(10):  # capture the five-millisecond shutdown sequence
+                    write_tmr1_count(7000)
                     lines.append("Stepi 8000")
                     sample()
         for _ in range(10):  # show the latched trip state for another 500ms
-            lines.append("Stepi 400000")
-            sample()
+            inject_step_hold(7000, 50)
         # Lower the temperature stimulus back to 2.5V over two simulated seconds.
         for step in range(19, -1, -1):
             voltage = 2.5 + step * 0.125
             lines.append(f"write pin RA5 {voltage:.3f}v")
-            lines.append("Stepi 400000")  # 50ms per recovery-ramp step
-            sample()
+            inject_step_hold(7000, 50)  # recovery ramp; the radio is still transmitting
         lines.append("quit")
         return "\n".join(lines)
     # --- Release PTT (RC0 back high): relays open, then VCC, then bias ---

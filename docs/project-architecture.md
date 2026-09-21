@@ -119,7 +119,7 @@ Band lockout protects the transmit path:
 
 Bypass is always safe: the RF path is straight through to the antenna with the LDMOS bias off. The amplifier is never keyed on an unverified band, and the relay selection never moves while it is keyed. The full model, its invariants and its test evidence are in [First-Dit band detection](first-dit-band-detection.md).
 
-The firmware interface is `freq_counter_lock_band()`, `freq_counter_unlock_band()`, and `freq_counter_signal_valid()` in [firmware/include/freq_counter.h](../firmware/include/freq_counter.h). The flow is diagrammed in [docs/hardware/project_schematic_package/block_diagram.md](hardware/project_schematic_package/block_diagram.md).
+The firmware interface is `freq_counter_lock_band()`, `freq_counter_unlock_band()`, `freq_counter_band_confirmed()`, `freq_counter_measured_band()` and `freq_counter_restore_locked_band()` in [firmware/include/freq_counter.h](../firmware/include/freq_counter.h). The flow is diagrammed in [docs/hardware/project_schematic_package/block_diagram.md](hardware/project_schematic_package/block_diagram.md).
 
 ## Temperature and fan strategy
 

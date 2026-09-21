@@ -187,6 +187,9 @@ runs its own MDB session and covers, in one transcript:
 6. Hot-switch fault injection: the cached band is deliberately overwritten with a different band
    and the amplifier is re-keyed during the release ramp (while `TX_VCC`/`TX_BIAS` are still
    asserted). The relays must move only after the firmware forces bypass.
+7. A blind cached-band engage that is corrected: the amplifier is keyed on the remembered band
+   with no RF to verify it, then 40m RF appears. Within `BAND_VERIFY_MS` the firmware must fold
+   back to bypass, re-select the relay cold and re-engage on the band actually being received.
 
 Every sample of the session is checked against invariants I1-I5 (see the design doc), and the
 three defects in that doc's table were re-introduced to confirm the test fails on each of them

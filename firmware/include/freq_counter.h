@@ -49,16 +49,15 @@ void freq_counter_restore_locked_band(rf_band_t band);
 // silence/noise (the 10 ms tick classifies an empty gate window as 160m).
 bool freq_counter_band_confirmed(void);
 
+// The band the latest stable measurement classifies to, or BAND_OUT_OF_SPEC when the gate
+// window holds no usable RF. This ignores the lock, so a caller can tell that the incoming RF
+// no longer matches the band the relay selection is frozen on.
+rf_band_t freq_counter_measured_band(void);
+
 // Unlock band after transmit returns to RX/Idle
 void freq_counter_unlock_band(void);
 
-// Return true only when the latest measurement is usable for PTT/TX sequencing.
-bool freq_counter_signal_valid(void);
-
 // Get current frequency counter status
 void freq_counter_get_status(freq_counter_status_t *status);
-
-// Helper to get string representation of a band (e.g., "160m", "20m")
-const char *freq_counter_band_str(rf_band_t band);
 
 #endif // FREQ_COUNTER_H

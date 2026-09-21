@@ -55,23 +55,34 @@
         |                              |
         |                              +--> candidate_band / current_band
         v
-  freq_counter_signal_valid()?
-        |                    |
-       no                   yes
-        |                    |
-        v                    v
-  PTT cancelled        PTT accepted
-  before TX            band locked (freq_counter_lock_band)
-  TX outputs forced    LPF relays frozen for the whole TX cycle
-  inactive, band              |
-  unlocked                    v
-                       TX completes -> back to RX/idle
-                              |
-                              v
-                       freq_counter_unlock_band()
-                       LPF relays free to follow the next snoop
+  PTT falls
+        |
+        +-- live measurement already confirmed? ---> engage on it, lock the band
+        |
+        +-- no, but a band is remembered? ---------> restore + lock it, engage instantly
+        |                                            (then verified against the first
+        |                                             measurement of this transmission;
+        |                                             a mismatch folds back to bypass and
+        |                                             re-engages on the measured band)
+        |
+        +-- no band known at all ------------------> BYPASS-SNOOP: PTT latched, LDMOS bias
+                                                     off, RF straight through to the
+                                                     antenna while the radio's first
+                                                     burst is decoded
+                                                        |
+                                                        v
+                                                     cache band, lock, wait for the LPF
+                                                     relay to settle, then engage
+        v
+  TX completes -> back to RX/idle -> band unlocked (band kept in the first-dit memory)
+                                            |
+                                            v
+                                     LPF relays free to follow the next snoop
 ```
 
-Band lockout is what prevents the LPF relays from being re-selected mid-transmission. If the
-snoop signal is missing, the controller refuses to key the amplifier rather than transmitting
-through an unverified filter.
+Band lockout is what prevents the LPF relays from being re-selected mid-transmission: while the
+amplifier is keyed the selection is frozen, and a band change is only ever applied with the
+amplifier cold. If nothing decodes a band, the amplifier is not keyed at all - the RF path stays
+in bypass (straight through, no LDMOS bias) instead of transmitting through an unverified filter.
+See [docs/first-dit-band-detection.md](../../first-dit-band-detection.md) for the full model,
+its invariants and its test evidence.

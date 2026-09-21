@@ -135,22 +135,26 @@ void freq_counter_tick_10ms(void) {
     // Classify candidate band
     rf_band_t measured_band = classify_frequency_khz(g_fc_status.frequency_khz);
 
+    // The candidate/stability tracker follows the incoming RF even while the band is locked,
+    // so the TX path can tell whether the RF being received still matches the frozen band
+    // (freq_counter_measured_band()).
+    if (measured_band == g_fc_status.candidate_band) {
+        if (g_fc_status.stability_count < 255) {
+            g_fc_status.stability_count++;
+        }
+    } else {
+        g_fc_status.candidate_band = measured_band;
+        g_fc_status.stability_count = 1;
+    }
+
     // If band is locked (during transmit), do NOT update current_band or switch relays!
     if (g_fc_status.band_locked) {
         update_band_outputs(g_fc_status.current_band);
         return;
     }
 
-    if (measured_band == g_fc_status.candidate_band) {
-        if (g_fc_status.stability_count < 255) {
-            g_fc_status.stability_count++;
-        }
-        if (g_fc_status.stability_count >= STABILITY_REQUIRED_TICKS) {
-            g_fc_status.current_band = measured_band;
-        }
-    } else {
-        g_fc_status.candidate_band = measured_band;
-        g_fc_status.stability_count = 1;
+    if (g_fc_status.stability_count >= STABILITY_REQUIRED_TICKS) {
+        g_fc_status.current_band = measured_band;
     }
 
     update_band_outputs(g_fc_status.current_band);
@@ -173,41 +177,26 @@ void freq_counter_restore_locked_band(rf_band_t band) {
 }
 
 bool freq_counter_band_confirmed(void) {
+    return freq_counter_measured_band() != BAND_OUT_OF_SPEC &&
+           g_fc_status.candidate_band == g_fc_status.current_band;
+}
+
+rf_band_t freq_counter_measured_band(void) {
     if (g_fc_status.stability_count < STABILITY_REQUIRED_TICKS) {
-        return false;
+        return BAND_OUT_OF_SPEC;
     }
     if (g_fc_status.frequency_khz < 1000U || g_fc_status.frequency_khz > 32000U) {
-        return false;
+        return BAND_OUT_OF_SPEC;
     }
-    return g_fc_status.current_band != BAND_OUT_OF_SPEC &&
-           classify_frequency_khz(g_fc_status.frequency_khz) == g_fc_status.current_band;
+    return g_fc_status.candidate_band;
 }
 
 void freq_counter_unlock_band(void) {
     g_fc_status.band_locked = false;
 }
 
-bool freq_counter_signal_valid(void) {
-    return g_fc_status.frequency_khz >= 1000U &&
-           g_fc_status.frequency_khz <= 32000U &&
-           g_fc_status.current_band != BAND_OUT_OF_SPEC;
-}
-
 void freq_counter_get_status(freq_counter_status_t *status) {
     if (status != NULL) {
         *status = g_fc_status;
-    }
-}
-
-const char *freq_counter_band_str(rf_band_t band) {
-    switch (band) {
-        case BAND_160M: return "160m";
-        case BAND_80M:  return "80m";
-        case BAND_40M:  return "40m";
-        case BAND_20M:  return "20m";
-        case BAND_15M:  return "15m";
-        case BAND_10M:  return "10m";
-        case BAND_OUT_OF_SPEC: return "OOS";
-        default:        return "N/A";
     }
 }

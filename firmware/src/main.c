@@ -121,6 +121,12 @@ typedef struct {
    the radio's first burst is unaffected. Confirm against the fitted relay's operate time
    on the bench. */
 #define BAND_SETTLE_MS 20U
+/* A band engage that came from the first-dit memory was chosen with no RF to verify it: at
+   keydown the radio has not started transmitting yet. The remembered band is therefore
+   checked against the first usable measurement of that transmission, and a band mismatch must
+   persist this long before the amplifier is folded back to bypass and re-engaged on the band
+   actually being received. Confirm on the bench that this is short enough to be inaudible. */
+#define BAND_VERIFY_MS 20U
 
 static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
@@ -136,6 +142,12 @@ static volatile bool g_snoop_active = false;
 static unsigned int g_band_cache_idle_ms = 0;
 static volatile bool g_band_settle_active = false;
 static unsigned int g_band_settle_elapsed_ms = 0;
+static volatile bool g_band_verify_active = false;
+static unsigned int g_band_verify_mismatch_ms = 0;
+/* A band is "established" for the current transmission when it is backed by a real measurement
+   or by the first-dit memory. This is what gates keying: with no RF the classifier reports its
+   160m no-signal default, and the amplifier must never key on a band that was never measured. */
+static volatile bool g_band_established = false;
 static volatile bool g_startup_inhibit = true;
 static volatile bool g_comparator_reset_active = false;
 static volatile unsigned char g_comparator_reset_elapsed_ms = 0;
@@ -249,6 +261,13 @@ static protection_thresholds_t g_thresholds = {
     true, false, PEAK_HOLD_DEFAULT_MS, PEAK_DECAY_DEFAULT_MS
 };
 
+/* XC8 does not merge duplicate string literals, so the few that appear on more than one
+   screen are defined once here instead of being repeated at each call site. */
+static const char LCD_TEXT_SWR1[] = "SWR1 ";
+static const char LCD_TEXT_SWR2[] = "SWR2 ";
+static const char LCD_TEXT_MAX[] = "MAX ";
+static const char LCD_TEXT_TEMP[] = "TEMP ";
+
 bool output_level(bool active, bool active_high) {
     return active_high ? active : !active;
 }
@@ -296,6 +315,12 @@ void release_band_if_cold(void) {
     }
 }
 
+/* The relay selection is free to follow live RF again (a trip recovery, a PTT release), so the
+   band is no longer established and the amplifier must establish one before it may key. */
+void invalidate_established_band(void) {
+    g_band_established = false;
+}
+
 void __interrupt() timer0_isr(void) {
     freq_counter_isr();
 
@@ -312,17 +337,12 @@ void __interrupt() timer0_isr(void) {
         unsigned int sample = (unsigned int)ADRES;
         PIR1bits.ADIF = 0;
 
-        switch (g_adc_active_index) {
-            case 0: g_adc_samples[0] = sample; break;
-            case 1: g_adc_samples[1] = sample; break;
-            case 2: g_adc_samples[2] = sample; break;
-            case 3: g_adc_samples[3] = sample; break;
-            case 4: g_adc_samples[4] = sample; break;
-            case 5: g_adc_samples[5] = sample; break;
-            case 6: g_adc_samples[6] = sample; break;
-            default: g_adc_samples[7] = sample; break;
+        /* Indexed store rather than an 8-case switch: g_adc_active_index is always a valid
+           channel index (it is only ever loaded from g_adc_scan_index), and the switch cost
+           eight copies of the same store in flash. */
+        if (g_adc_active_index < 8) {
+            g_adc_samples[g_adc_active_index] = sample;
         }
-
     }
 
     /* Refresh every trip ADC on the same bounded cadence. At one channel per
@@ -394,7 +414,10 @@ void lcd_write_power_bar(unsigned int power_w, unsigned int full_scale_w, unsign
         full_scale_w = 1;
     }
 
-    bar_segments = (unsigned char)(((unsigned long)power_w * width) / full_scale_w);
+    /* 16-bit on purpose: power_w is bounded by the configured forward full scale (2500 W max)
+       and width by the LCD columns, so the product cannot overflow 16 bits. Using longs here
+       pulled the 32-bit divide/multiply helpers into the image for no reason. */
+    bar_segments = (unsigned char)((power_w * width) / full_scale_w);
 
     if (bar_segments > width) {
         bar_segments = width;
@@ -521,7 +544,7 @@ void show_menu_page(void) {
         }
         lcd_set_cursor(0, 0);
         if (g_trip_reason & TRIP_REASON_TEMP) {
-            lcd_write_text("TEMP ");
+            lcd_write_text(LCD_TEXT_TEMP);
             lcd_write_unsigned(g_live_temperature_c);
             lcd_write_byte('/', true);
             lcd_write_unsigned(g_thresholds.temp_trip_c);
@@ -530,17 +553,17 @@ void show_menu_page(void) {
             if (g_swr1_live_hundredths >= 1000) {
                 lcd_write_text("FLTR?? CHECK LPF");
             } else {
-                lcd_write_text("SWR1 ");
+                lcd_write_text(LCD_TEXT_SWR1);
                 lcd_write_swr_right(11, g_swr1_live_hundredths);
                 lcd_set_cursor(1, 0);
-                lcd_write_text("MAX ");
+                lcd_write_text(LCD_TEXT_MAX);
                 lcd_write_swr_right(11, (unsigned int)g_thresholds.swr1_trip_tenths * 10U);
             }
         } else if (g_trip_reason & TRIP_REASON_SWR2) {
-            lcd_write_text("SWR2 ");
+            lcd_write_text(LCD_TEXT_SWR2);
             lcd_write_swr_right(11, g_swr2_live_hundredths);
             lcd_set_cursor(1, 0);
-            lcd_write_text("MAX ");
+            lcd_write_text(LCD_TEXT_MAX);
             lcd_write_swr_right(11, (unsigned int)g_thresholds.swr2_trip_tenths * 10U);
         } else if (g_trip_reason & TRIP_REASON_CURRENT) {
             lcd_write_text("AMPS ");
@@ -593,7 +616,7 @@ void show_menu_page(void) {
         lcd_write_text("W ");
         lcd_write_power_bar(g_post_fwd_pep_w, g_thresholds.swr2_fwd_full_scale_w, 8);
         lcd_set_cursor(1, 0);
-        lcd_write_text("TEMP ");
+        lcd_write_text(LCD_TEXT_TEMP);
         if (temp_c_value < 100) lcd_write_spaces(1);
         if (temp_c_value < 10) lcd_write_spaces(1);
         lcd_write_unsigned(temp_c_value);
@@ -602,10 +625,10 @@ void show_menu_page(void) {
     }
     if (g_menu_page == MENU_PAGE_SWR_METER) {
         lcd_set_cursor(0, 0);
-        lcd_write_text("SWR1 ");
+        lcd_write_text(LCD_TEXT_SWR1);
         lcd_write_swr_right(11, g_swr1_live_hundredths);
         lcd_set_cursor(1, 0);
-        lcd_write_text("SWR2 ");
+        lcd_write_text(LCD_TEXT_SWR2);
         lcd_write_swr_right(11, g_swr2_live_hundredths);
         return;
     }
@@ -706,6 +729,9 @@ void apply_startup_inhibit(void) {
     g_snoop_active = false;
     g_band_settle_active = false;
     g_band_settle_elapsed_ms = 0;
+    g_band_verify_active = false;
+    g_band_verify_mismatch_ms = 0;
+    g_band_established = false;
 }
 
 void clear_fault_latches(void) {
@@ -731,6 +757,7 @@ void handle_ptt_transition(bool ptt_asserted) {
         g_band_cache_idle_ms = 0;
         g_band_settle_active = false;
         g_band_settle_elapsed_ms = 0;
+        g_band_verify_mismatch_ms = 0;
         /* Never move the LPF relays while the amplifier is keyed: a PTT re-assert
            during the release ramp can still have TX_VCC/TX_BIAS asserted, and both
            branches below touch the band selection. Forcing bypass first means the
@@ -763,28 +790,41 @@ void handle_ptt_transition(bool ptt_asserted) {
             g_band_cache_valid = true;
             g_band_cache_idle_ms = 0;
             g_snoop_active = false;
+            g_band_verify_active = false;
+            g_band_verify_mismatch_ms = 0;
+            g_band_established = true;
             return;
         }
         if (g_band_cache_valid) {
             /* First-dit: there is no usable live measurement yet (the radio has only just
                been keyed), so use the band decoded from the previous transmission and engage
-               immediately. The relay selection settles while the amplifier stays in bypass. */
+               immediately. The relay selection settles while the amplifier stays in bypass,
+               and the remembered band is verified against the first measurement of this
+               transmission by update_tx_sequence(). */
             freq_counter_restore_locked_band(g_band_cache_band);
             g_snoop_active = false;
+            g_band_verify_active = true;
+            g_band_verify_mismatch_ms = 0;
+            g_band_established = true;
             return;
         }
         /* First-dit bypass snoop: no band is known yet, so hold the amplifier in bypass
            (LDMOS bias off, RF path straight through) while the radio's first RF burst is
-           measured. The band is deliberately NOT locked here - the relay selection stays
-           live so the first burst can be classified. */
-        apply_bypass();
+           measured. Bypass was already forced at the top of this transition; the band is
+           deliberately NOT locked here - the relay selection stays live so the first burst
+           can be classified. */
         freq_counter_unlock_band();
         g_snoop_active = true;
+        g_band_verify_active = false;
+        g_band_verify_mismatch_ms = 0;
         g_state = STATE_BYPASS_SNOOP;
     } else {
         g_ptt_active = false;
         g_snoop_active = false;
         g_band_settle_active = false;
+        g_band_verify_active = false;
+        g_band_verify_mismatch_ms = 0;
+        invalidate_established_band();
         g_state = STATE_STANDBY;
         if (g_ptt_complete_display_active) {
             g_ptt_complete_display_elapsed_ms = 0;
@@ -1160,6 +1200,7 @@ void update_tx_sequence(void) {
         g_band_cache_idle_ms = 0;
         freq_counter_lock_band();
         g_snoop_active = false;
+        g_band_established = true;
         /* The band selection has just moved to the decoded band. Stay in bypass until the
            relay contacts have settled, then engage on that band (see BAND_SETTLE_MS). */
         g_band_settle_active = true;
@@ -1178,8 +1219,48 @@ void update_tx_sequence(void) {
         g_band_settle_active = false;
     }
 
+    if (g_band_verify_active) {
+        /* The engage came from the remembered band, which was chosen with no RF to verify it:
+           at keydown the radio has not started transmitting yet. Verify it against the first
+           usable measurement of this transmission - if the operator changed bands and keyed
+           straight away, this is where that is caught. The relay selection must not move while
+           the amplifier is keyed, so a confirmed mismatch forces bypass first; the snoop path
+           then re-selects the measured band cold and re-engages on it. */
+        freq_counter_status_t status;
+        rf_band_t measured = freq_counter_measured_band();
+
+        freq_counter_get_status(&status);
+        if (measured == BAND_OUT_OF_SPEC) {
+            g_band_verify_mismatch_ms = 0;   /* nothing usable to compare against yet */
+        } else if (measured == status.locked_band) {
+            g_band_verify_active = false;    /* the remembered band is confirmed */
+            g_band_verify_mismatch_ms = 0;
+        } else if (g_band_verify_mismatch_ms < BAND_VERIFY_MS) {
+            g_band_verify_mismatch_ms++;
+        } else {
+            apply_bypass();
+            freq_counter_unlock_band();
+            g_band_verify_active = false;
+            g_band_verify_mismatch_ms = 0;
+            g_snoop_active = true;
+            g_sequence_stage = 0;
+            g_state = STATE_BYPASS_SNOOP;
+            return;
+        }
+    }
+
     if (g_ptt_active) {
         if (g_sequence_stage == 0) {
+            if (!g_band_established) {
+                /* The relay selection is not backed by any measurement for this transmission
+                   (with no RF the classifier reports its 160m no-signal default), so the
+                   amplifier must not key. Wait in bypass until the first burst decodes a band. */
+                apply_bypass();
+                freq_counter_unlock_band();
+                g_snoop_active = true;
+                g_state = STATE_BYPASS_SNOOP;
+                return;
+            }
             freq_counter_lock_band();
             set_tx_output(true);
             g_sequence_elapsed_ms = 0;
@@ -1349,9 +1430,11 @@ void update_protection_state(unsigned int temp_c,
             g_sequence_stage = 0;
             g_state = STATE_RESET_WAIT;
             set_trip_output(false);
-            /* Recovery unlocks the band, so the relay selection becomes live again:
-               put the amplifier in bypass before that can happen. */
+            /* Recovery unlocks the band, so the relay selection becomes live again: put the
+               amplifier in bypass before that can happen, and make it re-establish a band
+               before it may key (with no RF the selection would follow the 160m default). */
             apply_bypass();
+            invalidate_established_band();
             start_comparator_reset();
             return;
         }

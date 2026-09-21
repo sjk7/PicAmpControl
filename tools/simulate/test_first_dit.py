@@ -15,6 +15,11 @@ needs the debug symbols) and proves, clause by clause:
   (d) After BAND_CACHE_IDLE_TIMEOUT_MS of inactivity the cache is dropped and the next
       PTT goes back to bypass-snoop.
   (e) A different band on the next first dit is re-detected and re-selected.
+  (f) Hot-switch fault injection: re-key during the release ramp with a deliberately wrong
+      cached band; the relays may only move once the amplifier has been forced into bypass.
+  (g) Operator changed bands and keyed straight away (no RF at keydown, so the remembered band
+      was used blind): the first measurement of the transmission must catch the mismatch, fold
+      the amplifier back to bypass, re-select the LDMOS cold and re-engage on the real band.
 
 It also enforces the safety invariants that make first-dit safe, over every sample of the
 whole session (see validate_no_hot_switch):
@@ -208,6 +213,14 @@ def build_script(addrs):
         b.step(3, ms=5)         # 15 ms after release: TX off, TX_VCC and TX_BIAS still on
         b.ptt(True)
         b.step(14, ms=5)
+
+    with b.phase("g_band_change_foldback"):
+        # The operator changed bands and keyed straight away, so the remembered band was used
+        # blind (there was no RF to verify it against at keydown). The amplifier is already keyed
+        # on it here - 15m from phase (f). The first measurement of this transmission must catch
+        # the mismatch, fold back to bypass, re-select the LDMOS cold and re-engage on 40m.
+        b.inject_step(7000, 30, ms=1)
+        b.inject_step(7000, 40, ms=5)
 
     b.lines.append("quit")
     return "\n".join(b.lines), b.spans
@@ -422,6 +435,44 @@ def validate_clause_f(samples):
           "bypass before restoring the band: relays moved cold, then TX engaged on 15m")
 
 
+def validate_clause_g(samples):
+    """The band-change-while-keyed-straight-away case: the remembered band was used blind, and
+    the first measurement of the transmission has to correct it."""
+    if not keyed(samples[0]):
+        raise AssertionError("clause (g): the phase did not start keyed on the remembered band")
+    if selected_band_pin(samples[0]) != "RD6":
+        raise AssertionError(f"clause (g): expected the remembered 15m selection, got "
+                             f"{selected_band_pin(samples[0])}")
+    injected = [index for index, sample in enumerate(samples)
+                if sample[2]["g_fc_status.frequency_khz"] == "7000"]
+    if not injected:
+        raise AssertionError("clause (g): the 40m measurement was never seen")
+    foldback = next((index for index, sample in enumerate(samples) if not keyed(sample)), None)
+    if foldback is None:
+        raise AssertionError(
+            "clause (g): the amplifier stayed keyed on the remembered band while 40m was being "
+            "received - the cached band was never verified")
+    moved = next((index for index, sample in enumerate(samples) if sample[1]["RD4"] == 1), None)
+    if moved is None:
+        raise AssertionError("clause (g): the 40m relay was never selected")
+    if keyed(samples[moved]):
+        raise AssertionError("clause (g): the relays moved while the amplifier was still keyed")
+    latency_ms = millis(samples[foldback]) - millis(samples[injected[0]])
+    if latency_ms > 150:
+        raise AssertionError(f"clause (g): the fold back to bypass took {latency_ms:.1f}ms")
+    engaged = next((index for index, sample in enumerate(samples) if index > moved
+                    and sample[2]["g_sequence_stage"] == "3"
+                    and selected_band_pin(sample) == "RD4"
+                    and sample[2]["g_fc_status.band_locked"] == "true"), None)
+    if engaged is None:
+        raise AssertionError("clause (g): the amplifier never re-engaged on the measured band")
+    show("(g) cached band corrected by the first measurement of the transmission",
+         [samples[0], samples[injected[0]], samples[foldback], samples[moved], samples[engaged]])
+    print(f"  PASS  (g) the blind cached-band engage was corrected {latency_ms:.1f}ms after the "
+          "40m measurement appeared: bypass first, relays re-selected cold, then re-engaged on "
+          "the locked 40m band")
+
+
 def write_csv(samples, path):
     path.parent.mkdir(parents=True, exist_ok=True)
     header = ("time_ms," + ",".join(PINS) + "," + ",".join(STATE_VARS) + "\n")
@@ -449,12 +500,12 @@ def main():
         start, end = spans[name]
         return samples[start:end]
 
-    startup, a, b, c, d, e, f = (span(name) for name in
-                                 ("startup", "a_ptt_without_band", "b_first_burst",
-                                  "c_warm_start", "d_timeout", "e_band_change",
-                                  "f_hot_switch_attempt"))
+    startup, a, b, c, d, e, f, g = (span(name) for name in
+                                    ("startup", "a_ptt_without_band", "b_first_burst",
+                                     "c_warm_start", "d_timeout", "e_band_change",
+                                     "f_hot_switch_attempt", "g_band_change_foldback"))
     for name, group in (("startup", startup), ("a", a), ("b", b), ("c", c), ("d", d),
-                        ("e", e), ("f", f)):
+                        ("e", e), ("f", f), ("g", g)):
         if not group:
             sys.exit(f"error: no samples for phase {name} - mdb script failed? "
                      f"transcript tail:\n{output[-2000:]}")
@@ -472,12 +523,13 @@ def main():
     validate_clause_d(d, c, IDLE_TIMEOUT_MS)
     validate_clause_e(e)
     validate_clause_f(f)
+    validate_clause_g(g)
     if "--csv" in sys.argv[1:]:
         csv_path = REPO_ROOT / "_build" / "My_Pic_Project" / "sim" / "csv" / "first_dit_trace.csv"
         write_csv(samples, csv_path)
         print(f"Wrote {csv_path}")
-    print("FIRST-DIT PROOF PASSED: clauses (a)-(e), the (f) hot-switch fault injection, "
-          "and invariants I1-I5 hold")
+    print("FIRST-DIT PROOF PASSED: clauses (a)-(g), the hot-switch fault injections, and "
+          "invariants I1-I5 hold")
 
 
 if __name__ == "__main__":

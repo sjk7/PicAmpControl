@@ -67,6 +67,17 @@ Then run:
 cmake --build _build/My_Pic_Project/release -j4
 ```
 
+**Both configurations link to the same `out/My_Pic_Project/default.elf`.** A Release build
+replaces the ELF that MDB loads, and its stripped/optimized symbols break the `print <var>`
+reads the harnesses depend on. After any Release build, delete that ELF and rebuild Debug before
+running the simulator tests - Ninja will otherwise report "no work to do" and leave the Release
+binary in place:
+
+```sh
+rm -f out/My_Pic_Project/default.elf
+cmake --build _build/My_Pic_Project/debug -j4
+```
+
 ## Simulator verification
 
 Run the full merged suite with the cleanup-aware launcher. This is the default test workflow: it records its PID, kills a stale prior launcher, owns the MDB process group, logs raw MDB stderr, records 10-second progress heartbeats, and cleans up on timeout or Ctrl-C:
