@@ -4,6 +4,28 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-21 — Docs still described the removed EasyEDA/KiCad schematic automation
+
+Commit `90c7bf7` deleted the whole schematic-automation pipeline (generators, `.kicad_sch`
+artifacts, `node_modules`, `package.json`, the KiCad MCP skill setup) but left the documents that
+described it, so the repo advertised a workflow with no files behind it:
+
+- `docs/hardware/SCHEMATIC_WORKFLOW.md` documented an EasyEDA pipeline (`easyeda_pro_generator.py`,
+  `svg_renderer.py`, `visual_validator.py`, `watch_and_render.py`, `pic_amp_control_full.yaml`,
+  `out/picampcontrol_easyeda_*.json`) whose scripts no longer exist, plus three EasyEDA integration
+  routes (`easyeda-agent` CLI, the `easyeda-copilot` MCP server, a custom `.eext` extension) that
+  were themselves the abandoned approach.
+- Three other files still pointed at removed targets: `README.md` linked the workflow doc,
+  `AI-HANDOFF.md` listed it as the schematic reference and told the next session to read
+  `docs/hardware/schematic-workflow.md` and run `tools/setup_schematic_skill.ps1` (neither exists),
+  and `project_schematic_package/README.md` referenced a `schematic-design` MCP skill,
+  `mcp-server-kicad`, `.vscode/mcp.json`, a `generated/` tree and a `_SCHEMATIC_TEMPLATE.kicad_sch`
+  that are all absent.
+
+Fixed by deleting the workflow document and repointing the survivors: the schematic package is now
+described as what it actually is - static design inputs (block diagram, connection table, component
+list, wiring checklist) captured by hand, with no automated path to a schematic file.
+
 ## 2026-09-21 — Releasing PTT during sequencer stage 2 left TX_VCC asserted and unlocked the band
 
 Found by the new first-dit proof (`tools/simulate/test_first_dit.py`) the first time it released

@@ -61,8 +61,6 @@
 - Main project documentation: `README.md`
 - Hardware map (single source of truth for pin assignments): `docs/hardware/PIC16F18875_pin_map.md`
 - Display/menu diagram links are in `README.md`.
-- Schematic workflow (KiCad MCP skill, setup, troubleshooting): `docs/hardware/SCHEMATIC_WORKFLOW.md`
-- Active schematic project: `docs/hardware/project_schematic_package/generated/mcp-final/pic_amp_protection.kicad_sch`
 - Operator UI is a single EC11-style rotary encoder (A/B/push), all active-low/common-to-ground with pull-ups.
 - LPF band selection is one dedicated active-high output per band; the old 74HC4514 decoder and B0-B2 bus are gone. Band lockout freezes the LPF relays for the duration of a TX cycle.
 
@@ -74,5 +72,3 @@
 4. Run the single suite before modifying simulator behavior.
 5. Keep generated outputs in the existing `sim/csv` and `sim/graphs` directories.
 6. Commit and push verified changes promptly.
-7. For any schematic work, read `docs/hardware/schematic-workflow.md` first and use the `schematic-design` skill; never hand-edit `.kicad_sch` files or run `kicad-cli` directly.
-8. On a new machine, run `powershell -File tools\setup_schematic_skill.ps1`, start `kicad` from `MCP: List Servers`, and use only `generated/mcp-final`.

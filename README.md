@@ -21,7 +21,6 @@ The project is in a working firmware-validation stage:
 - Hardware pin map: [docs/hardware/PIC16F18875_pin_map.md](docs/hardware/PIC16F18875_pin_map.md)
 - Pull-up resistor guidance: [docs/hardware/pull-up-resistor-guidance.md](docs/hardware/pull-up-resistor-guidance.md)
 - ADC input protection guidance: [docs/hardware/adc-input-protection-guidance.md](docs/hardware/adc-input-protection-guidance.md)
-- Schematic workflow (KiCad MCP skill setup and usage): [docs/hardware/SCHEMATIC_WORKFLOW.md](docs/hardware/SCHEMATIC_WORKFLOW.md)
 - Schematic package (block diagram, connection table, component list): [docs/hardware/project_schematic_package/README.md](docs/hardware/project_schematic_package/README.md)
 - Wiring checklist: [docs/hardware/wiring-checklist.md](docs/hardware/wiring-checklist.md)
 - Bench validation procedure: [docs/hardware/bench-validation.md](docs/hardware/bench-validation.md)
