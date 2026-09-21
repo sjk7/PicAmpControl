@@ -17,6 +17,7 @@ The project is in a working firmware-validation stage:
 ## Key documentation
 
 - Architecture overview: [docs/project-architecture.md](docs/project-architecture.md)
+- First-Dit band detection specification: [docs/first-dit-band-detection.md](docs/first-dit-band-detection.md)
 - Hardware pin map: [docs/hardware/PIC16F18875_pin_map.md](docs/hardware/PIC16F18875_pin_map.md)
 - Pull-up resistor guidance: [docs/hardware/pull-up-resistor-guidance.md](docs/hardware/pull-up-resistor-guidance.md)
 - ADC input protection guidance: [docs/hardware/adc-input-protection-guidance.md](docs/hardware/adc-input-protection-guidance.md)

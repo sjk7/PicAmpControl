@@ -61,6 +61,7 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
 ## References
 - Hardware source of truth: docs/hardware/PIC16F18875_pin_map.md
 - Architecture and safety behaviour: docs/project-architecture.md
+- Band-change detection (approved spec, not yet implemented): docs/first-dit-band-detection.md
 - Firmware entry point: firmware/src/main.c
 - Bug fixes log (update whenever a real bug is found): bugfixes.md
 

@@ -111,7 +111,9 @@ Band lockout protects the transmit path:
 
 - on a valid PTT request with a usable snoop measurement, the band is locked and the LPF relay selection is frozen for the whole TX cycle
 - the lock is released when the amplifier returns to RX/idle, letting the relays follow the next snoop
-- if the snoop signal is missing or not usable for sequencing, PTT is cancelled before TX starts: the TX outputs are forced inactive and the band is unlocked. The controller refuses to key the amplifier rather than transmit through an unverified filter
+- if the snoop signal is missing or not usable for sequencing, the current release cancels PTT before TX starts: the TX outputs are forced inactive and the band is unlocked. When no band is remembered, the controller refuses to key the amplifier rather than transmit through an unverified filter
+
+The approved replacement for that cancel-and-refuse rule is the [First-Dit band detection](first-dit-band-detection.md) model: PTT is latched, the amplifier stays in bypass, the first RF burst is measured in bypass, the band is remembered, and subsequent transmissions on that band engage active TX immediately. It is specified but not implemented yet.
 
 The firmware interface is `freq_counter_lock_band()`, `freq_counter_unlock_band()`, and `freq_counter_signal_valid()` in [firmware/include/freq_counter.h](../firmware/include/freq_counter.h). The flow is diagrammed in [docs/hardware/project_schematic_package/block_diagram.md](hardware/project_schematic_package/block_diagram.md).
 
