@@ -4,6 +4,64 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-21 — The T/R relay could close onto LPF relays that were still moving (first-dit warm re-key)
+
+Found by code review of the first-dit band-selection ordering, prompted by the question "will the
+rig see the relays change over?".
+
+There are **two mechanical relay groups in the RF path**, not one: the T/R relays (`OUTPUT_TX`,
+RC5 - confirmed by the release ordering comment "open relays first" and by `PIN_LABELS` in
+`tools/simulate/trace_ptt_sequence.py`, which labels RC5 `RELAYS`) and the LPF band relays
+(K1-K6, RD2-RD7). In a normal amplifier the band relays are positioned from the rig's band data
+*before* key-down, so only the T/R relay moves on PTT and the existing `tx_vcc_delay_ms` wait
+covers it. This design has no band data - the band is *measured* - so the band relays can move at
+key-down, and the T/R relay must not close until they have settled.
+
+The decode (snoop) path got this right: the band relays move with the T/R relay open, then
+`BAND_SETTLE_MS` of bypass is held, and only then does the sequencer close the T/R relay. The
+**warm path did not**: `handle_ptt_transition()` called `freq_counter_restore_locked_band()`,
+which drives the band-select outputs, and the sequencer reached stage 0 - `set_tx_output(true)` -
+on the next pass, roughly 1 ms later, with `g_band_settle_active` explicitly cleared at the top of
+the same function.
+
+This was not hypothetical, because of a second problem: `release_band_if_cold()` unlocks the band
+after every over and `freq_counter_tick_10ms()` then followed the classifier, which reports its
+**160m no-signal default** for an empty gate window (`classify_frequency_khz(<1000)`). So the LPF
+relays parked on 160m after each over and had to move back on the next warm re-key - right as the
+T/R relay closed on top of them. It also meant the relay selection chattered on every over.
+
+The invariant checks could not catch it: I5 only requires that the *sample in which the selection
+changed* was cold, and the move is initiated in the same pass as `apply_bypass()`, so at 1-5 ms
+sample granularity it looks cold. This is the sample-granularity limit already noted in
+docs/first-dit-band-detection.md.
+
+Fixed by:
+- `freq_counter_tick_10ms()` no longer follows an unusable measurement. It updates `current_band`
+  (and therefore the relay selection) only when the reading is stable and usable - the frequency
+  bound is what separates real 160m (1800-2000 kHz) from silence. The relays now hold their last
+  real selection through RX, so a warm re-key on the same band moves nothing.
+- `freq_counter_restore_locked_band()` now returns whether the band-select outputs actually moved,
+  and when they did the caller starts the existing `g_band_settle_active` window, so bypass is
+  held for `BAND_SETTLE_MS` before the T/R relay may close. When nothing moves (the common case)
+  the engage stays immediate.
+
+## 2026-09-21 — The SWR trips were armed while the amplifier was in bypass
+
+`swr_trip()` was evaluated on every main-loop pass and its result folded straight into
+`any_trip_fault` in `update_protection_state()` with **no gate on the amplifier being keyed** - the
+only guard inside `swr_trip()` was `forward_raw < 10`. During bypass the T/R relay is open, so the
+SWR bridges are disconnected from the RF path and the band selection may legitimately be moving,
+yet a bridge reading in that window could latch `g_fault_latched` and drop the firmware into
+`STATE_TRIP`. That is the opposite of what the bypass window is for: the first-dit design depends
+on PTT staying latched and the amplifier staying cold while the band is decoded.
+
+Fixed by arming the SWR trips only while the TX path is engaged: sequencer stages 1-3 are exactly
+the stages that hold `OUTPUT_TX` asserted, so `update_protection_state()` now requires
+`g_sequence_stage >= 1 && g_sequence_stage <= 3` before `swr1_fault`/`swr2_fault` can contribute to
+a trip. The hardware overcurrent, current, temperature, overdrive and drain trips are deliberately
+left ungated. The gate is applied once, in `update_protection_state()`, rather than at the two call
+sites, because the Debug image is at its flash ceiling.
+
 ## 2026-09-21 — The developer's macOS account name was published in tracked files
 
 A case-insensitive search for the developer's macOS account name (which is their real name) found it

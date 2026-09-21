@@ -153,7 +153,16 @@ void freq_counter_tick_10ms(void) {
         return;
     }
 
-    if (g_fc_status.stability_count >= STABILITY_REQUIRED_TICKS) {
+    /* Only follow a usable measurement. An empty gate window classifies as the 160m
+       no-signal default, and driving the relay selection from that would make the LPF
+       relays chatter to 160m after every over and leave the selection disagreeing with
+       current_band (invariant I4). Holding the last real selection also means a warm
+       re-key on the same band moves no relay at all, so the T/R relay can close
+       straight away instead of waiting on a relay that was never going to move.
+       The frequency bound is what separates real 160m (1800-2000 kHz) from silence. */
+    if (g_fc_status.stability_count >= STABILITY_REQUIRED_TICKS &&
+        measured_band != BAND_OUT_OF_SPEC &&
+        g_fc_status.frequency_khz >= 1000U) {
         g_fc_status.current_band = measured_band;
     }
 
@@ -165,15 +174,19 @@ void freq_counter_lock_band(void) {
     g_fc_status.locked_band = g_fc_status.current_band;
 }
 
-void freq_counter_restore_locked_band(rf_band_t band) {
+bool freq_counter_restore_locked_band(rf_band_t band) {
     if (band == BAND_OUT_OF_SPEC) {
-        return;  // Nothing usable to restore; leave the live measurement in charge.
+        return false;  // Nothing usable to restore; leave the live measurement in charge.
     }
+    /* The relay selection is driven from current_band on every tick, so a difference here
+       is exactly a relay move the caller has to let settle before the T/R relay closes. */
+    bool relay_selection_changed = (g_fc_status.current_band != band);
     g_fc_status.current_band = band;
     g_fc_status.candidate_band = band;
     g_fc_status.locked_band = band;
     g_fc_status.band_locked = true;
     update_band_outputs(band);
+    return relay_selection_changed;
 }
 
 bool freq_counter_band_confirmed(void) {

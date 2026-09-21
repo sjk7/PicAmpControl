@@ -238,12 +238,14 @@ static const unsigned char g_menu_setting_types[] = {
 #define TX_BIAS_ACTIVE_HIGH_DEFAULT false
 #define FAN_ACTIVE_HIGH_DEFAULT false
 #define TRIP_ACTIVE_HIGH_DEFAULT false
+/* Labels are kept as short as clarity allows: string literals live in STRCODE, which is the
+   class the linker fails to place first, so every character here is flash. */
 static const char *const g_setting_menu_labels[] = {
-    "S1 SWR TRIP", "S2 SWR TRIP", "S1 FWD MAX", "S2 FWD MAX",
-    "NTC B VALUE", "TEMP TRIP", "INPUT TRIP", "DRAIN TRIP", "CURRENT TRIP",
-    "TX-VCC DELAY", "TX-BIAS DELAY", "TX ACTIVE",
-    "TX-VCC ACTIVE", "TX-BIAS ACTIVE", "FAN ACTIVE", "TRIP ACTIVE",
-    "POWER DISPLAY", "NET POWER", "PEAK HOLD", "PEAK DECAY"
+    "SWR1 TRIP", "SWR2 TRIP", "SWR1 FWD", "SWR2 FWD",
+    "NTC B", "TEMP TRIP", "INPUT TRIP", "DRAIN TRIP", "CURR TRIP",
+    "TX-VCC DLY", "TX-BIAS DLY", "TX ACTIVE",
+    "TX-VCC POL", "TX-BIAS POL", "FAN POL", "TRIP POL",
+    "POWER MODE", "NET POWER", "PK HOLD", "PK DECAY"
 };
 static protection_thresholds_t g_thresholds = {
     30, 20,
@@ -692,9 +694,7 @@ void show_boot_message(void) {
     lcd_write_byte_now(0x01, false);
     __delay_ms(2);
     lcd_set_cursor(0, 0);
-    lcd_write_text("Booting, please");
-    lcd_set_cursor(1, 0);
-    lcd_write_text("wait.");
+    lcd_write_text("Booting");
 }
 
 void adc_init(void) {
@@ -798,10 +798,18 @@ void handle_ptt_transition(bool ptt_asserted) {
         if (g_band_cache_valid) {
             /* First-dit: there is no usable live measurement yet (the radio has only just
                been keyed), so use the band decoded from the previous transmission and engage
-               immediately. The relay selection settles while the amplifier stays in bypass,
-               and the remembered band is verified against the first measurement of this
-               transmission by update_tx_sequence(). */
-            freq_counter_restore_locked_band(g_band_cache_band);
+               immediately. The remembered band is verified against the first measurement of
+               this transmission by update_tx_sequence(). */
+            if (freq_counter_restore_locked_band(g_band_cache_band)) {
+                /* The remembered band differs from the one the LPF relays are sitting on, so
+                   they have just been commanded to move. The T/R relay must not close onto a
+                   moving relay, so hold bypass for the relay's switching time exactly as the
+                   decode path does after a snoop. When the selection does not move (the common
+                   warm re-key on the same band) there is nothing to wait for and the T/R relay
+                   is closed on the normal sequencer timing. */
+                g_band_settle_active = true;
+                g_band_settle_elapsed_ms = 0;
+            }
             g_snoop_active = false;
             g_band_verify_active = true;
             g_band_verify_mismatch_ms = 0;
@@ -1383,7 +1391,13 @@ void update_protection_state(unsigned int temp_c,
     bool temp_trip = temp_c >= g_thresholds.temp_trip_c;
     bool overdrive_trip = overdrive_raw >= (unsigned int)g_thresholds.overdrive_trip_tenths_w * 100U;
     bool drain_trip = drain_raw >= g_thresholds.drain_trip_v;
-    bool any_trip_fault = swr1_fault || swr2_fault || hw_fault || current_fault ||
+    /* The SWR bridges sit in the TX train, which the T/R relay only connects to the RF path
+       while it is closed (sequencer stages 1-3 are exactly the stages that hold OUTPUT_TX
+       asserted). During bypass the relay selection may legitimately be moving and any bridge
+       reading is meaningless, so the SWR trips are only armed while TX is engaged. */
+    bool swr_armed = (g_sequence_stage >= 1 && g_sequence_stage <= 3);
+    bool any_trip_fault = (swr_armed && (swr1_fault || swr2_fault)) ||
+                          hw_fault || current_fault ||
                           temp_trip || overdrive_trip || drain_trip;
 
     if (g_startup_inhibit) {

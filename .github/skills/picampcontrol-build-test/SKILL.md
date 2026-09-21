@@ -104,9 +104,14 @@ cmake --build _build/My_Pic_Project/debug -j4
 
 Flash is the binding constraint on this project, and it is easy to trip from a test change:
 
-- Release (shipping) uses 6899/8192 words = 84.2% used as of 2026-09-21; Debug uses 8135/8192 = 99.3%.
+- Release (shipping) uses ~6899/8192 words = ~84% used; Debug is the binding one at 8117/8192 = 99.1%
+  (2026-09-21 snapshot - always read the current value from `memoryfile.xml`, and note that the same
+  figures are tracked in `Ai-Notes.txt` under "Device memory usage").
 - Debug is deliberately compiled `-O1` (not `-Os`) so MDB can resolve symbols and breakpoints. That is why the build the simulator loads is far closer to the limit than the shipped build. Budget against the Release number.
-- A link error reporting that program space is exhausted reproduces in the Debug build first, long before Release breaks. Treat it as a signal that the test image needs `-O1` kept and the change needs to be smaller — not as a reason to switch Debug to `-Os`, which would silently break MDB symbol resolution. Read the exact figure from `memoryfile.xml` rather than guessing at the wording of the linker message.
+- A link error reporting that program space is exhausted reproduces in the Debug build first, long before Release breaks. It reads as `(1347) can't find 0xN words ... for psect "<name>" in class "<class>"` and lists several psects, because the last few words are fragmented. Treat it as a signal that the test image needs `-O1` kept and the change needs to be smaller — not as a reason to switch Debug to `-Os`, which would silently break MDB symbol resolution. Read the exact figure from `memoryfile.xml` rather than guessing at the wording of the linker message.
+- The cheapest room is in string literals (`STRCODE`), which the linker fails to place first. On
+  2026-09-21 the LCD menu labels and boot text were shortened to reclaim ~72 words; that is the
+  precedent to follow before reaching for anything structural, but it is a user-visible change - ask.
 - Prefer table-driven logic over long if/else chains when adding firmware code, and ask before adding code.
 
 ## Simulator verification
@@ -254,6 +259,54 @@ Prerequisites that decide whether debugging works at all:
 - **The simulator is a debugger model, not silicon.** Timer1's external clock is not modelled and the suite injects `TMR1H`/`TMR1L` instead (see the triage section); exact timing still needs the bench. The simulator notes in `Ai-Notes.txt` are the reference for what the model does and does not implement.
 - If the CPU appears stuck at the interrupt vector with continuous `W0223-ADC` spam on every `Halt`, suspect the ADC-ISR starvation bug class recorded in `bugfixes.md` rather than a debugger fault.
 
+## Known snags (each one cost real time - do not rediscover them)
+
+- **Delete large logs as soon as their verdict is read.** MDB transcripts and captured suite output
+  run to megabytes. Remove them (`rm -f /tmp/<log>`) the moment the verdict has been extracted, and
+  do not leave them on disk even in `/tmp`. Keep a log only while its run's verdict is still needed;
+  never accumulate a series of run logs. Copying a log to a second path to defeat a stale read (see
+  below) doubles the space, so delete both once read.
+- **A fault-injection proof must fail on the clause that names the defect.** Re-introducing a defect
+  can trip an *earlier* clause instead, because the suite is one continuous MDB session and one phase
+  feeds the next. That is still evidence the defect is caught, but it is NOT evidence for the clause
+  you wrote - record the failure message actually observed, and if it does not name your clause,
+  either make the injection narrower or say plainly that the clause's own proof is outstanding. Do
+  not upgrade an incidental cascade into a claim about the new clause.
+- **Clause (d)'s idle-delta window looks sensitive to phase alignment (observed 2026-09-21, cause not
+  confirmed).** A fault injection whose only firmware difference was an unrelated few-word code
+  change made the test fail at `clause (d): the idle counter did not advance ~1 ms/ms while idle`
+  with a delta list containing the injected `-113` and a `1`, i.e. the injected idle count landed a
+  sample earlier in the window than usual. If an injection run fails at clause (d) instead of at the
+  clause under test, suspect this assertion's tolerance rather than the defect, and treat the
+  clause-under-test proof as outstanding.
+- **A log read back through a file tool can be STALE.** Reading a log while it is still being
+  written, or re-reading a path that was read earlier in the same session, can hand back an old copy
+  - which looks exactly like "the run produced nothing". Copy it to a path that has never been read
+  before (`cp /tmp/run.log /tmp/run_v2.log`) and read that, incrementing the suffix each time. Never
+  judge a run from a log path you have already read.
+- **Never reuse a log path across runs.** Truncate it (`> file`) or use a new name per run, or a
+  stale verdict from an earlier run is indistinguishable from the current one. The appended
+  exit-code line only helps if the file was genuinely rewritten.
+- **The terminal's output capture can die and take the run with it.** A long suite printed enough to
+  make VS Code report "Output exceeded terminal scrollback; beginning of output was lost", after
+  which every command in that shell returned no output at all while the once-healthy run had stopped
+  mid-trace. Recover with `workbench.action.terminal.killAll` and a fresh command; prevent it by
+  launching long runs in the background with everything redirected to a file, so the run does not
+  depend on the terminal staying healthy.
+- **A stale PID file stops the next launch before it starts.** `run_suite_with_watchdog.py` kills the
+  previous run's process group at startup and dies with `PermissionError: [Errno 1] Operation not
+  permitted` from `os.killpg` when `/tmp/picampcontrol_suite.pid` belongs to a run that is already
+  gone. `rm -f /tmp/picampcontrol_suite.pid` and relaunch.
+- **A missing program-memory line means "nothing was relinked", not "no space used".** Both
+  configurations link to the same `out/My_Pic_Project/default.elf`, so after a Release build the
+  Debug `cmake --build` can print no summary at all because Ninja has no work to do. Force the relink
+  with `rm -f out/My_Pic_Project/default.elf` before the Debug build.
+- **`test_first_dit.py` can only inject the variables in `SYSTEM_SYMBOLS`** (`g_band_cache_band`,
+  `g_band_cache_idle_ms`). Writing any other name raises `KeyError: '<name>'` before the simulator
+  even starts. Either add the name to `SYSTEM_SYMBOLS`, or drive the state through the firmware's own
+  mechanism - it puts the cache back into bypass-snoop by injecting an idle count past
+  `IDLE_TIMEOUT_MS` rather than clearing `g_band_cache_valid`, which is not injectable.
+
 ## Failure triage
 
 - `Frequency counter failed to classify ...`: inspect the scenario name, `FREQ_DEBUG` lines, Timer1 writes, measured `frequency_khz`, `current_band`, `band_locked`, PTT state, and sequence stage.
@@ -289,6 +342,13 @@ Prerequisites that decide whether debugging works at all:
 ## Reporting
 
 Report:
+
+0. **Commit and push as you go - local and remote.** As soon as a change is verified green, commit
+   it and push to `origin/main`. Do not batch a session's work into one large commit at the end, and
+   never leave verified work sitting only in the working tree. Small verified commits are the rule;
+   the only acceptable reason to hold one is a verdict that is still running, and then it is
+   committed the moment that verdict reads green. This is a standing user instruction - it has been
+   forgotten before.
 
 1. Debug and Release build exit status and important compiler/linker warnings, plus the program-memory figure when a build is near the limit.
 2. CTest test discovery and result.

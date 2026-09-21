@@ -27,6 +27,52 @@ amplifier into active TX mode instantly on the next PTT drop. The amplifier only
 Bypass-Snoop mode if it detects a long period of inactivity, which indicates the operator may
 have changed bands.
 
+### Two relay groups, and the order they must switch in
+
+There are **two mechanical relay groups in the RF path**, and the ordering between them is what
+makes the whole scheme safe:
+
+- `OUTPUT_TX` (RC5) — the **T/R relays**, which put the amplifier (and therefore its LPF) into the
+  path. The harness labels this pin `RELAYS`, and the release path comments it as the one that is
+  "opened first".
+- `K1–K6` (RD2–RD7) — the **LPF band relays**, which select the filter. The filters are on the TX
+  train only, so RX does not pass through them, and they are disconnected from the rig while the
+  T/R relay is open.
+
+In a conventional amplifier this never bites, because the band relays are positioned from the rig's
+**band data** before key-down: only the T/R relay moves on PTT, and the normal sequencer's wait
+after it (`tx_vcc_delay_ms`, default 20 ms) covers its switching time. That is why the relays fire
+first — they are the only genuinely slow element; the supply and bias that follow are electronic
+and effectively immediate.
+
+This design has no band data. The band is **measured**, so the band relays can only be positioned
+once RF exists — which is the whole reason the T/R relay cannot simply fire on PTT-low, and the
+reason first-dit bypass exists. The order is therefore always:
+
+```
+band relays to the decoded/remembered band   (T/R relay open: the rig is not connected to them)
+wait BAND_SETTLE_MS                          (relay contacts settle)
+T/R relays close                             (OUTPUT_TX)
+wait tx_vcc_delay_ms                         (the T/R relay's own switching time)
+HT on                                        (OUTPUT_TX_VCC)
+wait tx_bias_delay_ms
+bias on                                      (OUTPUT_TX_BIAS)
+```
+
+The decode path always did this. The warm path now does too: `freq_counter_restore_locked_band()`
+returns whether the band-select outputs actually moved, and the engage only takes the
+`BAND_SETTLE_MS` window when they did. A warm re-key on the same band moves nothing, so it stays
+immediate.
+
+### The relay selection does not follow silence
+
+`freq_counter_tick_10ms()` updates `current_band`, and therefore drives the band-select outputs,
+**only for a usable measurement**. An empty gate window classifies as the 160 m no-signal default
+(`classify_frequency_khz(<1000)`), and following that would make the LPF relays chatter to 160 m
+after every over and leave the selection disagreeing with `current_band` (invariant I4). Real 160 m
+(1800–2000 kHz) is separable from silence by the frequency bound, so the relays simply hold their
+last real selection through RX — which is also what keeps a warm re-key free of relay movement.
+
 ## Required behaviour
 
 1. PTT goes low → the MCU keeps the LDMOS bias OFF and holds the RF path in **Bypass**
@@ -62,6 +108,16 @@ Firmware mechanisms behind them:
   inactive, so a released band can never let the relays move under a keyed amplifier.
 - the band is locked in the same tick that TX is first enabled, and stays locked for the whole
   TX cycle including the ordered release.
+- the **T/R relay only closes after the band relays have settled**. The decode path holds
+  `BAND_SETTLE_MS` after commanding a new selection; the warm path does the same whenever
+  `freq_counter_restore_locked_band()` reports that the selection actually moved. When the
+  selection does not move, nothing needs to settle and the engage stays immediate.
+- the **SWR trips are only armed while the TX path is engaged** (`g_sequence_stage` 1–3, i.e. the
+  stages that hold `OUTPUT_TX` asserted). The bridges sit in the TX train, which the T/R relay
+  only connects to the RF path while it is closed; during bypass any reading is meaningless and
+  the band selection may legitimately be moving, so a bridge reading must not be able to latch a
+  trip while the amplifier is cold. The hardware overcurrent, current, temperature, overdrive and
+  drain trips stay ungated.
 
 ## Implementation
 
@@ -154,12 +210,16 @@ Two CTest tests cover this model:
 
 - `FirstDit_BandDetectionAndHotSwitchGuards` —
   [tools/simulate/test_first_dit.py](../tools/simulate/test_first_dit.py), its own MDB session
-  (~18 s). Proves each item of [Required behaviour](#required-behaviour) in order: bypass with no
+  (~21 s). Proves each item of [Required behaviour](#required-behaviour) in order: bypass with no
   band, decode of the first burst and engagement on the decoded band, an instant warm re-key with
   **no RF injected at all**, cache expiry after the inactivity timeout, re-detection of a band
   change, and a hot-switch fault injection that re-keys during the release ramp with a
   deliberately wrong cached band, then a blind cached-band engage that is corrected by the first
-  measurement of the transmission.
+  measurement of the transmission. Three clauses guard the relay ordering and the SWR arming:
+  (h) the relay selection **holds** through RX instead of following the 160m no-signal default,
+  (i) a remembered-band engage that has to **move** the band relays holds bypass until they have
+  settled before the T/R relay closes, and (j) a hard SWR fault injected while bypass-snooping
+  latches **no** trip.
 - `PTT_SequencerAndTripSuite` — enforces invariants I1-I5 over **every** scenario in the merged
   suite by post-processing the samples it already takes.
 
@@ -174,6 +234,9 @@ of these defects makes the first-dit test fail with the message shown.
 | Band not locked before keying | `I2: amplifier keyed with the band unlocked` |
 | No `BAND_SETTLE_MS` after decoding | `clause (b): only 1.0ms of bypass between the relay selection and keying` |
 | Releasing PTT during sequencer stage 2 | `clause (c): the stage-2 release left a TX output asserted` |
+| Relay selection follows silence in RX | `clause (c): the remembered 20m band was not restored` — an *earlier* clause trips first, because one phase of the session feeds the next. Clause (h) is the direct guard for this defect, but its own proof is still outstanding: the cascade masks it. |
+| No relay settle on a remembered-band engage | `clause (i): only 6.0ms of bypass between the band-relay selection change and the T/R relay closing` — the focused proof, with (g) and (h) still passing. |
+| SWR trips left ungated | **Not yet proven for clause (j).** The injection failed at `clause (d): the idle counter did not advance ~1 ms/ms while idle` instead, which looks like a timing-sensitivity in that assertion rather than the defect (see the snags section of [the build/test skill](../.github/skills/picampcontrol-build-test/SKILL.md)). Clause (j)'s own proof is outstanding. |
 
 Two limits are worth stating:
 
@@ -188,7 +251,14 @@ Two limits are worth stating:
 
 - `BAND_CACHE_IDLE_TIMEOUT_MS` (60 s) — confirm on the bench against typical operator
   band-change habits.
-- `BAND_SETTLE_MS` (20 ms) — confirm against the fitted LPF relay's operate time.
+- `BAND_SETTLE_MS` (20 ms) — confirm against the fitted LPF relay's operate time. Unlike the
+  two sequencer delays, this one is a compile-time constant, not a settings-menu value:
+  `tx_vcc_delay_ms` and `tx_bias_delay_ms` are adjustable from the menu (0–1000 ms in 5 ms steps,
+  both defaulting to 20 ms), but `BAND_SETTLE_MS` and `BAND_VERIFY_MS` are `#define`s. If the
+  bench shows the LPF relays need longer than the T/R relays, the two windows need to be
+  separable, which means either promoting `BAND_SETTLE_MS` to a setting or accepting one
+  conservative value for both. Record the fitted relay part numbers and operate times with the
+  final values.
 - If the operator changes bands and keys again within the timeout **and the keydown has no RF to
   measure**, the first RF of that transmission is amplified through the previous band's filter
   until the verification above corrects it: `BAND_VERIFY_MS` of measurement/stability plus the

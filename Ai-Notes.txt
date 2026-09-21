@@ -5,9 +5,31 @@ Update the Date and any changed sections whenever design, firmware, docs, or
 CI/release workflows change - don't let it go stale.
 
 ## Standing AI instructions (things the user asked to always remember)
-- ALWAYS use the file-based pattern for tests: write the command's output to a log file and read the verdict from that file (read the file, or print a short tail if the shell is healthy). Never rely on the terminal scrollback for a pass/fail line - MDB emits megabytes of trace and the terminal capture/scrollback loses it. Applies to `ctest`, `run_tests.sh`, and direct `tools/simulate/*.py` runs. If a terminal command returns no output, do not conclude the run failed: check the log file and the exit-code file instead (e.g. `... > /tmp/log 2>&1; echo "EXIT=$?" >> /tmp/log`).
+- TEST RUNS ARE NEVER OBSERVED THROUGH THE TERMINAL (user instruction, restated 2026-09-21): do
+  not run a test to watch its output, do not `tail`/`grep` a test log into the terminal, and do not
+  ask a run for its terminal output. There is far too much data (MDB emits megabytes of pin/state
+  trace) and the capture is unreliable. The terminal is only for *launching* a run and for short,
+  bounded process checks (`pgrep`, `ps`, `wc -c`). Every verdict, progress report and diagnostic is
+  read from the run's files: the log it was redirected into, the exit-code line appended to it, and
+  the watchdog progress logs. Two traps: a terminal command that returns no output says nothing
+  about the run, and `read_file` can serve a stale cached copy of a log that is still being written,
+  which also looks like "the run produced nothing" - copy the log to a fresh path and read that.
+  The mechanics (exact commands and the redirect/exit-code pattern) live in
+  `.github/skills/picampcontrol-build-test/SKILL.md` and TESTING.md, deliberately not restated here.
 - Keep this file (Ai-Notes.txt) ALWAYS up to date; it's the launch point for a new session.
-- Always push to origin/main after a successful compile/build of a change - don't leave verified-good commits sitting local. Firmware only truly compiles via CI (firmware-build.yml, which runs on ubuntu-latest), so this means: commit, push, and confirm the triggered build succeeds.
+- COMMIT AND PUSH OFTEN - LOCAL AND REMOTE (user instruction, restated 2026-09-21 because it was
+  forgotten). Commit and push to `origin/main` as soon as each change is verified green; do not
+  batch a session's work into one large commit at the end, and never leave verified work sitting
+  only in the working tree. The only acceptable reason to hold a commit is a verdict that is still
+  running, and then it is committed the moment that verdict reads green. Always push to origin/main
+  after a successful compile/build of a change. Firmware only truly compiles via CI
+  (firmware-build.yml, which runs on ubuntu-latest), so this means: commit, push, and confirm the
+  triggered build succeeds.
+- DELETE LARGE FILES WHEN DONE WITH THEM, INCLUDING IN /tmp (user instruction, 2026-09-21). Test
+  logs and MDB transcripts are megabytes; remove them (`rm -f /tmp/<log>`) as soon as the verdict
+  has been read. Keep a log only while its run's verdict is still in use, and never accumulate a
+  series of run logs (the stale-read workaround of copying a log to a second path doubles the
+  space, so delete both).
 - Keep README.md and docs/ purely current-facing: no "old prototype was replaced by..." style historical narrative. Historical context belongs only in prototype_reference/.
 - Never run bare `git status`/`git status --short`; use `git --no-pager status --short` (avoids hitting an interactive pager or the `gcm-core` credential helper prompt).
 - docs/hardware/PIC16F18875_pin_map.md is the SINGLE source of truth for MCU pin assignments. Never restate pin numbers or pin tables in README, architecture, schematic-package, or checklist docs - link to it instead. Keep it in sync with firmware/include/pin_map.h. The same rule applies to nets (project_schematic_package/connection_table.csv) and the BOM (component_list.csv).
@@ -16,7 +38,15 @@ CI/release workflows change - don't let it go stale.
 - Do NOT reintroduce schematic automation. Both attempts were abandoned outright and every trace of them has been removed. Gone for good: the EasyEDA generator/SVG-validation pipeline (`easyeda_pro_generator.py`, `svg_renderer.py`, `visual_validator.py`, `watch_and_render.py`, `pic_amp_control_full.yaml`, `out/picampcontrol_easyeda_*.json`, and the `easyeda-agent` / `easyeda-copilot` routes), the KiCad MCP `schematic-design` skill with its `generated/` `.kicad_sch` tree and `mcp-server-kicad`, all node/npm scaffolding (`package.json`, `node_modules`, `@jlceda`), the workflow documents that described them, and every KiCad symbol/toolchain reference in the docs. The user's instruction: EasyEDA "was a disaster and can be removed entirely", then "same for kicad stuff. Another disaster... it can all go". Do not add generators, MCP schematic servers, `.kicad_sch`/`.eext` tooling or node/npm back, and do not re-add tool-specific symbol references to the pin map. The schematic package at docs/hardware/project_schematic_package/ is deliberately static design inputs (block diagram, connection table, component list, wiring checklist), captured by hand end to end. Netlist-verification tooling (exporting the EDA netlist and diffing it against `connection_table.csv`) was offered as a lighter-weight alternative and has been declined as well, so this means no schematic automation of any kind - not drawing generation, not verification.
 - `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their configured active levels (active-low by default); keep it transient, then restore the user's saved home page.
 - Keep verified changes committed and pushed promptly; generated simulator CSVs belong in `_build/My_Pic_Project/sim/csv/` and graphs in `_build/My_Pic_Project/sim/graphs/`. Commit+push as soon as a step is verified green - the only valid reason to hold a commit is a verdict that is still running, and then you read that verdict from its log file and commit the moment it is green. Always pass explicit paths to `git add` (never `git add .`).
-- Do not let build/test output flood the terminal. Log it to a file and read the verdict from the file (e.g. `ctest ... > /tmp/pac_ctest.log 2>&1`). MDB emits megabytes of pin/state trace, which overflows the terminal scrollback and destroys the pass/fail line.
+- WHERE A FACT LIVES (so this file does not drift, and so nothing is written twice): *state and user
+  instructions* (what the firmware does now, what is in flight, what is left, the rules below) live
+  in THIS file; *build/test/debug procedure* (toolchain paths, configure/build commands, the flash
+  budget, mdb and harness techniques, test names and labels, failure triage) lives only in
+  `.github/skills/picampcontrol-build-test/SKILL.md`, with `.github/agents/firmware-build-test.agent.md`
+  as the thin runner that must stay in sync with it and TESTING.md as the human-facing guide;
+  *design detail* lives in `docs/` (e.g. docs/first-dit-band-detection.md); *defects and their fixes*
+  in `bugfixes.md`; *historical/origin narrative* only in `prototype_reference/`. Never restate a
+  command here - link to the skill.
 
 ## Date
 2026-09-21
@@ -63,6 +93,37 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
   (that is what stops it keying on the classifier's 160m no-signal default after a trip
   recovery). New freq_counter API: freq_counter_restore_locked_band(),
   freq_counter_band_confirmed(), freq_counter_measured_band().
+- **TWO mechanical relay groups in the RF path, and the order they switch in.** `OUTPUT_TX` (RC5,
+  labelled `RELAYS` by the harness) is the **T/R relay** that puts the amplifier into the path;
+  `K1-K6` (RD2-RD7) are the **LPF band relays**. The band relays must be settled *before* the T/R
+  relay closes, so the T/R relay can no longer be the first thing fired on PTT-low when the band is
+  not yet known (that is why first-dit bypass exists, and why the normal "relays first, wait, HT,
+  bias" order only holds once the band is known). The decode path holds BAND_SETTLE_MS after
+  commanding a new selection; the warm path now does the same whenever
+  `freq_counter_restore_locked_band()` reports the selection actually moved. The LPF filters are on
+  the **TX train only** - RX does not pass through them - so the rig never sees the band relays
+  change over while the T/R relay is open.
+- **The relay selection no longer follows silence.** `freq_counter_tick_10ms()` drives the band
+  outputs only for a usable measurement; it used to follow the classifier's 160m no-signal default,
+  which parked the relays on 160m after every over and made almost every warm re-key move them.
+- **The SWR trips are armed only while the TX path is engaged** (`g_sequence_stage` 1-3, the stages
+  that hold `OUTPUT_TX` asserted). They used to be evaluated unconditionally, so a bridge reading
+  during bypass (relay open, band selection possibly moving) could latch a spurious STATE_TRIP
+  during the very first dit. Hardware overcurrent, current, temperature, overdrive and drain trips
+  remain ungated. The gate is applied once inside `update_protection_state()` for flash reasons.
+- **FLASH IS EFFECTIVELY FULL IN THE Debug/simulator BUILD.** The shared Debug image links at
+  8189/8192 words (100.0%, 3 words free) - up from 8135/8192 before the relay-ordering and
+  SWR-arming work. Release (the shipping budget) still has normal headroom, but the simulator build
+  has none, and the linker fails with `(1347) can't find 0xN words ... for psect` as soon as
+  anything is added. The failing psects are string literals (`STRCODE`), so the cheapest room is in
+  the LCD text. **Space was therefore freed on 2026-09-21** by shortening every `g_setting_menu_labels`
+  entry (e.g. `S1 SWR TRIP` -> `SWR1 TRIP`, `NTC B VALUE` -> `NTC B`, `CURRENT TRIP` -> `CURR TRIP`,
+  `TX-VCC DELAY` -> `TX-VCC DLY`, `TX-VCC ACTIVE` -> `TX-VCC POL`, `POWER DISPLAY` -> `POWER MODE`,
+  `PEAK HOLD` -> `PK HOLD`) and reducing the boot message to a single `Booting` line - about 60
+  words reclaimed. `tools/simulate/render_lcd_lifecycle_diagram.py` was updated to match, since its
+  SETTINGS_PANELS hard-code the on-screen labels. The budget rules and how to read the live figure
+  are in the skill's `## Flash space`; the current numbers are in the Device memory usage section
+  below.
 - **The remembered band is verified, not trusted (fold-back).** A first-dit engage taken from the
   band memory is a blind decision - at keydown the radio has not started transmitting, so there is
   nothing to measure yet. The remembered band is therefore re-checked against the first usable
@@ -123,7 +184,15 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
 ## Device memory usage
 - `memoryfile.xml` (and `mem.map`) is regenerated by XC8 on every build and is always included in the latest release, so it always reflects the current firmware, not a stale snapshot.
 - To check current % free: download it from the latest release (`gh release download <tag> -p memoryfile.xml`) and read `<memory name="program">`/`<memory name="data">` `used`/`free`/`length` (program = flash words, data = RAM bytes).
-- FLASH IS TIGHT (2026-09-21): Release (shipping) uses 6899/8192 words = 84.2% used (15.8% free); the Debug build that the simulator/tests load uses 8135/8192 = 99.3% used, because user.cmake deliberately compiles Debug with -O1 (not -Os) so mdb can resolve symbols and breakpoints. Budget new firmware features against the Release number, and expect the Debug build to hit the 8192 limit first. Ask before adding code, and prefer table-driven logic over long if/else chains.
+- FLASH IS TIGHT (2026-09-21): Release (shipping) uses ~6899/8192 words = ~84% used; the Debug build
+  that the simulator/tests load is the binding one - it was 8135/8192 (99.3%) at the start of this
+  session, peaked at 8189/8192 (100.0%, 3 words free) once the relay-ordering and SWR-arming guards
+  landed, and is now 8117/8192 = 99.1% used (75 words free) after the LCD label/boot-text shortening.
+  That is because user.cmake deliberately compiles Debug with -O1 (not -Os) so mdb can resolve
+  symbols and breakpoints. Budget new firmware features against the Release number, and expect the
+  Debug build to hit the 8192 limit first. Ask before adding code, and prefer table-driven logic
+  over long if/else chains. Budget rules and the exact way to read the live figure: the skill's
+  `## Flash space`.
 - As of v0.0.25 (commit 3a49285): program flash 54.2% free (4440/8192 words), data RAM 84.2% free (862/1024 bytes). Superseded by the 2026-09-21 numbers above.
 
 ## Remaining work

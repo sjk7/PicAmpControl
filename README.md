@@ -178,6 +178,10 @@ Each SWR channel is measured independently at its own RF point.
 - Compute the SWR for that local pair.
 - Compare the result against the configured threshold.
 - If the SWR exceeds the threshold, trip that channel.
+- The trips are armed only while the transmit path is engaged, i.e. while OUTPUT_TX is asserted. The
+  bridges sit in the TX train, which the T/R relay only connects to the RF path while it is closed,
+  so a reading taken during bypass is meaningless - and the band selection may be moving - and must
+  not latch a trip.
 - The pre-filter default trip is 3:1 and the post-filter default trip is 2:1; either is configurable in the menu.
 
 This applies to both SWR measurement points:
@@ -230,7 +234,7 @@ Polarity suffixes are not added to pin names unless a specific signal intentiona
 
 ## LCD lifecycle
 
-At boot the LCD shows `Booting, please` / `wait.` through the startup-inhibit period, then the saved EEPROM home page is shown. A PTT request temporarily uses the status display and applies the `PTT_RESET_PULSE`. `PTT_COMPLETE` appears for 500 ms only after RELAYS, TX_VCC, and TX_BIAS have all reached their active levels, then the saved home page is restored. A TRIP display always has priority over both transient states and the home page until a valid re-arm clears the fault; temperature is the exception and may recover after its hysteresis band is satisfied.
+At boot the LCD shows `Booting` through the startup-inhibit period, then the saved EEPROM home page is shown. A PTT request temporarily uses the status display and applies the `PTT_RESET_PULSE`. `PTT_COMPLETE` appears for 500 ms only after RELAYS, TX_VCC, and TX_BIAS have all reached their active levels, then the saved home page is restored. A TRIP display always has priority over both transient states and the home page until a valid re-arm clears the fault; temperature is the exception and may recover after its hysteresis band is satisfied.
 
 The [LCD lifecycle diagram](_build/My_Pic_Project/sim/graphs/lcd/lcd_lifecycle_16x2.png), [normal TX LCD screen diagram](_build/My_Pic_Project/sim/graphs/lcd/lcd_normal_screens_16x2.png), and [individual fault-screen diagram](_build/My_Pic_Project/sim/graphs/lcd/lcd_fault_screens_16x2.png) show the exact 16x2 examples.
 
@@ -265,7 +269,9 @@ The firmware should implement these states:
 
 - TX_SEQUENCE_1
   - OUTPUT_TX is asserted
-  - this is the first transmit relay step and must happen immediately on a valid transmit request
+  - this is the first transmit relay step, and happens as soon as the LPF band relays are in position and have settled
+  - the band relays are a second, slower relay group in the same RF path, so they are always selected and allowed to settle *before* the T/R relay closes; see [First-Dit band detection](docs/first-dit-band-detection.md)
+  - on a first-dit cycle, where no band is known yet, OUTPUT_TX is held off entirely while the first RF burst is decoded in bypass
 
 - TX_SEQUENCE_2
   - OUTPUT_TX_VCC is asserted after the first step delay
@@ -303,7 +309,8 @@ The firmware should implement these states:
 
 2. SWR faults are computed in firmware from the local forward/reflected ADC pair.
    - Each SWR sensor pair is evaluated independently.
-   - A sensor trips when its calculated SWR exceeds the configured threshold, default 2:1.
+   - A sensor trips when its calculated SWR exceeds the configured threshold, default 3:1 pre-filter and 2:1 post-filter.
+   - The trips are armed only while the transmit path is engaged (OUTPUT_TX asserted), never during bypass.
 
 3. PTT high means receive mode.
    - The transmitter is not active.
@@ -331,12 +338,16 @@ For a valid transmit request, the controller should complete the sequence in thi
 2. apply the 10 ms comparator reset pulse
 3. wait for the comparator reset settle time
 4. check all comparator inputs and thermal limits
-5. if safe, assert OUTPUT_TX
-6. wait the first sequencing delay
-7. assert OUTPUT_TX_VCC
-8. wait the second sequencing delay
-9. assert OUTPUT_TX_BIAS
-10. enter TX_ACTIVE
+5. select the LPF band relays for the decoded or remembered band and let them settle, still in bypass
+   (OUTPUT_TX stays inactive, so the rig is not connected to them yet). If no band is known, the
+   cycle enters bypass-snoop here and waits for the radio's first RF burst to decode one, then
+   continues from this step.
+6. if safe, assert OUTPUT_TX
+7. wait the first sequencing delay
+8. assert OUTPUT_TX_VCC
+9. wait the second sequencing delay
+10. assert OUTPUT_TX_BIAS
+11. enter TX_ACTIVE
 
 All TX outputs are active-low driver lines and are forced inactive whenever a fault, trip, or thermal lockout condition is detected.
 
@@ -349,7 +360,7 @@ A fresh transmit cycle is allowed only when:
 - temperature has not reached the trip or lockout threshold
 - the output sequence is complete and the RF path is safe
 
-Once a TX sequence begins, it completes its engage order even if PTT returns high early; it then completes the ordered release sequence. The next falling PTT edge produces the comparator reset pulse for the following TX cycle.
+An in-progress transmit sequence is not completed if PTT returns high early: it unwinds in order instead (OUTPUT_TX first, then TX_VCC, then TX_BIAS), and the band selection is released only once every TX output is confirmed inactive. The next falling PTT edge produces the comparator reset pulse for the following TX cycle.
 
 See [firmware/src/main.c](firmware/src/main.c) for the protection and sequencer logic, and [firmware/src/lcd_parallel.c](firmware/src/lcd_parallel.c) for the LCD transport.
 

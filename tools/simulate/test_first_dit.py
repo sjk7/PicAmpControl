@@ -151,6 +151,9 @@ class Builder:
     def ptt(self, asserted):
         self.lines.append(f"write pin {PTT_PIN} {'0v' if asserted else '5v'}")
 
+    def pin(self, name, value):
+        self.lines.append(f"write pin {name} {value}")
+
     @contextmanager
     def phase(self, name):
         start = self.sample_count
@@ -221,6 +224,45 @@ def build_script(addrs):
         # the mismatch, fold back to bypass, re-select the LDMOS cold and re-engage on 40m.
         b.inject_step(7000, 30, ms=1)
         b.inject_step(7000, 40, ms=5)
+
+    with b.phase("h_rx_hold"):
+        # Release and leave the radio silent: with nothing to measure the relay selection must
+        # HOLD. It used to follow the classifier's 160m no-signal default, which parked the LPF
+        # relays on 160m after every over and made almost every warm re-key move them - right as
+        # the T/R relay closed. Sampled at 5 ms so the hold is checked over several scheduler ticks.
+        b.ptt(False)
+        b.step(4)
+        b.step(12, ms=5)
+
+    with b.phase("i_remembered_band_move"):
+        # Force the remembered band to differ from the selection the relays are actually sitting
+        # on, so the warm engage has to MOVE the band relays. The T/R relay must not close onto
+        # contacts that are still moving, so the engage has to hold bypass for BAND_SETTLE_MS
+        # first - exactly as the decode path does after a snoop. 1 ms sampling resolves the gap.
+        b.write_u8("g_band_cache_band", 5)     # 15m, while the relays sit on 40m
+        b.step(1, ms=1)
+        b.ptt(True)
+        b.step(45, ms=1)
+
+    with b.phase("j_swr_while_bypassed"):
+        # A hard SWR fault injected while the amplifier is bypassed must not latch a trip. The SWR
+        # bridges sit in the TX train, which the T/R relay only connects to the RF path while it is
+        # closed, so during bypass the reading is meaningless - and the band selection may be
+        # moving. Expiring the band memory through the firmware's own timeout puts the next PTT
+        # back into bypass-snoop (the 60 s itself is not affordable to simulate).
+        b.ptt(False)
+        b.step(10)
+        b.write_u16("g_band_cache_idle_ms", IDLE_TIMEOUT_MS - 5)
+        b.step(1, ms=1)
+        b.step(3)
+        b.ptt(True)
+        b.step(4)
+        b.pin("RA0", "5v")     # SWR1 forward
+        b.pin("RA1", "5v")     # SWR1 reflected: far past the 3:1 default trip
+        b.step(6)
+        b.pin("RA0", "0v")
+        b.pin("RA1", "0v")
+        b.step(2)
 
     b.lines.append("quit")
     return "\n".join(b.lines), b.spans
@@ -473,6 +515,68 @@ def validate_clause_g(samples):
           "the locked 40m band")
 
 
+def validate_clause_h(samples):
+    """The relay selection holds through RX: with no RF to measure there is nothing to follow."""
+    held = inv.selected_band_pin(samples[0])
+    if held is None:
+        raise AssertionError("clause (h): no single band was selected at the start of the phase")
+    if all(sample[2]["g_fc_status.band_locked"] == "true" for sample in samples):
+        raise AssertionError("clause (h): the band was never released, so the hold was not tested")
+    for sample in samples:
+        if inv.selected_band_pin(sample) != held:
+            raise AssertionError(
+                f"clause (h): the relay selection moved from {held} to "
+                f"{inv.selected_band_pin(sample)} with the amplifier cold and no RF to measure - "
+                "it followed the 160m no-signal default instead of holding the last real band\n"
+                f"      {fmt(sample)}")
+    print(f"  PASS  (h) the relay selection held {held} through "
+          f"{inv.millis(samples[-1]) - inv.millis(samples[0]):.0f}ms of released, signal-free "
+          "time instead of following the 160m no-signal default")
+
+
+def validate_clause_i(samples):
+    """A remembered-band engage that has to move the relays settles before the T/R relay closes."""
+    move_index = next((index for index in range(1, len(samples))
+                       if inv.band_pattern(samples[index]) != inv.band_pattern(samples[index - 1])),
+                      None)
+    if move_index is None:
+        raise AssertionError("clause (i): the relay selection never moved, so the remembered-band "
+                             "settle window was not exercised")
+    moved = samples[move_index]
+    if inv.keyed(moved):
+        raise AssertionError("clause (i): the relay selection moved while the amplifier was keyed\n"
+                             f"      {fmt(moved)}")
+    closed = next((index for index in range(move_index, len(samples))
+                   if samples[index][1]["RC5"] == 0), None)
+    if closed is None:
+        raise AssertionError("clause (i): the T/R relay never closed after the relay move")
+    settle_ms = inv.millis(samples[closed]) - inv.millis(samples[move_index])
+    if settle_ms < 10:
+        raise AssertionError(
+            f"clause (i): only {settle_ms:.1f}ms of bypass between the band-relay selection change "
+            "and the T/R relay closing - the T/R relay closed onto relay contacts that were still "
+            "moving")
+    print(f"  PASS  (i) the remembered-band engage moved "
+          f"{inv.selected_band_pin(samples[move_index - 1])} -> {inv.selected_band_pin(moved)} "
+          f"with the amplifier cold, then held {settle_ms:.1f}ms of bypass before the T/R relay "
+          "closed")
+
+
+def validate_clause_j(samples):
+    """An SWR fault injected during bypass must not latch a trip."""
+    if not any(sample[2]["g_snoop_active"] == "true" for sample in samples):
+        raise AssertionError("clause (j): the amplifier was not bypass-snooping, so the SWR-arming "
+                             "gate was not exercised")
+    for sample in samples:
+        if sample[2]["g_fault_latched"] == "true":
+            raise AssertionError(
+                "clause (j): an SWR fault injected while the amplifier was bypassed latched a "
+                "trip\n"
+                f"      {fmt(sample)}")
+    print("  PASS  (j) an SWR fault far past the 3:1 default injected while bypass-snooping "
+          "latched no trip: the SWR trips are only armed while the TX path is engaged")
+
+
 def write_csv(samples, path):
     path.parent.mkdir(parents=True, exist_ok=True)
     header = ("time_ms," + ",".join(PINS) + "," + ",".join(STATE_VARS) + "\n")
@@ -500,12 +604,14 @@ def main():
         start, end = spans[name]
         return samples[start:end]
 
-    startup, a, b, c, d, e, f, g = (span(name) for name in
-                                    ("startup", "a_ptt_without_band", "b_first_burst",
-                                     "c_warm_start", "d_timeout", "e_band_change",
-                                     "f_hot_switch_attempt", "g_band_change_foldback"))
+    startup, a, b, c, d, e, f, g, h, i, j = (span(name) for name in
+                                             ("startup", "a_ptt_without_band", "b_first_burst",
+                                              "c_warm_start", "d_timeout", "e_band_change",
+                                              "f_hot_switch_attempt", "g_band_change_foldback",
+                                              "h_rx_hold", "i_remembered_band_move",
+                                              "j_swr_while_bypassed"))
     for name, group in (("startup", startup), ("a", a), ("b", b), ("c", c), ("d", d),
-                        ("e", e), ("f", f), ("g", g)):
+                        ("e", e), ("f", f), ("g", g), ("h", h), ("i", i), ("j", j)):
         if not group:
             sys.exit(f"error: no samples for phase {name} - mdb script failed? "
                      f"transcript tail:\n{output[-2000:]}")
@@ -524,11 +630,14 @@ def main():
     validate_clause_e(e)
     validate_clause_f(f)
     validate_clause_g(g)
+    validate_clause_h(h)
+    validate_clause_i(i)
+    validate_clause_j(j)
     if "--csv" in sys.argv[1:]:
         csv_path = REPO_ROOT / "_build" / "My_Pic_Project" / "sim" / "csv" / "first_dit_trace.csv"
         write_csv(samples, csv_path)
         print(f"Wrote {csv_path}")
-    print("FIRST-DIT PROOF PASSED: clauses (a)-(g), the hot-switch fault injections, and "
+    print("FIRST-DIT PROOF PASSED: clauses (a)-(j), the hot-switch fault injections, and "
           "invariants I1-I5 hold")
 
 

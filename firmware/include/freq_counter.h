@@ -42,7 +42,9 @@ void freq_counter_lock_band(void);
 // earlier TX cycle and lock it, so the LPF relays are already correct when the
 // amplifier keys. freq_counter_lock_band() only freezes whatever current_band happens
 // to be, which is the no-signal default during silence.
-void freq_counter_restore_locked_band(rf_band_t band);
+// Returns true when the band-select outputs actually moved, so the caller can let the
+// relay contacts settle before closing the T/R relay (see BAND_SETTLE_MS in main.c).
+bool freq_counter_restore_locked_band(rf_band_t band);
 
 // Return true only when the stabilised current_band agrees with the latest measurement.
 // Unlike freq_counter_signal_valid(), this cannot report a band left behind by earlier
