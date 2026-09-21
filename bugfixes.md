@@ -4,6 +4,54 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-21 — Band/frequency-counter tests were weaker than their labels; Timer1 external clock is not modelled
+
+Audited the band/frequency-counter tests in `tools/simulate/trace_ptt_sequence.py` against the
+firmware. The core assertions were genuine (the injected counts invert the firmware's own
+scaling, and the TX-lock check injects a different band while asserting the band did not
+move), but four gaps meant they did not do exactly what they claimed.
+
+- **The band-select outputs were never observed.** `PINS` sampled only RC0/RC1/RC5/RC6/RC7, so
+  "each band stayed locked during TX" was verified only through the internal
+  `g_fc_status.current_band` variable. A regression in `update_band_outputs()` would have
+  passed. RD2-RD7 are now sampled and `validate_band_outputs()` asserts the relay selection
+  matches `current_band` (and that nothing is driven when out of spec).
+- **`--quick-bands` made the lock assertion vacuous.** It reduced `BAND_TESTS` to one entry, and
+  the "inject the next band's frequency" scheme then injected the *same* frequency, which
+  cannot detect a failure to freeze. Injection now always picks a frequency different from the
+  band under test.
+- **`FREQ_CTR_FAIL` never proved PTT was asserted.** It asserted `g_ptt_active` was never true
+  but never that RC0 was driven low, so a silent pin-write failure would have passed. It now
+  requires an observed RC0 low.
+- **The 10m case was not a real 10m frequency.** It used 25000 kHz, outside the documented 10m
+  range (28000-29700 kHz); it only passed because the classifier's accept window is wider. A
+  true 10m frequency needs 70000-74250 Timer1 counts, beyond the single 16-bit `TMR1` write the
+  harness performs, so the limitation is now documented instead of hidden.
+
+End-to-end counter testing is impossible in simulation, and that is now verified rather than
+assumed. MDB does provide a stimulus facility that was not being used — `stim <file>.scl`
+(SCL, documented in the MPLAB X install under `docs/SCL_Users_Guide`) — and SCL processes do
+run during `Stepi`. But the simulator does not implement Timer1's external clock:
+
+```text
+W0106-SIM: This device only has partial support for TMR1 peripheral.
+Use internal oscillator as timer clock slection is not implemented
+```
+
+Measured with an SCL stimulus driving RD1 as fast as the simulator can represent: `print pin
+RD1` reported `HIGH`/`Din` (the pin really was driven) and `T1CON` read `0x27` (CS=T1CKI,
+CKPS=1:4), yet `TMR1L`/`TMR1H` and `g_tmr1_overflows` stayed `0`. Register injection is
+therefore the only option. It covers the frequency maths, band classification, band-select
+outputs and TX lock, but not the T1CKI pin, PPS routing, the 1:4 prescaler, or the Timer1
+overflow path — those need bench validation.
+
+Related gotcha recorded for future use: SCL pin/SFR assignment uses `<=` (`:=` is for user
+variables). `RD1 = '1';` parses but derails the simulator with
+`E0101-SIM: Failed to disassemble instruction`.
+
+Verified: `ctest` passes 1/1 in 130 s with all 11 scenarios green, including the new
+band-select and PTT-asserted assertions.
+
 ## 2026-09-21 — Pin/net assignments were duplicated across the docs and had drifted (single source of truth established)
 
 The same pin and net assignments were restated in at least eight documents, and they no longer

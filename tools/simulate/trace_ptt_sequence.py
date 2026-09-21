@@ -65,8 +65,17 @@ PHASES = [
     ("asserted", "0v", 300, STEP_SIZE),  # PTT pressed; covers both ~20ms sequencer delays
     ("released", "5v", 100, STEP_SIZE),  # PTT released again
 ]
-PINS = ["RC1", "RC0", "RC5", "RC6", "RC7"]
-PIN_LABELS = {"RC1": "SETTLE", "RC0": "PTT", "RC5": "RELAYS", "RC6": "TX_VCC", "RC7": "TX_BIAS"}
+# RD2-RD7 are the per-band LPF select outputs. Sampling them lets the tests assert the
+# relay selection itself, not just the firmware's internal current_band variable.
+BAND_PINS = ["RD2", "RD3", "RD4", "RD5", "RD6", "RD7"]
+BAND_PIN_FOR = {1: "RD2", 2: "RD3", 3: "RD4", 4: "RD5", 5: "RD6", 6: "RD7"}
+BAND_OUT_OF_SPEC = 7
+PINS = ["RC1", "RC0", "RC5", "RC6", "RC7"] + BAND_PINS
+PIN_LABELS = {
+    "RC1": "SETTLE", "RC0": "PTT", "RC5": "RELAYS", "RC6": "TX_VCC", "RC7": "TX_BIAS",
+    "RD2": "BAND 160m", "RD3": "BAND 80m", "RD4": "BAND 40m",
+    "RD5": "BAND 20m", "RD6": "BAND 15m", "RD7": "BAND 10m",
+}
 ADC_PINS = ["RA0", "RA1", "RA2", "RA3", "RA5", "RB1", "RB2", "RB3"]
 ADC_LABELS = {
     "RA0": "SWR1 FWD", "RA1": "SWR1 REF", "RA2": "SWR2 FWD", "RA3": "SWR2 REF",
@@ -80,7 +89,13 @@ TRIP_ADC_PINS = {
 }
 TRIP_NAMES = {"SWR1", "SWR2", "HWFAULT", "CURRENT", "OVERDRIVE", "DRAIN", "TEMPERATURE"}
 NON_TRIP_NAMES = {"SWR1_1P5"}
-BAND_TESTS = [
+# Nominal in-band frequencies used by the Timer1 register-injection stimulus.
+# Note there is no injectable true 10m representative: a real 10m frequency
+# (28000-29700 kHz) needs 70000-74250 Timer1 counts, which exceeds the single 16-bit
+# TMR1 write this harness performs, so 25000 kHz is the highest injectable value that
+# still lands in the classifier's 10m window (>24500 and <=32000 kHz). The SCL
+# stimulus test (--freq-scl) covers 160m/80m end-to-end; see docs in TESTING.md.
+ALL_BAND_TESTS = [
     ("160m", 1800, 1),
     ("80m", 3600, 2),
     ("40m", 7000, 3),
@@ -88,6 +103,21 @@ BAND_TESTS = [
     ("15m", 21000, 5),
     ("10m", 25000, 6),
 ]
+BAND_TESTS = list(ALL_BAND_TESTS)
+
+
+def injected_frequency_for(freq_khz):
+    """Frequency to inject during another band's TX.
+
+    It must differ from the band under test, otherwise a failure to freeze the band
+    selection would be invisible. The previous next-index scheme injected the same
+    frequency when BAND_TESTS held one entry (--quick-bands), making the lock
+    assertion vacuous.
+    """
+    for _, candidate_khz, _ in ALL_BAND_TESTS:
+        if candidate_khz != freq_khz:
+            return candidate_khz
+    raise AssertionError("need at least two distinct band frequencies to test locking")
 
 
 def find_mdb() -> Path:
@@ -119,6 +149,23 @@ def build_script(trip_name=None) -> str:
             lines.append(f"print {var}")
 
     def write_tmr1_count(freq_khz):
+        """Inject the Timer1 count that the firmware's own scaling maps to freq_khz.
+
+        Why this is register injection instead of a real clock on T1CKI: the MPLAB X
+        simulator does not implement Timer1's external clock selection. It warns
+        "W0106-SIM: This device only has partial support for TMR1 peripheral ... timer
+        clock selection is not implemented". Driving RD1 with an SCL stimulus
+        (mdb `stim`, verified 2026-09-21) leaves TMR1L/TMR1H at 0 even though the pin
+        is actively driven (print pin RD1 reports HIGH/Din) and T1CON reads 0x27
+        (TMR1ON, RD16, nSYNC, CKPS=1:4, CS=00=T1CKI).
+
+        So a true end-to-end RF frequency-counter test is not possible in the simulator.
+        Writing the count exercises the frequency maths, classification, band-select
+        outputs and the TX lock logic, but it does NOT cover the T1CKI pin, the PPS
+        routing, the 1:4 prescaler, or the Timer1 overflow path.
+
+        counts = freq_khz * 1000 / 400  (inverse of the firmware's pulses*2/5)
+        """
         total_counts = int(round((freq_khz * 1000.0) / 400.0))
         if total_counts > 0xFFFF:
             raise ValueError(f"{freq_khz} kHz cannot be represented by a 16-bit Timer1 write")
@@ -148,8 +195,8 @@ def build_script(trip_name=None) -> str:
             sample()
 
         band_preflight(all_bands=True)
-        for index, (band_name, freq_khz, expected_band) in enumerate(BAND_TESTS):
-            injected_freq_khz = BAND_TESTS[(index + 1) % len(BAND_TESTS)][1]
+        for band_name, freq_khz, expected_band in BAND_TESTS:
+            injected_freq_khz = injected_frequency_for(freq_khz)
             lines.append(f"# TX BAND CHECK: {band_name} @ {freq_khz} kHz, inject {injected_freq_khz} kHz")
             for _ in range(5):
                 write_tmr1_count(freq_khz)
@@ -482,10 +529,45 @@ def validate_band_coverage(samples, scenario_name="unknown") -> None:
             )
 
 
+def validate_band_outputs(samples, scenario_name="FREQ_CTR") -> None:
+    """Assert the RD2-RD7 band-select outputs agree with current_band.
+
+    Checks the relay selection itself rather than only the internal current_band
+    variable, so a regression in update_band_outputs() is caught.
+    """
+    checked = 0
+    for sample in samples:
+        # Before the scheduler runs, PORTD may not have been initialised yet.
+        if sample[2].get("g_startup_inhibit") != "false":
+            continue
+        pins = sample[1]
+        if not all(pin in pins for pin in BAND_PINS):
+            raise AssertionError(f"{scenario_name}: band-select pins were not sampled")
+        high = [pin for pin in BAND_PINS if pins[pin] == 1]
+        band = sample[2].get("g_fc_status.current_band")
+        if band == str(BAND_OUT_OF_SPEC):
+            if high:
+                raise AssertionError(
+                    f"{scenario_name}: band-select outputs {high} driven while out of spec")
+            checked += 1
+            continue
+        expected_pin = BAND_PIN_FOR.get(int(band)) if band and band.isdigit() else None
+        if expected_pin is None:
+            raise AssertionError(f"{scenario_name}: unexpected current_band value {band!r}")
+        if high != [expected_pin]:
+            raise AssertionError(
+                f"{scenario_name}: band-select outputs {high} do not match "
+                f"current_band={band} (expected exactly {expected_pin})")
+        checked += 1
+    if checked == 0:
+        raise AssertionError(f"{scenario_name}: no samples checked for band-select outputs")
+
+
 def validate_freq_ctr(samples, scenario_name="FREQ_CTR") -> None:
     validate_band_coverage(samples, scenario_name)
-    for index, (band_name, freq_khz, expected_band) in enumerate(BAND_TESTS):
-        injected_freq_khz = BAND_TESTS[(index + 1) % len(BAND_TESTS)][1]
+    validate_band_outputs(samples, scenario_name)
+    for band_name, freq_khz, expected_band in BAND_TESTS:
+        injected_freq_khz = injected_frequency_for(freq_khz)
         locked_injection = [
             sample for sample in samples
             if sample[2].get("g_ptt_active") == "true"
@@ -498,10 +580,16 @@ def validate_freq_ctr(samples, scenario_name="FREQ_CTR") -> None:
             raise AssertionError(
                 f"{band_name} TX lock failed while injecting {injected_freq_khz} kHz"
             )
-    print("FREQ_CTR passed: all bands classified and each band stayed locked during TX injection")
+    print("FREQ_CTR passed: all bands classified, band-select outputs matched, "
+          "and each band stayed locked during TX injection")
 
 
 def validate_freq_ctr_failure(samples) -> None:
+    # Prove the stimulus actually drove PTT, otherwise a failed pin write would make
+    # the rest of this negative test pass vacuously.
+    if not any(sample[1].get("RC0") == 0 for sample in samples):
+        raise AssertionError("PTT was never driven low, so rejection was not exercised")
+    validate_band_outputs(samples, "FREQ_CTR_FAIL")
     attempted_tx = [sample for sample in samples if sample[2].get("g_ptt_active") == "true"]
     if attempted_tx:
         raise AssertionError("PTT was not canceled when the frequency counter had no valid signal")

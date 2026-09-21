@@ -152,6 +152,14 @@ configuration failure, not success.
 - `Frequency counter failed to classify ...`: inspect the scenario name, `FREQ_DEBUG` lines, Timer1 writes, measured `frequency_khz`, `current_band`, `band_locked`, PTT state, and sequence stage.
 - `did not clear and re-enter TX after a PTT re-arm`: check that the re-arm stimulus writes a valid Timer1 count after the new frequency-validity gate; fault scenarios must not reassert PTT with frequency `0`.
 - `FREQ_CTR_FAIL` must remain a negative test and must prove no active TX stage and inactive TX outputs.
+- Band/frequency-counter coverage is deliberately indirect. The MPLAB X simulator does not
+  model Timer1's external clock (it warns `W0106-SIM: ... partial support for TMR1 ...
+  timer clock selection is not implemented`), so the suite injects `TMR1H`/`TMR1L` rather than
+  clocking the pin. Do not try to "fix" a frequency-counter failure by driving RD1: an SCL
+  stimulus (`stim <file>.scl`) does drive the pin correctly — verified, `print pin RD1`
+  reports HIGH/Din — but `TMR1L`/`TMR1H` still stay 0. T1CKI, PPS routing, the 1:4 prescaler
+  and the Timer1 overflow path can only be validated on the bench. For SCL syntax note that
+  pin/SFR assignment uses `<=` (`:=` is for user variables); `RD1 = '1';` breaks the simulator.
 - MDB output ending without a final validator line is inconclusive; inspect the saved log and process table.
 - Keep source fixes separate from test-harness timing fixes. Re-run the narrow failing scenario first, then the full suite.
 - If the terminal wrapper reports a command as finished while the PID file remains, the run is still active or the wrapper lost control of it. Kill the recorded process group before doing anything else.

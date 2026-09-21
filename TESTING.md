@@ -99,6 +99,41 @@ Each scenario also validates output pin sequencing, fault latching and re-arm be
 status state, and startup-inhibit timing. `FREQ_CTR_FAIL` is intentionally a negative test —
 it must never be "fixed" into a passing trip.
 
+### What the band/frequency-counter test does and does not cover
+
+The band scenarios inject Timer1 counts by writing `TMR1H`/`TMR1L` directly, using the
+inverse of the firmware's own scaling (`counts = kHz x 1000 / 400`). This is deliberate: the
+MPLAB X simulator does not implement Timer1's external clock, so T1CKI edges never increment
+TMR1 no matter how the pin is driven.
+
+Verified 2026-09-21 by driving RD1 with an SCL stimulus (`stim <file>.scl`) as fast as the
+simulator can represent: `print pin RD1` reported `HIGH`/`Din` (the pin really was driven) and
+`T1CON` read `0x27` (T1CKI selected, 1:4 prescaler), yet `TMR1L`/`TMR1H` stayed `0`. The
+simulator's own diagnostic explains why:
+
+```text
+W0106-SIM: This device only has partial support for TMR1 peripheral.
+Use internal oscillator as timer clock slection is not implemented
+```
+
+Covered by the injected-count tests:
+
+- the counts-to-kHz arithmetic and the 400 Hz-per-count scaling
+- band classification for all six bands, including the two-tick stability requirement
+- the band-select outputs themselves — RD2-RD7 are sampled and must match `current_band`,
+  so a regression in `update_band_outputs()` fails the test
+- band lock during TX (with a *different* band's frequency injected) and unlock on return to RX/idle
+- the no-signal rejection path, including a check that PTT really was asserted
+
+Not covered, and not coverable in simulation:
+
+- the T1CKI pin, its PPS routing, and the Timer1 1:4 prescaler
+- the Timer1 overflow path (`g_tmr1_overflows`), because the injected counts fit in 16 bits
+- true 10m coverage: a real 10m frequency (28.0-29.7 MHz) needs 70000-74250 counts, beyond a
+  single 16-bit TMR1 write, so the 10m case uses 25000 kHz (inside the classifier's wider window)
+
+Bench validation with a real signal generator is required for those.
+
 ## Individual scenario tests
 
 The merged suite is the default and the authoritative check. To register each scenario as
