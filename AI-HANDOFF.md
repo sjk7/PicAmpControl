@@ -4,9 +4,9 @@
 
 - Repository: `PicAmpControl`
 - Branch: `main`
-- Latest pushed commit: `90c7bf7` (`Remove all EasyEDA/KiCad schematic automation tooling and generated artifacts`)
-- A user change exists in `.vscode/tasks.json`; do not revert or include it unless explicitly requested.
+- Latest pushed commit: `7041164` (`docs: remove the abandoned EasyEDA/KiCad schematic automation entirely`). This line is a snapshot - run `git --no-pager log --oneline -1` for the real head.
 - After verified changes, build, commit, and push.
+- `Ai-Notes.txt` is the authoritative launch point for current design, firmware and verification state. This file is a shorter orientation summary; keep the two from contradicting each other.
 
 ## Firmware
 
@@ -32,17 +32,20 @@
 - LCD `PTT_COMPLETE` appears only after all three TX outputs reach active levels, for 500 ms, then restores the saved home page.
 - TRIP LCD display always has priority over `PTT_COMPLETE` and home-page restoration.
 - Fault LCD screens show measured value versus EEPROM limit for temperature, SWR, current, overdrive, and drain. Extreme SWR1 can show `FLTR?? CHECK LPF`.
+- Band selection is first-dit bypass-snoop with a remembered band that is verified against the first usable measurement (fold-back); see `docs/first-dit-band-detection.md`. The amplifier never keys without an established band, and the LPF relays never move while it is keyed.
 
 ## Testing and artifacts
 
-- Fast complete suite, one MDB/Java invocation:
-  ```powershell
-  python tools/simulate/trace_ptt_sequence.py --suite
+- Fast complete suite, one MDB/Java invocation. Use the cleanup-aware launcher and log the output
+  to a file: MDB emits megabytes of trace and the verdict line is easily lost.
+  ```sh
+  python3 tools/simulate/run_suite_with_watchdog.py --timeout 300 > /tmp/pac_suite.log 2>&1
   ```
-- The suite covers baseline sequencing, temperature trip/recovery, SWR1, SWR2, hardware fault, current ramp/trip/re-arm, overdrive, drain, and SWR1 1.5:1 no-trip at 2 kW PEP.
-- The suite emits exactly nine scenario CSVs under `_build/My_Pic_Project/sim/csv/` and nine scenario PNGs under `_build/My_Pic_Project/sim/graphs/`.
-- CTest default is one test: `PTT_SequencerAndTripSuite`.
+- The suite covers baseline sequencing, temperature trip/recovery, SWR1, SWR2, hardware fault, current ramp/trip/re-arm, overdrive, drain, SWR1 1.5:1 no-trip at 2 kW PEP, the six-band RX preflight and TX lock, the `FREQ_CTR_FAIL` first-dit case, and the band-selection safety invariants.
+- The suite emits one scenario CSV per scenario under `_build/My_Pic_Project/sim/csv/` and matching PNGs under `_build/My_Pic_Project/sim/graphs/` (12 of each as of 2026-09-21).
+- CTest registers two tests by default: `PTT_SequencerAndTripSuite` (about 2.5 minutes) and `FirstDit_BandDetectionAndHotSwitchGuards` (about 20 seconds, running `tools/simulate/test_first_dit.py`). They must not run concurrently - each owns MDB.
 - Individual CTest registrations are optional through `-DPICAMP_ENABLE_INDIVIDUAL_SIM_TESTS=ON`.
+- `tools/simulate/*.sh` (macOS) and `*.ps1` (Windows) both exist; the Python harnesses and ctest are cross-platform.
 - Diagram generators:
   ```powershell
   python tools/simulate/render_display_menu_diagram.py
@@ -68,7 +71,7 @@
 
 1. Read this file and `Ai-Notes.txt`.
 2. Check `git --no-pager status --short`.
-3. Preserve unrelated `.vscode/tasks.json` changes.
-4. Run the single suite before modifying simulator behavior.
+3. Do not let build/test output flood the terminal - log it and read the verdict from the file.
+4. Run the suite and the first-dit proof through ctest before modifying simulator behavior, and read the verdict from the log file rather than the terminal.
 5. Keep generated outputs in the existing `sim/csv` and `sim/graphs` directories.
 6. Commit and push verified changes promptly.

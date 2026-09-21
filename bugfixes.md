@@ -21,10 +21,17 @@ described it, so the repo advertised a workflow with no files behind it:
   and `project_schematic_package/README.md` referenced a `schematic-design` MCP skill,
   `mcp-server-kicad`, `.vscode/mcp.json`, a `generated/` tree and a `_SCHEMATIC_TEMPLATE.kicad_sch`
   that are all absent.
+- `PIC16F18875_pin_map.md` kept a "KiCad Symbol Reference" section asserting that the design uses
+  KiCad's `MCU_Microchip_PIC16:PIC16F18875-xPDIP40` symbol: a pointer into the abandoned toolchain,
+  and the last tool-specific reference left anywhere in the docs.
 
 Fixed by deleting the workflow document and repointing the survivors: the schematic package is now
 described as what it actually is - static design inputs (block diagram, connection table, component
-list, wiring checklist) captured by hand, with no automated path to a schematic file.
+list, wiring checklist) captured by hand, with no automated path to a schematic file. The pin-map
+KiCad section was deleted too, after the user ruled out any further schematic automation ("same for
+kicad stuff ... it can all go"). No current-facing doc, README or config in the repository now names
+EasyEDA, KiCad, an MCP schematic server or a `.kicad_sch` file - the only mentions left are this log
+and the standing instruction in `Ai-Notes.txt`.
 
 ## 2026-09-21 — Releasing PTT during sequencer stage 2 left TX_VCC asserted and unlocked the band
 

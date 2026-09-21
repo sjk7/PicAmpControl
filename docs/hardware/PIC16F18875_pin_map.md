@@ -147,12 +147,8 @@ The following pins are genuinely free (not claimed by any `pin_map.h` define):
 - Serial communication (UART, CAN)
 - MCLR decoupling if internal reset is insufficient
 
-## KiCad Symbol Reference
-
-The design uses KiCad's `MCU_Microchip_PIC16:PIC16F18875-xPDIP40` symbol, which preserves pin compatibility while extending port availability.
-
 ---
 
-**Document Version:** 2.1  
-**Last Updated:** 2026-09-20  
+**Document Version:** 2.2  
+**Last Updated:** 2026-09-21  
 **Device Migration:** PIC16F18855-I/SP (28-pin, 8KB) → PIC16F18875-I/P (40-pin, 16KB)
