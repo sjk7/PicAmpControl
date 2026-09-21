@@ -46,14 +46,15 @@ the DFP packs (`$HOME/.mchp_packs` on macOS). Use `$HOME`/`%USERPROFILE%` rather
 home directory: the committed docs and config must not carry a developer's account name, and the
 paths differ per machine.
 
-`.clangd` is deliberately **not tracked** (it is in `.gitignore`) because its whole content is
-absolute XC8/DFP include paths, and clangd has no portable way to express them: it does not expand
-`${workspaceFolder}` (verified on the bundled clangd 19.1.7 - the literal string reaches the
-compiler), and `If: PathMatch` fragments cannot discriminate by OS (verified: both an `If:` branch
-matching a POSIX path and one matching `C:/**` were applied to the same file). Recreate it per
-machine with the `CompileFlags.Add` list pointing at that machine's XC8 and DFP directories, or let
-IntelliSense come from `.vscode/c_cpp_properties.json`, which does support `${env:HOME}` and
-`${env:USERPROFILE}` and carries a config for each platform.
+`.clangd` **is** tracked and is deliberately machine-agnostic - do not add absolute include paths
+back to it, and do not untrack it. It needs none: `CompilationDatabase` is relative to the config
+file, the compile database CMake generates already carries that machine's compiler and `-mdfp` pack
+path, and clangd then queries that compiler for its system includes ("System includes extractor:
+successfully executed xc8-cc"), so the XC8 and DFP directories resolve automatically on either OS.
+The firmware's own headers are included with relative paths (`../include/...`), so they need no `-I`
+either. Verified on clangd 19.1.7: with no `-I`/`-mdfp` lines, `--check firmware/src/main.c` reports
+0 errors. (An earlier revision of this file hard-coded one machine's home directory, which both
+published a developer's account name and broke the other platform - see `bugfixes.md` 2026-09-21.)
 
 Before building, check that `xc8-cc` exists. Existing build caches may contain the invalid compiler value `c`; explicitly override the compiler paths when reconfiguring. The repository root has no `CMakeLists.txt`, so do not configure with `cmake --preset` from the root unless the preset is first corrected to specify the nested source directory.
 

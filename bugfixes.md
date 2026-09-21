@@ -21,12 +21,15 @@ leak was in the repository, not in the shipped firmware.
 
 Fixed in the working tree by replacing the literal home directory with portable forms: `$HOME` in
 the shell examples, `${env:HOME}` / `${env:USERPROFILE}` in the VS Code configuration, and a new
-`Windows-XC8` configuration alongside `Mac-XC8`. `.clangd` was untracked and added to `.gitignore`
-rather than rewritten, because its content is unavoidably machine-absolute: clangd does not expand
-`${workspaceFolder}` (verified on the bundled clangd 19.1.7 - the literal string reaches the
-compiler) and its `If: PathMatch` fragments cannot select by OS (verified - a POSIX-matching branch
-and a `C:/**` branch were both applied to the same file), so no single version can serve both
-machines.
+`Windows-XC8` configuration alongside `Mac-XC8`. `.clangd` was untracked at first, then restored as
+a **portable, tracked** file once its machine paths turned out to be redundant: clangd queries the
+compiler named in the compile database for its system includes ("System includes extractor:
+successfully executed xc8-cc"), and that database is generated per machine by CMake, so the XC8 and
+DFP include directories resolve on either OS without being listed. Verified with `--check` on
+`firmware/src/main.c`: 0 errors with no `-I`/`-mdfp` lines. Two dead ends worth not repeating:
+clangd does not expand `${workspaceFolder}` (the literal string reaches the compiler), and
+`If: PathMatch` fragments cannot select by OS (a POSIX-matching branch and a `C:/**` branch were
+both applied to the same file).
 
 **Not fixed, and not fixable by a commit:** the name remains in the history of `main` (six commits
 match a history search, from `efbd7a7` through `e4b9c93`) and a personal email address remains in

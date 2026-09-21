@@ -1,0 +1,36 @@
+# clangd configuration for the XC8 PIC build. Committed, and deliberately free of
+# machine-specific paths so it works unchanged on macOS and Windows.
+#
+# Nothing absolute is needed here:
+#   - CompilationDatabase is relative to this file, and the compile database CMake
+#     generates already carries the compiler path (and -mdfp pack path) of the
+#     machine it was configured on.
+#   - clangd asks that compiler for its system includes ("System includes
+#     extractor: successfully executed xc8-cc"), so the XC8 and DFP include
+#     directories are discovered automatically on either OS.
+#   - The firmware's own headers are included with relative paths
+#     ("../include/..."), so they need no -I either.
+# Verified with clangd 19.1.7: --check on firmware/src/main.c reports 0 errors
+# with no -I or -mdfp lines present. Do not re-add per-machine paths.
+CompileFlags:
+  CompilationDatabase: "_build/My_Pic_Project/release"
+  Add:
+    - "-mcpu=16F18875"
+    - "-D__16F18875__"
+    - "-D_16F18875"
+    - "-D__XC8"
+    - "-D__XC8_VERSION=4000"
+    - "-D__DEBUG=1"
+    - "-DXPRJ_default=default"
+    - "-Wno-unknown-pragmas"
+    - "-Wno-unused-variable"
+  Remove:
+    - "-msummary=*"
+    - "-maddrqual=*"
+    - "-mwarn=*"
+    - "-ginhx32"
+    - "-mno-*"
+    - "-mstack=*"
+    - "-fno-short-double"
+    - "-fno-short-float"
+

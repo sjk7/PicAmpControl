@@ -15,5 +15,5 @@ out/
 __pycache__/
 *.pyc
 
-# Per-machine clangd config: absolute XC8/DFP paths, no portable form exists.
-.clangd
+# Windows PowerShell transcript / stray logs
+*.log
