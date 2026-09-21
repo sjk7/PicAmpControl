@@ -102,6 +102,29 @@ cmake --build _build/My_Pic_Project/debug -j4
 
 ## Flash space
 
+**Reducing flash is a standing work item, not a nuisance to tolerate (user instruction,
+2026-09-21).** A near-full Debug image is not an acceptable steady state. Concretely:
+
+- When a build or test run leaves you waiting, spend that time finding space - do not idle.
+- **Inline assembly is acceptable here, on one condition:** every block must carry an equivalent-C
+  comment so it can be reviewed and re-derived. An uncommented asm block is not acceptable.
+- Every saving is a code change like any other: it must keep the tests green, and ideally be proven
+  by a fault injection. Space is never "free" just because the tests happen to pass.
+- The purpose of the headroom is to be able to assert **strongly, and with test evidence, that the
+  PTT sequencing cannot damage the amplifier** - the silicon in this project is expensive and the
+  safety argument has to be airtight. No gaps, no excuses.
+
+Known reduction levers, in rough order of value:
+
+1. Table-drive the long `if`/`else` chain in `adjust_selected_setting()` (est. 80-100 words). The
+   per-setting min/max/step bounds are irregular, so it needs a new menu-edit scenario in the suite.
+2. Compile the translation units the harness does NOT read (`lcd_parallel.c`) at `-Os` in the Debug
+   build; the harness only needs symbols from `main.c` and `freq_counter.c`.
+3. Bit-pack the menu metadata (`g_menu_setting_offsets[]` 20 B + `g_menu_setting_types[]` 20 B).
+4. Shorten the remaining display strings.
+5. Only if the user explicitly agrees: build the whole Debug image `-Os` - it costs ~1200 words but
+   silently breaks MDB symbol and breakpoint resolution.
+
 Flash is the binding constraint on this project, and it is easy to trip from a test change:
 
 - Release (shipping) uses ~6899/8192 words = ~84% used; Debug is the binding one at 8117/8192 = 99.1%
@@ -167,11 +190,13 @@ The suite must cover:
 - normal PTT/trip scenarios
 - `FREQ_CTR_FAIL`, where no Timer1 signal must hold PTT latched in bypass-snoop with every TX
   output inactive and no band locked (first-dit model, not a refusal)
-- the band-selection safety invariants over every scenario (`validate_keyed_band_invariants` and
-  `validate_band_changes_are_cold` in `tools/simulate/first_dit_invariants.py`): I1 no relay move
+- the band-selection safety invariants over every scenario (`validate_keyed_band_invariants`,
+  `validate_band_changes_are_cold` and `validate_t_r_closes_only_after_band_settle` in
+  `tools/simulate/first_dit_invariants.py`): I1 no relay move
   between consecutive keyed samples, I2 never keyed while the band is unlocked, I3 never keyed
   while snooping, I4 the band-select output pins agree with `current_band`, I5 every relay move
-  seen with the amplifier cold
+  seen with the amplifier cold, I6 every T/R relay close follows a band relay selection that has
+  already settled (never hot-switch the band relay)
 
 `test_first_dit.py` additionally covers the first-dit clauses end to end in its own MDB session:
 clause (a) bypass with no band, (b) first-burst decode with bypass held for `BAND_SETTLE_MS`,
@@ -272,13 +297,21 @@ Prerequisites that decide whether debugging works at all:
   you wrote - record the failure message actually observed, and if it does not name your clause,
   either make the injection narrower or say plainly that the clause's own proof is outstanding. Do
   not upgrade an incidental cascade into a claim about the new clause.
-- **Clause (d)'s idle-delta window looks sensitive to phase alignment (observed 2026-09-21, cause not
-  confirmed).** A fault injection whose only firmware difference was an unrelated few-word code
-  change made the test fail at `clause (d): the idle counter did not advance ~1 ms/ms while idle`
-  with a delta list containing the injected `-113` and a `1`, i.e. the injected idle count landed a
-  sample earlier in the window than usual. If an injection run fails at clause (d) instead of at the
-  clause under test, suspect this assertion's tolerance rather than the defect, and treat the
-  clause-under-test proof as outstanding.
+- **Clause (d)'s idle-counter check was layout-sensitive; it is fixed - do not reintroduce the old
+  form.** It used to build its delta list from consecutive entries of the *filtered* idle-sample list,
+  so exactly one delta always spanned the keyed gap between two released runs, and the assertion
+  required `len(resets) == 1`. Shift the phase boundary by a single sample and that one pair splits
+  into a small positive plus a large negative: two "resets", and the clause fails for reasons that
+  have nothing to do with the firmware. Fixed 2026-09-21 by grouping released samples into runs that
+  are adjacent in the transcript (`idle_runs()`) and validating each run against **its own measured
+  span**, not an assumed sample spacing - these phases mix 1 ms and 10 ms steps, so a fixed-spacing
+  assumption is wrong even within one run. Symptom to watch for: a fault-injection run failing at
+  clause (d) instead of at the clause under test.
+- **A foreground `test_first_dit.py` run can be killed by the terminal capture.** Twice on 2026-09-21
+  it came back with `Command produced no output`, exit `130`, and an **empty** log - the run never
+  happened. Do not treat that as a pass or a fail. Check that the log is non-empty before judging
+  anything, and launch these runs in the background (async) with output redirected, which is
+  reliable; if the shell is wedged, `workbench.action.terminal.killAll` first.
 - **A log read back through a file tool can be STALE.** Reading a log while it is still being
   written, or re-reading a path that was read earlier in the same session, can hand back an old copy
   - which looks exactly like "the run produced nothing". Copy it to a path that has never been read

@@ -389,6 +389,32 @@ def validate_clause_c(samples):
           "cold and only then was the band released")
 
 
+def idle_runs(release_samples):
+    """Released samples split into runs that are adjacent in the transcript.
+
+    The idle counter is only meaningful *within* a run: a keyed sample in between resets it, so a
+    delta taken across that gap is meaningless. Keeping the runs separate is what makes clause (d)
+    independent of exactly where the phase boundary lands - a single-sample shift used to split one
+    boundary delta into a small positive plus a large negative, which made the clause fail with two
+    "resets" for reasons that had nothing to do with the idle counter.
+    """
+    runs = []
+    current = []
+    for index, sample in enumerate(release_samples):
+        if sample[2]["g_ptt_active"] == "true":
+            if current:
+                runs.append(current)
+                current = []
+            continue
+        if current and index != current[-1][0] + 1:
+            runs.append(current)
+            current = []
+        current.append((index, sample))
+    if current:
+        runs.append(current)
+    return [[sample for _, sample in run] for run in runs]
+
+
 def validate_clause_d(samples, release_samples, timeout_ms):
     idle_samples = [sample for sample in release_samples
                     if sample[2]["g_ptt_active"] == "false"]
@@ -396,24 +422,39 @@ def validate_clause_d(samples, release_samples, timeout_ms):
         raise AssertionError("clause (d): not enough released samples to check the idle timer")
     if any(sample[2]["g_band_cache_valid"] != "true" for sample in idle_samples):
         raise AssertionError("clause (d): the cache expired well before the timeout")
-    # The counter must climb while idle. These phases sample every 10 ms of simulated time,
-    # and instruction-count time is approximate (branches cost two cycles), so accept a
-    # band rather than an exact figure: the point is that it tracks real elapsed time.
-    deltas = [int(later[2]["g_band_cache_idle_ms"]) - int(earlier[2]["g_band_cache_idle_ms"])
-              for earlier, later in zip(idle_samples, idle_samples[1:])]
-    advancing = [delta for delta in deltas if delta > 0]
-    resets = [delta for delta in deltas if delta <= 0]
-    if len(advancing) < 5 or not all(4 <= delta <= 30 for delta in advancing):
-        raise AssertionError("clause (d): the idle counter did not advance ~1 ms/ms while "
-                             f"idle (deltas {deltas})")
-    if len(resets) != 1:
-        raise AssertionError("clause (d): the idle counter reset outside a PTT assert "
-                             f"(deltas {deltas})")
-    growth = sum(advancing)
-    idle_ms = len(idle_samples) * 10
-    if not 0.7 * idle_ms <= growth <= 1.5 * idle_ms:
-        raise AssertionError(f"clause (d): idle counter grew {growth} over {idle_ms}ms of "
-                             "simulated idle")
+    # The counter must climb while idle, and only while idle. Each released run is checked on its
+    # own: deltas are never taken across a keyed gap (see idle_runs()), and each run's growth is
+    # compared against that run's own measured span rather than an assumed sample spacing, because
+    # these phases mix 10 ms and 1 ms steps.
+    runs = idle_runs(release_samples)
+    checked = 0
+    growth = 0
+    expected_ms = 0.0
+    for run in runs:
+        deltas = [int(later[2]["g_band_cache_idle_ms"]) - int(earlier[2]["g_band_cache_idle_ms"])
+                  for earlier, later in zip(run, run[1:])]
+        if not deltas:
+            continue
+        checked += len(deltas)
+        if any(delta <= 0 for delta in deltas):
+            raise AssertionError("clause (d): the idle counter did not increase monotonically "
+                                 f"within a released run (deltas {deltas})")
+        span_ms = millis(run[-1]) - millis(run[0])
+        run_growth = sum(deltas)
+        if span_ms <= 0 or not 0.7 * span_ms <= run_growth <= 1.5 * span_ms:
+            raise AssertionError(f"clause (d): the idle counter grew {run_growth} over a "
+                                 f"{span_ms:.0f}ms released run")
+        growth += run_growth
+        expected_ms += span_ms
+    if checked < 5:
+        raise AssertionError("clause (d): not enough released samples to check the idle timer")
+    # A PTT assert must reset the counter, not merely cap it: every released run after the first
+    # was preceded by a keyed gap, so it has to restart from near zero.
+    for run in runs[1:]:
+        start_count = int(run[0][2]["g_band_cache_idle_ms"])
+        if start_count > 20:
+            raise AssertionError("clause (d): the idle counter did not reset across a PTT "
+                                 f"assert (restarted at {start_count})")
     injected = [sample for sample in samples
                 if int(sample[2]["g_band_cache_idle_ms"]) >= timeout_ms - 50
                 and sample[2]["g_band_cache_valid"] == "true"]
@@ -429,7 +470,8 @@ def validate_clause_d(samples, release_samples, timeout_ms):
         raise AssertionError("clause (d): a TX output went active after the cache expired")
     show("(d) idle counter running, then threshold crossing drops the cache",
          idle_samples[:2] + expired)
-    print(f"  PASS  (d) idle counter grew {growth} over {idle_ms}ms of simulated idle; "
+    print(f"  PASS  (d) idle counter grew {growth} over {expected_ms:.0f}ms inside "
+          f"{len(runs)} released run(s), resetting at each PTT assert; "
           f"injected idle count {injected[0][2]['g_band_cache_idle_ms']} of {timeout_ms}ms "
           "expired the cache, and the next PTT went back to bypass-snoop with TX outputs "
           "inactive")
@@ -622,6 +664,8 @@ def main():
         print(line)
     for line in inv.validate_band_changes_are_cold(samples, "first-dit"):
         print(line)
+    for line in inv.validate_t_r_closes_only_after_band_settle(samples, "first-dit"):
+        print(line)
     print("--- Spec clauses ---")
     validate_clause_a(a)
     validate_clause_b(b)
@@ -638,7 +682,7 @@ def main():
         write_csv(samples, csv_path)
         print(f"Wrote {csv_path}")
     print("FIRST-DIT PROOF PASSED: clauses (a)-(j), the hot-switch fault injections, and "
-          "invariants I1-I5 hold")
+          "invariants I1-I6 hold")
 
 
 if __name__ == "__main__":

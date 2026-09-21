@@ -98,6 +98,7 @@ These are enforced by construction in the firmware and checked independently by 
 | I3 | The amplifier is never keyed while bypass-snooping |
 | I4 | The relay selection always agrees with the firmware's `current_band` |
 | I5 | Every observed relay-selection change is seen with the amplifier cold |
+| I6 | Every T/R relay close follows a band relay selection that has already settled |
 
 Firmware mechanisms behind them:
 
@@ -220,7 +221,7 @@ Two CTest tests cover this model:
   (i) a remembered-band engage that has to **move** the band relays holds bypass until they have
   settled before the T/R relay closes, and (j) a hard SWR fault injected while bypass-snooping
   latches **no** trip.
-- `PTT_SequencerAndTripSuite` — enforces invariants I1-I5 over **every** scenario in the merged
+- `PTT_SequencerAndTripSuite` — enforces invariants I1-I6 over **every** scenario in the merged
   suite by post-processing the samples it already takes.
 
 The invariant checks live in one module,
@@ -236,7 +237,7 @@ of these defects makes the first-dit test fail with the message shown.
 | Releasing PTT during sequencer stage 2 | `clause (c): the stage-2 release left a TX output asserted` |
 | Relay selection follows silence in RX | `clause (c): the remembered 20m band was not restored` — an *earlier* clause trips first, because one phase of the session feeds the next. Clause (h) is the direct guard for this defect, but its own proof is still outstanding: the cascade masks it. |
 | No relay settle on a remembered-band engage | `clause (i): only 6.0ms of bypass between the band-relay selection change and the T/R relay closing` — the focused proof, with (g) and (h) still passing. |
-| SWR trips left ungated | **Not yet proven for clause (j).** The injection failed at `clause (d): the idle counter did not advance ~1 ms/ms while idle` instead, which looks like a timing-sensitivity in that assertion rather than the defect (see the snags section of [the build/test skill](../.github/skills/picampcontrol-build-test/SKILL.md)). Clause (j)'s own proof is outstanding. |
+| SWR trips left ungated | `clause (j): an SWR fault injected while the amplifier was bypassed latched a trip`, with the failing sample showing `state=3` (TRIP) and `snoop=true`. Focused proof: (h) and (i) still passed. (The first attempt at this injection was masked by a layout-sensitivity in clause (d), which has since been fixed - see the snags section of [the build/test skill](../.github/skills/picampcontrol-build-test/SKILL.md).) |
 
 Two limits are worth stating:
 

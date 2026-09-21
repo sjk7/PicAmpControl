@@ -15,6 +15,7 @@ outputs (RC5 OUTPUT_TX, RC6 TX_VCC, RC7 TX_BIAS, all active-low with default set
   I3  the amplifier is never keyed while bypass-snooping
   I4  the relay selection always agrees with the firmware's current_band
   I5  every observed relay-selection change is seen with the amplifier cold
+  I6  every T/R relay close follows a band relay selection that has already settled
 
 These were verified to fail on real regressions (2026-09-21), by re-introducing each defect
 and re-running tools/simulate/test_first_dit.py:
@@ -33,6 +34,15 @@ checks at 1-5 ms, which is finer than that window.
 
 TX_PINS = ["RC5", "RC6", "RC7"]  # OUTPUT_TX (relays), TX_VCC, TX_BIAS - active-low
 BAND_PINS = ["RD2", "RD3", "RD4", "RD5", "RD6", "RD7"]
+# The T/R relay is the pin that puts the amplifier (and therefore its LPF bank) into the RF path.
+T_R_RELAY_PIN = "RC5"
+# The band relays and the T/R relay are both mechanical and both live in the TX train. The band
+# relays must ALWAYS be switched first, with the T/R relay open, so the amplifier is never connected
+# to the RF path while its filter is changing. This ordering - "never hot-switch the band relay" - is
+# what the whole first-dit design exists to preserve, so it is checked (I6), not merely documented.
+# Both relay groups are taken to operate in 20 ms, and the harness samples transitions at 1-5 ms, so
+# anything below 10 ms is a violation rather than sampling slop.
+BAND_SETTLE_MIN_MS = 10.0
 BAND_PIN_FOR = {1: "RD2", 2: "RD3", 3: "RD4", 4: "RD5", 5: "RD6", 6: "RD7"}
 BAND_NAME = {1: "160m", 2: "80m", 3: "40m", 4: "20m", 5: "15m", 6: "10m"}
 BAND_OUT_OF_SPEC = 7
@@ -122,6 +132,40 @@ def validate_keyed_band_invariants(all_samples, label):
                         f"band={BAND_NAME.get(int(run[0][2]['g_fc_status.current_band']), '?')} "
                         f"({len(run)} samples, selection {selected_band_pin(run[0])})")
     return evidence
+
+
+def validate_t_r_closes_only_after_band_settle(all_samples, label):
+    """I6. Returns evidence strings; raises AssertionError on violation.
+
+    The band relays must always be switched first, with the T/R relay open, so the amplifier is
+    never connected to the RF path while its low-pass filter is changing. This is the ordering the
+    whole first-dit design exists to preserve: "never hot-switch the band relay". A scenario with no
+    T/R relay close is reported rather than failed, so the check is never silently vacuous.
+    """
+    closes = []
+    last_change_ms = None
+    for index, sample in enumerate(all_samples):
+        if index and band_pattern(sample) != band_pattern(all_samples[index - 1]):
+            last_change_ms = millis(sample)
+        if (index and sample[1][T_R_RELAY_PIN] == 0
+                and all_samples[index - 1][1][T_R_RELAY_PIN] != 0):
+            gap = None if last_change_ms is None else millis(sample) - last_change_ms
+            closes.append((sample, gap))
+    if not closes:
+        return [f"  PASS  {label} I6: no T/R relay close in this scenario, so the ordering was "
+                "not exercised"]
+    for sample, gap in closes:
+        if gap is not None and gap < BAND_SETTLE_MIN_MS:
+            raise AssertionError(
+                f"{label} I6: the T/R relay closed {gap:.1f}ms after the band relay selection "
+                "changed (HOT SWITCH of the band relay - the band relays must always be switched "
+                "first, with the T/R relay open)\n"
+                f"      {describe(sample)}")
+    worst = min((gap for _, gap in closes if gap is not None), default=None)
+    tightest = "n/a" if worst is None else f"{worst:.1f}ms"
+    return [f"  PASS  {label} I6: all {len(closes)} T/R relay closes followed a band relay "
+            f"selection already settled for at least {BAND_SETTLE_MIN_MS:.0f}ms "
+            f"(tightest {tightest})"]
 
 
 def validate_band_changes_are_cold(all_samples, label):

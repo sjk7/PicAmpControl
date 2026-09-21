@@ -1016,13 +1016,17 @@ def main():
             else:
                 validate_trip(scenario_samples, scenario)
         # Band-selection safety invariants (docs/first-dit-band-detection.md) over every
-        # scenario: the LPF relays must never move while the amplifier is keyed, and the
-        # amplifier must never be keyed on a band that is not locked.
+        # scenario: the LPF relays must never move while the amplifier is keyed, the amplifier
+        # must never be keyed on a band that is not locked, and the band relays must always be
+        # switched before the T/R relay closes (never hot-switch the band relay).
         for scenario, (_, scenario_samples) in zip(scenario_names, groups):
             label = scenario or "PTT_BASE"
             for line in invariants.validate_keyed_band_invariants(scenario_samples, label):
                 print(line)
             for line in invariants.validate_band_changes_are_cold(scenario_samples, label):
+                print(line)
+            for line in invariants.validate_t_r_closes_only_after_band_settle(
+                    scenario_samples, label):
                 print(line)
         out_dir = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"
         csv_dir = out_dir / "csv"

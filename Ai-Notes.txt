@@ -17,6 +17,12 @@ CI/release workflows change - don't let it go stale.
   The mechanics (exact commands and the redirect/exit-code pattern) live in
   `.github/skills/picampcontrol-build-test/SKILL.md` and TESTING.md, deliberately not restated here.
 - Keep this file (Ai-Notes.txt) ALWAYS up to date; it's the launch point for a new session.
+- FLASH REDUCTION IS A STANDING WORK ITEM (user instruction, 2026-09-21). A near-full Debug image
+  is not an acceptable steady state: when a build or test leaves you waiting, spend the time finding
+  space. Inline assembly is allowed if every block carries an equivalent-C comment for review. The
+  point of the headroom is to be able to assert strongly - and with test evidence - that the PTT
+  sequencing cannot damage the amplifier, so no gaps and no excuses in the test coverage. Levers and
+  the policy detail live in the skill's `## Flash space`.
 - COMMIT AND PUSH OFTEN - LOCAL AND REMOTE (user instruction, restated 2026-09-21 because it was
   forgotten). Commit and push to `origin/main` as soon as each change is verified green; do not
   batch a session's work into one large commit at the end, and never leave verified work sitting
@@ -198,7 +204,23 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
 ## Remaining work
 The open work is hardware validation: final sensor calibration, comparator thresholds and polarity, ADC transient protection, TX timing, fan implementation, LCD/menu/internal EEPROM persistence testing, final PCB review, and CI validation. First-dit specifics to confirm on the bench: BAND_CACHE_IDLE_TIMEOUT_MS (60 s) against real band-change habits, BAND_SETTLE_MS (20 ms) against the fitted LPF relay's operate time, and BAND_VERIFY_MS (20 ms) - i.e. how long a wrong remembered band may stay engaged before fold-back, which is the one figure that trades amplifier protection against nuisance drop-outs on a noisy first dit.
 
-Flash space is the next constraint, and it needs a user decision - both remaining levers are deliberate trades, not free wins:
-1. Make `adjust_selected_setting()` in firmware/src/main.c table-driven ({min,max,step} rows instead of the long if/else chain). Est. 80-100 words, but it is untested UI logic with odd per-setting bounds, so it should be paired with a new menu-edit scenario added to the suite.
-2. Compile the simulator/tests image with `-Os` instead of `-O1` (user.cmake). Est. 1200 words off the Debug number, but degrades mdb symbol/breakpoint resolution for the VS Code "Simulate PicAmpControl (Debug)" session - the whole reason Debug is -O1 today.
-Do not start either without asking; see the Device memory usage section for the current numbers.
+Flash space is the next constraint. Measure before you refactor - the earlier estimates here were
+guesses and at least one is probably wrong:
+
+1. Make `adjust_selected_setting()` in firmware/src/main.c table-driven ({min,max,step} rows instead
+   of the long if/else chain). **The earlier "est. 80-100 words" is suspect.** Most of those settings
+   are 16-bit, so a `{min,max,step}` row costs ~6 bytes and a table for all 20 pages is ~120 bytes
+   *plus* lookup code - likely MORE than the branch chain it replaces, whose branches are a handful
+   of words each. Measure the actual function size first; if the table does not win, say so and drop
+   the idea rather than implementing it for appearance.
+2. Compile the translation units the harness does NOT read (`lcd_parallel.c`) at `-Os` in the Debug
+   build. The harness reads symbols only from `main.c` and `freq_counter.c`, so MDB resolution should
+   be unaffected.
+3. Compile the whole simulator/tests image `-Os` instead of `-O1` (user.cmake). Est. 1200 words off
+   the Debug number, but degrades mdb symbol/breakpoint resolution for the VS Code "Simulate
+   PicAmpControl (Debug)" session - the whole reason Debug is -O1 today. Needs explicit user consent.
+4. Bit-pack the menu metadata, shorten the remaining display strings, or use commented inline
+   assembly where a hot path justifies it (equivalent C must be in the comment).
+
+Do not start a structural one without asking; see the skill's `## Flash space` for the policy and the
+Device memory usage section above for the current numbers.
