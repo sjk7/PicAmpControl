@@ -53,24 +53,25 @@ TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parent.parent
 sys.path.insert(0, str(TOOLS_DIR))
 
-# Reuse the one MDB launcher (process-group cleanup, timeout handling, stderr capture) and
-# the one transcript parser rather than keeping second copies of either.
+# Reuse the one MDB launcher (process-group cleanup, timeout handling, stderr capture), the
+# one transcript parser, and the one set of band-selection invariants rather than keeping
+# second copies of any of them.
 import trace_ptt_sequence as harness  # noqa: E402
+from first_dit_invariants import (  # noqa: E402
+    BAND_PINS, TX_PINS, describe, keyed, millis, selected_band_pin,
+)
+import first_dit_invariants as inv  # noqa: E402
 
 ELF_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.elf"
 SYM_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.sym"
 DEVICE = "PIC16F18875"
 
 INSTRUCTIONS_PER_MS = 8000  # 32 MHz / 4 = 8 MIPS
-SECONDS_PER_INSTRUCTION = 4 / 32_000_000
 
 PTT_PIN = "RC0"
 SETTLE_PIN = "RC1"
-TX_PINS = ["RC5", "RC6", "RC7"]  # OUTPUT_TX (RELAYS), TX_VCC, TX_BIAS - all active-low here
-BAND_PINS = ["RD2", "RD3", "RD4", "RD5", "RD6", "RD7"]
-BAND_PIN_FOR = {1: "RD2", 2: "RD3", 3: "RD4", 4: "RD5", 5: "RD6", 6: "RD7"}
-BAND_NAME = {1: "160m", 2: "80m", 3: "40m", 4: "20m", 5: "15m", 6: "10m"}
 PINS = [PTT_PIN, SETTLE_PIN] + TX_PINS + BAND_PINS
+fmt = describe
 
 IDLE_TIMEOUT_MS = 60000  # BAND_CACHE_IDLE_TIMEOUT_MS in firmware/src/main.c
 STATE_BYPASS_SNOOP = 6   # STATE_BYPASS_SNOOP in firmware/src/main.c (appended last)
@@ -219,120 +220,12 @@ def parse(output):
     return harness.parse_trace(output)
 
 
-def keyed(sample):
-    """True when any TX output is at its active level (active-low here)."""
-    return any(sample[1][pin] == 0 for pin in TX_PINS)
-
-
-def band_pattern(sample):
-    return tuple(sample[1][pin] for pin in BAND_PINS)
-
-
-def selected_band_pin(sample):
-    high = [pin for pin in BAND_PINS if sample[1][pin] == 1]
-    return high[0] if len(high) == 1 else None
-
-
-def millis(sample):
-    return sample[0] * SECONDS_PER_INSTRUCTION * 1000
-
-
-def fmt(sample):
-    _, pins, state, _ = sample
-    return (
-        f"t={millis(sample):7.1f}ms PTT={pins[PTT_PIN]} SETTLE={pins[SETTLE_PIN]} "
-        f"TX/VCC/BIAS={pins['RC5']}{pins['RC6']}{pins['RC7']} "
-        f"bandpins={''.join(str(pins[p]) for p in BAND_PINS)} "
-        f"ptt_active={state['g_ptt_active']} stage={state['g_sequence_stage']} "
-        f"state={state['g_state']} snoop={state['g_snoop_active']} "
-        f"cache={state['g_band_cache_valid']}/{state['g_band_cache_band']} "
-        f"idle_ms={state['g_band_cache_idle_ms']} "
-        f"cur_band={state['g_fc_status.current_band']} "
-        f"locked={state['g_fc_status.band_locked']} "
-        f"freq_khz={state['g_fc_status.frequency_khz']}"
-    )
-
-
 def show(title, samples, limit=6):
     print(f"    {title}")
     for sample in samples[:limit]:
         print(f"      {fmt(sample)}")
     if len(samples) > limit:
         print(f"      ... {len(samples) - limit} more")
-
-
-def validate_hot_switch_invariants(all_samples):
-    """I1-I4: the amplifier must never key on an unverified band, and the LPF relays must
-    never move while it is keyed."""
-    keyed_runs = []
-    for index, sample in enumerate(all_samples):
-        pins, state = sample[1], sample[2]
-        band = state["g_fc_status.current_band"]
-
-        # I4: the relay selection and current_band must always agree. Skipped during the
-        # startup inhibit, before freq_counter_init() has driven the band outputs.
-        if state["g_startup_inhibit"] == "false" and band != "7":  # BAND_OUT_OF_SPEC
-            expected = BAND_PIN_FOR.get(int(band))
-            if selected_band_pin(sample) != expected:
-                raise AssertionError(
-                    f"I4: band-select output for current_band={band} is "
-                    f"{selected_band_pin(sample)}, expected {expected}\n      {fmt(sample)}")
-
-        if not keyed(sample):
-            continue
-
-        # I2: keyed implies a locked band.
-        if state["g_fc_status.band_locked"] != "true":
-            raise AssertionError(f"I2: amplifier keyed with the band unlocked\n      {fmt(sample)}")
-
-        # I3: snooping implies bypass.
-        if state["g_snoop_active"] == "true":
-            raise AssertionError(f"I3: amplifier keyed while bypass-snooping\n      {fmt(sample)}")
-
-        # I1: the band selection must not change between two consecutive keyed samples,
-        # which means it is frozen for the whole keyed run.
-        if index == 0 or not keyed(all_samples[index - 1]):
-            keyed_runs.append([sample])
-        else:
-            if band_pattern(sample) != band_pattern(all_samples[index - 1]):
-                raise AssertionError(
-                    "I1: band-select outputs changed while the amplifier stayed keyed "
-                    f"(HOT SWITCH)\n      prev: {fmt(all_samples[index - 1])}\n"
-                    f"      now:  {fmt(sample)}")
-            keyed_runs[-1].append(sample)
-    print(f"  PASS  I1/I2/I4 hold over {len(all_samples)} samples and {len(keyed_runs)} keyed "
-          "runs; every keyed run kept one fixed band selection and a locked band")
-    return keyed_runs
-
-
-def validate_band_changes_are_cold(all_samples):
-    """I5: the LPF relays must only ever move while the amplifier is cold.
-
-    A hot switch would show up here as a new band selection on a sample that is still
-    keyed, and in validate_hot_switch_invariants() as a selection change between two
-    consecutive keyed samples. The phases that change band are sampled at 1 ms so the
-    relay move and the keying that follows it cannot share a sample interval.
-    """
-    changes = []
-    for index in range(1, len(all_samples)):
-        if band_pattern(all_samples[index]) == band_pattern(all_samples[index - 1]):
-            continue
-        if keyed(all_samples[index]):
-            raise AssertionError(
-                "I5: band-select outputs changed while the amplifier was keyed "
-                f"(HOT SWITCH)\n      prev: {fmt(all_samples[index - 1])}\n"
-                f"      now:  {fmt(all_samples[index])}")
-        changes.append((all_samples[index - 1], all_samples[index]))
-    if not changes:
-        raise AssertionError("I5: no band-select change was observed at all")
-    print(f"  PASS  I5: all {len(changes)} observed band-select changes were seen with the "
-          "amplifier cold (every TX output inactive)")
-    for previous, current in changes:
-        print(f"    {selected_band_pin(previous)!s:>5} -> {selected_band_pin(current)!s:<5} "
-              f"at t={millis(current):.1f}ms, TX/VCC/BIAS={current[1]['RC5']}"
-              f"{current[1]['RC6']}{current[1]['RC7']}, "
-              f"locked={current[2]['g_fc_status.band_locked']}, "
-              f"keyed_before={keyed(previous)}")
 
 
 def validate_clause_a(samples):
@@ -568,8 +461,10 @@ def main():
 
     print(f"Parsed {len(samples)} samples across {len(spans)} phases")
     print("--- Safety invariants (whole session) ---")
-    validate_hot_switch_invariants(samples)
-    validate_band_changes_are_cold(samples)
+    for line in inv.validate_keyed_band_invariants(samples, "first-dit"):
+        print(line)
+    for line in inv.validate_band_changes_are_cold(samples, "first-dit"):
+        print(line)
     print("--- Spec clauses ---")
     validate_clause_a(a)
     validate_clause_b(b)

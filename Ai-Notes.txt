@@ -5,6 +5,7 @@ Update the Date and any changed sections whenever design, firmware, docs, or
 CI/release workflows change - don't let it go stale.
 
 ## Standing AI instructions (things the user asked to always remember)
+- ALWAYS use the file-based pattern for tests: write the command's output to a log file and read the verdict from that file (read the file, or print a short tail if the shell is healthy). Never rely on the terminal scrollback for a pass/fail line - MDB emits megabytes of trace and the terminal capture/scrollback loses it. Applies to `ctest`, `run_tests.sh`, and direct `tools/simulate/*.py` runs. If a terminal command returns no output, do not conclude the run failed: check the log file and the exit-code file instead (e.g. `... > /tmp/log 2>&1; echo "EXIT=$?" >> /tmp/log`).
 - Keep this file (Ai-Notes.txt) ALWAYS up to date; it's the launch point for a new session.
 - Always push to origin/main after a successful compile/build of a change - don't leave verified-good commits sitting local. Firmware only truly compiles via CI (firmware-build.yml, which runs on ubuntu-latest), so this means: commit, push, and confirm the triggered build succeeds.
 - Keep README.md and docs/ purely current-facing: no "old prototype was replaced by..." style historical narrative. Historical context belongs only in prototype_reference/.
@@ -28,6 +29,15 @@ CI/release workflows change - don't let it go stale.
 This repository is the active PIC16F18875-I/P linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
 
 ## Firmware
+- **First-dit band switching is implemented** (docs/first-dit-band-detection.md). With no decoded
+  band, PTT is latched but the amplifier stays in bypass (STATE_BYPASS_SNOOP, g_snoop_active) while
+  the radio's first RF burst is decoded; the band is then remembered (g_band_cache_valid/
+  g_band_cache_band) so later PTT drops engage instantly, and the memory is dropped after
+  BAND_CACHE_IDLE_TIMEOUT_MS (60 s, needs bench confirmation) of inactivity. BAND_SETTLE_MS (20 ms,
+  needs bench confirmation) holds bypass after the decode so the amplifier is never keyed into a
+  relay that is still moving. apply_bypass()/release_band_if_cold() enforce the "relays only move
+  with the amplifier cold" rule. New freq_counter API: freq_counter_restore_locked_band(),
+  freq_counter_band_confirmed().
 - Direct ADC inputs monitor two forward/reflected SWR pairs, temperature, WCS1700 current, input power, and drain voltage.
 - SWR trips, power scales, drain/input thresholds, 10 kOhm NTC B-value profile, sequencer timing, and output polarities are user-configurable from the 1602 LCD menu.
 - Hardware comparators combine at INPUT_HARD_FAULT for independent overdrive, drain-peak, and overcurrent protection.
@@ -54,14 +64,16 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
 - Benign, expected simulator noise: `W0106-SIM: This device only has partial support for TMR1/TMR3/TMR5 peripheral...` on every reset. Firmware never touches T1CON/T3CON/T5CON; this is just `mdb`'s partial clock-source-mux model for those timers at their POR default state, not a real firmware/silicon issue - safe to ignore (already filtered out by run_sim.sh/.ps1).
 - FIXED (2026-09-15, see bugfixes.md): the ADC ISR used to immediately re-arm the next conversion (with a blocking `__delay_us`) right after each conversion completed, entirely inside `timer0_isr()`. In simulation this created a back-to-back interrupt chain that fully starved the main loop - `update_tx_sequence()`/`update_protection_state()` never ran even once after 30+ simulated seconds. Fixed by only re-arming once per Timer0 tick (~1 ms) instead of immediately; verified main-loop breakpoints now hit normally. If future simulation runs show the CPU stuck at the interrupt vector address on every `Halt` with continuous `W0223-ADC` spam, that class of bug is back.
 - To simulate a steady-state-then-PTT-drop scenario without spurious protection faults, drive plausible idle ADC voltages before running: `write pin RA0/RA1/RA2/RA3 0v` (SWR fwd/ref, both pairs), `write pin RA5 2.5v` (temp), `write pin RB1/RB2/RB3 0v` (current/overdrive/drain), `write pin RB4 low` (hw overcurrent fault, active-high). PTT (`RC0`) is active-low; hold `high` for idle/steady-state, then `low` to assert. Without explicit stimulus, floating ADC inputs read as very low/high and spam `W0222/W0223-ADC` over/underflow warnings (cosmetic) but can also cause `swr_trip()` etc. to behave unpredictably.
-- The simulator suite runs eleven scenarios in one MDB session and emits per-scenario CSVs and graphs under `_build/My_Pic_Project/sim/csv/` and `_build/My_Pic_Project/sim/graphs/`.
-- Run tests with `./run_tests.sh` or `ctest --test-dir _build/My_Pic_Project/sim --output-on-failure > /tmp/pac_ctest.log 2>&1` (see TESTING.md). A green run ends with `100% tests passed` and the suite line `PTT suite passed: 11 scenarios in one MDB session`; expect roughly 2-3 minutes.
-- CTest registers one merged test, `PTT_SequencerAndTripSuite`, which runs `tools/simulate/run_suite_with_watchdog.py --timeout 300` (own timeout, MDB process-group cleanup, progress logs). The suite is Python 3 only and configuration now fails if the discovered interpreter is not Python 3; `PYTHON_EXECUTABLE` is cached, so clear it with `-U PYTHON_EXECUTABLE` when reconfiguring an existing build directory.
+- The simulator suite runs eleven scenarios in one MDB session and emits per-scenario CSVs and graphs under `_build/My_Pic_Project/sim/csv/` and `_build/My_Pic_Project/sim/graphs/`. The first-dit proof is a separate session (`tools/simulate/test_first_dit.py`, `--csv` to dump its samples) and shares the band-selection invariant checks in `tools/simulate/first_dit_invariants.py` with the suite.
+- Injecting snoop RF only *before* PTT models a radio that is silent while transmitting. The tick resets TMR1 every 10 ms, so the injected measurement goes stale and the firmware correctly stays in bypass. Keep the band frequency injected for the whole keyed window (the suite does this for 40m now; see bugfixes.md 2026-09-21).
+- mdb cannot write a C variable by name in this version (`write g_x 1` fails with `For input string: "<addr> "`, and `print /a g_x` fails the same way). Fault injection into firmware state works via the address: read it from `out/My_Pic_Project/default.sym` (line format `_g_name <hexaddr> 0 BANKn <size>`, e.g. `_g_band_cache_idle_ms B4 0 BANK1 1`) and use `write /r 0x<addr> <lo> <hi>` for a 16-bit value (little-endian, one byte per word) or `write /r 0x<addr> <byte>` for a bool/enum. Addresses move on every rebuild, so parse the .sym at run time (test_first_dit.py does).
+- Run tests with `./run_tests.sh` or `ctest --test-dir _build/My_Pic_Project/debug --output-on-failure > /tmp/pac_ctest.log 2>&1` (see TESTING.md). A green run ends with `100% tests passed`; the suite prints `PTT suite passed: 11 scenarios in one MDB session` and the first-dit proof prints `FIRST-DIT PROOF PASSED: ...`. Both together take roughly 3 minutes.
+- CTest registers two tests (cmake/My_Pic_Project/default/user.cmake): `PTT_SequencerAndTripSuite` (labels `sim;suite`, ~2.5 min, runs `run_suite_with_watchdog.py --timeout 300`) and `FirstDit_BandDetectionAndHotSwitchGuards` (labels `sim;first-dit`, ~20 s, runs `tools/simulate/test_first_dit.py`). Select with `-R FirstDit`, `-R PTT_Sequencer`, or `-L sim`; never run the two concurrently (both own MDB, and the suite launcher kills stray MDB processes). The suite is Python 3 only and configuration now fails if the discovered interpreter is not Python 3; `PYTHON_EXECUTABLE` is cached, so clear it with `-U PYTHON_EXECUTABLE` when reconfiguring an existing build directory.
 
 ## References
 - Hardware source of truth: docs/hardware/PIC16F18875_pin_map.md
 - Architecture and safety behaviour: docs/project-architecture.md
-- Band-change detection (approved spec, not yet implemented): docs/first-dit-band-detection.md
+- Band-change detection (first-dit model, implemented): docs/first-dit-band-detection.md
 - Firmware entry point: firmware/src/main.c
 - Bug fixes log (update whenever a real bug is found): bugfixes.md
 
@@ -76,4 +88,4 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
 - As of v0.0.25 (commit 3a49285): program flash 54.2% free (4440/8192 words), data RAM 84.2% free (862/1024 bytes).
 
 ## Remaining work
-The open work is hardware validation: final sensor calibration, comparator thresholds and polarity, ADC transient protection, TX timing, fan implementation, LCD/menu/internal EEPROM persistence testing, final PCB review, and CI validation.
+The open work is hardware validation: final sensor calibration, comparator thresholds and polarity, ADC transient protection, TX timing, fan implementation, LCD/menu/internal EEPROM persistence testing, final PCB review, and CI validation. First-dit specifics to confirm on the bench: BAND_CACHE_IDLE_TIMEOUT_MS (60 s) against real band-change habits, and BAND_SETTLE_MS (20 ms) against the fitted LPF relay's operate time.

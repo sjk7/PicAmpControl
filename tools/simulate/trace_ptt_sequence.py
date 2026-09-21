@@ -27,6 +27,9 @@ import threading
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import first_dit_invariants as invariants  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 HEX_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.hex"
 # Loaded instead of the .hex so mdb can resolve C variable names (debug symbols).
@@ -38,8 +41,11 @@ STATE_VARS = [
     "g_startup_inhibit", "g_comparator_reset_active", "g_fault_latched", "g_trip_reason",
     "g_ptt_active", "g_sequence_stage", "g_state", "g_trip_shutdown_active",
     "g_ptt_complete_display_active", "g_transient_menu_display",
-    "g_fc_status.current_band", "g_fc_status.band_locked", "g_fc_status.frequency_khz"
+    "g_fc_status.current_band", "g_fc_status.band_locked", "g_fc_status.frequency_khz",
+    "g_snoop_active"
 ]
+# STATE_BYPASS_SNOOP in firmware/src/main.c (appended last so existing numbering is stable).
+STATE_BYPASS_SNOOP = 6
 TRIP_REASON_BITS = [
     (0x01, "SWR1"),
     (0x02, "SWR2"),
@@ -176,14 +182,19 @@ def build_script(trip_name=None) -> str:
         band_tests = BAND_TESTS if all_bands else [("40m", 7000, 3)]
         for band_name, freq_khz, expected_band in band_tests:
             lines.append(f"# BAND PREFLIGHT: {band_name} @ {freq_khz} kHz (expected {expected_band})")
-            for _ in range(4):
+            # 5 ms steps, not 10 ms: the firmware resets TMR1 on every 10 ms tick, and a 10 ms
+            # sample interval aliases with that tick. When it aliases badly *every* sample lands
+            # before the tick that consumes the injected count, so the reading is never observed
+            # and the assertion fails on a stimulus artefact rather than on firmware behaviour.
+            # At 5 ms every tick window contains at least one post-tick sample.
+            for _ in range(8):
                 write_tmr1_count(freq_khz)
-                lines.append("Stepi 80000")
+                lines.append("Stepi 40000")
                 sample()
         lines.append("# Restore 40m before scenario PTT stimulus")
-        for _ in range(4):
+        for _ in range(8):
             write_tmr1_count(7000)
-            lines.append("Stepi 80000")
+            lines.append("Stepi 40000")
             sample()
 
     if trip_name == "SWR1_1P5":
@@ -198,9 +209,9 @@ def build_script(trip_name=None) -> str:
         for band_name, freq_khz, expected_band in BAND_TESTS:
             injected_freq_khz = injected_frequency_for(freq_khz)
             lines.append(f"# TX BAND CHECK: {band_name} @ {freq_khz} kHz, inject {injected_freq_khz} kHz")
-            for _ in range(5):
+            for _ in range(10):
                 write_tmr1_count(freq_khz)
-                lines.append("Stepi 80000")
+                lines.append("Stepi 40000")
                 sample()
             lines.append("write pin RC0 0v")
             for _ in range(12):
@@ -211,9 +222,9 @@ def build_script(trip_name=None) -> str:
                 write_tmr1_count(freq_khz)
                 lines.append("Stepi 40000")
                 sample()
-            for _ in range(10):
+            for _ in range(20):
                 write_tmr1_count(injected_freq_khz)
-                lines.append("Stepi 80000")
+                lines.append("Stepi 40000")
                 sample()
             lines.append("write pin RC0 5v")
             for _ in range(30):
@@ -254,17 +265,25 @@ def build_script(trip_name=None) -> str:
         sample()
     band_preflight()
     # --- Assert PTT (pull RC0 low), triggering SETTLE high for 10 ms ---
+    # The radio transmits once PTT is asserted, so keep the 40m snoop signal present for the
+    # whole keyed window. Without this the injected measurement goes stale (the 10 ms tick
+    # resets TMR1, so the next tick reads zero counts) and the firmware correctly refuses to
+    # leave bypass: "RF present while receiving, silent while transmitting" is the opposite of
+    # a real transmission. See docs/first-dit-band-detection.md.
     lines.append("write pin RC0 0v")
     # Fine-grained steps to catch SETTLE high pulse (comparator reset)
     for _ in range(12):  # ~12 ms sampled every 1 ms
+        write_tmr1_count(7000)
         lines.append("Stepi 8000")
         sample()
     # Continue simulation for sequencer actions (TX, TX_VCC, etc), 200 ms more
     for _ in range(10 if temperature_trip else 40):
+        write_tmr1_count(7000)
         lines.append("Stepi 40000")
         sample()
     # Hold PTT low for 500 ms before releasing it.
     for _ in range(100):
+        write_tmr1_count(7000)
         lines.append("Stepi 40000")
         sample()
 
@@ -585,20 +604,34 @@ def validate_freq_ctr(samples, scenario_name="FREQ_CTR") -> None:
 
 
 def validate_freq_ctr_failure(samples) -> None:
+    """No decodable band must not key the amplifier (first-dit bypass snoop).
+
+    Under the old semantics PTT itself was refused; now PTT is latched and the amplifier is
+    held in bypass while the radio's first RF burst is snooped for. What must never happen
+    is active TX, because the amplifier would then be amplifying through an unverified
+    filter. See docs/first-dit-band-detection.md.
+    """
     # Prove the stimulus actually drove PTT, otherwise a failed pin write would make
     # the rest of this negative test pass vacuously.
     if not any(sample[1].get("RC0") == 0 for sample in samples):
-        raise AssertionError("PTT was never driven low, so rejection was not exercised")
+        raise AssertionError("PTT was never driven low, so bypass-snoop was not exercised")
     validate_band_outputs(samples, "FREQ_CTR_FAIL")
-    attempted_tx = [sample for sample in samples if sample[2].get("g_ptt_active") == "true"]
-    if attempted_tx:
-        raise AssertionError("PTT was not canceled when the frequency counter had no valid signal")
+    latched = [sample for sample in samples if sample[2].get("g_ptt_active") == "true"]
+    if not latched:
+        raise AssertionError("PTT was not latched when the frequency counter had no signal")
+    if any(sample[2].get("g_snoop_active") != "true" for sample in latched):
+        raise AssertionError("latched PTT did not hold the amplifier in bypass-snoop")
+    if any(sample[2].get("g_state") != str(STATE_BYPASS_SNOOP) for sample in latched):
+        raise AssertionError("bypass-snoop did not report STATE_BYPASS_SNOOP")
     if any(sample[2].get("g_sequence_stage") != "0" for sample in samples):
-        raise AssertionError("frequency-counter failure left the TX sequence active")
+        raise AssertionError("frequency-counter failure advanced the TX sequence")
     if any((sample[1]["RC5"], sample[1]["RC6"], sample[1]["RC7"]) != (1, 1, 1)
            for sample in samples):
         raise AssertionError("frequency-counter failure did not keep all TX outputs inactive")
-    print("FREQ_CTR failure passed: missing signal canceled PTT before TX")
+    if any(sample[2].get("g_fc_status.band_locked") == "true" for sample in samples):
+        raise AssertionError("the band was locked with no usable snoop measurement")
+    print(f"FREQ_CTR_FAIL passed: no decodable band, so {len(latched)} samples held latched "
+          "PTT in bypass-snoop with TX/TX_VCC/TX_BIAS inactive, stage 0 and the band unlocked")
 
 
 def validate_sequence(samples) -> None:
@@ -966,6 +999,15 @@ def main():
                 pass
             else:
                 validate_trip(scenario_samples, scenario)
+        # Band-selection safety invariants (docs/first-dit-band-detection.md) over every
+        # scenario: the LPF relays must never move while the amplifier is keyed, and the
+        # amplifier must never be keyed on a band that is not locked.
+        for scenario, (_, scenario_samples) in zip(scenario_names, groups):
+            label = scenario or "PTT_BASE"
+            for line in invariants.validate_keyed_band_invariants(scenario_samples, label):
+                print(line)
+            for line in invariants.validate_band_changes_are_cold(scenario_samples, label):
+                print(line)
         out_dir = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"
         csv_dir = out_dir / "csv"
         graph_dir = out_dir / "graphs"

@@ -1,11 +1,16 @@
 # Testing Guide
 
-Firmware behaviour is verified in the MPLAB X `mdb` simulator. CTest drives
-[`tools/simulate/trace_ptt_sequence.py`](tools/simulate/trace_ptt_sequence.py) against the
-built ELF, single-steps the firmware, samples pin state and firmware variables, and asserts
-the sequencing, band-locking, and fault-protection behaviour.
+Firmware behaviour is verified in the MPLAB X `mdb` simulator. CTest drives two Python
+harnesses against the built ELF, single-steps the firmware, samples pin state and firmware
+variables, and asserts the sequencing, band-detection, band-locking, and fault-protection
+behaviour:
 
-A full run takes roughly 2-3 minutes.
+- [`tools/simulate/trace_ptt_sequence.py`](tools/simulate/trace_ptt_sequence.py) — the merged
+  PTT/trip/band suite (eleven scenarios in one MDB session)
+- [`tools/simulate/test_first_dit.py`](tools/simulate/test_first_dit.py) — the first-dit
+  band-detection proof, in its own MDB session
+
+A full run takes roughly 3 minutes.
 
 ## Prerequisites
 
@@ -63,14 +68,34 @@ line, so always send CTest output to a log file and read the verdict from there.
 | `_build/My_Pic_Project/sim/csv/` | Per-scenario CSV sample dumps |
 | `_build/My_Pic_Project/sim/graphs/` | Per-scenario logic-analyzer PNG traces |
 
-A successful run ends with `100% tests passed`, `CTEST_EXIT=0`, and the suite log line
-`PTT suite passed: 11 scenarios in one MDB session`.
+A successful run ends with `100% tests passed` and `CTEST_EXIT=0`; the suite log line
+`PTT suite passed: 11 scenarios in one MDB session` and the first-dit proof line
+`FIRST-DIT PROOF PASSED: ...` confirm that each harness ran to completion.
 
 ## Test suite
 
-CTest registers one merged test, `PTT_SequencerAndTripSuite`, in
-[`cmake/My_Pic_Project/default/user.cmake`](cmake/My_Pic_Project/default/user.cmake). Its
-command is:
+CTest registers two tests in [`cmake/My_Pic_Project/default/user.cmake`](cmake/My_Pic_Project/default/user.cmake):
+
+| Test | Command | Labels | Time |
+|---|---|---|---|
+| `PTT_SequencerAndTripSuite` | `run_suite_with_watchdog.py --timeout 300` | `sim`, `suite` | ~2-2.5 min |
+| `FirstDit_BandDetectionAndHotSwitchGuards` | `test_first_dit.py` | `sim`, `first-dit` | ~20 s |
+
+Run everything, or select one test at a time, from the build directory:
+
+```bash
+ctest --test-dir _build/My_Pic_Project/debug --output-on-failure     # both tests
+ctest --test-dir _build/My_Pic_Project/debug -R FirstDit             # first-dit only
+ctest --test-dir _build/My_Pic_Project/debug -R PTT_Sequencer        # merged suite only
+ctest --test-dir _build/My_Pic_Project/debug -L sim                  # everything labelled sim
+ctest --test-dir _build/My_Pic_Project/debug -N                      # list without running
+```
+
+Redirect to a log file as in the examples above when you need the pass/fail line to survive.
+
+### Merged suite
+
+The suite's command is:
 
 ```text
 python3 tools/simulate/run_suite_with_watchdog.py --timeout 300
@@ -83,7 +108,7 @@ single-stepping rather than per-scenario overhead.
 
 | # | Scenario | Expected behaviour |
 |---|---|---|
-| 1 | Baseline PTT cycle | Startup inhibit, then TX → TX_VCC → TX_BIAS in order with the configured delays, then the ordered release |
+| 1 | Baseline PTT cycle | Startup inhibit, then the first-dit bypass-snoop decode of the 40 m signal, then TX → TX_VCC → TX_BIAS in order with the configured delays, then the ordered release |
 | 2 | `TEMPERATURE` | Thermal fault during transmit trips and latches |
 | 3 | `SWR1` | Pre-filter SWR fault trips |
 | 4 | `SWR2` | Post-filter SWR fault trips |
@@ -92,12 +117,17 @@ single-stepping rather than per-scenario overhead.
 | 7 | `OVERDRIVE` | Overdrive trip |
 | 8 | `DRAIN` | Drain-peak trip |
 | 9 | `SWR1_1P5` | SWR1 at 1.5:1 and 2 kW must **not** trip |
-| 10 | `FREQ_CTR` | Frequency counter classifies all six nominal bands in RX and keeps each band locked through TX injection |
-| 11 | `FREQ_CTR_FAIL` | Negative test: a missing Timer1 signal cancels PTT before TX, with no active TX stage and inactive TX outputs |
+| 10 | `FREQ_CTR` | Frequency counter classifies all six nominal bands in RX and keeps each band locked through TX injection. Each band is engaged from its own live measurement, which wins over the remembered band (see the design doc) |
+| 11 | `FREQ_CTR_FAIL` | Negative test: with no Timer1 signal, PTT is latched but held in bypass-snoop — no band is locked, no TX stage advances, and every TX output stays inactive |
 
 Each scenario also validates output pin sequencing, fault latching and re-arm behaviour, LCD
 status state, and startup-inhibit timing. `FREQ_CTR_FAIL` is intentionally a negative test —
 it must never be "fixed" into a passing trip.
+
+Every scenario additionally has the band-selection safety invariants checked on its samples
+(relay selection frozen while keyed, never keyed with an unlocked band, and every relay move
+observed with the amplifier cold). The checks live in
+[`tools/simulate/first_dit_invariants.py`](tools/simulate/first_dit_invariants.py).
 
 ### What the band/frequency-counter test does and does not cover
 
@@ -105,6 +135,11 @@ The band scenarios inject Timer1 counts by writing `TMR1H`/`TMR1L` directly, usi
 inverse of the firmware's own scaling (`counts = kHz x 1000 / 400`). This is deliberate: the
 MPLAB X simulator does not implement Timer1's external clock, so T1CKI edges never increment
 TMR1 no matter how the pin is driven.
+
+The band under test is injected for the **whole keyed window**, not just before PTT, because
+the firmware resets TMR1 on every 10 ms tick: a measurement taken only in RX goes stale at the
+assert, which is the opposite of a real transmission and (correctly, under the first-dit model)
+leaves the amplifier in bypass.
 
 Verified 2026-09-21 by driving RD1 with an SCL stimulus (`stim <file>.scl`) as fast as the
 simulator can represent: `print pin RD1` reported `HIGH`/`Din` (the pin really was driven) and
@@ -123,7 +158,8 @@ Covered by the injected-count tests:
 - the band-select outputs themselves — RD2-RD7 are sampled and must match `current_band`,
   so a regression in `update_band_outputs()` fails the test
 - band lock during TX (with a *different* band's frequency injected) and unlock on return to RX/idle
-- the no-signal rejection path, including a check that PTT really was asserted
+- the no-band path, including a check that PTT really was asserted: PTT must latch, the
+  amplifier must stay in bypass-snoop, and no band may be locked
 
 Not covered, and not coverable in simulation:
 
@@ -133,6 +169,36 @@ Not covered, and not coverable in simulation:
   single 16-bit TMR1 write, so the 10m case uses 25000 kHz (inside the classifier's wider window)
 
 Bench validation with a real signal generator is required for those.
+
+## First-dit band detection
+
+[`tools/simulate/test_first_dit.py`](tools/simulate/test_first_dit.py) proves the first-dit
+model described in [`docs/first-dit-band-detection.md`](docs/first-dit-band-detection.md). It
+runs its own MDB session and covers, in one transcript:
+
+1. PTT with no RF at all: PTT latches, the amplifier stays in bypass, no band is locked.
+2. The first RF burst (20 m): decoded while bypassed, the relay selection moves cold, the band
+   is cached, the amplifier is keyed only after the relay settle window.
+3. A second PTT on the remembered band engages with **no RF injected anywhere in that window**,
+   which is what proves the cache — not a fresh snoop — drove the engagement.
+4. The cache idle counter advances, and crossing `BAND_CACHE_IDLE_TIMEOUT_MS` drops the cache so
+   the next PTT snoops again.
+5. A band change to 40 m is re-detected on the next first burst.
+6. Hot-switch fault injection: the cached band is deliberately overwritten with a different band
+   and the amplifier is re-keyed during the release ramp (while `TX_VCC`/`TX_BIAS` are still
+   asserted). The relays must move only after the firmware forces bypass.
+
+Every sample of the session is checked against invariants I1-I5 (see the design doc), and the
+three defects in that doc's table were re-introduced to confirm the test fails on each of them
+rather than passing vacuously.
+
+The test drives two firmware globals directly (`write /r <address> <bytes>`), because this mdb
+build cannot write a C variable by name — it fails with `For input string: "<addr> "`. The
+addresses are read from `out/My_Pic_Project/default.sym` at run time, so they follow rebuilds.
+
+Because simulating the full 60 s timeout would need ~480M instructions, clause 4 proves the
+counter really advances (~1 ms/ms) and then injects an idle count just below the threshold, so
+the expiry comparison itself still runs in the firmware.
 
 ## Individual scenario tests
 

@@ -29,6 +29,18 @@ set(PICAMP_SUITE_LAUNCHER "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/run
 add_test(
     NAME PTT_SequencerAndTripSuite
     COMMAND "${PYTHON_EXECUTABLE}" "${PICAMP_SUITE_LAUNCHER}" --timeout 300)
+set_tests_properties(PTT_SequencerAndTripSuite PROPERTIES LABELS "sim;suite")
+
+# The first-dit band-detection proof runs as its own MDB session. Its stimulus (band snoop,
+# warm re-key from the remembered band, cache expiry, and a hot-switch fault injection) is
+# long enough that folding it into the merged suite would roughly double that suite's
+# runtime, so it stays a separate test. See tools/simulate/test_first_dit.py.
+add_test(
+    NAME FirstDit_BandDetectionAndHotSwitchGuards
+    COMMAND "${PYTHON_EXECUTABLE}"
+            "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/test_first_dit.py")
+set_tests_properties(FirstDit_BandDetectionAndHotSwitchGuards
+    PROPERTIES LABELS "sim;first-dit")
 option(PICAMP_ENABLE_INDIVIDUAL_SIM_TESTS "Register each simulator scenario separately" OFF)
 if (PICAMP_ENABLE_INDIVIDUAL_SIM_TESTS)
     add_test(

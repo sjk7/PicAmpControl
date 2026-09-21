@@ -7,6 +7,8 @@ description: "Use when building or testing PicAmpControl firmware: Debug or Rele
 
 Use this skill for firmware builds and simulator verification. Do not claim success from a missing or truncated terminal response; require a fresh exit code and final output.
 
+Always use the **file-based pattern**: redirect every test command's output to a log file, append the exit code, and read the verdict from that file. MDB emits megabytes of trace, and the terminal scrollback and output capture regularly lose the pass/fail line (a command can even come back with no captured output while the run is still going). Never conclude anything from an empty terminal response - check the log and the exit-code line.
+
 Always clean up an earlier run before starting another. The MDB suite can outlive a terminal wrapper if the wrapper is interrupted, and a stale Java/MDB process can make the next run appear hung.
 
 ## Repository facts
@@ -17,7 +19,11 @@ Always clean up an earlier run before starting another. The MDB suite can outliv
 - Firmware ELF used by MDB: `out/My_Pic_Project/default.elf`
 - Merged simulator suite: `tools/simulate/trace_ptt_sequence.py --suite`
 - Cleanup-aware suite launcher: `tools/simulate/run_suite_with_watchdog.py`
+- First-dit band-detection proof (own MDB session): `tools/simulate/test_first_dit.py`
+- Shared band-selection invariants: `tools/simulate/first_dit_invariants.py`
 - CTest registration: `cmake/My_Pic_Project/default/user.cmake`
+- CTest tests: `PTT_SequencerAndTripSuite` (labels `sim;suite`) and
+  `FirstDit_BandDetectionAndHotSwitchGuards` (labels `sim;first-dit`)
 - The standalone `test_freq_counter.py` is not the authoritative suite; frequency and band checks are merged into the PTT suite.
 
 ## Toolchain setup
@@ -112,7 +118,15 @@ The suite must cover:
 - all six nominal bands in RX preflight
 - TX lock behavior for every band
 - normal PTT/trip scenarios
-- `FREQ_CTR_FAIL`, where no Timer1 signal must cancel PTT before TX
+- `FREQ_CTR_FAIL`, where no Timer1 signal must hold PTT latched in bypass-snoop with every TX
+  output inactive and no band locked (first-dit model, not a refusal)
+- the band-selection safety invariants over every scenario (relay selection frozen while keyed,
+  never keyed with an unlocked band, every relay move seen with the amplifier cold)
+
+`test_first_dit.py` additionally covers the first-dit clauses end to end (bypass with no band,
+first-burst decode, instant warm re-key with no RF injected, cache expiry, band re-detection,
+and a hot-switch fault injection). Both harnesses share `first_dit_invariants.py`, and the
+defects that test is proven to catch are listed in `docs/first-dit-band-detection.md`.
 
 For a bounded run:
 
@@ -138,6 +152,18 @@ and state dump; printing it to the terminal overflows the scrollback and loses t
 ctest --test-dir _build/My_Pic_Project/debug --output-on-failure > /tmp/pac_ctest.log 2>&1
 echo "CTEST_EXIT=$?" >> /tmp/pac_ctest.log
 ```
+
+Both tests run by default (~3 min together). Run one at a time when iterating - the first-dit
+proof is ~20 s against the suite's ~2.5 min:
+
+```sh
+ctest --test-dir _build/My_Pic_Project/debug -R FirstDit
+ctest --test-dir _build/My_Pic_Project/debug -R PTT_Sequencer
+ctest --test-dir _build/My_Pic_Project/debug -L sim
+```
+
+Neither test may run concurrently with the other: each owns MDB, and the suite launcher kills
+stray MDB processes at startup.
 
 Run that detached (or let it finish) and read the verdict from `/tmp/pac_ctest.log`. Do not
 re-run another suite while one is active, and do not reuse a terminal that still has a prior

@@ -753,17 +753,23 @@ void handle_ptt_transition(bool ptt_asserted) {
             clear_fault_latches();
             g_state = STATE_OPERATE;
         }
-        if (g_band_cache_valid) {
-            /* First-dit: a band was decoded from an earlier transmission and the
-               operator has not been idle long enough to have plausibly changed bands,
-               so the LPF relays are set to the remembered band and TX engages
-               immediately - no snoop wait. */
-            freq_counter_restore_locked_band(g_band_cache_band);
+        if (freq_counter_band_confirmed()) {
+            /* The counter has already confirmed a band from live RF. That is fresher evidence
+               than the remembered band, so it wins: the operator may have changed bands and be
+               transmitting on the new one right now. Remember it and engage on it. */
+            freq_counter_status_t status;
+            freq_counter_get_status(&status);
+            g_band_cache_band = status.current_band;
+            g_band_cache_valid = true;
+            g_band_cache_idle_ms = 0;
             g_snoop_active = false;
             return;
         }
-        if (freq_counter_signal_valid()) {
-            /* Live snoop RF is already usable, so this is a normal engage. */
+        if (g_band_cache_valid) {
+            /* First-dit: there is no usable live measurement yet (the radio has only just
+               been keyed), so use the band decoded from the previous transmission and engage
+               immediately. The relay selection settles while the amplifier stays in bypass. */
+            freq_counter_restore_locked_band(g_band_cache_band);
             g_snoop_active = false;
             return;
         }

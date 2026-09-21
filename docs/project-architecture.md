@@ -85,6 +85,7 @@ Recommended states:
 - STANDBY
 - IDLE
 - OPERATE
+- BYPASS_SNOOP (first-dit: PTT latched, amplifier held in bypass until a band is decoded)
 - TRIP
 - FAULT_LATCHED
 - RESET_WAIT
@@ -100,6 +101,7 @@ Rules:
 - on the PTT falling edge, the PIC must issue the 10 ms comparator reset pulse before it can clear software-latched fault state
 - a live comparator fault must not be bypassed by entering PTT
 - if a hardware condition is still outside limits, the amplifier must remain disabled
+- when no band is known, PTT is still latched, but the amplifier stays in bypass until the first RF burst decodes the band (see [First-Dit band detection](first-dit-band-detection.md)); the controller never keys the amplifier on an unverified band
 - the startup power-up interval should keep the amplifier off for about 0.5 to 1.0 seconds after applying power
 - On the PTT falling edge, OUTPUT_COMP_RESET produces a 10 ms active-low pulse to clear the overcurrent comparator latch. INPUT_OVERCURRENT_FAULT must then be clear before the controller re-arms software latches or begins sequencing.
 
@@ -110,10 +112,12 @@ The band is determined from the RF snoop signal counted by Timer1 (T1CKI via PPS
 Band lockout protects the transmit path:
 
 - on a valid PTT request with a usable snoop measurement, the band is locked and the LPF relay selection is frozen for the whole TX cycle
-- the lock is released when the amplifier returns to RX/idle, letting the relays follow the next snoop
-- if the snoop signal is missing or not usable for sequencing, the current release cancels PTT before TX starts: the TX outputs are forced inactive and the band is unlocked. When no band is remembered, the controller refuses to key the amplifier rather than transmit through an unverified filter
+- the lock is released when the amplifier returns to RX/idle, and only once every TX output is inactive, letting the relays follow the next snoop
+- if no band has been decoded, PTT is latched and the amplifier is held in bypass while the operator's first RF burst is snooped for: the first dit / first syllable passes straight to the antenna, the counter decodes the band, and only then does the amplifier key on that band
+- the decoded band is remembered, so the next PTT on the same band engages instantly without a fresh snoop; the memory is dropped after a period of inactivity, because the operator may have changed bands
+- after the relays are commanded for a newly decoded band, the amplifier stays in bypass until the relay contacts have settled, so it is never keyed into a relay that is still moving
 
-The approved replacement for that cancel-and-refuse rule is the [First-Dit band detection](first-dit-band-detection.md) model: PTT is latched, the amplifier stays in bypass, the first RF burst is measured in bypass, the band is remembered, and subsequent transmissions on that band engage active TX immediately. It is specified but not implemented yet.
+Bypass is always safe: the RF path is straight through to the antenna with the LDMOS bias off. The amplifier is never keyed on an unverified band, and the relay selection never moves while it is keyed. The full model, its invariants and its test evidence are in [First-Dit band detection](first-dit-band-detection.md).
 
 The firmware interface is `freq_counter_lock_band()`, `freq_counter_unlock_band()`, and `freq_counter_signal_valid()` in [firmware/include/freq_counter.h](../firmware/include/freq_counter.h). The flow is diagrammed in [docs/hardware/project_schematic_package/block_diagram.md](hardware/project_schematic_package/block_diagram.md).
 

@@ -9,9 +9,8 @@ Background leakage from a transceiver can be too low to resolve into a clean squ
 the snoop input, so instead of relying on continuous background RF the firmware treats the
 first transmission after an idle period as a dedicated measurement cycle.
 
-**Status:** approved specification. The firmware change is not implemented yet; the current
-release still refuses PTT when the snoop signal is unusable
-(see [Band selection and lockout](project-architecture.md#band-selection-and-lockout)).
+**Status:** implemented (2026-09-21). See [Implementation](#implementation) for the code and
+[Test coverage](#test-coverage) for the proof.
 
 ## How it works
 
@@ -38,67 +37,135 @@ have changed bands.
 4. It reverts to bypass-snoop only after a **long period of inactivity**, because the operator
    may have changed bands in the meantime.
 
-## Safety invariant
+## Safety invariants
 
-The amplifier must **never amplify on an unverified band**. Bypass is always safe; `OUTPUT_TX`,
-`OUTPUT_TX_VCC`, and `OUTPUT_TX_BIAS` stay inactive until the band has been decoded and the LPF
-relays match it.
+The amplifier must **never amplify on an unverified band**, and the LPF relay selection must
+**never move while the amplifier is keyed**. Bypass is always safe: the RF path is straight
+through to the antenna and no LDMOS bias is applied.
 
-## Intended implementation design
+These are enforced by construction in the firmware and checked independently by the tests:
+
+| # | Invariant |
+|---|---|
+| I1 | The relay selection never changes between two consecutive keyed samples |
+| I2 | The amplifier is only ever keyed while the band is locked |
+| I3 | The amplifier is never keyed while bypass-snooping |
+| I4 | The relay selection always agrees with the firmware's `current_band` |
+| I5 | Every observed relay-selection change is seen with the amplifier cold |
+
+Firmware mechanisms behind them:
+
+- `apply_bypass()` — every path that is about to let the band selection change (restoring a
+  remembered band, entering bypass-snoop, a PTT re-assert, the comparator-reset window)
+  forces all TX outputs inactive first.
+- `release_band_if_cold()` — the band is only allowed to follow live RF once every TX output is
+  inactive, so a released band can never let the relays move under a keyed amplifier.
+- the band is locked in the same tick that TX is first enabled, and stays locked for the whole
+  TX cycle including the ordered release.
+
+## Implementation
 
 ### State and flags
 
-- new `STATE_BYPASS_SNOOP` member of `system_state_t` (`firmware/src/main.c`)
-- `g_band_cache_valid` — a remembered band is usable
-- `g_band_cache_band` (`rf_band_t`) — the remembered band
-- `g_snoop_active` — authoritative snoop indicator (see note below)
-- `g_band_cache_idle_ms` — time since the last PTT assert
-- `BAND_CACHE_IDLE_TIMEOUT_MS` — inactivity timeout before the cache is dropped
-  (60 s is a first guess and must be confirmed on the bench)
+- `STATE_BYPASS_SNOOP` in `system_state_t` (`firmware/src/main.c`), appended last so the
+  existing state numbering stays stable
+- `g_band_cache_valid`, `g_band_cache_band`, `g_snoop_active`, `g_band_cache_idle_ms`
+- `g_band_settle_active`, `g_band_settle_elapsed_ms`
+- `BAND_CACHE_IDLE_TIMEOUT_MS` (60 s) and `BAND_SETTLE_MS` (20 ms)
 
-`update_protection_state()` ends by setting `g_state = STATE_OPERATE`, so the **flag**
-`g_snoop_active` — not `g_state` — is the authoritative snoop indicator; `STATE_BYPASS_SNOOP` is
-re-asserted each tick while snooping.
+`update_protection_state()` re-derives `g_state` every pass, so the **flag** `g_snoop_active`
+is the authoritative snoop indicator, not the enumerated state.
 
 ### PTT assert (`handle_ptt_transition(ptt_asserted = true)`)
 
-- cache valid → restore and lock the remembered band, clear `g_snoop_active`, set
-  `g_ptt_active` → normal instant engage.
-- cache invalid but `freq_counter_signal_valid()` → normal engage (band already decoded).
-- otherwise → `g_ptt_active = true`, `g_snoop_active = true`, stage 0, all TX outputs inactive,
-  `freq_counter_unlock_band()`, `g_state = STATE_BYPASS_SNOOP`. **The band is not locked.**
+1. Latch PTT, reset the idle counter, and force bypass.
+2. Live RF already confirmed a band → that measurement wins over the remembered band (it is
+   fresher evidence: the operator may have changed bands and be transmitting on the new one
+   right now). Remember it and engage normally.
+3. Otherwise, a remembered band exists → restore and lock it; the relay selection settles while
+   the amplifier stays in bypass, then the normal engage sequence runs.
+4. Otherwise → `g_snoop_active = true`, stage 0, all TX outputs inactive,
+   `freq_counter_unlock_band()`, `g_state = STATE_BYPASS_SNOOP`. **The band is not locked**, so
+   the relay selection stays live and the first burst can be classified.
 
-### Snooping (`update_tx_sequence()` while `g_snoop_active`)
+Priority matters: the cache is a *fallback for silence* (the radio has only just been keyed),
+never an override of a live, confirmed measurement.
 
-- `freq_counter_signal_valid()` → store the band in the cache, lock the band, clear
-  `g_snoop_active`, and fall through to the normal engage sequence.
-- not yet valid → keep every TX output inactive and return.
+### Decoding the first burst (`update_tx_sequence()` while `g_snoop_active`)
+
+- Not yet confirmed → keep every TX output inactive and return.
+- Confirmed → cache the band, lock it, clear `g_snoop_active`, and hold bypass for
+  `BAND_SETTLE_MS` so the amplifier is never keyed into a relay that is still moving. The
+  normal engage sequence then starts on the decoded band.
+
+The confirmation test is `freq_counter_band_confirmed()`, **not** `freq_counter_signal_valid()`:
+after silence the 10 ms tick has already classified an empty gate window as 160 m, and that
+stale band must never be cached or locked.
 
 ### Cache lifetime
 
 - the idle counter resets on each PTT assert
 - the cache expires after `BAND_CACHE_IDLE_TIMEOUT_MS` with no PTT
-- `apply_startup_inhibit()` invalidates the cache
+- `apply_startup_inhibit()` invalidates the cache, so power-up always requires a fresh first dit
 
 ### Frequency-counter API
 
-`freq_counter_lock_band()` only freezes whatever `current_band` already holds, so restoring a
-remembered band needs a new entry point — `freq_counter_restore_locked_band(rf_band_t)` in
-[firmware/include/freq_counter.h](../firmware/include/freq_counter.h) and
-[firmware/src/freq_counter.c](../firmware/src/freq_counter.c) — which sets `current_band`,
-`locked_band`, and `candidate_band` and calls `update_band_outputs()`.
+`freq_counter_lock_band()` only freezes whatever `current_band` already holds, so two entry
+points were added in [firmware/include/freq_counter.h](../firmware/include/freq_counter.h):
+
+- `freq_counter_restore_locked_band(rf_band_t)` — sets `current_band`, `candidate_band` and
+  `locked_band`, locks, and drives the band-select outputs, for the remembered band
+- `freq_counter_band_confirmed(void)` — true only when the stabilised `current_band` agrees with
+  the latest measurement
 
 These are internal firmware interfaces; the external pin contract is unchanged
 (see [docs/hardware/PIC16F18875_pin_map.md](hardware/PIC16F18875_pin_map.md)).
 
 ## Test coverage
 
-The band-cache/branch behaviour is testable in simulation; the Timer1 external-clock path is
-not. See [TESTING.md](../TESTING.md) for what the counter test can and cannot cover.
+Two CTest tests cover this model:
+
+- `FirstDit_BandDetectionAndHotSwitchGuards` —
+  [tools/simulate/test_first_dit.py](../tools/simulate/test_first_dit.py), its own MDB session
+  (~18 s). Proves each item of [Required behaviour](#required-behaviour) in order: bypass with no
+  band, decode of the first burst and engagement on the decoded band, an instant warm re-key with
+  **no RF injected at all**, cache expiry after the inactivity timeout, re-detection of a band
+  change, and a hot-switch fault injection that re-keys during the release ramp with a
+  deliberately wrong cached band.
+- `PTT_SequencerAndTripSuite` — enforces invariants I1-I5 over **every** scenario in the merged
+  suite by post-processing the samples it already takes.
+
+The invariant checks live in one module,
+[tools/simulate/first_dit_invariants.py](../tools/simulate/first_dit_invariants.py), used by both.
+
+They were verified to fail on real regressions rather than merely passing: re-introducing each
+of these defects makes the first-dit test fail with the message shown.
+
+| Re-introduced defect | Failure |
+|---|---|
+| Band not locked before keying | `I2: amplifier keyed with the band unlocked` |
+| No `BAND_SETTLE_MS` after decoding | `clause (b): only 1.0ms of bypass between the relay selection and keying` |
+| Releasing PTT during sequencer stage 2 | `clause (c): the stage-2 release left a TX output asserted` |
+
+Two limits are worth stating:
+
+- **Sample granularity.** A sample only shows one instant, so a relay move and a keying inside
+  one sample interval cannot be separated. The decode path therefore holds `BAND_SETTLE_MS` of
+  bypass and the harness samples those transitions at 1-5 ms, which is finer than that window.
+- **The Timer1 external clock is not modelled**, so the first burst is injected by writing
+  `TMR1H`/`TMR1L`. The T1CKI pin, PPS routing and prescaler are not covered — see
+  [TESTING.md](../TESTING.md).
 
 ## Open questions
 
-- `BAND_CACHE_IDLE_TIMEOUT_MS` value (60 s assumed) — confirm on the bench against typical
-  operator band-change habits.
+- `BAND_CACHE_IDLE_TIMEOUT_MS` (60 s) — confirm on the bench against typical operator
+  band-change habits.
+- `BAND_SETTLE_MS` (20 ms) — confirm against the fitted LPF relay's operate time.
+- If the operator changes bands and keys again within the timeout **and the counter has no live
+  measurement at that moment**, the first RF burst of that transmission is amplified through the
+  previous band's filter. That is the accepted trade-off for an instant engage (clause 3), and the
+  timeout is the mitigation. A live confirmed measurement always wins over the remembered band, so
+  the exposure is limited to the case where the counter genuinely has nothing to say. The
+  alternative, if the bench shows it matters, is to snoop every PTT and accept the bypass delay.
 - How the operator should be told the amplifier is in bypass-snoop on a `MENU_PAGE_STATUS`-style
   screen.

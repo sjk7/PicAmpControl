@@ -17,7 +17,7 @@ The project is in a working firmware-validation stage:
 ## Key documentation
 
 - Architecture overview: [docs/project-architecture.md](docs/project-architecture.md)
-- First-Dit band detection specification: [docs/first-dit-band-detection.md](docs/first-dit-band-detection.md)
+- First-dit band switching (bypass-snoop) model: [docs/first-dit-band-detection.md](docs/first-dit-band-detection.md)
 - Hardware pin map: [docs/hardware/PIC16F18875_pin_map.md](docs/hardware/PIC16F18875_pin_map.md)
 - Pull-up resistor guidance: [docs/hardware/pull-up-resistor-guidance.md](docs/hardware/pull-up-resistor-guidance.md)
 - ADC input protection guidance: [docs/hardware/adc-input-protection-guidance.md](docs/hardware/adc-input-protection-guidance.md)
@@ -52,6 +52,9 @@ The controller is intended to use a layered protection model:
 - PIC firmware state machine for monitoring and safe sequencing
 - 16x2 parallel LCD status output
 - PTT-based re-arm behavior without bypassing live hardware faults
+- first-dit band switching: the first RF burst after an idle period is measured in bypass, the
+  band is remembered, and later PTT drops on that band engage instantly (see
+  [docs/first-dit-band-detection.md](docs/first-dit-band-detection.md))
 - startup inhibit and fault-latch behavior for safe operation
 
 ## Hardware overview
@@ -106,8 +109,8 @@ flowchart LR
     POST --> POST_REF
     SNOOP --> FREQ
     FREQ --> BAND
-    BAND -->|signal valid| LOCK
-    BAND -->|no signal: PTT cancelled| STATE
+    BAND -->|band confirmed| LOCK
+    BAND -->|no band confirmed: keep bypass, snoop| STATE
     STATE --> BANDSEL
     LOCK -->|freezes relays during TX| BANDSEL
     BANDSEL["Band-select outputs\none pin per band"] --> DRIVER["LPF relay drivers"] --> FILTER

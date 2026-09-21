@@ -4,6 +4,50 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-21 — Releasing PTT during sequencer stage 2 left TX_VCC asserted and unlocked the band
+
+Found by the new first-dit proof (`tools/simulate/test_first_dit.py`) the first time it released
+PTT while the sequencer was in stage 2: TX and TX_VCC up, bias still ramping.
+
+`update_tx_sequence()` had a release branch for stage 3 (the normal path) plus a separate one for
+stage 2 that jumped straight to stage 5:
+
+```c
+} else if (g_sequence_stage == 2) {
+    set_tx_output(false);
+    g_sequence_elapsed_ms = 0;
+    g_sequence_stage = 5;
+}
+```
+
+Stage 5 only removes the bias, so a release in that window never turned TX_VCC off: the drain
+supply stayed asserted for the rest of the receive period, and stage 5's completion then unlocked
+the band, letting the LPF relays follow live RF with TX_VCC still on. An operator releasing PTT
+within ~20 ms of keying hits this, and the reachable window is exactly the `tx_bias_delay_ms`
+setting (20 ms by default).
+
+Fixed by unwinding stage 2 through the same ordered path as stage 3 (TX relay first, TX_VCC after
+the VCC delay, then TX_BIAS), and by adding `release_band_if_cold()`, which releases the band only
+once every TX output is confirmed inactive. The first-dit test asserts the release ends cold with
+the band released, and the defect was re-introduced to confirm the test fails on it:
+`clause (c): the stage-2 release left a TX output asserted`.
+
+## 2026-09-21 — Simulator suite modelled RF backwards: silent while transmitting, present while receiving
+
+`trace_ptt_sequence.py` injected the 40m Timer1 counts only in the pre-PTT preflight. Because the
+firmware resets TMR1 every 10 ms tick, the measurement went stale the moment the preflight ended,
+so `g_fc_status.frequency_khz` was already 0 when PTT was asserted.
+
+The old firmware hid this: its assert-time `freq_counter_signal_valid()` check happened to land on
+a tick that still held the injected value, and the scenario only passed because of that timing. It
+is also physically inverted — a real radio is silent while receiving and transmits once PTT is
+asserted — and under the first-dit model the stale measurement correctly leaves the amplifier in
+bypass-snoop, so the baseline scenario never reached TX.
+
+The harness now keeps the 40m snoop signal present for the whole keyed window. That models a real
+transmission, and it means the baseline scenario now exercises the first-dit decode-and-engage path
+instead of relying on pre-PTT RF leakage.
+
 ## 2026-09-21 — Band/frequency-counter tests were weaker than their labels; Timer1 external clock is not modelled
 
 Audited the band/frequency-counter tests in `tools/simulate/trace_ptt_sequence.py` against the
