@@ -115,6 +115,12 @@ typedef struct {
    before the firmware assumes the operator may have changed bands and reverts to
    bypass-snoop. 60 s is a starting guess - confirm on the bench. */
 #define BAND_CACHE_IDLE_TIMEOUT_MS 60000U
+/* After the first RF burst decodes the band the LPF relays have just been commanded.
+   The amplifier must not be keyed into a relay that is still moving, so the engage waits
+   for the contacts to settle. Bypass (RF straight through) is held for this window, so
+   the radio's first burst is unaffected. Confirm against the fitted relay's operate time
+   on the bench. */
+#define BAND_SETTLE_MS 20U
 
 static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
@@ -128,6 +134,8 @@ static volatile bool g_band_cache_valid = false;
 static volatile rf_band_t g_band_cache_band = BAND_UNKNOWN;
 static volatile bool g_snoop_active = false;
 static unsigned int g_band_cache_idle_ms = 0;
+static volatile bool g_band_settle_active = false;
+static unsigned int g_band_settle_elapsed_ms = 0;
 static volatile bool g_startup_inhibit = true;
 static volatile bool g_comparator_reset_active = false;
 static volatile unsigned char g_comparator_reset_elapsed_ms = 0;
@@ -265,6 +273,27 @@ void set_fan_output(bool active) {
 
 void set_trip_output(bool active) {
     OUTPUT_TRIP_STATUS = output_level(active, g_thresholds.trip_active_high);
+}
+
+/* Safety invariant for band selection: the LPF relays must never move while the
+   amplifier is keyed. Any code path that is about to let the relay selection change
+   (restoring a remembered band, entering bypass-snoop, or following live RF) must put
+   the amplifier in bypass first. Bypass is always safe: the RF path is straight
+   through to the antenna and no LDMOS bias is applied. */
+void apply_bypass(void) {
+    set_tx_output(false);
+    set_tx_vcc_output(false);
+    set_tx_bias_output(false);
+}
+
+/* The band may only go back to following live RF once the amplifier is cold, otherwise
+   the relays would move underneath a keyed amplifier. */
+void release_band_if_cold(void) {
+    if (OUTPUT_TX == output_level(false, g_thresholds.tx_active_high) &&
+        OUTPUT_TX_VCC == output_level(false, g_thresholds.tx_vcc_active_high) &&
+        OUTPUT_TX_BIAS == output_level(false, g_thresholds.tx_bias_active_high)) {
+        freq_counter_unlock_band();
+    }
 }
 
 void __interrupt() timer0_isr(void) {
@@ -664,9 +693,7 @@ void adc_init(void) {
 }
 
 void apply_startup_inhibit(void) {
-    set_tx_output(false);
-    set_tx_vcc_output(false);
-    set_tx_bias_output(false);
+    apply_bypass();
     set_fan_output(false);
     set_trip_output(false);
     OUTPUT_COMP_RESET = 0; // SETTLE held low for the startup-inhibit window
@@ -677,6 +704,8 @@ void apply_startup_inhibit(void) {
     g_band_cache_band = BAND_UNKNOWN;
     g_band_cache_idle_ms = 0;
     g_snoop_active = false;
+    g_band_settle_active = false;
+    g_band_settle_elapsed_ms = 0;
 }
 
 void clear_fault_latches(void) {
@@ -700,6 +729,13 @@ void handle_ptt_transition(bool ptt_asserted) {
         g_ptt_active = true;
         g_sequence_stage = 0;
         g_band_cache_idle_ms = 0;
+        g_band_settle_active = false;
+        g_band_settle_elapsed_ms = 0;
+        /* Never move the LPF relays while the amplifier is keyed: a PTT re-assert
+           during the release ramp can still have TX_VCC/TX_BIAS asserted, and both
+           branches below touch the band selection. Forcing bypass first means the
+           relay change (if any) always happens with the amplifier cold. */
+        apply_bypass();
         if (!g_transient_menu_display) {
             if (is_live_menu_page(g_menu_page)) {
                 g_saved_user_menu_page = g_menu_page;
@@ -735,15 +771,14 @@ void handle_ptt_transition(bool ptt_asserted) {
            (LDMOS bias off, RF path straight through) while the radio's first RF burst is
            measured. The band is deliberately NOT locked here - the relay selection stays
            live so the first burst can be classified. */
-        set_tx_output(false);
-        set_tx_vcc_output(false);
-        set_tx_bias_output(false);
+        apply_bypass();
         freq_counter_unlock_band();
         g_snoop_active = true;
         g_state = STATE_BYPASS_SNOOP;
     } else {
         g_ptt_active = false;
         g_snoop_active = false;
+        g_band_settle_active = false;
         g_state = STATE_STANDBY;
         if (g_ptt_complete_display_active) {
             g_ptt_complete_display_elapsed_ms = 0;
@@ -1088,11 +1123,9 @@ void update_current_peak(unsigned int current_a) {
 
 void update_tx_sequence(void) {
     if (g_startup_inhibit || g_comparator_reset_active) {
-        set_tx_output(false);
-        set_tx_vcc_output(false);
-        set_tx_bias_output(false);
+        apply_bypass();
         g_sequence_stage = 0;
-        freq_counter_unlock_band();
+        release_band_if_cold();
         return;
     }
     if (g_fault_latched) {
@@ -1108,9 +1141,9 @@ void update_tx_sequence(void) {
         freq_counter_status_t status;
 
         if (!freq_counter_band_confirmed()) {
-            set_tx_output(false);
-            set_tx_vcc_output(false);
-            set_tx_bias_output(false);
+            /* Still bypassed: the amplifier must not key on an unverified band, and the
+               relay selection is still free to follow the incoming RF. */
+            apply_bypass();
             g_sequence_stage = 0;
             g_state = STATE_BYPASS_SNOOP;
             return;
@@ -1121,7 +1154,22 @@ void update_tx_sequence(void) {
         g_band_cache_idle_ms = 0;
         freq_counter_lock_band();
         g_snoop_active = false;
-        /* Fall through: engage on the band the first RF burst just decoded. */
+        /* The band selection has just moved to the decoded band. Stay in bypass until the
+           relay contacts have settled, then engage on that band (see BAND_SETTLE_MS). */
+        g_band_settle_active = true;
+        g_band_settle_elapsed_ms = 0;
+    }
+
+    if (g_band_settle_active) {
+        /* Bypass (no bias, RF straight through) until the newly selected LPF relay has
+           settled, so the amplifier is never keyed into a relay that is still moving. */
+        apply_bypass();
+        g_sequence_stage = 0;
+        if (g_band_settle_elapsed_ms < BAND_SETTLE_MS) {
+            g_band_settle_elapsed_ms++;
+            return;
+        }
+        g_band_settle_active = false;
     }
 
     if (g_ptt_active) {
@@ -1155,7 +1203,11 @@ void update_tx_sequence(void) {
     }
 
     // PTT released: open relays first, then remove VCC and bias in order.
-    if (g_sequence_stage == 3) {
+    if (g_sequence_stage == 3 || g_sequence_stage == 2) {
+        /* Stage 2 is TX + TX_VCC already up with the bias still ramping. It must unwind
+           through the same ordered path as stage 3, otherwise releasing PTT in that
+           20 ms window would leave TX_VCC asserted (and, before release_band_if_cold(),
+           the band unlocked) for the rest of the receive period. */
         set_tx_output(false);
         g_sequence_elapsed_ms = 0;
         g_sequence_stage = 4;
@@ -1171,16 +1223,12 @@ void update_tx_sequence(void) {
         if (g_sequence_elapsed_ms >= g_thresholds.tx_bias_delay_ms) {
             set_tx_bias_output(false);
             g_sequence_stage = 0;
-            freq_counter_unlock_band();
+            release_band_if_cold();
         }
-    } else if (g_sequence_stage == 2) {
-        set_tx_output(false);
-        g_sequence_elapsed_ms = 0;
-        g_sequence_stage = 5;
     } else if (g_sequence_stage == 1) {
         set_tx_output(false);
         g_sequence_stage = 0;
-        freq_counter_unlock_band();
+        release_band_if_cold();
     }
 }
 
@@ -1253,9 +1301,7 @@ void update_protection_state(unsigned int temp_c,
 
     if (g_startup_inhibit) {
         g_state = STATE_RESET_WAIT;
-        set_tx_output(false);
-        set_tx_vcc_output(false);
-        set_tx_bias_output(false);
+        apply_bypass();
         return;
     }
 
@@ -1297,6 +1343,9 @@ void update_protection_state(unsigned int temp_c,
             g_sequence_stage = 0;
             g_state = STATE_RESET_WAIT;
             set_trip_output(false);
+            /* Recovery unlocks the band, so the relay selection becomes live again:
+               put the amplifier in bypass before that can happen. */
+            apply_bypass();
             start_comparator_reset();
             return;
         }
