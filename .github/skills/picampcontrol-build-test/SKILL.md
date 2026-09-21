@@ -1,11 +1,11 @@
 ---
 name: picampcontrol-build-test
-description: "Use when building or testing PicAmpControl firmware: Debug or Release builds, CMake configuration, ctest, run_tests.sh, simulator runs, PTT/frequency-counter tests, band-lock tests, first-dit band detection, remembered-band fold-back, band-change/hot-switch guards, or build/test failures."
+description: "Use when building, testing or debugging PicAmpControl firmware: Debug or Release builds, CMake configuration, ctest, run_tests.sh, simulator/mdb runs, the VS Code Simulate debug session, breakpoints and symbol reads, PTT/frequency-counter tests, band-lock tests, first-dit band detection, remembered-band fold-back, band-change/hot-switch guards, or build/test failures."
 ---
 
-# PicAmpControl Build and Test
+# PicAmpControl Build, Test and Debug
 
-Use this skill for firmware builds and simulator verification. Do not claim success from a missing or truncated terminal response; require a fresh exit code and final output.
+Use this skill for firmware builds, simulator verification and simulator debugging. Do not claim success from a missing or truncated terminal response; require a fresh exit code and final output.
 
 Always use the **file-based pattern**: redirect every test command's output to a log file, append the exit code, and read the verdict from that file. MDB emits megabytes of trace, and the terminal scrollback and output capture regularly lose the pass/fail line (a command can even come back with no captured output while the run is still going). Never conclude anything from an empty terminal response - check the log and the exit-code line.
 
@@ -28,6 +28,9 @@ Always clean up an earlier run before starting another. The MDB suite can outliv
 - Harness fault injection reads symbol addresses from `out/My_Pic_Project/default.sym` (regenerated every build).
 - Design reference for the first-dit model, the invariants, and the defects each test is proven to catch: `docs/first-dit-band-detection.md`.
 - Evidence log for defects found while testing: `bugfixes.md` (read it before "fixing" a suspicious harness assertion).
+- VS Code debug config: `.vscode/launch.json` → `Simulate PicAmpControl (Debug)` (`mplab-core-da`, tool `Simulator`, device `PIC16F18875`, program `out/My_Pic_Project/default.elf`).
+- Symbol table for breakpoints and harness state reads: `out/My_Pic_Project/default.sym`.
+- **The workspace build tasks in `.vscode/tasks.json` are Windows-only** — they hard-code `E:/hamcode/PicAmpControl/...`, so on this macOS checkout they fail immediately. Do not reach for `Build PicAmpControl (Debug/Release)` here; use the commands in this skill.
 
 ## Toolchain setup
 
@@ -219,6 +222,21 @@ ctest/suite command queued.
 Confirm that CTest discovers the merged `PTT_SequencerAndTripSuite` test
 (`ctest --test-dir _build/My_Pic_Project/debug -N`). Report zero discovered tests as a
 configuration failure, not success.
+
+## Debugging
+
+Two ways in, both against the simulator:
+
+**VS Code GUI session.** Launch `Simulate PicAmpControl (Debug)` from `.vscode/launch.json` (breakpoints, variables, watch, registers, no terminal). It needs `out/My_Pic_Project/default.elf` to exist, so build first - and see the shared-ELF trap above, because a Release build leaves an optimized binary there and the session then misbehaves. Pin and register names cannot be pre-seeded through a file; add `PORTA`/`PORTB`/`PORTC`, `LATA`/`LATB`/`LATC`, `TRISA`/`TRISB`/`TRISC` or bitfields like `PORTCbits.RC5` to the Watch panel by hand.
+
+**Headless `mdb`.** `tools/simulate/run_sim.sh [scenario.mdb]` builds, programs the simulator, and filters the benign `W0106-SIM` TMR1/3/5 warnings. Useful scripting commands: `break <function>` / `break <file>:<line>` with `Run`/`Continue`/`Halt`, `Stepi <count>` to single-step, `Stopwatch` for simulated elapsed time, `print pin <name>` to read an output and `write pin <name> high|low|<N>v` to drive an input. Scenario files must contain plain commands only - a `;` or `#` comment line aborts the rest of the script.
+
+Prerequisites that decide whether debugging works at all:
+
+- **Symbols come from the Debug build.** `user.cmake` compiles Debug with `-O1` and Release with `-Os` per configuration precisely so breakpoints and symbol reads resolve; a bare `-Os` overriding an `-O0` is a past bug that silently broke them, so if breakpoints on functions or statics stop resolving, read that file first.
+- **You cannot write a C variable by name.** `write g_x 1` fails with `For input string: "<addr> "`, and `print /a g_x` fails the same way. Inject state by address from `out/My_Pic_Project/default.sym`, using `write /r 0x<addr> <lo> <hi>` (little-endian, one byte per word). Addresses move on every rebuild, so parse the `.sym` at run time.
+- **The simulator is a debugger model, not silicon.** Timer1's external clock is not modelled and the suite injects `TMR1H`/`TMR1L` instead (see the triage section); exact timing still needs the bench. The simulator notes in `Ai-Notes.txt` are the reference for what the model does and does not implement.
+- If the CPU appears stuck at the interrupt vector with continuous `W0223-ADC` spam on every `Halt`, suspect the ADC-ISR starvation bug class recorded in `bugfixes.md` rather than a debugger fault.
 
 ## Failure triage
 
