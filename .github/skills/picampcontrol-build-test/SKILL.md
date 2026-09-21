@@ -1,6 +1,6 @@
 ---
 name: picampcontrol-build-test
-description: "Use when building or testing PicAmpControl firmware: Debug or Release builds, CMake configuration, ctest, run_tests.sh, simulator runs, PTT/frequency-counter tests, band-lock tests, or build/test failures."
+description: "Use when building or testing PicAmpControl firmware: Debug or Release builds, CMake configuration, ctest, run_tests.sh, simulator runs, PTT/frequency-counter tests, band-lock tests, first-dit band detection, remembered-band fold-back, band-change/hot-switch guards, or build/test failures."
 ---
 
 # PicAmpControl Build and Test
@@ -25,6 +25,9 @@ Always clean up an earlier run before starting another. The MDB suite can outliv
 - CTest tests: `PTT_SequencerAndTripSuite` (labels `sim;suite`) and
   `FirstDit_BandDetectionAndHotSwitchGuards` (labels `sim;first-dit`)
 - The standalone `test_freq_counter.py` is not the authoritative suite; frequency and band checks are merged into the PTT suite.
+- Harness fault injection reads symbol addresses from `out/My_Pic_Project/default.sym` (regenerated every build).
+- Design reference for the first-dit model, the invariants, and the defects each test is proven to catch: `docs/first-dit-band-detection.md`.
+- Evidence log for defects found while testing: `bugfixes.md` (read it before "fixing" a suspicious harness assertion).
 
 ## Toolchain setup
 
@@ -77,6 +80,15 @@ binary in place:
 rm -f out/My_Pic_Project/default.elf
 cmake --build _build/My_Pic_Project/debug -j4
 ```
+
+## Flash space
+
+Flash is the binding constraint on this project, and it is easy to trip from a test change:
+
+- Release (shipping) uses 6899/8192 words = 84.2% used as of 2026-09-21; Debug uses 8135/8192 = 99.3%.
+- Debug is deliberately compiled `-O1` (not `-Os`) so MDB can resolve symbols and breakpoints. That is why the build the simulator loads is far closer to the limit than the shipped build. Budget against the Release number.
+- A link error reporting that program space is exhausted reproduces in the Debug build first, long before Release breaks. Treat it as a signal that the test image needs `-O1` kept and the change needs to be smaller — not as a reason to switch Debug to `-Os`, which would silently break MDB symbol resolution. Read the exact figure from `memoryfile.xml` rather than guessing at the wording of the linker message.
+- Prefer table-driven logic over long if/else chains when adding firmware code, and ask before adding code.
 
 ## Simulator verification
 
@@ -131,13 +143,19 @@ The suite must cover:
 - normal PTT/trip scenarios
 - `FREQ_CTR_FAIL`, where no Timer1 signal must hold PTT latched in bypass-snoop with every TX
   output inactive and no band locked (first-dit model, not a refusal)
-- the band-selection safety invariants over every scenario (relay selection frozen while keyed,
-  never keyed with an unlocked band, every relay move seen with the amplifier cold)
+- the band-selection safety invariants over every scenario (`validate_keyed_band_invariants` and
+  `validate_band_changes_are_cold` in `tools/simulate/first_dit_invariants.py`): I1 no relay move
+  between consecutive keyed samples, I2 never keyed while the band is unlocked, I3 never keyed
+  while snooping, I4 the band-select output pins agree with `current_band`, I5 every relay move
+  seen with the amplifier cold
 
-`test_first_dit.py` additionally covers the first-dit clauses end to end (bypass with no band,
-first-burst decode, instant warm re-key with no RF injected, cache expiry, band re-detection,
-and a hot-switch fault injection). Both harnesses share `first_dit_invariants.py`, and the
-defects that test is proven to catch are listed in `docs/first-dit-band-detection.md`.
+`test_first_dit.py` additionally covers the first-dit clauses end to end in its own MDB session:
+clause (a) bypass with no band, (b) first-burst decode with bypass held for `BAND_SETTLE_MS`,
+(c) instant warm re-key with no RF injected, (d) cache expiry, (e) band re-detection, (f) a
+hot-switch fault injection, and (g) the remembered-band fold-back - engage on a remembered 160m,
+change to 80m, and assert the firmware forces bypass before releasing the band so the relay can
+follow the new frequency. Both harnesses share `first_dit_invariants.py`, and the defects that
+test is proven to catch are listed in `docs/first-dit-band-detection.md`.
 
 For a bounded run:
 
@@ -146,6 +164,24 @@ timeout 150 python3 -u tools/simulate/trace_ptt_sequence.py --suite
 ```
 
 Do not launch another suite while this launcher is running. If an old run exists, starting the launcher cleans it up through `/tmp/picampcontrol_suite.pid`. A terminal response with exit `130`, `142`, no output, or an empty log is not a pass; inspect the saved logs and process state.
+
+### Injecting stimuli and faults into the harness
+
+Two techniques matter when writing or repairing a scenario, both already implemented in
+`test_first_dit.py`:
+
+- **RF is injected by writing the counter, not by driving the pin.** Set `TMR1H`/`TMR1L` to
+  `counts = frequency_khz * 1000 / 400`. Because the firmware resets Timer1 on every 10 ms tick,
+  an injection made once before a long step reads as an empty gate window afterwards, and the
+  classifier reports its no-signal default of 160m. Re-inject before each short chunk inside a
+  long step (`inject_step_hold()`), sample at 5 ms rather than on 10 ms boundaries, and keep the
+  band frequency present for the whole keyed window when modelling a transmitting radio.
+- **Firmware state is injected by address, not by name.** MDB in this version cannot write a C
+  variable by symbol - `write g_x 1` fails with `For input string: "<addr> "`, and so does
+  `print /a g_x`. Read the address from `out/My_Pic_Project/default.sym` (lines look like
+  `_g_band_cache_idle_ms B4 0 BANK1 1`) and use `write /r 0x<addr> <lo> <hi>` for a 16-bit value
+  (little-endian, one byte per word) or a single byte for a bool/enum. Addresses move on every
+  rebuild, so parse the `.sym` at run time.
 
 ## CTest
 
@@ -187,7 +223,22 @@ configuration failure, not success.
 ## Failure triage
 
 - `Frequency counter failed to classify ...`: inspect the scenario name, `FREQ_DEBUG` lines, Timer1 writes, measured `frequency_khz`, `current_band`, `band_locked`, PTT state, and sequence stage.
-- `did not clear and re-enter TX after a PTT re-arm`: check that the re-arm stimulus writes a valid Timer1 count after the new frequency-validity gate; fault scenarios must not reassert PTT with frequency `0`.
+- `<band> TX lock failed while injecting <N> kHz`: check the injection timing before you touch the
+  firmware. This signature is usually a stimulus artefact of the 10 ms tick resetting Timer1 while
+  the harness sampled on 10 ms boundaries, so the sample always landed before the tick that
+  consumed the count. It is the classic "passed standalone, failed in the suite" case (a
+  standalone run can start at a favourable phase). Fix it with 5 ms sampling and
+  `inject_step_hold()`; the historical instance is logged in `bugfixes.md`.
+- A band assertion that "fails" only under `--quick-bands`: check whether the scenario is still
+  injecting a frequency that actually differs from the band under test. Injecting the same
+  frequency makes a lock-freeze assertion vacuous.
+- `did not clear and re-enter TX after a PTT re-arm`: the re-arm must keep a valid Timer1 count
+  present across the keyed window (see the injection notes above); a fault scenario must not
+  re-assert PTT with frequency `0`.
+- `I1:`/`I5:` or `clause (x):` failures naming a HOT SWITCH mean the invariant caught a real
+  firmware defect, not a test problem. Do not relax the invariant to get green - fix the ordering
+  so the amplifier is bypassed before the relay selection moves. `I2: amplifier keyed with the
+  band unlocked` and `I4:` (relay pins disagreeing with `current_band`) are the same class.
 - `FREQ_CTR_FAIL` must remain a negative test and must prove no active TX stage and inactive TX outputs.
 - Band/frequency-counter coverage is deliberately indirect. The MPLAB X simulator does not
   model Timer1's external clock (it warns `W0106-SIM: ... partial support for TMR1 ...
@@ -205,9 +256,10 @@ configuration failure, not success.
 
 Report:
 
-1. Debug and Release build exit status and important compiler/linker warnings.
+1. Debug and Release build exit status and important compiler/linker warnings, plus the program-memory figure when a build is near the limit.
 2. CTest test discovery and result.
 3. Merged suite exit status, elapsed time, and final pass/fail line.
 4. The first failing scenario and its diagnostic state, if any.
+5. Whether a fix that touched `firmware/` was pushed and whether the triggered `PIC firmware build` run for that commit succeeded (repo convention: commit and push verified-green work promptly, then confirm the triggered CI build rather than waiting for it before pushing).
 
-Never say all tests are green unless Debug/Release and the requested test command have fresh successful exit codes.
+Never say all tests are green unless Debug/Release and the requested test command have fresh successful exit codes, read from a log file rather than the terminal.
