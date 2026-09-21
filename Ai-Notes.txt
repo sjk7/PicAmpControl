@@ -13,11 +13,30 @@ CI/release workflows change - don't let it go stale.
 - docs/hardware/PIC16F18875_pin_map.md is the SINGLE source of truth for MCU pin assignments. Never restate pin numbers or pin tables in README, architecture, schematic-package, or checklist docs - link to it instead. Keep it in sync with firmware/include/pin_map.h. The same rule applies to nets (project_schematic_package/connection_table.csv) and the BOM (component_list.csv).
 - Any new "remember this" instruction from the user must be added to this section, not just kept in assistant memory.
 - `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their configured active levels (active-low by default); keep it transient, then restore the user's saved home page.
-- Keep verified changes committed and pushed promptly; generated simulator CSVs belong in `_build/My_Pic_Project/sim/csv/` and graphs in `_build/My_Pic_Project/sim/graphs/`.
+- Keep verified changes committed and pushed promptly; generated simulator CSVs belong in `_build/My_Pic_Project/sim/csv/` and graphs in `_build/My_Pic_Project/sim/graphs/`. Commit+push as soon as a step is verified green - the only valid reason to hold a commit is a verdict that is still running, and then you read that verdict from its log file and commit the moment it is green. Never commit TODO-Steve.md, and always pass explicit paths to `git add` (never `git add .`) so it cannot be picked up.
 - Do not let build/test output flood the terminal. Log it to a file and read the verdict from the file (e.g. `ctest ... > /tmp/pac_ctest.log 2>&1`). MDB emits megabytes of pin/state trace, which overflows the terminal scrollback and destroys the pass/fail line.
 
 ## Date
 2026-09-21
+
+## Session handoff (carry-over for a NEW session)
+- Last verified state: commit `1120028` "fix(firmware): verify the remembered band, never key without
+  an established band", pushed to origin/main, and the CI workflow `PIC firmware build` completed
+  **success** for that SHA. Nothing is uncommitted except TODO-Steve.md (which must stay uncommitted)
+  and the untracked scratch under `_build/`.
+- Verified by `ctest --test-dir _build/My_Pic_Project/debug --output-on-failure`, verdict read from
+  the log file: `100% tests passed out of 2` (PTT_SequencerAndTripSuite 151.9 s,
+  FirstDit_BandDetectionAndHotSwitchGuards 18.0 s), `CTEST_EXIT=0`.
+- The standing process rule that produced the most friction last session: never judge a test run
+  from terminal output. MDB emits megabytes of trace and a command that "returned no output" can
+  still have passed - always redirect to a log file, append `EXIT=$?`, and read the file.
+- Code landed this session: firmware/src/main.c (STATE_BYPASS_SNOOP, band cache, settle, verify,
+  g_band_established gate), firmware/src/freq_counter.c + include header (measured/confirmed/
+  restore_locked_band API, lock-independent stability tracker, dead helpers removed),
+  tools/simulate/test_first_dit.py (standalone proof, phases a-g), tools/simulate/
+  first_dit_invariants.py (shared I1-I5 checks), tools/simulate/trace_ptt_sequence.py (invariants
+  wired into the merged suite + stimulus fixes), cmake/My_Pic_Project/default/user.cmake (both
+  tests registered), docs/first-dit-band-detection.md, TESTING.md, bugfixes.md.
 
 ## Simulator timing limitation (IMPORTANT)
 - The firmware uses Timer2 for the approximately 1 ms scheduler tick because MDB's Timer0 model stalled during earlier testing.
@@ -41,6 +60,15 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
   (that is what stops it keying on the classifier's 160m no-signal default after a trip
   recovery). New freq_counter API: freq_counter_restore_locked_band(),
   freq_counter_band_confirmed(), freq_counter_measured_band().
+- **The remembered band is verified, not trusted (fold-back).** A first-dit engage taken from the
+  band memory is a blind decision - at keydown the radio has not started transmitting, so there is
+  nothing to measure yet. The remembered band is therefore re-checked against the first usable
+  measurement of that same transmission: if the measured band differs for BAND_VERIFY_MS (20 ms),
+  the firmware forces bypass FIRST, releases the band, and lets the snoop path re-select the band
+  actually being received cold before re-engaging. This is what makes the user's "FirstDit on 160m,
+  then immediately change to 80m and key straight away" case safe: the amplifier never amplifies the
+  whole first over through the wrong filter. Measured fold-back latency in the simulator: 23 ms.
+  The relay selection is never moved while keyed (the verify step bypasses before it unlocks).
 - Direct ADC inputs monitor two forward/reflected SWR pairs, temperature, WCS1700 current, input power, and drain voltage.
 - SWR trips, power scales, drain/input thresholds, 10 kOhm NTC B-value profile, sequencer timing, and output polarities are user-configurable from the 1602 LCD menu.
 - Hardware comparators combine at INPUT_HARD_FAULT for independent overdrive, drain-peak, and overcurrent protection.
@@ -93,4 +121,9 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
 - As of v0.0.25 (commit 3a49285): program flash 54.2% free (4440/8192 words), data RAM 84.2% free (862/1024 bytes). Superseded by the 2026-09-21 numbers above.
 
 ## Remaining work
-The open work is hardware validation: final sensor calibration, comparator thresholds and polarity, ADC transient protection, TX timing, fan implementation, LCD/menu/internal EEPROM persistence testing, final PCB review, and CI validation. First-dit specifics to confirm on the bench: BAND_CACHE_IDLE_TIMEOUT_MS (60 s) against real band-change habits, and BAND_SETTLE_MS (20 ms) against the fitted LPF relay's operate time.
+The open work is hardware validation: final sensor calibration, comparator thresholds and polarity, ADC transient protection, TX timing, fan implementation, LCD/menu/internal EEPROM persistence testing, final PCB review, and CI validation. First-dit specifics to confirm on the bench: BAND_CACHE_IDLE_TIMEOUT_MS (60 s) against real band-change habits, BAND_SETTLE_MS (20 ms) against the fitted LPF relay's operate time, and BAND_VERIFY_MS (20 ms) - i.e. how long a wrong remembered band may stay engaged before fold-back, which is the one figure that trades amplifier protection against nuisance drop-outs on a noisy first dit.
+
+Flash space is the next constraint, and it needs a user decision - both remaining levers are deliberate trades, not free wins:
+1. Make `adjust_selected_setting()` in firmware/src/main.c table-driven ({min,max,step} rows instead of the long if/else chain). Est. 80-100 words, but it is untested UI logic with odd per-setting bounds, so it should be paired with a new menu-edit scenario added to the suite.
+2. Compile the simulator/tests image with `-Os` instead of `-O1` (user.cmake). Est. 1200 words off the Debug number, but degrades mdb symbol/breakpoint resolution for the VS Code "Simulate PicAmpControl (Debug)" session - the whole reason Debug is -O1 today.
+Do not start either without asking; see the Device memory usage section for the current numbers.
