@@ -39,6 +39,10 @@ to decide. Local, gitignored working directories (`_build/`, `out/`, `build/*.lo
 `tools/simulate/__pycache__/`) also still contain the name; they are not in the repository, but
 attaching them to an issue or a chat would leak it.
 
+Out of scope by the owner's decision: the Windows account name in two archived files under
+`prototype_reference/` (`C:/Users/<name>/...`) is not sensitive and must not be scrubbed. Do not
+re-raise it in a future sweep.
+
 ## 2026-09-21 — AI-HANDOFF.md duplicated other docs and stated a release behaviour the firmware no longer has
 
 Two AI carry-over files had grown up side by side, `Ai-Notes.txt` and `AI-HANDOFF.md`. Nothing in
