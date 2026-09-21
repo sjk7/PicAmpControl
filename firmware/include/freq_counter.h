@@ -38,6 +38,17 @@ void freq_counter_tick_10ms(void);
 // Lock current band for transmit (freezes LPF relay changes during TX)
 void freq_counter_lock_band(void);
 
+// First-dit support: force current/locked/candidate band to a band remembered from an
+// earlier TX cycle and lock it, so the LPF relays are already correct when the
+// amplifier keys. freq_counter_lock_band() only freezes whatever current_band happens
+// to be, which is the no-signal default during silence.
+void freq_counter_restore_locked_band(rf_band_t band);
+
+// Return true only when the stabilised current_band agrees with the latest measurement.
+// Unlike freq_counter_signal_valid(), this cannot report a band left behind by earlier
+// silence/noise (the 10 ms tick classifies an empty gate window as 160m).
+bool freq_counter_band_confirmed(void);
+
 // Unlock band after transmit returns to RX/Idle
 void freq_counter_unlock_band(void);
 

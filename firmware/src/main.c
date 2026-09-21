@@ -20,7 +20,11 @@ typedef enum {
     STATE_OPERATE,
     STATE_TRIP,
     STATE_FAULT_LATCHED,
-    STATE_RESET_WAIT
+    STATE_RESET_WAIT,
+    /* First-dit bypass snoop: PTT is latched but the amplifier stays in bypass (all TX
+       outputs inactive) until the radio's first RF burst decodes a usable band.
+       Appended last so the existing state numbering stays stable. */
+    STATE_BYPASS_SNOOP
 } system_state_t;
 
 typedef enum {
@@ -107,6 +111,10 @@ typedef struct {
 #define ENCODER_LONG_PRESS_MS 1200U
 #define ENCODER_FAULT_CLEAR_MS 1500U
 #define ENCODER_ROTATION_LOCKOUT_MS 5U
+/* First-dit band memory: how long a remembered band stays trusted after the last PTT
+   before the firmware assumes the operator may have changed bands and reverts to
+   bypass-snoop. 60 s is a starting guess - confirm on the bench. */
+#define BAND_CACHE_IDLE_TIMEOUT_MS 60000U
 
 static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
@@ -114,6 +122,12 @@ static volatile unsigned char g_trip_reason = 0;
 static volatile bool g_trip_shutdown_active = false;
 static volatile unsigned char g_trip_shutdown_elapsed_ms = 0;
 static volatile bool g_ptt_active = false;
+/* First-dit band memory (see docs/first-dit-band-detection.md). Declared volatile so the
+   simulator/debugger can read and drive the cache state directly. */
+static volatile bool g_band_cache_valid = false;
+static volatile rf_band_t g_band_cache_band = BAND_UNKNOWN;
+static volatile bool g_snoop_active = false;
+static unsigned int g_band_cache_idle_ms = 0;
 static volatile bool g_startup_inhibit = true;
 static volatile bool g_comparator_reset_active = false;
 static volatile unsigned char g_comparator_reset_elapsed_ms = 0;
@@ -657,6 +671,12 @@ void apply_startup_inhibit(void) {
     set_trip_output(false);
     OUTPUT_COMP_RESET = 0; // SETTLE held low for the startup-inhibit window
     g_startup_inhibit = true;
+    /* Power-up has no idea which band the operator is on: drop any remembered band and
+       require a fresh first-dit measurement before the amplifier may key. */
+    g_band_cache_valid = false;
+    g_band_cache_band = BAND_UNKNOWN;
+    g_band_cache_idle_ms = 0;
+    g_snoop_active = false;
 }
 
 void clear_fault_latches(void) {
@@ -677,16 +697,9 @@ void handle_ptt_transition(bool ptt_asserted) {
     if (g_startup_inhibit)
         return; // Ignore PTT changes until system settles (RC1 low)
     if (ptt_asserted) {
-        if (!freq_counter_signal_valid()) {
-            set_tx_output(false);
-            set_tx_vcc_output(false);
-            set_tx_bias_output(false);
-            g_ptt_active = false;
-            g_sequence_stage = 0;
-            freq_counter_unlock_band();
-            return;
-        }
         g_ptt_active = true;
+        g_sequence_stage = 0;
+        g_band_cache_idle_ms = 0;
         if (!g_transient_menu_display) {
             if (is_live_menu_page(g_menu_page)) {
                 g_saved_user_menu_page = g_menu_page;
@@ -704,8 +717,33 @@ void handle_ptt_transition(bool ptt_asserted) {
             clear_fault_latches();
             g_state = STATE_OPERATE;
         }
+        if (g_band_cache_valid) {
+            /* First-dit: a band was decoded from an earlier transmission and the
+               operator has not been idle long enough to have plausibly changed bands,
+               so the LPF relays are set to the remembered band and TX engages
+               immediately - no snoop wait. */
+            freq_counter_restore_locked_band(g_band_cache_band);
+            g_snoop_active = false;
+            return;
+        }
+        if (freq_counter_signal_valid()) {
+            /* Live snoop RF is already usable, so this is a normal engage. */
+            g_snoop_active = false;
+            return;
+        }
+        /* First-dit bypass snoop: no band is known yet, so hold the amplifier in bypass
+           (LDMOS bias off, RF path straight through) while the radio's first RF burst is
+           measured. The band is deliberately NOT locked here - the relay selection stays
+           live so the first burst can be classified. */
+        set_tx_output(false);
+        set_tx_vcc_output(false);
+        set_tx_bias_output(false);
+        freq_counter_unlock_band();
+        g_snoop_active = true;
+        g_state = STATE_BYPASS_SNOOP;
     } else {
         g_ptt_active = false;
+        g_snoop_active = false;
         g_state = STATE_STANDBY;
         if (g_ptt_complete_display_active) {
             g_ptt_complete_display_elapsed_ms = 0;
@@ -1061,6 +1099,31 @@ void update_tx_sequence(void) {
         return;
     }
 
+    if (g_snoop_active) {
+        /* First-dit bypass snoop: the amplifier stays in bypass (all TX outputs inactive)
+           until the radio's first RF burst decodes a band. freq_counter_band_confirmed()
+           rather than freq_counter_signal_valid() is required here: after silence the
+           10 ms tick has already classified an empty gate window as 160m, and that stale
+           band must never be cached or locked. */
+        freq_counter_status_t status;
+
+        if (!freq_counter_band_confirmed()) {
+            set_tx_output(false);
+            set_tx_vcc_output(false);
+            set_tx_bias_output(false);
+            g_sequence_stage = 0;
+            g_state = STATE_BYPASS_SNOOP;
+            return;
+        }
+        freq_counter_get_status(&status);
+        g_band_cache_band = status.current_band;
+        g_band_cache_valid = true;
+        g_band_cache_idle_ms = 0;
+        freq_counter_lock_band();
+        g_snoop_active = false;
+        /* Fall through: engage on the band the first RF burst just decoded. */
+    }
+
     if (g_ptt_active) {
         if (g_sequence_stage == 0) {
             freq_counter_lock_band();
@@ -1250,7 +1313,9 @@ void update_protection_state(unsigned int temp_c,
         return;
     }
 
-    g_state = STATE_OPERATE;
+    /* The snoop flag, not the enumerated state, is authoritative: this function runs every
+       pass and would otherwise overwrite STATE_BYPASS_SNOOP with STATE_OPERATE. */
+    g_state = g_snoop_active ? STATE_BYPASS_SNOOP : STATE_OPERATE;
     set_trip_output(false);
 }
 
@@ -1396,6 +1461,18 @@ int main(void) {
                 update_peak_decay(&g_post_fwd_pep_w, &g_pep_decay_elapsed_ms, 1);
                 update_peak_decay(&g_current_peak_a, &g_current_peak_decay_elapsed_ms, 1);
                 update_tx_sequence();
+            }
+            /* First-dit band memory ages only while receiving. After a long idle period
+               the operator may have changed bands, so the remembered band is dropped and
+               the next PTT goes back to bypass-snoop. */
+            if (!g_ptt_active && g_band_cache_valid) {
+                if (g_band_cache_idle_ms < BAND_CACHE_IDLE_TIMEOUT_MS) {
+                    g_band_cache_idle_ms++;
+                } else {
+                    g_band_cache_valid = false;
+                    g_band_cache_band = BAND_UNKNOWN;
+                    g_band_cache_idle_ms = 0;
+                }
             }
             static unsigned char fc_tick_ms = 0;
             fc_tick_ms++;

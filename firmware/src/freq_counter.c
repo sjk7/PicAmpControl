@@ -161,6 +161,28 @@ void freq_counter_lock_band(void) {
     g_fc_status.locked_band = g_fc_status.current_band;
 }
 
+void freq_counter_restore_locked_band(rf_band_t band) {
+    if (band == BAND_OUT_OF_SPEC) {
+        return;  // Nothing usable to restore; leave the live measurement in charge.
+    }
+    g_fc_status.current_band = band;
+    g_fc_status.candidate_band = band;
+    g_fc_status.locked_band = band;
+    g_fc_status.band_locked = true;
+    update_band_outputs(band);
+}
+
+bool freq_counter_band_confirmed(void) {
+    if (g_fc_status.stability_count < STABILITY_REQUIRED_TICKS) {
+        return false;
+    }
+    if (g_fc_status.frequency_khz < 1000U || g_fc_status.frequency_khz > 32000U) {
+        return false;
+    }
+    return g_fc_status.current_band != BAND_OUT_OF_SPEC &&
+           classify_frequency_khz(g_fc_status.frequency_khz) == g_fc_status.current_band;
+}
+
 void freq_counter_unlock_band(void) {
     g_fc_status.band_locked = false;
 }
