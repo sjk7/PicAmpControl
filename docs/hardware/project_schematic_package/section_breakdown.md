@@ -1,5 +1,8 @@
 # Schematic Section Breakdown – Linear Amplifier Protection Board
 
+> Pin assignments are not restated here. Single source of truth:
+> [../PIC16F18875_pin_map.md](../PIC16F18875_pin_map.md).
+
 ## 1. Power Supplies & Layout
 - +12V_IN (J1), +5V_IN (J2)
 - Decoupling caps (C1–C3)
@@ -8,12 +11,13 @@
 ## 2. MCU & Digital Logic
 - PIC16F18875 (U1)
   - MCLR pull-up (R1)
-  - All analog sense, digital out, LCD, I2C, and EC11 encoder wiring
+  - All analog sense, digital out, LCD, and EC11 encoder wiring
 
-## 3. Band Decoder System
-- 74HC4514 (U2) and all input/output wiring
-- ULN2803A (U3) and relay drivers
-- LPF relays (K1–K7), flyback diodes (D1–D7)
+## 3. Band Selection & LPF Relays
+- One dedicated active-high band-select output per band (six bands, 160/80/40/20/15/10 m)
+- ULN2803A (U2) relay drivers
+- LPF relays (K1–K6), flyback diodes (D1–D6)
+- No 74HC4514 decoder and no B0–B2 address bus (superseded by direct per-band drive)
 
 ## 4. Analog & RF Measurement
 - Forward/reflected bridges to ADC (FWD1/REF1)
@@ -28,8 +32,8 @@
 - Fan output NMOS (Q1), fan connector, +12V
 
 ## 7. User Interface
-- LCD I2C output (J3)
-- PCF8574 backpack wiring
+- 1602 LCD in 4-bit parallel mode (RS / E / D4–D7)
+- LCD header (J3) — no PCF8574 backpack, no I2C
 - EC11 encoder A/B/push wiring
 
 ---

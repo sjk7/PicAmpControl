@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a PIC16F18875-I/SP-based linear amplifier protection controller that monitors RF power, SWR, temperature, current, and drain stress, and shuts down the amplifier safely when the system enters a fault condition.
+Build a PIC16F18875-I/P-based linear amplifier protection controller that monitors RF power, SWR, temperature, current, and drain stress, and shuts down the amplifier safely when the system enters a fault condition.
 
 ## High-level blocks
 
@@ -19,11 +19,14 @@ Build a PIC16F18875-I/SP-based linear amplifier protection controller that monit
 
 3. Microcontroller logic
    - direct ADC monitoring of four SWR detector outputs, temperature, overdrive, and drain voltage
+   - band snoop and classification: Timer1 T1CKI frequency counter classifying 160-10 m
+   - band selection: one dedicated active-high output per low-pass filter band
+   - band lockout: LPF relays frozen for the whole TX cycle, released when back in RX/idle
    - formal protection state machine
    - latching fault states
-   - PTT re-arm logic
+   - PTT re-arm logic, gated on a valid band-snoop signal
    - amplifier enable / disable control
-   - LCD status display over I2C backpack
+   - LCD status display over a 4-bit parallel interface
 
 4. Thermal and operator management
    - temperature sensing
@@ -53,13 +56,13 @@ This allows each SWR monitor to act independently and gives a clear, local prote
 
 SWR protection is computed entirely in firmware from the forward and reflected ADC readings at each RF point; no dedicated SWR comparator hardware is used.
 
-Eight planned measurements are wired directly to ADC-capable pins: RA0-RA3 for the two SWR pairs, RA5 for temperature, RB1 for current, RB2 for overdrive, and RB3 for drain voltage. No external analog multiplexer is required; the PIC selects the dedicated ADC channels sequentially.
+The eight measurements are wired directly to dedicated ADC-capable pins. No external analog multiplexer is required; the PIC selects the dedicated ADC channels sequentially. See [docs/hardware/PIC16F18875_pin_map.md](hardware/PIC16F18875_pin_map.md) for the authoritative pin assignments — they are deliberately not restated here.
 
 ## User threshold configuration
 
 The LCD configuration menu uses one EC11-style active-low rotary encoder: `INPUT_ENCODER_A` on RC2, `INPUT_ENCODER_B` on RB0, and `INPUT_ENCODER_SWITCH` on RB6. In normal display mode, rotation selects the home display page and a short press enters settings. In settings mode, rotation edits the current value, short press advances to the next saved setting, and long press exits back to the saved home page. On a trip screen, a long press clears/re-arms the latched fault when the live fault condition is safe. The operator can select and adjust an independent SWR trip ratio for each detector pair, from 1.1:1 to 5.0:1 in 0.1:1 steps. The pre-filter default is 3:1 and the post-filter default is 2:1. Each bridge has one forward full-scale setting from 500 W to 2500 W in 100 W steps, defaulting to 1500 W; its paired reflected reading uses that same setting. Temperature uses selectable B3435, B3950, or B4250 10 kOhm NTC profiles, defaulting to B3950, with a trip setting from 0 C to 150 C. Input power is adjustable from 0.0 W to 10.0 W in 0.1 W steps and defaults to a 10.0 W trip. Drain voltage is adjustable from 0 V to 300 V in 1 V steps and defaults to a 150 V trip. Setting edits are locked out during transmit. RB1 remains dedicated to current sensing.
 
-The operator can also configure the TX-to-VCC and VCC-to-bias sequencing delays from 0 to 1000 ms in 5 ms steps; both default to 20 ms. Each operational output can be configured active-low or active-high, with active-low as the default: TX, TX_VCC, TX_BIAS, fan, and trip. LCD I2C signalling remains fixed as open-drain bus logic and is driven by the dedicated software-I2C module.
+The operator can also configure the TX-to-VCC and VCC-to-bias sequencing delays from 0 to 1000 ms in 5 ms steps; both default to 20 ms. Each operational output can be configured active-low or active-high, with active-low as the default: TX, TX_VCC, TX_BIAS, fan, and trip. The LCD interface polarity is not configurable; the RS/E/data lines are push-pull outputs.
 
 The status pages refresh every 100 ms from the post-filter forward-power ADC reading. The default home page presents PEP with a shortened `|`/`.` peak bar and temperature in degrees C. Additional normal pages show PEP/RMS plus two-decimal SWR, SWR1/SWR2 detail, and current with peak hold. Peak hold and peak decay are user settings saved in EEPROM; factory defaults are 1200 ms hold and 100 ms decay interval.
 
@@ -69,16 +72,9 @@ Overdrive and drain voltage each have a separate, conditioned ADC path. The ADC 
 
 ## LCD strategy
 
-Use a standard low-cost 16x2 or 20x4 character LCD fitted with a PCF8574-based I2C backpack.
+Use a standard low-cost 16x2 character LCD driven in **4-bit parallel** mode. There is no PCF8574 I2C backpack; the earlier I2C design was dropped in favour of the direct parallel interface.
 
-The PIC16F18875-I/SP implementation uses a dedicated `lcd_i2c.c` software-I2C module on RC3/RC4. The module owns the PCF8574 transfers and HD44780 character commands; protection and menu logic remain in `main.c`. Settings persist via the PIC's internal EEPROM (256 bytes) using the XC8 `eeprom_read`/`eeprom_write` runtime functions, wrapped by `internal_eeprom_read`/`internal_eeprom_write`. Every operator page or value change stores a versioned, checksummed record. Startup accepts only a valid record and otherwise restores compiled safe defaults. The final PCB validation must include read/write and interrupted-power recovery tests.
-
-Benefits:
-
-- saves GPIO pins compared with a parallel LCD interface
-- cheap and widely available
-- simple software interface
-- leaves more MCU pins for comparator inputs and control outputs
+The driver lives in `firmware/src/lcd_parallel.c` (its interface header is `firmware/include/lcd_i2c.h`, a legacy filename). It owns the HD44780 4-bit transfers; protection and menu logic remain in `main.c`. Settings persist via the PIC's internal EEPROM (256 bytes) using the XC8 `eeprom_read`/`eeprom_write` runtime functions, wrapped by `internal_eeprom_read`/`internal_eeprom_write`. Every operator page or value change stores a versioned, checksummed record. Startup accepts only a valid record and otherwise restores compiled safe defaults. Final PCB validation must include read/write and interrupted-power recovery tests.
 
 ## State model
 
@@ -93,7 +89,7 @@ Recommended states:
 - FAULT_LATCHED
 - RESET_WAIT
 
-The main loop is paced by a Timer0 interrupt tick of approximately 1 ms rather than a blocking 5 ms delay. ADC conversion-complete interrupts capture samples and advance the channel scan, but perform no conversion math or state-machine calls. The main loop consumes the latest samples and updates protection before LCD rendering and menu/EEPROM work. EEPROM writes are deferred until 100 ms after the last menu change and only occur while receive mode is safe. This removes blocking ADC reads while keeping the ISR small enough for XC8, while the external overcurrent comparator remains the asynchronous hard-fault path.
+The main loop is paced by a Timer2 interrupt tick of approximately 1 ms rather than a blocking 5 ms delay. ADC conversion-complete interrupts capture samples and advance the channel scan, but perform no conversion math or state-machine calls. The main loop consumes the latest samples and updates protection before LCD rendering and menu/EEPROM work. EEPROM writes are deferred until 100 ms after the last menu change and only occur while receive mode is safe. This removes blocking ADC reads while keeping the ISR small enough for XC8, while the external overcurrent comparator remains the asynchronous hard-fault path.
 
 ## PTT and re-arm behavior
 
@@ -106,6 +102,18 @@ Rules:
 - if a hardware condition is still outside limits, the amplifier must remain disabled
 - the startup power-up interval should keep the amplifier off for about 0.5 to 1.0 seconds after applying power
 - On the PTT falling edge, OUTPUT_COMP_RESET produces a 10 ms active-low pulse to clear the overcurrent comparator latch. INPUT_OVERCURRENT_FAULT must then be clear before the controller re-arms software latches or begins sequencing.
+
+## Band selection and lockout
+
+The band is determined from the RF snoop signal counted by Timer1 (T1CKI via PPS), not from a manual band switch or a band-decoder bus. The firmware classifies the count into one of six bands (160/80/40/20/15/10 m) on a 10 ms scheduler tick and drives one dedicated active-high output per band into the LPF relay driver. The old 74HC4514 decoder and B0-B2 address bus are gone, and there is no 6 m position.
+
+Band lockout protects the transmit path:
+
+- on a valid PTT request with a usable snoop measurement, the band is locked and the LPF relay selection is frozen for the whole TX cycle
+- the lock is released when the amplifier returns to RX/idle, letting the relays follow the next snoop
+- if the snoop signal is missing or not usable for sequencing, PTT is cancelled before TX starts: the TX outputs are forced inactive and the band is unlocked. The controller refuses to key the amplifier rather than transmit through an unverified filter
+
+The firmware interface is `freq_counter_lock_band()`, `freq_counter_unlock_band()`, and `freq_counter_signal_valid()` in [firmware/include/freq_counter.h](../firmware/include/freq_counter.h). The flow is diagrammed in [docs/hardware/project_schematic_package/block_diagram.md](hardware/project_schematic_package/block_diagram.md).
 
 ## Temperature and fan strategy
 
@@ -146,7 +154,7 @@ This is a valid analog threshold scheme, but the reference must be chosen carefu
 - Keep the firmware state machine separate from the MCU pin definitions.
 - Use named constants instead of raw magic numbers.
 - Treat the prototype folder as the measurement/reference implementation, not the final protection controller.
-- Build firmware on a self-hosted Windows runner with the XC8 toolchain and PIC16Fxxx device pack installed; publish releases only from an explicitly selected successful build artifact.
+- Build firmware in CI (`.github/workflows/firmware-build.yml`, `ubuntu-latest`, XC8 v4.00 plus the PIC16F1xxxx DFP pack) and publish releases from a successful `main` build artifact.
 
 ## Recommended implementation order
 

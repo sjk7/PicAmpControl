@@ -6,14 +6,14 @@ Follow this list (left to right/top to bottom) during schematic assembly. Place,
 2. **Place PIC16F18875 (U1) and decoupling cap (C1) nearby**
    - Wire Vdd to +5V, Vss to GND, add C1 100nF across Vdd/Vss
    - Place R1 10k from MCLR to +5V
-3. **ADC and analog inputs:** Wire RF bridges, NTC, overcurrent/currentsense dividers to ADC/analog pins
-4. **Place and connect 74HC4514 (U2) and ULN2803A (U3) (with C2, C3 decoupling)**
-   - RA4/RA6/RA7 to decoder A0/A1/A2; tie decoder A3 low
-   - Decoder outputs (Y0–Y6) to ULN2803A IN1–IN7
-   - ULN OUT1–OUT7 to K1–K7 relay coils, other side of each relay to +12V
-   - Place D1–D7 flyback diodes across each coil
+3. **ADC and analog inputs:** Wire RF bridges, NTC, overcurrent/current-sense dividers to the ADC pins shown in the pin map; wire the RF band snoop to the Timer1 T1CKI input (no pull-up)
+4. **Place and connect ULN2803A (U2) with C2 decoupling**
+   - Band-select outputs to ULN2803A IN1–IN6 (one pin per band, active-high)
+   - ULN OUT1–OUT6 to K1–K6 relay coils, other side of each relay to +12V
+   - Place D1–D6 flyback diodes across each coil
+   - There is no 74HC4514 decoder and no B0–B2 address bus
 5. **Fan and thermal:** NTC to PIC ADC; NMOS (Q1) and fan, GND return
-6. **LCD and rotary UI:** J3 for I2C LCD backpack; EC11 A/B/SW lines to RC2/RB0/RB6
+6. **LCD and rotary UI:** J3 for the parallel 1602 LCD (RS/E/D4–D7; no I2C backpack); EC11 A/B/SW lines to the encoder inputs
 7. **All outputs/controls:** Connect TX, BIAS, enable, status, trip lines
 8. **Label all power and analog nets**
 9. **Double-check all power/gnd connections**

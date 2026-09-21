@@ -9,6 +9,7 @@ CI/release workflows change - don't let it go stale.
 - Always push to origin/main after a successful compile/build of a change - don't leave verified-good commits sitting local. Firmware only truly compiles via CI (firmware-build.yml, which runs on ubuntu-latest), so this means: commit, push, and confirm the triggered build succeeds.
 - Keep README.md and docs/ purely current-facing: no "old prototype was replaced by..." style historical narrative. Historical context belongs only in prototype_reference/.
 - Never run bare `git status`/`git status --short`; use `git --no-pager status --short` (avoids hitting an interactive pager or the `gcm-core` credential helper prompt).
+- docs/hardware/PIC16F18875_pin_map.md is the SINGLE source of truth for MCU pin assignments. Never restate pin numbers or pin tables in README, architecture, schematic-package, or checklist docs - link to it instead. Keep it in sync with firmware/include/pin_map.h. The same rule applies to nets (project_schematic_package/connection_table.csv) and the BOM (component_list.csv).
 - Any new "remember this" instruction from the user must be added to this section, not just kept in assistant memory.
 - `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their configured active levels (active-low by default); keep it transient, then restore the user's saved home page.
 - Keep verified changes committed and pushed promptly; generated simulator CSVs belong in `_build/My_Pic_Project/sim/csv/` and graphs in `_build/My_Pic_Project/sim/graphs/`.
@@ -29,7 +30,7 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
 - SWR trips, power scales, drain/input thresholds, 10 kOhm NTC B-value profile, sequencer timing, and output polarities are user-configurable from the 1602 LCD menu.
 - Hardware comparators combine at INPUT_HARD_FAULT for independent overdrive, drain-peak, and overcurrent protection.
 - The sequencer runs TX, TX_VCC, and TX_BIAS with two configurable inter-stage delays, defaulting to 20 ms.
-- The LCD is a 1602 driven in 4-bit parallel mode (RS=RA4, E=RA6, D4=RA7, D5=RC3, D6=RC4, D7=RD0) by firmware/src/lcd_parallel.c; there is no I2C backpack. firmware/include/lcd_i2c.h is the (legacy-named) interface header for the LCD plus internal EEPROM.
+- The LCD is a 1602 driven in 4-bit parallel mode by firmware/src/lcd_parallel.c; there is no I2C backpack. firmware/include/lcd_i2c.h is the (legacy-named) interface header for the LCD plus internal EEPROM. Pin assignments: see the single-source-of-truth rule above.
 - Menu settings and the last display page are stored in the PIC's internal EEPROM in a versioned, checksummed record; no external EEPROM module is used.
 
 ## Display
@@ -62,7 +63,7 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
 - Bug fixes log (update whenever a real bug is found): bugfixes.md
 
 ## CI / release
-- .github/workflows/firmware-build.yml builds on every push/PR to main on a self-hosted Windows runner (XC8 + Ninja) and packages `.hex`/`.elf`/`.map`/`.xml` plus the pin map (docs/hardware/PIC16F18875_pin_map.md) into a `firmware-<sha>` artifact.
+- .github/workflows/firmware-build.yml builds on every push/PR to main on `ubuntu-latest` (installs XC8 v4.00 + DFP, Ninja) and packages `.hex`/`.elf`/`.map`/`.xml` plus the pin map (docs/hardware/PIC16F18875_pin_map.md) into a `firmware-<sha>` artifact. It compiles only - the simulator tests are not run in CI.
 - .github/workflows/auto-release.yml runs after a successful main build, auto-increments a `v0.0.N` tag, and publishes that artifact as a GitHub Release. This is fully automatic - no manual step needed for a normal push to main.
 - .github/workflows/release-firmware.yml is the manual fallback (workflow_dispatch) to re-publish an older build's artifact under an existing tag.
 

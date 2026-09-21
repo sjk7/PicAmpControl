@@ -1,5 +1,19 @@
 # PIC16F18875-I/P Hardware Pin Map
 
+> **Single source of truth for MCU pin assignments.**
+>
+> This file is the one authoritative pin assignment table for the project. Every other
+> document — README, architecture, schematic package, checklists, guidance notes — must
+> **link here instead of restating pin assignments**. Duplicating this table is what caused
+> the band-select, LCD, and comparator-reset drift found on 2026-09-21.
+>
+> Rule: `firmware/include/pin_map.h` and this document must agree. If they disagree, the
+> code wins and this document gets corrected in the same change.
+>
+> Physical pin numbers are for the PDIP-40 package. Firmware addresses ports/bits by name
+> (e.g. `PORTCbits.RC0`) and is unaffected by physical numbering; only the
+> schematic/netlist/PCB need the numbers.
+
 This document captures the current hardware understanding for the PIC16F18875-I/P and keeps the MCU pin layout tied directly to the amplifier protection design.
 
 ## Device Overview

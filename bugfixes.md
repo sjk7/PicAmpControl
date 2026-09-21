@@ -4,6 +4,42 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-21 — Pin/net assignments were duplicated across the docs and had drifted (single source of truth established)
+
+The same pin and net assignments were restated in at least eight documents, and they no longer
+agreed with each other or with `pin_map.h`. This is the underlying cause of the individual doc
+bugs fixed earlier today.
+
+- `docs/hardware/PIC16F18855_pin_map.md` was a **misnamed stale duplicate** of the 18875 pin
+  map (28-pin SPDIP, I2C LCD backpack, LPF band-decoder bits on RA4/RA6/RA7), and nothing
+  linked to it.
+- `docs/hardware/wiring-checklist.md` duplicated the entire pin map and contradicted the
+  firmware: it claimed a 3.3 V supply, listed RD1–RD7 and RB2/RB3 as "NC / reserved for future
+  use", and proposed RA4/RA6/RA7 as future band-select pins — those are the parallel LCD lines.
+- `project_schematic_package/connection_table.md` restated the netlist that already existed in
+  `connection_table.csv`.
+- README, `project-architecture.md`, `section_breakdown.md`, `block_diagram.md`, and the
+  package `wiring_checklist.md` each restated pin assignments too.
+- `AI-HANDOFF.md` claimed "RA4 and RA6 are available for future band selection" (wrong) and
+  linked a `schematic-workflow.md` that does not exist.
+
+Fix — single source of truth treatment:
+
+- `docs/hardware/PIC16F18875_pin_map.md` is now explicitly the one authoritative pin table, and
+  must agree with `firmware/include/pin_map.h`.
+- `project_schematic_package/connection_table.csv` is the one authoritative netlist;
+  `connection_table.md` became a short usage/conventions page instead of a second netlist.
+- The misnamed duplicate was replaced with a short "not used" pointer, and
+  `docs/hardware/wiring-checklist.md` was rewritten as wiring guidance that refers to signals
+  rather than pins.
+- README, architecture, block diagram, section breakdown, and both checklists now link to the
+  pin map instead of restating it.
+- Band selection and lockout are now documented in the block diagram, the architecture doc, and
+  the README flow model, following the removal of the 74HC4514 decoder in favour of one
+  dedicated output per band.
+
+Rule recorded in `Ai-Notes.txt`: never restate pin numbers or pin tables outside the pin map.
+
 ## 2026-09-21 — `ctest` could not run the simulator suite (Python 2 binding + non-portable `timeout`)
 
 `ctest` reported 0/1 passed (exit 8) on a clean checkout. `user.cmake` used

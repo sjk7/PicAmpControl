@@ -1,28 +1,24 @@
 RefDes,Value,Description/Lib,Notes
 U1,PIC16F18875,MCU_Microchip_PIC,Main firmware controller
-U2,74HC4514,74xx:74HC4514,Band decoder, 4-to-16
-U3,ULN2803A,Interface_ULN:ULN2803A,Relay driver
+U2,ULN2803A,Interface_ULN:ULN2803A,Relay driver
 K1,RELAY_160m,Relay_SPST,LPF relay for 160m
 K2,RELAY_80m,Relay_SPST,LPF relay for 80m
 K3,RELAY_40m,Relay_SPST,LPF relay for 40m
 K4,RELAY_20m,Relay_SPST,LPF relay for 20m
 K5,RELAY_15m,Relay_SPST,LPF relay for 15m
 K6,RELAY_10m,Relay_SPST,LPF relay for 10m
-K7,RELAY_6m,Relay_SPST,LPF relay for 6m
 D1,1N4007,Diode,Flyback 160m relay
 D2,1N4007,Diode,Flyback 80m relay
 D3,1N4007,Diode,Flyback 40m relay
 D4,1N4007,Diode,Flyback 20m relay
 D5,1N4007,Diode,Flyback 15m relay
 D6,1N4007,Diode,Flyback 10m relay
-D7,1N4007,Diode,Flyback 6m relay
-R1,10k,Resistor,Pull-up, MCLR
+R1,10k,Resistor,"Pull-up, MCLR"
 C1,100nF,Capacitor,Decoupling (MCU)
-C2,100nF,Capacitor,Decoupling (Decoder)
-C3,100nF,Capacitor,Decoupling (Driver)
+C2,100nF,Capacitor,Decoupling (relay driver)
 J1,+12V_IN,Conn_01x02,Relay/fan power
 J2,+5V_IN,Conn_01x02,Logic power
-J3,LCD_I2C,Conn_01x04,LCD backpack
+J3,LCD_PARALLEL,Conn_01x08,Parallel 1602 LCD (RS/E/D4-D7/VSS/VDD)
 Q1,NMOS TO-220,MOSFET,Fan PWM driver
 RN1,10k NTC,NTC thermistor,Temp sensor
 FWD1,SMA,SMA socket,Forward bridge

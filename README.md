@@ -61,6 +61,7 @@ flowchart LR
         PRE["SWR sensor 1\nPre-LPF"]
         FILTER["Low-pass filter bank"]
         POST["SWR sensor 2\nPost-LPF"]
+        SNOOP["Band snoop sample\nTimer1 T1CKI"]
     end
 
     subgraph ADC["ADC measurement inputs"]
@@ -78,11 +79,14 @@ flowchart LR
         COMP_RESET["Comparator latch reset"]
     end
 
-    subgraph MCU["PIC16F18875-I/SP controller"]
+    subgraph MCU["PIC16F18875-I/P controller"]
         PTT["INPUT_PTT\nTransmit request"]
         RESET["OUTPUT_COMP_RESET\nComparator reset"]
         HARD["INPUT_OVERCURRENT_FAULT\nHardware overcurrent fault"]
         TICK["Timer2 ISR\n~1 ms scheduler tick"]
+        FREQ["INPUT_FREQ_COUNTER\nTimer1 T1CKI"]
+        BAND["Band classifier\n160-10 m, 10 ms tick"]
+        LOCK["Band lock\nLPF frozen during TX"]
         STATE["State machine"]
         SWR1["SWR pair 1\nsoftware trip logic"]
         SWR2["SWR pair 2\nsoftware trip logic"]
@@ -99,7 +103,13 @@ flowchart LR
     FILTER --> POST
     POST --> POST_FWD
     POST --> POST_REF
-    BANDSEL["Band-select outputs\nRD2-RD7, one per band"] --> DECODER["LPF relay drivers"] --> FILTER
+    SNOOP --> FREQ
+    FREQ --> BAND
+    BAND -->|signal valid| LOCK
+    BAND -->|no signal: PTT cancelled| STATE
+    STATE --> BANDSEL
+    LOCK -->|freezes relays during TX| BANDSEL
+    BANDSEL["Band-select outputs\none pin per band"] --> DRIVER["LPF relay drivers"] --> FILTER
 
     PRE_FWD --> SWR1
     PRE_REF --> SWR1
@@ -129,20 +139,12 @@ flowchart LR
 
 ## Hardware pin map
 
-The authoritative signal map lives in
-[docs/hardware/PIC16F18875_pin_map.md](docs/hardware/PIC16F18875_pin_map.md); it is kept in
-sync with [firmware/include/pin_map.h](firmware/include/pin_map.h). Do not duplicate the
-table here — it drifted out of sync when the LCD and band-select assignments changed.
+**Single source of truth:** [docs/hardware/PIC16F18875_pin_map.md](docs/hardware/PIC16F18875_pin_map.md),
+which must agree with [firmware/include/pin_map.h](firmware/include/pin_map.h).
 
-Current assignment summary:
-
-- ADC inputs: RA0-RA3 (two SWR pairs), RA5 (temperature), RB1 (current), RB2 (overdrive), RB3 (drain peak), plus RB4 as the hardware overcurrent comparator input
-- 16x2 parallel LCD in 4-bit mode: RS=RA4, E=RA6, D4=RA7, D5=RC3, D6=RC4, D7=RD0
-- TX sequencing: OUTPUT_TX=RC5, OUTPUT_TX_VCC=RC6, OUTPUT_TX_BIAS=RC7
-- Comparator latch reset: OUTPUT_COMP_RESET=RC1 (active-low; idles high, asserted low for the reset/settle window)
-- PTT input: INPUT_PTT=RC0; frequency counter input: INPUT_FREQ_COUNTER=RD1 (Timer1 T1CKI via PPS)
-- Rotary encoder: A=RC2, B=RB0, switch=RB6; fan PWM=RB5; trip status=RB7
-- LPF band select: one dedicated active-high output per band on RD2-RD7
+Pin assignments are deliberately **not** listed in this README. The duplicated table that
+used to live here went stale and contradicted the firmware (I2C LCD, band-decoder bus), so
+the README now points at the authoritative table instead of restating it.
 
 Menu settings persist in the PIC's internal EEPROM; no external EEPROM is required.
 
@@ -150,14 +152,14 @@ Menu settings persist in the PIC's internal EEPROM; no external EEPROM is requir
 
 - MCU: PIC16F18875-I/P (PDIP-40)
 - Clock: internal HFINTOSC at 32 MHz (FEXTOSC = OFF, RSTOSC = HFINT32); no external crystal is fitted
-- Display: 1602 LCD driven in 4-bit parallel mode on RS=RA4, E=RA6, D4=RA7, D5=RC3, D6=RC4, D7=RD0; no I2C backpack
-- Frequency counter: INPUT_FREQ_COUNTER on RD1, routed to Timer1 T1CKI through PPS
-- LPF band select: one dedicated active-high output per band on RD2-RD7
+- Display: 1602 LCD driven in 4-bit parallel mode (RS, E, D4-D7); no I2C backpack
+- Frequency counter: `INPUT_FREQ_COUNTER` routed to Timer1 T1CKI through PPS
+- LPF band select: one dedicated active-high output per band (six bands)
 - Protection faults: software-driven SWR, overdrive, drain-voltage, and temperature thresholds, backed by an independent hardware overcurrent comparator
 - SWR measurement pairs: two ADC pairs are required, one before and one after the low-pass filter bank, each with forward and reflected inputs
-- ADC wiring: RA0-RA3, RA5, RB1, RB2, and RB3 directly sample the two SWR pairs, temperature, current, overdrive, and drain voltage; no external analog multiplexer is fitted
+- ADC wiring: the two SWR pairs, temperature, current, overdrive, and drain voltage all sample dedicated ADC pins directly; no external analog multiplexer is fitted
 - Operator control: INPUT_PTT
-- User control: one EC11-style rotary encoder with active-low A/B contacts on RC2/RB0 and push switch on RB6
+- User control: one EC11-style rotary encoder with active-low A/B contacts and a push switch
 - Sequencing outputs: OUTPUT_TX, OUTPUT_TX_VCC, and OUTPUT_TX_BIAS
 - Status output: OUTPUT_TRIP_STATUS
 - Current sensor: buffered WCS1700 output centered at 2.5 V; positive current rises toward 5 V and negative current falls toward 0 V
