@@ -124,13 +124,28 @@ Do not launch another suite while this launcher is running. If an old run exists
 
 ## CTest
 
-After configuring the build directory:
+The registered `PTT_SequencerAndTripSuite` test runs the merged suite through
+`run_suite_with_watchdog.py`, so it owns the MDB process group, cleans up stale runs, and
+enforces its own timeout without depending on the non-standard macOS `timeout` binary.
+The suite is Python 3 only: configuration fails fast if the discovered interpreter is not
+Python 3, and `PYTHON_EXECUTABLE` may be stale in an existing cache, so clear it with
+`-U PYTHON_EXECUTABLE` when reconfiguring.
+
+Run CTest with **all output redirected to a log file**. The MDB trace is megabytes of pin
+and state dump; printing it to the terminal overflows the scrollback and loses the result.
 
 ```sh
-ctest --test-dir _build/My_Pic_Project/debug --output-on-failure --timeout 150
+ctest --test-dir _build/My_Pic_Project/debug --output-on-failure > /tmp/pac_ctest.log 2>&1
+echo "CTEST_EXIT=$?" >> /tmp/pac_ctest.log
 ```
 
-Confirm that CTest discovers the merged `PTT_SequencerAndTripSuite` test. Report zero discovered tests as a configuration failure, not success.
+Run that detached (or let it finish) and read the verdict from `/tmp/pac_ctest.log`. Do not
+re-run another suite while one is active, and do not reuse a terminal that still has a prior
+ctest/suite command queued.
+
+Confirm that CTest discovers the merged `PTT_SequencerAndTripSuite` test
+(`ctest --test-dir _build/My_Pic_Project/debug -N`). Report zero discovered tests as a
+configuration failure, not success.
 
 ## Failure triage
 

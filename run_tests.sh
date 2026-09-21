@@ -62,16 +62,20 @@ echo "  Hex: $(ls -lh "$REPO_ROOT/out/My_Pic_Project/default.hex" | awk '{print 
 echo "  ELF: $(ls -lh "$REPO_ROOT/out/My_Pic_Project/default.elf" | awk '{print $5}')"
 echo ""
 
-# Run tests
-echo "🧪 Running CTest suite (this may take 2-5 minutes)..."
+# Run tests. All CTest and simulator output goes to a log file: the MDB trace is
+# megabytes of pin/state dump and overflows the terminal scrollback.
+CTEST_LOG="${CTEST_LOG:-/tmp/pac_ctest.log}"
+echo "🧪 Running CTest suite (this may take 2-3 minutes)..."
+echo "   Logging to $CTEST_LOG"
 echo ""
-cd "$BUILD_DIR"
-if ctest --output-on-failure; then
-    echo ""
+if ctest --test-dir "$BUILD_DIR" --output-on-failure > "$CTEST_LOG" 2>&1; then
     echo "✓ All tests passed! 🎉"
+    grep -E 'Test #[0-9]+:|tests passed' "$CTEST_LOG" || true
+    echo ""
+    echo "Full log: $CTEST_LOG"
     exit 0
 else
-    echo ""
-    echo "❌ Tests failed"
+    echo "❌ Tests failed — see $CTEST_LOG"
+    grep -E 'Test #[0-9]+:|tests passed|FAILED' "$CTEST_LOG" || true
     exit 1
 fi

@@ -20,14 +20,16 @@ The project is in a working firmware-validation stage:
 - Hardware pin map: [docs/hardware/PIC16F18875_pin_map.md](docs/hardware/PIC16F18875_pin_map.md)
 - Pull-up resistor guidance: [docs/hardware/pull-up-resistor-guidance.md](docs/hardware/pull-up-resistor-guidance.md)
 - ADC input protection guidance: [docs/hardware/adc-input-protection-guidance.md](docs/hardware/adc-input-protection-guidance.md)
-- LPF band-select relay netlist and schematic notes: [docs/hardware/lpf-band-select-netlist.md](docs/hardware/lpf-band-select-netlist.md)
-- LPF band decoder KiCad schematic: [docs/hardware/lpf_band_decoder.kicad_sch](docs/hardware/lpf_band_decoder.kicad_sch)
-- Schematic workflow (KiCad MCP skill setup and usage): [docs/hardware/schematic-workflow.md](docs/hardware/schematic-workflow.md)
+- Schematic workflow (KiCad MCP skill setup and usage): [docs/hardware/SCHEMATIC_WORKFLOW.md](docs/hardware/SCHEMATIC_WORKFLOW.md)
+- Schematic package (block diagram, connection table, component list): [docs/hardware/project_schematic_package/README.md](docs/hardware/project_schematic_package/README.md)
+- Wiring checklist: [docs/hardware/wiring-checklist.md](docs/hardware/wiring-checklist.md)
 - Bench validation procedure: [docs/hardware/bench-validation.md](docs/hardware/bench-validation.md)
+- Testing guide: [TESTING.md](TESTING.md)
 - Firmware entry point: [firmware/src/main.c](firmware/src/main.c)
 - Pin definitions: [firmware/include/pin_map.h](firmware/include/pin_map.h)
-- LCD and software-I2C driver: [firmware/src/lcd_i2c.c](firmware/src/lcd_i2c.c)
-- LCD driver interface: [firmware/include/lcd_i2c.h](firmware/include/lcd_i2c.h)
+- Parallel LCD driver (4-bit): [firmware/src/lcd_parallel.c](firmware/src/lcd_parallel.c)
+- LCD and EEPROM interface: [firmware/include/lcd_i2c.h](firmware/include/lcd_i2c.h)
+- Frequency counter: [firmware/src/freq_counter.c](firmware/src/freq_counter.c)
 - Display/menu state diagram: [_build/My_Pic_Project/sim/graphs/lcd/display_menu_state_diagram.png](_build/My_Pic_Project/sim/graphs/lcd/display_menu_state_diagram.png)
 - 16x2 LCD lifecycle diagram: [_build/My_Pic_Project/sim/graphs/lcd/lcd_lifecycle_16x2.png](_build/My_Pic_Project/sim/graphs/lcd/lcd_lifecycle_16x2.png)
 - Normal TX LCD screens: [_build/My_Pic_Project/sim/graphs/lcd/lcd_normal_screens_16x2.png](_build/My_Pic_Project/sim/graphs/lcd/lcd_normal_screens_16x2.png)
@@ -47,7 +49,7 @@ The controller is intended to use a layered protection model:
 
 - hardware comparator trips for critical faults
 - PIC firmware state machine for monitoring and safe sequencing
-- I2C LCD status output using a standard backpack
+- 16x2 parallel LCD status output
 - PTT-based re-arm behavior without bypassing live hardware faults
 - startup inhibit and fault-latch behavior for safe operation
 
@@ -89,7 +91,7 @@ flowchart LR
         TXBIAS["OUTPUT_TX_BIAS\nTX sequence 3"]
         FAN["OUTPUT_FAN_PWM\nFan speed"]
         TRIP["OUTPUT_TRIP_STATUS\nTrip"]
-        LCD["1602 LCD\nPCF8574 I2C"]
+        LCD["1602 LCD\nparallel 4-bit"]
     end
 
     PRE --> PRE_FWD
@@ -97,7 +99,7 @@ flowchart LR
     FILTER --> POST
     POST --> POST_FWD
     POST --> POST_REF
-    BANDSEL["Band-select bus\nRA4/RA6/RA7/RB6"] --> DECODER["4-bit decoder\nrelay driver"] --> FILTER
+    BANDSEL["Band-select outputs\nRD2-RD7, one per band"] --> DECODER["LPF relay drivers"] --> FILTER
 
     PRE_FWD --> SWR1
     PRE_REF --> SWR1
@@ -121,56 +123,36 @@ flowchart LR
     STATE --> TXBIAS
     STATE --> FAN
     STATE --> TRIP
-    STATE -->|software I2C| LCD
+    STATE -->|parallel 4-bit| LCD
 ```
 
 
-## Approved hardware pin map
+## Hardware pin map
 
-This is the current approved signal map for the protection controller. The 1602 LCD backpack uses the software-I2C bus on RC3/RC4. Menu settings persist in the PIC's internal EEPROM; no external EEPROM is required.
+The authoritative signal map lives in
+[docs/hardware/PIC16F18875_pin_map.md](docs/hardware/PIC16F18875_pin_map.md); it is kept in
+sync with [firmware/include/pin_map.h](firmware/include/pin_map.h). Do not duplicate the
+table here — it drifted out of sync when the LCD and band-select assignments changed.
 
-Physical pin numbers below are for the 28-pin SPDIP/SOIC package (verified against
-KiCad's `MCU_Microchip_PIC16:PIC16F18875-xSO` symbol, which shares the same
-electrical pinout as the SPDIP part). Firmware addresses ports/bits by name
-(e.g. `PORTCbits.RC0`), so it is unaffected by physical pin numbering; only the
-schematic/netlist/PCB need these physical numbers to be correct.
+Current assignment summary:
 
-| PIC pin | Port | Project name | Direction | Function |
-|---|---|---|---|---|
-| 1 | MCLR/VPP | RESET | Input | Master clear reset |
-| 2 | RA0 | ADC_SWR1_FWD | Input | Pre-filter SWR forward power ADC |
-| 3 | RA1 | ADC_SWR1_REF | Input | Pre-filter SWR reflected power ADC |
-| 4 | RA2 | ADC_SWR2_FWD | Input | Post-filter SWR forward power ADC |
-| 5 | RA3 | ADC_SWR2_REF | Input | Post-filter SWR reflected power ADC |
-| 6 | RA4 | OUTPUT_FILTER_BAND_0 | Output | LPF band decoder bit 0 |
-| 7 | RA5 | ADC_TEMP | Input | Temperature sensor ADC (AN5) |
-| 8 | VSS | GND | Power | Ground return |
-| 9 | RA7 | OUTPUT_FILTER_BAND_2 | Output | LPF band decoder bit 2 |
-| 10 | RA6 | OUTPUT_FILTER_BAND_1 | Output | LPF band decoder bit 1 |
-| 11 | RC0 | INPUT_PTT | Input | Transmit request / key-down input |
-| 12 | RC1 | OUTPUT_COMP_RESET | Output | Active-low 10 ms comparator-latch reset pulse on PTT entry |
-| 13 | RC2 | INPUT_ENCODER_A | Input | EC11 rotary encoder A phase |
-| 14 | RC3 | OUTPUT_LCD_I2C_SCL | Output | LCD backpack clock line |
-| 15 | RC4 | OUTPUT_LCD_I2C_SDA | Output | LCD backpack data line |
-| 16 | RC5 | OUTPUT_TX | Output | First TX sequencing driver |
-| 17 | RC6 | OUTPUT_TX_VCC | Output | Second TX sequencing driver |
-| 18 | RC7 | OUTPUT_TX_BIAS | Output | Final TX sequencing driver |
-| 19 | VSS | GND | Power | Ground return |
-| 20 | VDD | +5 V | Power | Decouple locally per datasheet |
-| 21 | RB0 | INPUT_ENCODER_B | Input | EC11 rotary encoder B phase |
-| 22 | RB1 | ADC_CURRENT | Input | WCS1700 current ADC (AN9), 2.5 V center, 0-5 V = -70 to +70 A |
-| 23 | RB2 | ADC_OVERDRIVE | Input | Scaled overdrive-sense ADC (AN10) |
-| 24 | RB3 | ADC_DRAIN_PEAK | Input | Scaled drain-peak-sense ADC (AN11) |
-| 25 | RB4 | INPUT_OVERCURRENT_FAULT | Input | Active-high overcurrent comparator fault |
-| 26 | RB5 | OUTPUT_FAN_PWM | Output | 12 V fan low-side MOSFET control; confirm hardware-PWM alternate-function routing |
-| 27 | RB6 | INPUT_ENCODER_SWITCH | Input | EC11 rotary encoder push switch |
-| 28 | RB7 | OUTPUT_TRIP_STATUS | Output | Trip status output |
+- ADC inputs: RA0-RA3 (two SWR pairs), RA5 (temperature), RB1 (current), RB2 (overdrive), RB3 (drain peak), plus RB4 as the hardware overcurrent comparator input
+- 16x2 parallel LCD in 4-bit mode: RS=RA4, E=RA6, D4=RA7, D5=RC3, D6=RC4, D7=RD0
+- TX sequencing: OUTPUT_TX=RC5, OUTPUT_TX_VCC=RC6, OUTPUT_TX_BIAS=RC7
+- Comparator latch reset: OUTPUT_COMP_RESET=RC1 (active-low; idles high, asserted low for the reset/settle window)
+- PTT input: INPUT_PTT=RC0; frequency counter input: INPUT_FREQ_COUNTER=RD1 (Timer1 T1CKI via PPS)
+- Rotary encoder: A=RC2, B=RB0, switch=RB6; fan PWM=RB5; trip status=RB7
+- LPF band select: one dedicated active-high output per band on RD2-RD7
+
+Menu settings persist in the PIC's internal EEPROM; no external EEPROM is required.
 
 ## Current hardware assumptions
 
-- MCU: PIC16F18875-I/SP
+- MCU: PIC16F18875-I/P (PDIP-40)
 - Clock: internal HFINTOSC at 32 MHz (FEXTOSC = OFF, RSTOSC = HFINT32); no external crystal is fitted
-- Display: 1602 LCD with I2C backpack only
+- Display: 1602 LCD driven in 4-bit parallel mode on RS=RA4, E=RA6, D4=RA7, D5=RC3, D6=RC4, D7=RD0; no I2C backpack
+- Frequency counter: INPUT_FREQ_COUNTER on RD1, routed to Timer1 T1CKI through PPS
+- LPF band select: one dedicated active-high output per band on RD2-RD7
 - Protection faults: software-driven SWR, overdrive, drain-voltage, and temperature thresholds, backed by an independent hardware overcurrent comparator
 - SWR measurement pairs: two ADC pairs are required, one before and one after the low-pass filter bank, each with forward and reflected inputs
 - ADC wiring: RA0-RA3, RA5, RB1, RB2, and RB3 directly sample the two SWR pairs, temperature, current, overdrive, and drain voltage; no external analog multiplexer is fitted
@@ -204,7 +186,7 @@ The same logic is used for each pair and each sensor trips independently. A sing
 
 The 1602 display config menu uses one EC11-style rotary encoder wired active-low/common-to-ground. RC2 reads encoder A, RB0 reads encoder B, and RB6 reads the push switch. In normal display mode, rotation selects the saved home display page and a short press enters settings. In settings mode, rotation edits the current value, short press advances to the next saved setting, and long press exits back to the saved home page. On a trip screen, a long press clears/re-arms the latched fault when the live fault condition is safe. Setting edits are accepted only while PTT is inactive, so a threshold cannot change during transmit. RB1 remains dedicated to the WCS1700 current ADC.
 
-The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adjustable from 0 to 1000 ms in 5 ms steps, each defaulting to 20 ms. The active electrical level for OUTPUT_TX, OUTPUT_TX_VCC, OUTPUT_TX_BIAS, OUTPUT_FAN_PWM, and OUTPUT_TRIP_STATUS is selectable as LOW or HIGH, with LOW as the default. The power display can show forward power or net power (`forward - reflected`); forward-only is the default. LCD I2C polarity is not configurable because its open-drain signalling is defined by the I2C bus.
+The menu also configures the sequencer. TX-to-VCC and VCC-to-bias delays are adjustable from 0 to 1000 ms in 5 ms steps, each defaulting to 20 ms. The active electrical level for OUTPUT_TX, OUTPUT_TX_VCC, OUTPUT_TX_BIAS, OUTPUT_FAN_PWM, and OUTPUT_TRIP_STATUS is selectable as LOW or HIGH, with LOW as the default. The power display can show forward power or net power (`forward - reflected`); forward-only is the default. LCD interface polarity is not configurable; the RS/E/data lines are push-pull outputs and the LCD timing is generated in firmware.
 
 All menu settings and the selected display page are saved to the PIC's internal EEPROM. The stored record includes a magic value, format version, and checksum. At power-up the record is restored only when valid; a missing, incompatible, or corrupted record loads the compiled safe defaults and the PEP/temperature home page.
 
@@ -318,22 +300,22 @@ The firmware should implement these states:
    - Each SWR sensor pair is evaluated independently.
    - A sensor trips when its calculated SWR exceeds the configured threshold, default 2:1.
 
-2. PTT high means receive mode.
+3. PTT high means receive mode.
    - The transmitter is not active.
 
-3. PTT low means transmit request.
+4. PTT low means transmit request.
    - the transmit sequence begins only after the reset action and safety checks complete.
 
-4. If the configured temperature threshold is exceeded, transmit is blocked regardless of PTT.
+5. If the configured temperature threshold is exceeded, transmit is blocked regardless of PTT.
    - This is a hard thermal lockout.
 
-5. If the temperature threshold is exceeded during an active transmit sequence, the system immediately trips and disables TX.
+6. If the temperature threshold is exceeded during an active transmit sequence, the system immediately trips and disables TX.
    - This is a runtime thermal trip.
 
-6. The reset action is shared between startup inhibit and TX entry.
+7. The reset action is shared between startup inhibit and TX entry.
    - In practice, startup and TX reset are the same hardware intent: clear latched comparator state and force safe idle before enable.
 
-7. SWR protection does not require dedicated SWR comparators once the MCU has forward and reflected samples for each RF point.
+8. SWR protection does not require dedicated SWR comparators once the MCU has forward and reflected samples for each RF point.
    - The MCU computes the SWR and trips the channel in software.
 
 ### TX sequence ordering
@@ -364,20 +346,32 @@ A fresh transmit cycle is allowed only when:
 
 Once a TX sequence begins, it completes its engage order even if PTT returns high early; it then completes the ordered release sequence. The next falling PTT edge produces the comparator reset pulse for the following TX cycle.
 
-See [firmware/src/main.c](firmware/src/main.c) for the protection and sequencer logic, and [firmware/src/lcd_i2c.c](firmware/src/lcd_i2c.c) for the LCD transport.
+See [firmware/src/main.c](firmware/src/main.c) for the protection and sequencer logic, and [firmware/src/lcd_parallel.c](firmware/src/lcd_parallel.c) for the LCD transport.
 
 ## Build status
 
-The local project build has been validated with the CMake/XC8 flow. [cmake/My_Pic_Project/default/user.cmake](cmake/My_Pic_Project/default/user.cmake) constrains the production build to `firmware/src/main.c` and `firmware/src/lcd_i2c.c`, excluding any other sources the generated file list may contain.
+The local project build has been validated with the CMake/XC8 flow. [cmake/My_Pic_Project/default/user.cmake](cmake/My_Pic_Project/default/user.cmake) constrains the production build to `firmware/src/main.c`, `firmware/src/lcd_parallel.c`, and `firmware/src/freq_counter.c`, excluding any other sources the generated file list may contain.
 
 The firmware uses a Timer2 interrupt tick of approximately 1 ms. ADC conversion-complete interrupts capture the eight analogue channels without doing protection math in the ISR. The main loop consumes those samples and evaluates software SWR, overdrive, drain, current, and temperature trips before LCD refresh and menu work. The external overcurrent comparator remains the asynchronous hard-protection path. Fault shutdown raises TX_VCC inactive immediately, then raises RELAYS and TX_BIAS inactive after 5 ms; the outputs remain latched until re-arm, except for temperature hysteresis recovery.
 
-GitHub Actions builds on a self-hosted Windows x64 runner. Set these repository variables to the installed toolchain locations on that runner:
+## Testing
 
-- `XC8_DIR`: XC8 `bin` directory containing `xc8-cc.exe` and `xc8-ar.exe`
-- `PACK_REPO_PATH`: Microchip pack repository containing `Microchip/PIC16F1xxxx_DFP/1.32.471/xc8`
+Firmware behaviour is verified in the MPLAB X `mdb` simulator through CTest. A single merged test, `PTT_SequencerAndTripSuite`, runs 11 scenarios in one MDB session: the baseline PTT/sequencer order, the temperature, SWR1, SWR2, hardware-fault, current, overdrive, and drain trips, the SWR1 1.5:1 no-trip case, frequency-counter band locking across all six bands, and the `FREQ_CTR_FAIL` negative test. Full workflow: [TESTING.md](TESTING.md).
 
-The build workflow runs on pushes and pull requests to `main`, verifies those paths before compiling, and uploads an artifact named `firmware-<commit SHA>`. Releases are manual: dispatch the release workflow with an existing tag and the artifact name from a successful build. This prevents automatic release tags and duplicate releases from ordinary commits.
+```bash
+./run_tests.sh
+```
+
+The suite is Python 3 only and takes roughly 2-3 minutes. Write test output to a log file rather than the terminal — the simulator emits megabytes of pin/state trace, which overflows the terminal scrollback and loses the pass/fail line:
+
+```bash
+cmake --build _build/My_Pic_Project/sim
+ctest --test-dir _build/My_Pic_Project/sim --output-on-failure > /tmp/pac_ctest.log 2>&1
+```
+
+GitHub Actions builds on `ubuntu-latest`. The workflow downloads and caches XC8 v4.00 plus the `PIC16F1xxxx_DFP` 1.32.471 pack into `/opt/microchip`, then configures and builds the Release firmware; no repository variables need to be set for that runner.
+
+The build workflow runs on pushes and pull requests to `main` and uploads an artifact named `firmware-<commit SHA>`. It builds firmware only — the simulator tests need MPLAB X `mdb`, so they are not executed in CI and must be run locally before pushing. The auto-release workflow tags a successful `main` build as the next `v0.0.N` and publishes the matching release; the manual release workflow remains available for re-publishing an older artifact under an existing tag.
 
 ## TODOs
 
@@ -390,8 +384,8 @@ The following items remain to be finalized before the design is considered compl
 5. Build and validate the selected 12 V low-side logic-level MOSFET fan drive, its PWM-capable output routing, and its temperature schedule.
 6. Calibrate the two SWR bridges, 10 W input detector, and 300 V drain divider against traceable measurements at the regulated 5.0 V rail, including the RMS/PEP display and PEP-bar response.
 7. Verify that every conditioned ADC input stays between VSS and VDD, including fault/transient tests with the specified external clamps and series resistance.
-8. Validate the shared software-I2C LCD interface, internal EEPROM settings persistence, rotary encoder UI, 10 ms PTT-triggered comparator reset pulse, settings restore, and interrupted-power recovery on the final PCB.
-9. Configure the required self-hosted runner variables, run the GitHub Actions build workflow, and confirm the uploaded firmware artifact before using the manual release workflow.
+8. Validate the parallel 4-bit LCD interface, internal EEPROM settings persistence, rotary encoder UI, 10 ms PTT-triggered comparator reset pulse, settings restore, and interrupted-power recovery on the final PCB.
+9. Run the GitHub Actions build workflow and confirm the uploaded `firmware-<sha>` artifact before relying on the auto-release output.
 10. Review the final PCB against the pin map and update the design documentation for any wiring changes before fabrication.
 11. Revisit the full board schematic (sensor conditioning, comparator board, LCD/EEPROM bus, power) once component values are bench-confirmed.
 

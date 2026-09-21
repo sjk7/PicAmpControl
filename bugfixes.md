@@ -4,6 +4,59 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-21 — `ctest` could not run the simulator suite (Python 2 binding + non-portable `timeout`)
+
+`ctest` reported 0/1 passed (exit 8) on a clean checkout. `user.cmake` used
+`find_program(PYTHON_EXECUTABLE NAMES python python3 REQUIRED)`, which resolved to
+`/Library/Frameworks/Python.framework/Versions/2.7/bin/python`. The suite is Python 3
+only, and that interpreter is an Intel-only binary on this Apple Silicon host, so the
+test died before starting:
+
+```text
+timeout: failed to run command '.../Versions/2.7/bin/python': Bad CPU type in executable
+```
+
+The registration also wrapped the test in GNU `timeout`, which is not part of macOS.
+
+Fix in `cmake/My_Pic_Project/default/user.cmake`:
+
+- search `NAMES python3 python` and verify `sys.version_info[0] == 3` at configure time,
+  so a Python 2 interpreter fails configuration with an actionable message instead of
+  failing the test at run time;
+- run the suite through `tools/simulate/run_suite_with_watchdog.py` (owns the MDB
+  process group, cleans up stale runs, own timeout, progress logs) instead of invoking
+  `trace_ptt_sequence.py --suite` under the external `timeout` binary.
+
+`PYTHON_EXECUTABLE` is cached, so an existing build directory must be reconfigured with
+`-U PYTHON_EXECUTABLE` to pick up the change.
+
+## 2026-09-21 — README, TESTING.md, and the pin-map doc were out of sync with the current hardware and test scheme
+
+Found while bringing `ctest` back to green.
+
+- README described the superseded LCD and band-select scheme: a PCF8574 I2C backpack on
+  RC3/RC4, and a band-decoder bus on RA4/RA6/RA7/RB6. `pin_map.h` actually drives a 4-bit
+  **parallel** LCD (RS=RA4, E=RA6, D4=RA7, D5=RC3, D6=RC4, D7=RD0) and one dedicated
+  active-high band-select output per band on RD2-RD7. README also linked
+  `firmware/src/lcd_i2c.c`, `docs/hardware/lpf-band-select-netlist.md`,
+  `docs/hardware/lpf_band_decoder.kicad_sch`, and `docs/hardware/schematic-workflow.md` —
+  none of which exist.
+- README claimed a self-hosted Windows x64 runner and manual-only releases.
+  `firmware-build.yml` runs on `ubuntu-latest` and installs XC8/DFP itself, and
+  `auto-release.yml` tags and publishes a release automatically after a successful `main`
+  build.
+- TESTING.md listed a non-existent `PTT_FrequencyCounter_BandLock` test, said the suite
+  builds the firmware itself, documented trace PNG filenames that are never produced, and
+  claimed the simulator tests run in CI on a runner with MPLAB X installed via apt. They do
+  not run in CI at all.
+- `docs/hardware/PIC16F18875_pin_map.md` described `OUTPUT_COMP_RESET` as an active-high
+  pulse. `main.c` idles it high and drives it low for the reset/settle window
+  (`apply_startup_inhibit`, `start_comparator_reset`), so it is active-low.
+
+Fix: README now defers to the canonical pin map instead of duplicating a stale copy that
+had already drifted, the dead links were replaced with real ones, TESTING.md was rewritten
+to the current CTest + watchdog scheme, and the pin-map polarity note was corrected.
+
 ## 2026-09-20 — Hardware pin-map doc and sim tests out of sync with actual pinout
 
 `docs/hardware/PIC16F18875_pin_map.md` claimed RA4/RA6/RA7 and RB2/RB3 were free,

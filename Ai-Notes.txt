@@ -6,15 +6,16 @@ CI/release workflows change - don't let it go stale.
 
 ## Standing AI instructions (things the user asked to always remember)
 - Keep this file (Ai-Notes.txt) ALWAYS up to date; it's the launch point for a new session.
-- Always push to origin/main after a successful compile/build of a change - don't leave verified-good commits sitting local. Firmware only truly compiles via CI (firmware-build.yml on the self-hosted runner), so this means: commit, push, and confirm the triggered build succeeds.
+- Always push to origin/main after a successful compile/build of a change - don't leave verified-good commits sitting local. Firmware only truly compiles via CI (firmware-build.yml, which runs on ubuntu-latest), so this means: commit, push, and confirm the triggered build succeeds.
 - Keep README.md and docs/ purely current-facing: no "old prototype was replaced by..." style historical narrative. Historical context belongs only in prototype_reference/.
 - Never run bare `git status`/`git status --short`; use `git --no-pager status --short` (avoids hitting an interactive pager or the `gcm-core` credential helper prompt).
 - Any new "remember this" instruction from the user must be added to this section, not just kept in assistant memory.
 - `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their configured active levels (active-low by default); keep it transient, then restore the user's saved home page.
 - Keep verified changes committed and pushed promptly; generated simulator CSVs belong in `_build/My_Pic_Project/sim/csv/` and graphs in `_build/My_Pic_Project/sim/graphs/`.
+- Do not let build/test output flood the terminal. Log it to a file and read the verdict from the file (e.g. `ctest ... > /tmp/pac_ctest.log 2>&1`). MDB emits megabytes of pin/state trace, which overflows the terminal scrollback and destroys the pass/fail line.
 
 ## Date
-2026-09-16
+2026-09-21
 
 ## Simulator timing limitation (IMPORTANT)
 - The firmware uses Timer2 for the approximately 1 ms scheduler tick because MDB's Timer0 model stalled during earlier testing.
@@ -28,7 +29,7 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
 - SWR trips, power scales, drain/input thresholds, 10 kOhm NTC B-value profile, sequencer timing, and output polarities are user-configurable from the 1602 LCD menu.
 - Hardware comparators combine at INPUT_HARD_FAULT for independent overdrive, drain-peak, and overcurrent protection.
 - The sequencer runs TX, TX_VCC, and TX_BIAS with two configurable inter-stage delays, defaulting to 20 ms.
-- The LCD uses a PCF8574 backpack driven with software I2C on RC3/RC4 by firmware/src/lcd_i2c.c.
+- The LCD is a 1602 driven in 4-bit parallel mode (RS=RA4, E=RA6, D4=RA7, D5=RC3, D6=RC4, D7=RD0) by firmware/src/lcd_parallel.c; there is no I2C backpack. firmware/include/lcd_i2c.h is the (legacy-named) interface header for the LCD plus internal EEPROM.
 - Menu settings and the last display page are stored in the PIC's internal EEPROM in a versioned, checksummed record; no external EEPROM module is used.
 
 ## Display
@@ -50,7 +51,9 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
 - Benign, expected simulator noise: `W0106-SIM: This device only has partial support for TMR1/TMR3/TMR5 peripheral...` on every reset. Firmware never touches T1CON/T3CON/T5CON; this is just `mdb`'s partial clock-source-mux model for those timers at their POR default state, not a real firmware/silicon issue - safe to ignore (already filtered out by run_sim.sh/.ps1).
 - FIXED (2026-09-15, see bugfixes.md): the ADC ISR used to immediately re-arm the next conversion (with a blocking `__delay_us`) right after each conversion completed, entirely inside `timer0_isr()`. In simulation this created a back-to-back interrupt chain that fully starved the main loop - `update_tx_sequence()`/`update_protection_state()` never ran even once after 30+ simulated seconds. Fixed by only re-arming once per Timer0 tick (~1 ms) instead of immediately; verified main-loop breakpoints now hit normally. If future simulation runs show the CPU stuck at the interrupt vector address on every `Halt` with continuous `W0223-ADC` spam, that class of bug is back.
 - To simulate a steady-state-then-PTT-drop scenario without spurious protection faults, drive plausible idle ADC voltages before running: `write pin RA0/RA1/RA2/RA3 0v` (SWR fwd/ref, both pairs), `write pin RA5 2.5v` (temp), `write pin RB1/RB2/RB3 0v` (current/overdrive/drain), `write pin RB4 low` (hw overcurrent fault, active-high). PTT (`RC0`) is active-low; hold `high` for idle/steady-state, then `low` to assert. Without explicit stimulus, floating ADC inputs read as very low/high and spam `W0222/W0223-ADC` over/underflow warnings (cosmetic) but can also cause `swr_trip()` etc. to behave unpredictably.
-- The simulator suite runs nine scenarios in one MDB session and emits per-scenario CSVs and graphs under `_build/My_Pic_Project/sim/csv/` and `_build/My_Pic_Project/sim/graphs/`.
+- The simulator suite runs eleven scenarios in one MDB session and emits per-scenario CSVs and graphs under `_build/My_Pic_Project/sim/csv/` and `_build/My_Pic_Project/sim/graphs/`.
+- Run tests with `./run_tests.sh` or `ctest --test-dir _build/My_Pic_Project/sim --output-on-failure > /tmp/pac_ctest.log 2>&1` (see TESTING.md). A green run ends with `100% tests passed` and the suite line `PTT suite passed: 11 scenarios in one MDB session`; expect roughly 2-3 minutes.
+- CTest registers one merged test, `PTT_SequencerAndTripSuite`, which runs `tools/simulate/run_suite_with_watchdog.py --timeout 300` (own timeout, MDB process-group cleanup, progress logs). The suite is Python 3 only and configuration now fails if the discovered interpreter is not Python 3; `PYTHON_EXECUTABLE` is cached, so clear it with `-U PYTHON_EXECUTABLE` when reconfiguring an existing build directory.
 
 ## References
 - Hardware source of truth: docs/hardware/PIC16F18875_pin_map.md

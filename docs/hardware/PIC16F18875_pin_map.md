@@ -107,7 +107,7 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 | Signal | Purpose |
 |--------|---------|
 | INPUT_OVERCURRENT_FAULT (RB4) | Hardware overcurrent latch (CMP1 output, active-low trip) |
-| OUTPUT_COMP_RESET (RC1) | Active-high pulse to reset CMP1 latch after trip recovery |
+| OUTPUT_COMP_RESET (RC1) | Active-low pulse to reset CMP1 latch: idles high, driven low for the reset/settle window (10 ms on PTT entry, 1000 ms at startup) |
 
 ## Encoder UI
 

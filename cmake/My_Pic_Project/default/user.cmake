@@ -8,33 +8,48 @@ target_compile_options(My_Pic_Project_default_default_XC8_compile PRIVATE "$<$<C
 target_link_options(My_Pic_Project_default_image_LRxgA9DB PRIVATE "$<$<CONFIG:Debug>:-O1>" "$<$<CONFIG:Release>:-Os>")
 
 enable_testing()
-find_program(PYTHON_EXECUTABLE NAMES python python3 REQUIRED)
+
+# The simulator suite is Python 3 only. Search for python3 first and verify the
+# interpreter at configure time, so a `python` that resolves to Python 2 (common on
+# macOS) fails the configure step instead of silently failing the test at run time.
+find_program(PYTHON_EXECUTABLE NAMES python3 python REQUIRED)
+execute_process(
+    COMMAND "${PYTHON_EXECUTABLE}" -c "import sys; sys.exit(0 if sys.version_info[0] == 3 else 1)"
+    RESULT_VARIABLE PICAMP_PYTHON3_CHECK)
+if (NOT PICAMP_PYTHON3_CHECK EQUAL 0)
+    message(FATAL_ERROR
+        "Python 3 is required for the simulator suite, but '${PYTHON_EXECUTABLE}' is not Python 3. "
+        "Reconfigure with -DPYTHON_EXECUTABLE=/path/to/python3.")
+endif()
+
+# Run the merged suite through the cleanup-aware launcher. It owns the MDB process
+# group, kills stale runs, records progress logs, and enforces its own timeout, so the
+# test does not depend on the non-standard macOS `timeout` binary.
+set(PICAMP_SUITE_LAUNCHER "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/run_suite_with_watchdog.py")
 add_test(
     NAME PTT_SequencerAndTripSuite
-    COMMAND timeout 300 "${PYTHON_EXECUTABLE}"
-            "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
-            --suite)
+    COMMAND "${PYTHON_EXECUTABLE}" "${PICAMP_SUITE_LAUNCHER}" --timeout 300)
 option(PICAMP_ENABLE_INDIVIDUAL_SIM_TESTS "Register each simulator scenario separately" OFF)
 if (PICAMP_ENABLE_INDIVIDUAL_SIM_TESTS)
     add_test(
         NAME PTT_ActiveLow_StartupAndReleaseSequence
-        COMMAND timeout 120 "${PYTHON_EXECUTABLE}"
+        COMMAND "${PYTHON_EXECUTABLE}"
                 "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
                 --test)
     add_test(
         NAME PTT_TemperatureTrip_InTransmit
-        COMMAND timeout 120 "${PYTHON_EXECUTABLE}"
+        COMMAND "${PYTHON_EXECUTABLE}"
                 "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
                 --temperature-trip)
     add_test(
         NAME PTT_SWR1_1P5_NoTrip_At2kW
-        COMMAND timeout 120 "${PYTHON_EXECUTABLE}"
+        COMMAND "${PYTHON_EXECUTABLE}"
                 "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
                 --swr1-1p5)
     foreach(TRIP_NAME SWR1 SWR2 HWFAULT CURRENT OVERDRIVE DRAIN)
         add_test(
             NAME PTT_${TRIP_NAME}Trip_InTransmit
-            COMMAND timeout 120 "${PYTHON_EXECUTABLE}"
+            COMMAND "${PYTHON_EXECUTABLE}"
                     "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/trace_ptt_sequence.py"
                     --trip ${TRIP_NAME})
     endforeach()
