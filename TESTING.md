@@ -36,7 +36,7 @@ then runs CTest.
 ## Manual run
 
 ```bash
-cd /Users/stevekerr/mydocs/code/PicAmpControl
+cd "$HOME/mydocs/code/PicAmpControl"   # wherever you cloned the repo
 
 cmake -S cmake/My_Pic_Project/default \
   -B _build/My_Pic_Project/sim \
@@ -44,15 +44,19 @@ cmake -S cmake/My_Pic_Project/default \
   -DCMAKE_BUILD_TYPE=Debug \
   -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/My_Pic_Project/default/.generated/toolchain.cmake" \
   -DCMAKE_USER_MAKE_RULES_OVERRIDE="$PWD/cmake/My_Pic_Project/default/.generated/overrides.cmake" \
-  -DXC8_BIN_DIR=/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin \
-  -DCMAKE_C_COMPILER=/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-cc \
-  -DCMAKE_ASM_COMPILER=/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-cc \
-  -DCMAKE_AR=/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-ar \
+  -DXC8_BIN_DIR="$HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin" \
+  -DCMAKE_C_COMPILER="$HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-cc" \
+  -DCMAKE_ASM_COMPILER="$HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-cc" \
+  -DCMAKE_AR="$HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-ar" \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
 cmake --build _build/My_Pic_Project/sim
 ctest --test-dir _build/My_Pic_Project/sim --output-on-failure > /tmp/pac_ctest.log 2>&1
 ```
+
+On Windows the toolchain lives under `C:/Program Files/Microchip/xc8/v4.00/bin` and the
+machine-wide CMake cache normally finds it; `tools/simulate/*.ps1` and `run_tests.ps1` handle the
+platform differences for you.
 
 ## Test output goes to files, not the terminal
 
@@ -311,7 +315,7 @@ brew install --cask mplabx-ide
 
 ```bash
 brew install --cask mplab-xc8
-ls -la /Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin
+ls -la "$HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin"
 ```
 
 Pass `-DXC8_BIN_DIR`, `-DCMAKE_C_COMPILER`, `-DCMAKE_ASM_COMPILER`, and `-DCMAKE_AR` as

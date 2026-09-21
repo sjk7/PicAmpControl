@@ -34,11 +34,26 @@ Always clean up an earlier run before starting another. The MDB suite can outliv
 
 ## Toolchain setup
 
-On macOS, use the installed XC8 toolchain:
+On macOS, use the installed XC8 toolchain under `$HOME` (the MPLAB X installer also exposes it
+at `/Applications/microchip/...`; either works):
 
 ```text
-/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin
+$HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin
 ```
+
+On Windows it is `C:/Program Files/Microchip/xc8/v4.00/bin`, and `%USERPROFILE%/.mchp_packs` holds
+the DFP packs (`$HOME/.mchp_packs` on macOS). Use `$HOME`/`%USERPROFILE%` rather than a literal
+home directory: the committed docs and config must not carry a developer's account name, and the
+paths differ per machine.
+
+`.clangd` is deliberately **not tracked** (it is in `.gitignore`) because its whole content is
+absolute XC8/DFP include paths, and clangd has no portable way to express them: it does not expand
+`${workspaceFolder}` (verified on the bundled clangd 19.1.7 - the literal string reaches the
+compiler), and `If: PathMatch` fragments cannot discriminate by OS (verified: both an `If:` branch
+matching a POSIX path and one matching `C:/**` were applied to the same file). Recreate it per
+machine with the `CompileFlags.Add` list pointing at that machine's XC8 and DFP directories, or let
+IntelliSense come from `.vscode/c_cpp_properties.json`, which does support `${env:HOME}` and
+`${env:USERPROFILE}` and carries a config for each platform.
 
 Before building, check that `xc8-cc` exists. Existing build caches may contain the invalid compiler value `c`; explicitly override the compiler paths when reconfiguring. The repository root has no `CMakeLists.txt`, so do not configure with `cmake --preset` from the root unless the preset is first corrected to specify the nested source directory.
 
@@ -51,10 +66,10 @@ cmake -S cmake/My_Pic_Project/default \
   -DCMAKE_BUILD_TYPE=Debug \
   -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/My_Pic_Project/default/.generated/toolchain.cmake" \
   -DCMAKE_USER_MAKE_RULES_OVERRIDE="$PWD/cmake/My_Pic_Project/default/.generated/overrides.cmake" \
-  -DXC8_BIN_DIR=/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin \
-  -DCMAKE_C_COMPILER=/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-cc \
-  -DCMAKE_ASM_COMPILER=/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-cc \
-  -DCMAKE_AR=/Users/stevekerr/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-ar \
+  -DXC8_BIN_DIR="$HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin" \
+  -DCMAKE_C_COMPILER="$HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-cc" \
+  -DCMAKE_ASM_COMPILER="$HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-cc" \
+  -DCMAKE_AR="$HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-ar" \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build _build/My_Pic_Project/debug -j4
 ```

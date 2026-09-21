@@ -4,6 +4,38 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-21 — The developer's macOS account name was published in tracked files
+
+A case-insensitive search for the developer's macOS account name (which is their real name) found it
+hard-coded as an absolute home path in five tracked files: `.clangd`, `TESTING.md`,
+`.github/skills/picampcontrol-build-test/SKILL.md`, `.vscode/settings.json` and
+`.vscode/c_cpp_properties.json`. This repository is public, so the name was published in every clone
+and on the web. The name is deliberately not repeated here - writing it into this log would recreate
+the same leak.
+
+It was also in the local build metadata: the locally built `out/My_Pic_Project/default.elf` and
+`default.sym` embed the absolute source path (30 and 31 hits respectively). The flashable
+`default.hex` contains none, and neither do the published release assets (`default.elf`,
+`default.hex`, `mem.map`, `memoryfile.xml`) - CI builds on a runner under a temporary path. So the
+leak was in the repository, not in the shipped firmware.
+
+Fixed in the working tree by replacing the literal home directory with portable forms: `$HOME` in
+the shell examples, `${env:HOME}` / `${env:USERPROFILE}` in the VS Code configuration, and a new
+`Windows-XC8` configuration alongside `Mac-XC8`. `.clangd` was untracked and added to `.gitignore`
+rather than rewritten, because its content is unavoidably machine-absolute: clangd does not expand
+`${workspaceFolder}` (verified on the bundled clangd 19.1.7 - the literal string reaches the
+compiler) and its `If: PathMatch` fragments cannot select by OS (verified - a POSIX-matching branch
+and a `C:/**` branch were both applied to the same file), so no single version can serve both
+machines.
+
+**Not fixed, and not fixable by a commit:** the name remains in the history of `main` (six commits
+match a history search, from `efbd7a7` through `e4b9c93`) and a personal email address remains in
+the commit author metadata. Removing those needs a history rewrite plus a force-push, which changes
+every downstream commit SHA and invalidates existing clones and forks - left to the repository owner
+to decide. Local, gitignored working directories (`_build/`, `out/`, `build/*.log`,
+`tools/simulate/__pycache__/`) also still contain the name; they are not in the repository, but
+attaching them to an issue or a chat would leak it.
+
 ## 2026-09-21 — AI-HANDOFF.md duplicated other docs and stated a release behaviour the firmware no longer has
 
 Two AI carry-over files had grown up side by side, `Ai-Notes.txt` and `AI-HANDOFF.md`. Nothing in
