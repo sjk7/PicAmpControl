@@ -1,0 +1,1 @@
+we want to make sure any band change is detected by a 'first dit' method.
