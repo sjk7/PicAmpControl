@@ -10,7 +10,7 @@
 
 ## Firmware
 
-- Target: PIC16F18875-I/SP, XC8, 32 MHz HFINTOSC.
+- Target: PIC16F18875-I/P (40-pin PDIP), XC8, 32 MHz HFINTOSC. The firmware is the source of truth for the target device: `-mcpu=16F18875` in `cmake/My_Pic_Project/default/.generated/rule.cmake`, mirrored in `.clangd`.
 - Timer2 drives the approximately 1 ms scheduler tick.
 - ADC is 10-bit, right-justified, VDD-referenced, approximately 4.89 mV/count.
 - ADC channels:

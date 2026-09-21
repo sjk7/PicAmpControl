@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains the design for a PIC16F18875-I/SP-based linear amplifier protection controller, covering hardware fault protection, safe amplifier enable/disable behavior, operator feedback, and startup/latched fault handling.
+This repository contains the design for a PIC16F18875-I/P-based linear amplifier protection controller, covering hardware fault protection, safe amplifier enable/disable behavior, operator feedback, and startup/latched fault handling.
 
 ## Current project status
 
