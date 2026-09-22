@@ -57,6 +57,29 @@ NEVER truncate in a failure/error path. `TEST_END` / `PROBE_END` is appended at 
 whatever the run wrote, so a finished log reads begin -> heartbeats -> scenario output -> failure
 detail -> end marker. A failure must leave the full tail, not a one-line `code=1`.
 
+**Hard rule: NEVER run a simulator test against an ELF you have not just rebuilt, and never trust
+`cmake --build` alone to have rebuilt it.** Every harness loads a single fixed image
+(`out/My_Pic_Project_<mcpu>/default.elf`), *not* the build tree it was configured in, so a test run
+silently uses whatever ELF was written last - including a stale one from an older source revision or
+a different `-D` set. This wasted a whole debugging cycle on 2026-09-22: an LCD-protocol test kept
+reading the *previous* firmware's output because `cmake --build` printed only `ninja: no work to do`
+(the build dir was cleaned after configure, so ninja had already built during the combined command
+and main.c's edit had not been seen by a *fresh* configure). The failure looked like a firmware bug
+and was pure staleness. Rules that prevent it:
+
+1. Before running any simulator test, compare timestamps: `(Get-Item firmware/src/main.c).LastWriteTime`
+   vs `(Get-Item out/My_Pic_Project_<mcpu>/default.elf).LastWriteTime`. The ELF must be **newer** than
+   every source file you edited. If it is not, the build did nothing - fix that first.
+2. Do not chain the reconfigure and the build in one shell command and then read only the tail; the
+   `--build` output can be swallowed. Run `cmake --build <dir> --verbose` as its own command and
+   grep it for the compile line of the file you changed (e.g. `main.c.p1`). "no work to do" means
+   your change was not picked up.
+3. When a test's behaviour does not change after an edit that should change it, suspect the ELF
+   BEFORE suspecting the logic. A stale image is the most common cause of "my fix did nothing".
+4. A `PICAMP_LCD_TEST` (or any other test-only `#ifdef`) build writes the SAME shared ELF path as
+   the normal build. Rebuild the normal configuration afterwards, or the next suite run will load
+   the test-only image.
+
 **Finding (2026-09-22): FREQ_CTR I5 hot-switch root cause and fix.** The remembered-band rekey
 engaged on the stale remembered band, then the band-verify mismatch folded the relay back to the
 measured band *after* the amplifier was keyed, moving the band relay under a keyed amp (I5/I1
