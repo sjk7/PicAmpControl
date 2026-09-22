@@ -651,6 +651,17 @@ Prerequisites that decide whether debugging works at all:
   | the NVM unlock + `WR` sequence completes | `g_nvm_done = 1`, `NVMDATL` read back `165` (0xA5) |
   | 64 MHz core runs the tick at 1.000 ms | 106 ticks per 200,000 `Stepi` steps; `OSCCON1` reads `96` |
 
+  **PPS ON Q10: ONLY ONE ASSIGNMENT EXISTS, AND IT IS AN INPUT (2026-09-22).** The firmware's
+  entire PPS surface is `T1CKIPPS = 0x19` in `freq_counter.c` - the Timer1 clock *input* from RD1.
+  No `RPnR`/`*PPS` **output** register is written anywhere: every other pin is a plain LAT/PORT pin.
+  So the "Q10 PPS output codes differ from the 16F's" risk does not apply to this design as it
+  stands, and the band relays do not need PPS at all. If that ever changes, the output source codes
+  come from the Q10's own output table, which is a different table from the input codes - do not
+  carry `0x19` across. The input code itself measured good on the model (readback `25`).
+  Still open on Q10 and only answerable on the bench: whether `RB4` (hardware fault latch) is
+  digital with the right polarity, and whether the 64 MHz core changes the LCD parallel timing
+  (`lcd_parallel.c` runs `-Os` in Debug and was never timed on Q10).
+
   **`W9602-COMP` IS NOT A BLOCKER FOR THIS DESIGN - the firmware never configures an on-chip
   comparator (clarified 2026-09-22).** The warning says the model cannot route a DAC voltage into a
   comparator input, and it was carried in `Ai-Notes.txt` as an open risk "in the overcurrent safety
