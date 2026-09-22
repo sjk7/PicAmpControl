@@ -419,6 +419,12 @@ changed on disk" prompt. Tailing a log for visibility is sanctioned by the user;
 terminal output is not, so the pass/fail line and the appended exit code still come from the run's own
 log file.
 
+**A freshly recreated log is empty, and that is expected - say so.** Immediately after the
+delete/create step there is no run in progress, so the tab and the tail both show nothing, which looks
+exactly like "the file is not open" (2026-09-22: this cost a cycle and a round of confusion). Either
+state plainly that it stays blank until the job starts, or start the job in the same breath. An empty
+recreated log is never evidence of a missing file or a failed launch.
+
 Both tests run by default. Windows is about 2.4x slower than macOS - the first-dit proof is ~20 s
 on macOS / ~55 s on Windows, and the merged suite ~150 s / ~356 s (measured 2026-09-22) - so read
 the elapsed time against the platform before calling a slow run anomalous. Run one at a time when
