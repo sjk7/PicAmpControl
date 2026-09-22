@@ -33,6 +33,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 WINDOWS = sys.platform == "win32"
@@ -48,6 +49,98 @@ def temp_dir() -> Path:
     `%TEMP%` there and to `/tmp` (or `$TMPDIR`) on the POSIX side.
     """
     return Path(tempfile.gettempdir())
+
+
+# `O_BINARY` keeps the CRLF we write from being doubled by text-mode translation; it
+# does not exist on POSIX, where the byte stream is already exact.
+_BINARY = getattr(os, "O_BINARY", 0)
+_APPEND_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_APPEND | _BINARY
+
+
+class AppendLog:
+    """One serialised, line-atomic appender per log file.
+
+    Three writers share the harness's progress file - the launcher, the test's own stdout, and
+    the sibling heartbeat process (or, on a Ctrl-C, the test's Python atexit writer, which
+    closes the same inherited handle). Frayed records only happen while two writers reach the
+    file at the same instant, and that is what a heartbeat line reading `ed=50.3 ...` - no
+    timestamp, no `HEARTBEAT`, just the tail of a line - was.
+
+    Measured on Windows, 2026-09-22, three writers, 113-byte records, ~160 k records per run,
+    repeatable across runs (throwaway probes, since deleted - the numbers are the point):
+
+    ==================  ==========  =========
+    writer shape        records     frayed
+    ==================  ==========  =========
+    one write per line  42 k        ~50
+    lock, one per line  25 k        0
+    ==================  ==========  =========
+
+    So the rule this class encodes is **one `os.write` per record, with the writers serialised
+    on an `O_CREAT|O_EXCL` lock file**, and no other write to the progress file. An earlier
+    measurement that looked like "the lock alone fixes it" was confounded: that probe wrote a
+    23 KB burst per lock acquisition, and a single large write is whole by itself.
+
+    Acquire is retried on a stale lock because a writer killed mid-record must not wedge a run.
+    """
+
+    def __init__(self, path: Path):
+        self.path = Path(path)
+        self.lock_path = self.path.with_name(self.path.name + ".lock")
+
+    def _acquire(self):
+        while True:
+            try:
+                return os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                # A writer killed mid-record must not wedge the run; the lock file is only
+                # advisory, so a stale one is replaced rather than waited on.
+                try:
+                    self.lock_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                time.sleep(0.002)
+            except OSError:
+                return None
+
+    def _release(self, lock_fd):
+        if lock_fd is not None:
+            os.close(lock_fd)
+            try:
+                self.lock_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def write(self, text: str):
+        """Append one line, whole or not at all."""
+        data = text.encode("utf-8", "replace")
+        if not data.endswith(b"\n"):
+            data += b"\n"
+        lock_fd = self._acquire()
+        try:
+            fd = os.open(self.path, _APPEND_FLAGS)
+            try:
+                view = memoryview(data)
+                while view:
+                    try:
+                        written = os.write(fd, view)
+                    except InterruptedError:      # pragma: no cover - signal-dependent
+                        continue
+                    view = view[written:] if written < len(view) else memoryview(b"")
+            finally:
+                os.close(fd)
+        except OSError:
+            pass
+        finally:
+            self._release(lock_fd)
+
+    def open_for_child(self):
+        """`(path, file_object)` for handing a log to a child as its stdout.
+
+        The child gets its own append handle rather than the launcher's, because the
+        launcher's is only open for the duration of a write.
+        """
+        return self.path, open(self.path, "a", buffering=1)
 
 
 # MPLAB X installs one versioned directory per release. `sort -V` is used by

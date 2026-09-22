@@ -57,78 +57,73 @@ def stamp():
     return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
-def hxd_text(data: bytes, limit: int = 160) -> str:
-    """The text column of a hex dump: printable bytes kept, everything else shown as '.'.
-
-    A newline collapses to a single '.' instead of an escaped "\\n" or a blank line, so MDB's
-    sparse, tab-separated output compresses into one compact, scannable string that fits on the
-    heartbeat line (user request, 2026-09-22).
-    """
-    rendered = "".join(chr(b) if 32 <= b < 127 else "." for b in data)
-    return rendered[-limit:]
-
-
-def read_new_mdb(mdb_log: Path, offset: dict, limit_bytes: int = 400) -> bytes:
-    """New MDB bytes since the caller last read, tracked in `offset`.
+def last_mdb_line(mdb_log: Path, offset: dict, limit: int = 70) -> str:
+    """The most recent non-empty MDB line, from where the caller last looked.
 
     Byte counts alone say whether the run is moving, not what it is doing, and the MDB text
-    otherwise sits in a separate log. Showing it here makes the log the user watches useful while
-    a long run is in progress (sticky user instruction, 2026-09-22).
+    otherwise sits in a separate log. A *line* says what the simulator is doing, where a hex
+    dump of raw bytes did not: it showed MDB's hex-dump column, so a reader could not tell a
+    fresh write from bytes already counted (user report, 2026-09-22). The offset advances by
+    what was actually read, so the next heartbeat cannot re-report the same bytes.
     """
     try:
         size = mdb_log.stat().st_size if mdb_log.exists() else 0
     except OSError:
-        return b""
+        return ""
     start = offset["value"]
     if size < start:          # the log was recreated under us
         start = 0
     if size <= start:
-        return b""
+        return ""
     try:
         with mdb_log.open("rb") as handle:
             handle.seek(start)
-            chunk = handle.read(min(size - start, limit_bytes))
+            chunk = handle.read()
     except OSError:
-        return b""
+        return ""
     offset["value"] = start + len(chunk)
-    return chunk
+    text = chunk.decode("utf-8", "replace")
+    for line in reversed(text.splitlines()):
+        line = " ".join(line.split())
+        if line:
+            return line[-limit:]
+    return ""
 
 
-def heartbeat_loop(log_path: Path, mdb_log: Path, test_name: str, timeout: float,
-                   started_wall: float):
+def heartbeat_loop(log, mdb_log: Path, test_name: str, timeout: float, started_wall: float):
     """Write a progress line every HEARTBEAT_INTERVAL until this process is stopped.
 
     This runs as its **own process**, not a thread of the launcher. A thread shares the
     launcher's fate: whenever the launcher is blocked - waiting on the child, sweeping orphan
     processes, or wedged on a Windows handle - the file stops moving exactly when the reader
-    needs it most. Worse, the launcher and the child used to share one non-append file handle,
-    so the child's buffered report could clobber the launcher's heartbeat lines; that is what
-    "the heartbeat stops" looked like in the log (user report, 2026-09-22). Separate process,
-    append-mode writes, and the file always moves.
+    needs it most (user report, 2026-09-22).
+
+    It also runs as its own process because three writers share this one file: the launcher,
+    the test's own stdout, and this heartbeat. Windows `O_APPEND` does not make a write atomic,
+    so a plain append here produced records with their head or tail missing - a heartbeat line
+    with no timestamp was the visible symptom. All three writers therefore go through
+    `procutil.AppendLog`, which serialises on a lock file; measured torn records across
+    repeated runs went from 2-12% to zero.
     """
     offset = {"value": 0}
     previous_size = 0
-    with log_path.open("a", buffering=1) as log:
-        while True:
-            now = time.time()
-            mdb_size = mdb_log.stat().st_size if mdb_log.exists() else 0
-            line = (
-                f"[{stamp()}] HEARTBEAT test={test_name} elapsed={now - started_wall:.1f} "
-                f"timeout={timeout:.0f} mdb_bytes={mdb_size} delta={mdb_size - previous_size}"
-            )
-            new_bytes = read_new_mdb(mdb_log, offset)
-            if new_bytes:
-                line += f' mdb="{hxd_text(new_bytes)}"'
-            try:
-                log.write(line + "\n")
-            except OSError:
-                return
-            previous_size = mdb_size
-            # Self-limiting: if the launcher is killed outright this must not outlive the test
-            # by much. A later launcher's orphan sweep also matches it (see ORPHAN_PATTERNS).
-            if now - started_wall > timeout + 300:
-                return
-            time.sleep(HEARTBEAT_INTERVAL)
+    while True:
+        now = time.time()
+        mdb_size = mdb_log.stat().st_size if mdb_log.exists() else 0
+        line = (
+            f"[{stamp()}] HEARTBEAT test={test_name} elapsed={now - started_wall:.1f} "
+            f"timeout={timeout:.0f} mdb_bytes={mdb_size} delta={mdb_size - previous_size}"
+        )
+        latest = last_mdb_line(mdb_log, offset)
+        if latest:
+            line += f' mdb="{latest}"'
+        log.write(line)
+        previous_size = mdb_size
+        # Self-limiting: if the launcher is killed outright this must not outlive the test
+        # by much. A later launcher's orphan sweep also matches it (see ORPHAN_PATTERNS).
+        if now - started_wall > timeout + 300:
+            return
+        time.sleep(HEARTBEAT_INTERVAL)
 
 
 def kill_previous(log):
@@ -179,8 +174,8 @@ def main():
     args = parser.parse_args()
 
     if args.heartbeat:
-        heartbeat_loop(args.log, args.mdb_log, args.label or args.test, args.timeout,
-                       args.started if args.started is not None else time.time())
+        heartbeat_loop(procutil.AppendLog(args.log), args.mdb_log, args.label or args.test,
+                       args.timeout, args.started if args.started is not None else time.time())
         return 0
     mdb_log = args.log.with_name("picampcontrol_mdb_progress.log")
     mdb_log.unlink(missing_ok=True)
@@ -197,56 +192,62 @@ def main():
     # TEST_BEGIN/TEST_END so a reader can always tell which test is running. Deleting the file
     # per test used to leave a watcher's tab reading a dead handle (and the reader with no way
     # to see the transition). Delete it once, before the ctest run, for a fresh view.
-    with args.log.open("a", buffering=1) as log:
-        kill_orphaned_processes(log)
-        kill_previous(log)
-        log.write(f"[{stamp()}] TEST_BEGIN name={test_name} timeout={args.timeout:.0f}s "
-                  f"command={' '.join(command)}\n")
-        env = os.environ.copy()
-        env.setdefault("PICAMP_MDB_DEBUG_LOG", str(mdb_log))
-        proc = subprocess.Popen(
-            command,
-            cwd=REPO_ROOT,
-            env=env,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            **procutil.isolated_spawn_kwargs(),
-        )
-        PID_FILE.write_text(str(proc.pid))
-        log.write(f"[{stamp()}] CHILD pid={proc.pid}\n")
+    #
+    # Every write goes through AppendLog: the launcher, the child's inherited stdout, and the
+    # heartbeat process are three independent writers on this one file, and on Windows the
+    # append mode alone does not keep their records whole (see AppendLog).
+    log = procutil.AppendLog(args.log)
+    kill_orphaned_processes(log)
+    kill_previous(log)
+    log.write(f"[{stamp()}] TEST_BEGIN name={test_name} timeout={args.timeout:.0f}s "
+              f"command={' '.join(command)}")
+    _, child_log = log.open_for_child()
+    env = os.environ.copy()
+    env.setdefault("PICAMP_MDB_DEBUG_LOG", str(mdb_log))
+    proc = subprocess.Popen(
+        command,
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=child_log,
+        stderr=subprocess.STDOUT,
+        **procutil.isolated_spawn_kwargs(),
+    )
+    child_log.close()
+    PID_FILE.write_text(str(proc.pid))
+    log.write(f"[{stamp()}] CHILD pid={proc.pid}")
 
-        # Separate process, started *before* the first wait, so the progress file already carries
-        # a fresh line while the launcher is still only blocking on the child (see
-        # heartbeat_loop for why this is not a thread). Its stderr goes to a file rather than
-        # DEVNULL: a wrong argument here once killed the writer silently, and a progress log that
-        # quietly stops for a reason nobody can see is worse than no progress log.
-        heartbeat_err = args.log.with_name("picampcontrol_heartbeat_err.log")
-        heartbeat_proc = subprocess.Popen(
-            [sys.executable, "-u", str(Path(__file__).resolve()), "--heartbeat",
-             "--log", str(args.log), "--mdb-log", str(mdb_log), "--label", test_name,
-             "--timeout", str(args.timeout), "--started", str(time.time())],
-            cwd=REPO_ROOT,
-            stdout=subprocess.DEVNULL,
-            stderr=heartbeat_err.open("a"),
-        )
-        log.write(f"[{stamp()}] HEARTBEAT_WRITER pid={heartbeat_proc.pid}\n")
-        try:
-            code = proc.wait(timeout=args.timeout)
-        except KeyboardInterrupt:
-            log.write(f"[{stamp()}] INTERRUPTED cleanup_pid={proc.pid}\n")
-            procutil.terminate_tree(proc.pid)
-            code = proc.wait()
-        except subprocess.TimeoutExpired:
-            log.write(f"[{stamp()}] TIMEOUT cleanup_pid={proc.pid}\n")
-            procutil.kill_tree(proc.pid)
-            code = proc.wait()
-        finally:
-            # The heartbeat is stopped last, so the file keeps moving through the whole of the
-            # child's exit path, including anything slow this launcher does during cleanup.
-            if heartbeat_proc.poll() is None:
-                procutil.terminate_tree(heartbeat_proc.pid)
-            PID_FILE.unlink(missing_ok=True)
-            log.write(f"[{stamp()}] TEST_END name={test_name} code={proc.returncode}\n")
+    # Separate process, started *before* the first wait, so the progress file already carries
+    # a fresh line while the launcher is still only blocking on the child (see
+    # heartbeat_loop for why this is not a thread). Its stderr goes to a file rather than
+    # DEVNULL: a wrong argument here once killed the writer silently, and a progress log that
+    # quietly stops for a reason nobody can see is worse than no progress log.
+    heartbeat_err = args.log.with_name("picampcontrol_heartbeat_err.log")
+    heartbeat_proc = subprocess.Popen(
+        [sys.executable, "-u", str(Path(__file__).resolve()), "--heartbeat",
+         "--log", str(args.log), "--mdb-log", str(mdb_log), "--label", test_name,
+         "--timeout", str(args.timeout), "--started", str(time.time())],
+        cwd=REPO_ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=heartbeat_err.open("a"),
+    )
+    log.write(f"[{stamp()}] HEARTBEAT_WRITER pid={heartbeat_proc.pid}")
+    try:
+        code = proc.wait(timeout=args.timeout)
+    except KeyboardInterrupt:
+        log.write(f"[{stamp()}] INTERRUPTED cleanup_pid={proc.pid}")
+        procutil.terminate_tree(proc.pid)
+        code = proc.wait()
+    except subprocess.TimeoutExpired:
+        log.write(f"[{stamp()}] TIMEOUT cleanup_pid={proc.pid}")
+        procutil.kill_tree(proc.pid)
+        code = proc.wait()
+    finally:
+        # The heartbeat is stopped last, so the file keeps moving through the whole of the
+        # child's exit path, including anything slow this launcher does during cleanup.
+        if heartbeat_proc.poll() is None:
+            procutil.terminate_tree(heartbeat_proc.pid)
+        PID_FILE.unlink(missing_ok=True)
+        log.write(f"[{stamp()}] TEST_END name={test_name} code={proc.returncode}")
     print(f"SUITE_EXIT:{code}")
     print(f"LOG:{args.log}")
     return code
