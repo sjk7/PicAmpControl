@@ -651,6 +651,21 @@ Prerequisites that decide whether debugging works at all:
   | the NVM unlock + `WR` sequence completes | `g_nvm_done = 1`, `NVMDATL` read back `165` (0xA5) |
   | 64 MHz core runs the tick at 1.000 ms | 106 ticks per 200,000 `Stepi` steps; `OSCCON1` reads `96` |
 
+  **`W9602-COMP` IS NOT A BLOCKER FOR THIS DESIGN - the firmware never configures an on-chip
+  comparator (clarified 2026-09-22).** The warning says the model cannot route a DAC voltage into a
+  comparator input, and it was carried in `Ai-Notes.txt` as an open risk "in the overcurrent safety
+  path". Reading `firmware/src/main.c` settles it: there is no `C1CON`/`C2CON`/`CM1CON`/`CM2CON`
+  write anywhere. The overcurrent protection is an **external hardware comparator**, whose latch
+  output the firmware only *reads* as a digital pin (`INPUT_OVERCURRENT_FAULT` = `RB4`), and whose
+  reset is an output the firmware drives (`OUTPUT_COMP_RESET` = `RC1`). So the unimplemented model
+  feature is a peripheral this firmware does not use, and `W9602-COMP` can be treated as benign
+  simulator noise alongside `W0106-SIM` - do not re-open it as a blocker.
+  What *does* still need care on Q10 is the electrical side: `RB4` must be digital (analogue-select
+  cleared) and its polarity/level must match the external comparator's latch, and `RC1` must drive
+  the reset with the same active-low sense the 16F used. Those are covered by the pin-map
+  comparison (`docs/hardware/q10-pinout-compatibility.md`) plus bench validation, not by any
+  firmware change.
+
   **THE Q10 CLOCK IS A DESIGN DECISION, NOT A CONFIG DETAIL (2026-09-22).** The Q10 config map
   offers exactly two reset-oscillator settings - `HFINTOSC_64MHZ` and `HFINTOSC_1MHZ` - and no
   `HFINT32`, which is a 16F-only name. The port had landed on `HFINTOSC_1MHZ`, i.e. running the
