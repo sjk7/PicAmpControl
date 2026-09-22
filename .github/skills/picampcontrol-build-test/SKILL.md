@@ -286,6 +286,22 @@ Prerequisites that decide whether debugging works at all:
 
 ## Known snags (each one cost real time - do not rediscover them)
 
+- **Do NOT swap the target device without first checking that MPLAB models it equivalently.** On
+  2026-09-22 the PIC16F18877 (same family, 40-pin PDIP, 4x flash and RAM, ~£2, in stock) was trialled
+  as a drop-in upgrade for the PIC16F18875. It **builds perfectly** - the whole change is
+  `-mcpu=16F18877` in `.generated/rule.cmake` plus the `__16F1887x__` defines and `.clangd` - and
+  gives 8117/32768 words = 24.8% flash, 365/4096 bytes = 8.9% RAM. `mdb` also **accepts** the device
+  and runs the script. But the firmware then behaves differently: **0 keyed runs**, only 3 band-select
+  changes (all `locked=false`), and `g_state` never reaches STATE_BYPASS_SNOOP, so `test_first_dit.py`
+  aborts at the first clause with `clause (a): snooping did not report STATE_BYPASS_SNOOP`.
+  Band-change timing is unchanged (1161/1705ms vs 1162/1699ms), which rules out a clock-rate
+  difference, and `ANSELC = 0x00` / `TRISC0 = 1` / `WPUC0 = 1` are already set in `main.c`, which
+  rules out a pin-config omission. The pattern says the firmware never sees PTT asserted on the
+  18877 model. Reverted.
+  **The lesson: a clean build says nothing about the simulator.** Every suite in this project runs on
+  `mdb`, so a device whose model is not verification-equivalent trades verified behaviour for
+  headroom - never worth it here. Check the simulator first, and treat an unexplained behaviour change
+  on the new device as a blocker, not a puzzle to work around.
 - **Delete large logs as soon as their verdict is read.** MDB transcripts and captured suite output
   run to megabytes. Remove them (`rm -f /tmp/<log>`) the moment the verdict has been extracted, and
   do not leave them on disk even in `/tmp`. Keep a log only while its run's verdict is still needed;
