@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import open_progress_log  # noqa: E402
 import platform_process as procutil  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -213,6 +214,12 @@ def main():
     kill_previous(log)
     log.write(f"[{stamp()}] TEST_BEGIN name={test_name} timeout={args.timeout:.0f}s "
               f"command={' '.join(command)}")
+    # Open the progress log in the running editor *before* the long wait, not after: the user
+    # watches this file during a multi-minute MDB run, and a progress log nobody can see is the
+    # same as no log (user instruction, 2026-09-22). Best-effort by design - a headless host has
+    # no editor to open, and that must not fail the test.
+    if os.environ.get("PICAMP_NO_EDITOR_OPEN") != "1":
+        open_progress_log.open_in_editor([args.log], quiet=True)
     _, child_log = log.open_for_child()
     env = os.environ.copy()
     env.setdefault("PICAMP_MDB_DEBUG_LOG", str(mdb_log))

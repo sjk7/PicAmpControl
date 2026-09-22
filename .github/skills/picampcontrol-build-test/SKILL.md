@@ -28,7 +28,14 @@ Therefore, permanently:
 
 **Hard rule: follow logs in a VS Code tab, and treat FileTail as conditional.** Long jobs - suites,
 builds, spike runs - write their output to a log file, and the user watches that file in a VS Code
-**tab**. **Never tail in a terminal/console**: forbidden explicitly and more than once, and also
+**tab**. **Opening that tab is part of doing the job, not a courtesy done afterwards.** The user had
+to say this three times on 2026-09-22 - "no log file shown in my code-insiders instance", then "I want
+to see logs during long ops in VSCode, Insiders or not. Always." - while effort was spent improving
+what the log *contained*. A progress file the user cannot see is the same as no log, so: before
+starting any operation that runs longer than a few seconds, get its log open in their editor. The
+suite launcher now does this for itself (`tools/simulate/open_progress_log.py`, `code-insiders` then
+`code`, `-r` to reuse the running window, `PICAMP_NO_EDITOR_OPEN=1` to suppress); for anything else,
+run that helper. **Never tail in a terminal/console**: forbidden explicitly and more than once, and also
 silently broken, because `Get-Content -Wait` holds a handle to a file the launcher used to unlink and
 recreate. FileTail (`spacetown.filetail`, command `filetail.toggle`) is the follow mechanism *only
 while a job is actually running*: it measured ~110% of one core in the extension host plus ~24% in the
@@ -38,6 +45,13 @@ run ends; if it shows that load again, stop using it and read the log on demand 
 `Get-Content -Tail 20` is a read, not a console tail. Truncate logs with `Clear-Content`, never delete
 one a watcher has open. Watching a log for visibility is sanctioned; judging a run from terminal
 output is not - verdicts come from the run's own log file plus its appended exit code.
+
+**A progress line the user actually uses must carry `delta`: bytes of MDB output since the previous
+tick** (user correction, 2026-09-22: "no output of bytes since previous tick"). `mdb_bytes` alone is a
+running total and says nothing about the last five seconds; `delta=0` on a frozen total is the signal
+that distinguishes "hung" from "slow but healthy", and an earlier revision dropped it while adding the
+MDB text. Keep it on the heartbeat line, and keep the beat **stamped and written before** the MDB tail
+is read - the beat must never be delayed by the work of describing the run.
 
 **Hard rule: never delete or recreate a file a FileTail tab is already watching.** Deleting the log
 between runs drops the watcher: the tab keeps rendering its old buffer and the file looks frozen even
@@ -482,6 +496,22 @@ test 1 finished, is in the ctest job log instead: it prints `1/2 ... Passed` the
 the two logs answer different questions - heartbeat = progress *inside* the suite, ctest log = which
 test is running - and neither one alone shows the whole run.
 
+**HARD RULE - THE LOG MUST BE OPEN IN VS CODE, EVERY TIME, FOR EVERY LONG OPERATION.** Standing
+user instruction, stated three times on 2026-09-22 ("no log file shown in my code-insiders instance",
+"I want to see logs during long ops in VSCode, Insiders or not. Always."). A progress file the user
+cannot see is the same as no log at all, and "I wrote a useful log" is not compliance. Before
+starting any job that takes more than a few seconds - suite, build, spike run, MDB session - the log
+must be open in the user's editor, in a tab they can watch. This is not a nicety that can be traded
+against other work: fixing the log's *contents* while leaving it invisible is exactly the failure
+that drew the complaint.
+
+Mechanically: `run_suite_with_watchdog.py` now opens its own progress log in the editor as it starts
+(`tools/simulate/open_progress_log.py`, `code-insiders` first then `code`, reusing the running window
+with `-r`, best-effort so a headless host cannot fail the test). Set `PICAMP_NO_EDITOR_OPEN=1` to
+suppress it. For a job the launcher does not wrap, open the log yourself with the snippets below -
+and if neither CLI exists, say so explicitly rather than continuing silently, because that silence
+is what made the missing log look like a non-event.
+
 **Delete the log before you launch the job, not after.** The sequence is: delete -> create fresh ->
 *start the job* -> open the file in a tab -> FileTail on. Opening a tab that a previous run already
 created, or reusing one mid-run, leaves the user looking at a stale buffer and was called out on
@@ -497,9 +527,9 @@ rule above.
 ```powershell
 # Windows: open in a TAB and let FileTail follow it (never a console tail - see the hard rule above)
 # Resolve the CLI rather than assuming Insiders (hard rule at the top):
-$code = if (Get-Command code-insiders -ErrorAction SilentlyContinue) { 'code-insiders' } else { 'code' }
-& $code -r "$env:TEMP\picampcontrol_suite_progress.log"
-# then run the command `filetail.toggle` with that tab active
+#   tools/simulate/open_progress_log.py does exactly this, and handles the .cmd path that
+#   `Get-Command` may not resolve in a non-interactive shell (it fell back to %LOCALAPPDATA%).
+python tools/simulate/open_progress_log.py "$env:TEMP\picampcontrol_suite_progress.log" "$env:TEMP\picampcontrol_mdb_progress.log"
 ```
 
 ```sh
