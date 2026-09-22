@@ -27,10 +27,34 @@ const following = new Set();
 const userTookOver = new Set();
 /** Last observed file size per followed uri, to detect growth cheaply. */
 const lastSize = new Map();
-/** Suppress our own selection noise briefly so it is not mistaken for a user click. */
-const lastSelfMove = new Map();
 /** Live file watchers, one per followed uri, so an append scrolls immediately. */
 const watchers = new Map();
+
+/** Last observed file size per followed uri, to detect growth cheaply. */
+const lastSelfMove = new Map();
+/**
+ * Count of programmatic scrolls whose resulting events have not yet been seen, per uri.
+ *
+ * This is a COUNT, not a timestamp, and that is the whole point. A timestamp grace window leaks:
+ * during a fast burst the extension scrolls, then the resulting selection/visible-range event can
+ * arrive after the window has expired and is read as "the user took control", so the follow pauses
+ * itself part-way down the file (measured twice - line 15 of 501, then line 15 of 201). Counting
+ * ignores exactly the events we caused and no more, however fast the writes arrive.
+ */
+const pendingSelfScroll = new Map();
+
+/** Mark one programmatic scroll as owing an event to be ignored. */
+function noteSelfScroll(uriString) {
+  pendingSelfScroll.set(uriString, (pendingSelfScroll.get(uriString) || 0) + 1);
+}
+
+/** Consume one owed self-event. True if the event was ours, so the caller must ignore it. */
+function consumeSelfScroll(uriString) {
+  const owed = pendingSelfScroll.get(uriString) || 0;
+  if (owed <= 0) return false;
+  pendingSelfScroll.set(uriString, owed - 1);
+  return true;
+}
 
 const SELF_MOVE_GRACE_MS = 150;
 
@@ -78,11 +102,16 @@ function scrollToEnd(editor) {
   // viewport. Because it is the last line, "top of viewport" means the document is scrolled as far
   // down as it can go and the newest line is pinned to the bottom edge - which is what a tail
   // looks like. Doing both, in this order, is what makes it settle correctly.
+  //
+  // Each of these two calls can raise an event, so both are registered as owed-and-ignored BEFORE
+  // they are made; see pendingSelfScroll. The timestamp is also stamped for the trailing-event
+  // case, where VS Code re-emits a coalesced event after the counted ones are used up.
+  noteSelfScroll(key(doc.uri));
+  noteSelfScroll(key(doc.uri));
+  lastSelfMove.set(key(doc.uri), Date.now());
   if (!editor.selection.active.isEqual(end)) {
-    lastSelfMove.set(key(doc.uri), Date.now());
     editor.selection = new vscode.Selection(end, end);
   }
-  lastSelfMove.set(key(doc.uri), Date.now());
   editor.revealRange(new vscode.Range(end, end), vscode.TextEditorRevealType.AtTop);
 }
 
@@ -96,6 +125,7 @@ function startFollow() {
   following.add(k);
   userTookOver.delete(k);
   lastSize.delete(k);
+  pendingSelfScroll.delete(k);
   armWatcher(k);
   scrollToEnd(editor);
 }
@@ -105,6 +135,7 @@ function stopFollow() {
   const k = key(editor.document.uri);
   following.delete(k);
   lastSize.delete(k);
+  pendingSelfScroll.delete(k);
   releaseWatcher(k);
 }
 
@@ -115,6 +146,7 @@ function toggleFollow() {
   if (following.has(k) && !userTookOver.has(k)) {
     following.delete(k);
     lastSize.delete(k);
+    pendingSelfScroll.delete(k);
     releaseWatcher(k);
     vscode.window.setStatusBarMessage('Log Follower: stopped', 2000);
   } else {
@@ -123,6 +155,7 @@ function toggleFollow() {
     following.add(k);
     userTookOver.delete(k);
     lastSize.delete(k);
+    pendingSelfScroll.delete(k);
     armWatcher(k);
     scrollToEnd(editor);
     vscode.window.setStatusBarMessage('Log Follower: following (interact to pause)', 3000);
@@ -225,13 +258,21 @@ function activate(context) {
 
   // --- Pause on ANY interaction with the tab, resume only deliberately. -------------------
   //
-  // The requirement is "stop scrolling the moment I touch the text or the scrollbar". Three
-  // separate events have to be watched, because none of them covers the others:
-  //   1. selection change      - clicking in the text, arrow keys, selecting a range;
-  //   2. visible-range change  - wheeling / dragging the scrollbar (fires with no selection change);
-  //   3. active-editor change  - focusing another tab, which must not leave this one scrolling.
-  // Our own programmatic moves are filtered out by the self-move grace window, or the extension
-  // would pause itself the first time it scrolled.
+  // The requirement is "stop scrolling the moment I touch the text or the scrollbar". Pausing needs
+  // more than one event, but not as many as first assumed - and watching too many is worse than
+  // watching too few, which is what happened here:
+  //
+  //   * `onDidChangeTextEditorVisibleRanges` fires when the document is OPENED, before the
+  //     extension has scrolled anything, so treating it as user action paused the follow at once
+  //     and the tab never moved off line 1 (measured 2026-09-22).
+  //   * `onDidChangeActiveTextEditor` fires when the tab merely becomes active - including when
+  //     this extension's own `code -r` opens it - so that paused it too.
+  //
+  // So the pause is gated on having *already* scrolled once (a self-move stamp exists). Before the
+  // first programmatic scroll there is nothing for the user to have taken control of, and an event
+  // seen then is the editor opening, not a person reading. After that, a selection change or a
+  // visible-range change is genuine interaction. Our own reveal keeps stamping the self-move so it
+  // is never mistaken for the user.
   //
   // Resume is DELIBERATE (the toggle command), never automatic. An earlier version resumed whenever
   // the last line merely became visible, so a short log - or one wheel notch near the bottom -
@@ -239,6 +280,10 @@ function activate(context) {
   const pauseInteractive = (uriString, why) => {
     if (!following.has(uriString)) return;
     if (userTookOver.has(uriString)) return;
+    // An event we caused by scrolling is not the user taking control: consume it and return.
+    if (consumeSelfScroll(uriString)) return;
+    // A trailing event from our own move can still arrive a moment later (VS Code coalesces and
+    // re-emits), so also ignore anything inside the post-scroll grace window.
     const self = lastSelfMove.get(uriString) || 0;
     if (Date.now() - self < SELF_MOVE_GRACE_MS) return;
     userTookOver.add(uriString);
@@ -255,10 +300,6 @@ function activate(context) {
     }),
     vscode.window.onDidChangeTextEditorVisibleRanges((event) => {
       pauseInteractive(key(event.textEditor.document.uri), 'you scrolled');
-    }),
-    vscode.window.onDidChangeActiveTextEditor((editor) => {
-      if (!editor) return;
-      pauseInteractive(key(editor.document.uri), 'you switched tabs');
     }),
     // Opening a matching log follows it automatically, so the common case needs no command.
     vscode.workspace.onDidOpenTextDocument((doc) => {
@@ -277,6 +318,7 @@ function activate(context) {
       userTookOver.delete(k);
       lastSize.delete(k);
       lastSelfMove.delete(k);
+      pendingSelfScroll.delete(k);
       releaseWatcher(k);
     }),
     vscode.commands.registerCommand('logFollower.start', startFollow),
@@ -298,6 +340,7 @@ function deactivate() {
   userTookOver.clear();
   lastSize.clear();
   lastSelfMove.clear();
+  pendingSelfScroll.clear();
 }
 
 module.exports = { activate, deactivate };

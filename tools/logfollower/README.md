@@ -23,9 +23,9 @@ code-insiders --install-extension pac-log-follower.vsix --force   # or: code
   newest output instead of the run's first three lines. A `FileSystemWatcher` drives the refresh,
   with a poll as the safety net, so an append scrolls straight away rather than up to one interval
   late.
-- **Yields to you, instantly.** Clicking in the text, moving the cursor, selecting, wheeling,
-  dragging the scrollbar, or switching to another tab all pause the follow. Resume is *deliberate*
-  (the toggle command) - it never re-arms itself behind your back.
+- **Yields to you, instantly.** Clicking in the text, moving the cursor, selecting, wheeling, or
+  dragging the scrollbar all pause the follow. Resume is *deliberate* (the toggle command) - it
+  never re-arms itself behind your back.
 - **Stays cheap.** Following costs one file stat per interval plus one reveal per actual growth
   (plus watcher events). Paused, it costs nothing.
 

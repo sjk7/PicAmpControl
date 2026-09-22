@@ -2,7 +2,7 @@
   "name": "log-follower",
   "displayName": "Log Follower",
   "description": "Keeps a growing log file scrolled to its tail in the editor, and yields the moment you take control of the tab.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "license": "MIT",
   "publisher": "log-follower",
   "engines": { "vscode": "^1.85.0" },

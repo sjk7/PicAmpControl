@@ -165,16 +165,30 @@ that looks dead (this cost a whole session on 2026-09-22 - the log was written, 
    - A tab opened *after* output already exists must scroll to the end on first sight (adopt the
      current size and reveal), or it sits at the top until the next append.
 
-   Current version: **0.5.0**; `logFollower.coalesceMs = 250` ms, watcher-driven with the poll as
+   Current version: **0.6.0**; `logFollower.coalesceMs = 250` ms, watcher-driven with the poll as
    the safety net. **Verified working 2026-09-22**: a 200-line burst on an open log left the tab on
-   `growing line 200`. Before that fix the same test stopped at 136, and before that at 15.
+   the last line, growing it again kept following, and interacting with the tab then growing it
+   again left the view exactly where the user had put it. Before these fixes the same test stopped
+   at 136, and before that at 15.
+
    **Pause on interaction:** the follow must stop the moment the user touches the text or the
-   scrollbar (user instruction), which needs **three** listeners - selection change, visible-range
-   change, and active-editor change - because no single one covers clicking, wheeling, dragging the
-   scrollbar and switching tabs. **Resume is deliberate (the toggle command) and never automatic:**
-   an earlier revision resumed as soon as the last line was merely visible, which re-armed the
-   follow on a short log or a single wheel notch and yanked the view away from whatever the user
-   had scrolled up to read.
+   scrollbar (user instruction). **Suppress our own scroll events with a COUNT, never a timestamp
+   grace window.** A time-based window leaks: during a fast burst the extension scrolls, the
+   resulting event then arrives after the window expires, and it is read as the user taking control
+   - so the follow pauses itself part-way down the file, which looks like the follow being broken
+   and is exactly why two "fixed" versions regressed at different line numbers. `scrollToEnd()`
+   registers both events it is about to cause (`pendingSelfScroll`) *before* it makes them, and the
+   handlers consume them. The timestamp remains only as a backstop for a coalesced trailing event.
+   Two further traps, both of which paused the follow instantly and left the tab on line 1:
+   - **`onDidChangeTextEditorVisibleRanges` fires when the document is OPENED**, before anything has
+     been scrolled, so it must not be treated as interaction until at least one scroll has happened.
+   - **Do not listen to `onDidChangeActiveTextEditor` at all.** It fires when a tab merely *becomes*
+     active - including when this extension's own `code -r` opens it - so switching tabs must not be
+     treated as taking control.
+
+   **Resume is deliberate (the toggle command) and never automatic:** an earlier revision resumed as
+   soon as the last line was merely visible, which re-armed the follow on a short log or a single
+   wheel notch and yanked the view away from whatever the user had scrolled up to read.
    **After changing the extension, repackage and reinstall, then restart VS Code:**
 
 ```powershell
