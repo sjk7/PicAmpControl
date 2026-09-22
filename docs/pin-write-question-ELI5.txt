@@ -1,0 +1,389 @@
+================================================================================
+THE PIN-WRITE QUESTION - EXPLAINED IN PLAIN ENGLISH
+================================================================================
+Date written : 2026-09-22
+Branch       : upgrade/pic18f47q10
+Chip under test : PIC18F47Q10  (replacing the older PIC16F18875)
+Short answer : THE PIN WRITE WORKS. This is NOT an outstanding problem.
+               The real fault found was the startup-inhibit timer never expiring.
+
+Written to be read cold by someone who was not in the session.
+
+
+================================================================================
+PART 1 - THE HARDWARE SETUP
+================================================================================
+
+WHAT THE BOARD HAS
+------------------
+  * PIC18F47Q10 microcontroller (the new chip being trialled)
+  * A PTT line - the wire from the radio meaning "I am transmitting now"
+  * Six band relays - switches that select which low-pass filter is in circuit
+  * Three amplifier keying lines - TX, TX_VCC, TX_BIAS
+
+THE ACTIVE-LOW CONVENTION - READ THIS FIRST
+-------------------------------------------
+Several signals are "active low", which means the pin reads 0 when the thing is
+HAPPENING and 1 when it is not:
+
+    PTT   : 1 = button NOT pressed      0 = button PRESSED
+    TX    : 1 = amplifier OFF           0 = amplifier KEYED
+    RELAY : (band relays are active HIGH - 1 = that band selected)
+
+So seeing a 1 on TX does NOT mean "transmitting". It means "not transmitting".
+This catches people out constantly.
+
+
+THE PINS USED, AND WHAT THEY DO
+-------------------------------
+Pin      Port bit   Direction   Signal name            Purpose
+-------  ---------  ----------  ---------------------  --------------------------
+RC0      PORTC.0    input       INPUT_PTT              PTT from the radio
+                                                       ACTIVE LOW. Weak pull-up
+                                                       ON (WPUC0=1), so with
+                                                       nothing connected it
+                                                       reads 1 = "not pressed".
+                                                       Digital (ANSELC0 = 0).
+
+RD1      PORTD.1    input       INPUT_FREQ_COUNTER     RF sample for frequency
+                                                       counting. Routed to the
+                                                       timer by PPS.
+
+RD2      PORTD.2    output      OUTPUT_BAND_160M       160m low-pass filter relay
+RD3      PORTD.3    output      OUTPUT_BAND_80M        80m relay
+RD4      PORTD.4    output      OUTPUT_BAND_40M        40m relay
+RD5      PORTD.5    output      OUTPUT_BAND_20M        20m relay
+RD6      PORTD.6    output      OUTPUT_BAND_15M        15m relay
+RD7      PORTD.7    output      OUTPUT_BAND_10M        10m relay
+                                                       (all band relays ACTIVE
+                                                       HIGH: 1 = selected)
+
+RC5      PORTC.5    output      OUTPUT_TX              Keys the amplifier
+                                                       ACTIVE LOW
+RC6      PORTC.6    output      OUTPUT_TX_VCC          Switches the drain supply
+                                                       ACTIVE LOW
+RC7      PORTC.7    output      OUTPUT_TX_BIAS         Switches the LDMOS bias
+                                                       ACTIVE LOW
+
+RC1      PORTC.1    output      OUTPUT_COMP_RESET      Resets the external
+                                                       overcurrent comparator
+                                                       ACTIVE LOW
+
+RB4      PORTB.4    input       INPUT_OVERCURRENT_     Fault latch output from the
+                                FAULT                  external comparator.
+                                                       Read only.
+
+RB5      PORTB.5    output      OUTPUT_FAN_PWM         Fan drive
+RB7      PORTB.7    output      OUTPUT_TRIP_STATUS     Trip indicator
+
+RA4      PORTA.4    output      OUTPUT_LCD_RS          LCD register select
+RA6      PORTA.6    output      OUTPUT_LCD_E           LCD enable/strobe
+RA7      PORTA.7    output      OUTPUT_LCD_D4          LCD data bit 4
+RC3, RC4, RD0       outputs     LCD D5, D6, D7
+
+WHY RC0 MATTERS TO THIS STORY
+-----------------------------
+The test fakes a button press by typing a command that pulls RC0 low. If that
+command does not reach the chip, every "the amplifier never keyed" result is a
+lie about our own test rather than a fact about the chip. That is the whole
+question this document answers.
+
+
+HARDWARE SETTINGS THAT AFFECT RC0
+---------------------------------
+Five separate settings must all be right for a pin to work, and getting any one
+wrong produces the same symptom - "the pin does not respond":
+
+  1. TRIS  - direction          TRISCbits.TRISC0 = 1   (1 = input)
+  2. ANSEL - analogue select    ANSELCbits.ANSELC0 = 0 (0 = digital, NOT analogue)
+                                If this is left at 1 the pin becomes an analogue
+                                input and a digital read/write is ignored.
+  3. WPU   - weak pull-up       WPUCbits.WPUC0 = 1     (so idle reads 1)
+  4. PORT vs LAT                 input:  read PORT (the pin)
+                                 output: write LAT (the latch)
+                                 Reading LAT on an input echoes back nothing real.
+  5. Special-function override  some pins double as other functions - see RA6 below
+
+THE RA6 WARNING - A REAL Q10 DIFFERENCE
+---------------------------------------
+On the Q10, RA6 doubles as CLKOUT/OSC2, the clock-output pin. The Q10's default
+for CLKOUTEN is ON - meaning the clock-output function owns that pin unless you
+turn it off. RA6 is OUTPUT_LCD_E in this design, so leaving the default would hand
+the LCD enable line to the clock function and the display would never latch.
+
+This was found by reading RA6 back under the simulator and seeing it reported as
+an analogue pin even though the firmware had configured it as an output.
+
+Fixed by adding, guarded to the Q10 only:
+    #pragma config CLKOUTEN = OFF
+
+Confirmed to take effect: the linker's "missing configuration setting" warning
+dropped from two settings to one afterwards.
+
+There is still an open question about RA6 (see the end of this document).
+
+
+================================================================================
+PART 2 - THE TEST SETUP
+================================================================================
+
+The firmware is never run on real hardware during development. It runs inside a
+simulator (Microchip's MPLAB "mdb" - their debugger). A test script can:
+
+  1. load the compiled firmware into a pretend chip
+  2. run it a chosen number of instruction steps
+  3. read any variable or pin, to see what the firmware is doing
+  4. TYPE COMMANDS TO FAKE INPUTS, e.g. "pretend somebody pulled pin RC0 low"
+
+Item 4 is what fakes the button press.
+
+THE EXACT COMMANDS
+------------------
+This is a real script from the boot test, with comments added:
+
+    device PIC18F47Q10            <- which chip to simulate
+    hwtool sim                    <- use the simulator, not real hardware
+    program ...\default.elf       <- load the firmware
+
+    Stepi 200000                  <- run 200,000 instruction steps
+    print PORTC                   <- print port C as a number
+    print pin RC0                 <- print pin RC0 specifically
+
+    write pin RC0 low             <- FAKE the button press (active low)
+    Stepi 20000                   <- run some more
+    print PORTC                   <- did anything change?
+
+    write pin RC0 high            <- FAKE releasing the button
+    Stepi 20000
+    print PORTC                   <- did it go back?
+
+A sample is one "Stepi N" followed by its prints. The tests line these up into a
+timeline, so you can watch state change over simulated time.
+
+
+================================================================================
+PART 3 - THE WORRY
+================================================================================
+
+Running the full test suite on the Q10 firmware reported:
+
+    0 keyed runs out of 552 samples
+
+In the entire test, the amplifier never once keyed. It was asked to transmit and
+it never did.
+
+That looks like a chip problem, and there is a precedent: an earlier attempt to
+swap in a different chip (PIC16F18877) failed with THE SAME SIGNATURE - "the
+firmware never sees PTT asserted" - and that attempt was abandoned.
+
+So the question was:
+
+    Is the firmware genuinely broken on the new chip?
+    OR
+    Is our test failing to press the pretend button, and blaming the chip?
+
+From the outside these look IDENTICAL. Both produce "0 keyed runs". A test that
+cannot tell "the thing is broken" from "my test is broken" is not evidence of
+anything, so this had to be settled before any conclusion was drawn.
+
+WHY THE TEST MIGHT BE THE CULPRIT
+---------------------------------
+The simulator ACCEPTS a `write pin` command silently. If the pin is in the wrong
+mode, the write may do nothing and print no complaint. A failed fake button press
+is therefore completely invisible - it looked like success in the transcript.
+
+There was already one suspicious sighting: in the boot test, `write pin RA6 high`
+was echoed as though applied, yet RA6 read back as an analogue pin.
+
+
+================================================================================
+PART 4 - HOW IT WAS SETTLED: THE "POSITIVE CONTROL"
+================================================================================
+
+WHAT A POSITIVE CONTROL IS
+--------------------------
+Instead of testing the thing you care about, test the METHOD first, on a case
+where you already know the right answer. If the method cannot get the easy case
+right, the method is broken - not the thing you were testing.
+
+Rule for this project:
+    A NEGATIVE RESULT IS ONLY EVIDENCE IF A POSITIVE CONTROL BACKS IT.
+
+THE CONTROL USED
+----------------
+As simple as possible:
+
+    read what the chip sees on port C
+    fake-press the button   (write pin RC0 low)
+    read again
+    release the button      (write pin RC0 high)
+    read again
+
+If the method works, the value must change on press and change back on release.
+
+THE RESULT, ON THE PIC18F47Q10
+------------------------------
+    PORTC = 229    pin = HIGH    idle, button not pressed
+    PORTC = 228    pin = LOW     PRESSED
+    PORTC = 229    pin = HIGH    released
+
+    229 -> 228 -> 229
+
+WHY 229 -> 228 PROVES IT
+------------------------
+Port C is a number where each bit is one pin, and RC0 is the LEAST SIGNIFICANT
+BIT - the one worth the value 1:
+
+    229 in binary  =  1110 0101
+    228 in binary  =  1110 0100
+                         ^
+                         the rightmost bit changed 1 -> 0
+
+Exactly one bit changed, it was the right one, and releasing put it back. So the
+fake button press DOES reach the firmware.
+
+ANSWER: the "0 keyed runs" result is a GENUINE firmware finding. It is not a test
+artefact.
+
+
+================================================================================
+PART 5 - WHAT THE FAILURE ACTUALLY WAS
+================================================================================
+
+Knowing the test could be trusted, a staged probe walked the PTT path one step at
+a time, because "no keying" could have failed at several different points:
+
+    stage 1 : has the chip finished its startup wait?
+    stage 2 : with the button released, does the firmware agree it is released?
+    stage 3 : press the button - does the firmware latch it?
+    stage 4 : if latched, does it enter bypass-snoop and look for the band?
+
+THE ANSWER WAS STAGE 1
+----------------------
+    g_startup_inhibit = true      <- still in its startup wait
+    g_state           = 5         <- STATE_RESET_WAIT, waiting, not operating
+
+    ...and STILL in that state after 800,000 instruction steps.
+
+WHAT THAT MEANS
+---------------
+The firmware has a 1000 millisecond startup wait after power-up. For that first
+second it deliberately refuses to act on the PTT button, to let the hardware
+settle. The wait is counted by adding 1 to a counter each pass round the main
+loop, stopping at 1000.
+
+It never reached 1000.
+
+So the firmware sat in its startup wait forever, and PTT could never latch - not
+because PTT handling was broken, but because the firmware was never ready to look
+at PTT at all.
+
+IMPORTANT LESSON
+----------------
+"0 keyed runs" was a SYMPTOM. PTT handling was fine. The cause was upstream, in
+the startup timer never advancing. Chasing the visible symptom - PTT - would have
+wasted a lot of time.
+
+
+================================================================================
+PART 6 - TWO MISTAKES MADE, RECORDED SO THEY DO NOT REPEAT
+================================================================================
+
+MISTAKE 1 - THE CONTROL FIRST REPORTED THE OPPOSITE OF THE TRUTH
+----------------------------------------------------------------
+The first version of the control checked BIT 1 of port C instead of BIT 0.
+
+    Bit 0 is worth 1  -> RC0, the pin we actually pressed
+    Bit 1 is worth 2  -> RC1, a different pin
+
+229 and 228 have the SAME bit 1, so the check saw "no change" and announced that
+the stimulus was broken. A perfect result was reported as a failure because of an
+off-by-one in a bit index.
+
+    A positive control you have not sanity-checked is WORSE THAN NO CONTROL,
+    because it manufactures confidence in the wrong direction.
+
+Always confirm which bit or mask you are testing against the pin you drove, and
+confirm the direction of the effect: idle -> asserted -> released should RETURN
+to idle.
+
+MISTAKE 2 - A COMMAND THE SIMULATOR ACCEPTS IS NOT A COMMAND THAT APPLIED
+-------------------------------------------------------------------------
+`write pin RA6 high` appeared in the transcript as though applied, and did
+nothing.
+
+Two possible causes:
+  * placement - before `program`, the chip is not programmed yet, so the write
+    goes nowhere. This one is real.
+  * RA6 is a special pin (doubles as CLKOUT/OSC2), so the clock function may
+    still own it. NOT PROVEN - still open.
+
+Consequence for tests: any test whose whole purpose is to prove a BAD outcome (a
+"sad path") must ASSERT that its stimulus actually applied, and fail loudly if it
+did not. The first version of the boot sad-path test did not, and reported a PASS
+while exercising nothing at all. That is worse than a failure - it is a false
+pass.
+
+
+================================================================================
+PART 7 - CONCLUSION
+================================================================================
+
+  * The pin-write method WORKS on the PIC18F47Q10.
+    Proven: PORTC 229 -> 228 -> 229 with RC0.
+
+  * The "0 keyed runs" result is a REAL firmware finding, not a test artefact.
+
+  * The real fault: the 1000 ms startup-inhibit timer never expires, so the
+    firmware stays in STATE_RESET_WAIT and is never willing to act on PTT.
+
+  * The SAFETY INVARIANTS ALL PASS on the new chip:
+      I1  no band change between two keyed samples
+      I2  the amplifier is only keyed while the band is locked
+      I3  during bypass-snoop every TX output is inactive
+      I4  the band outputs always agree with the firmware's current_band
+      I5  every band-select change happened with the amplifier cold
+      I6  the T/R relay closes only after the band relay has settled
+    Nothing is unsafe. The amplifier simply never engages.
+
+  * NOT an outstanding pin-write problem.
+    The outstanding problem is the startup inhibit.
+
+  * ONE OPEN QUESTION REMAINS: whether RA6 needs special handling because it
+    doubles as CLKOUT/OSC2. CLKOUTEN is now explicitly OFF, but RA6 still read
+    back as analogue under stimulus, and that has not been explained.
+
+
+================================================================================
+PART 8 - WHERE THE EVIDENCE LIVES
+================================================================================
+
+THE CONTROL (proves the fake button press works)
+  tools/simulate/test_stimulus_positive_control.py
+  _build/My_Pic_Project/sim/stimulus_control_report.txt
+  _build/My_Pic_Project/sim/stimulus_control_mdb.log
+
+THE STAGED PROBE (found the real cause)
+  tools/simulate/probe_q10_ptt_path.py
+  _build/My_Pic_Project/sim/q10_ptt_probe_report.txt
+  _build/My_Pic_Project/sim/q10_ptt_probe_mdb.log
+
+THE BOOT ORDER TEST AND SCOPE TRACE
+  tools/simulate/test_boot_safety_order.py
+  _build/My_Pic_Project/sim/boot_trace.png
+
+THE DURABLE LESSONS (read by future sessions)
+  .github/skills/picampcontrol-build-test/SKILL.md
+     - "Build the positive control BEFORE believing the negative result"
+     - "When several symptoms share one cause, find the cause"
+     - "Every durable finding goes into this skill in the session it is found"
+
+RELATED DESIGN DOCUMENT
+  docs/keying-and-band-selection.md
+     the operator-visible keying sequence, the band-selection state machine,
+     the three band sources in priority order, and which timings are measured
+     versus still bench guesses
+
+================================================================================
+END
+================================================================================
