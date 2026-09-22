@@ -1146,6 +1146,85 @@ artefact - and both were avoidable:
   `(1311) missing configuration setting for config word 0x300005; using default` (benign - one
   config word was left at its DFP default).
 
+## ADCC registers: the PIC18F47Q10 is NOT the generic PIC18 ADC
+
+The Q10 uses the **ADCC** (ADC with Computation), and its register map is not the one the family
+name suggests. Verified 2026-09-22 against the actual DFP headers, because a written "resolution"
+brief asserted otherwise and it was wrong on every point:
+
+| Register | PIC18F47Q10 (ADCC, PIC18F-Q_DFP 1.30.487) | Classic PIC18 (e.g. PIC18F47J53, PIC18F-J_DFP) |
+| --- | --- | --- |
+| `ADREF` | **exists**, `ADPREF<1:0>` at bits 0-1, `ADNREF` at bit 4 | does not exist |
+| ref-select bits | `ADPREF` 2 bits, `ADNREF` 1 bit, in `ADREF` | `VCFG<1:0>` = `VCFG0` (ADCON0 bit 6) and `VCFG1` (ADCON0 bit 7), `ADCON0` at `0xFC2` |
+| `ADPCH` | exists, 6-bit positive channel at `0xF5A` | does not exist; channel is `CHS<3:0>` in `ADCON0` bits 2-5 |
+| `ADCON0` | `__at(0xF5B)`: `ADGO` 0, `ADFM` 2, `ADCONT` 6, `ADON` 7 | `__at(0xFC2)`, plus separate `ADCON1`/`ADCON2` |
+| `ADCON1` | `__at(0xF54)`: `ADDSEN` 0 and comparator polarity bits only - **no `ADFM`, no `ADCS`** | `__at(0xFC1)`: `ADCS<2:0>`, `ACQT<2:0>`, `ADCAL`, `ADFM<1:0>` |
+| conversion clock | `ADCLK` (`0xF52`), `ADCS<5:0>` | `ADCON1` `ADCS<2:0>` |
+| result | `ADRES`/`ADRESH`/`ADRESL`, but ADCC also has `ADACC`, `ADPREV`, `ADSEL`, `ADSTAT`, `ADCON2/3` | `ADRESH`/`ADRESL` |
+| `ADCON1 = 0x20` means | `ADGPOL = 1` (comparator polarity) | benign |
+
+The practical consequences: **there is no `ADREF` byte write in the firmware, and there must not be
+one** - `adc_init()` sets the reference implicitly by leaving `ADREF` at its all-zero reset (VDD/VSS),
+which is exactly what the project wants. Writing `ADREF = 0x00` is a no-op for the same reason. Code
+copied from a classic PIC18 (or from a PIC16F188x, whose registers are `ADCON0`/`ADCON1`/`ADPCH` too
+but with different bit positions) will silently set a *comparator* polarity bit or a different
+channel. Always confirm the register layout in the device's own header before adding an ADC write:
+
+```
+<MPLABX install>/packs/Microchip/PIC18F-Q_DFP/<ver>/xc8/pic/include/proc/pic18f47q10.h
+```
+
+and grep for the register name - a `NOT FOUND` there is a real answer, not a bad path.
+
+**Do not transfer PIC16F18875 ADC findings to the Q10.** The 16F header does have `ADPCH`, but the
+control/format bits differ (`ADFM` lives at a different position and `ADCON1` carries `ADPREF`), so
+even a same-named register can mean something else.
+
+### Mistakes made while chasing the Q10 trip (2026-09-22) - do not repeat these
+
+A "trip resolution" brief was written for this blocker and reviewed against the headers. Five of its
+claims and one of mine were wrong. The pattern in every one of them is the same: **a plausible story
+about register layout or timing was believed without being checked against the device header, a
+warning log, or a converted unit.**
+
+1. **"The Q10's `ADREF` bit map differs from the PIC16's" - wrong conclusion from a false premise.**
+   The real error was asserting *any* legacy `ADREF` byte write existed to be misinterpreted. There is
+   none. The correct handling is the one already in `adc_init()`: never write `ADREF`, i.e. rely on
+   its reset value. An added `ADREFbits.ADPREF = 0; ADREFbits.ADNREF = 0;` would be harmless but
+   pointless - do not add it as a "fix".
+2. **`ADFM` does not behave differently between the families here.** On the Q10, `ADFM` is `ADCON0`
+   bit 2 and `ADCON0 = 0x88` sets it: `ADON = 1`, `ADCONT = 0` (single-shot), `ADCS = 0` (Frc),
+   `ADFM = 0`. The comment in `adc_init()` describing `ADFM<1:0>=10` is **inaccurate for the Q10** -
+   the field is 1 bit. The code is still correct because the ADCC result is right-justified by
+   default in this configuration, but the comment is misleading and should not be trusted as a
+   spec. `ADFM = 0` is the *justified-right* setting on the classic PIC18 and on the Q10 alike.
+3. **A log line was quoted as evidence without being read.** The brief cited a simulator warning
+   "`W0223-ADC: ADC input voltage low. ADC output underflow`" as the "definitive smoking gun". That
+   string appears nowhere in this repo's logs or in MDB's message set. Before quoting a tool
+   message as the decisive clue, grep the run's own log for the exact text; if it is not there, the
+   clue does not exist.
+4. **"The PIC16 code did a raw byte write to `ADREF`" established a claim by looking in the wrong
+   file.** The PIC16 firmware has no `ADREF` write either - `adc_init()` is a single shared function
+   under one `#if` on the device define, not a per-device pair. A claim about what "the legacy code
+does" must be checked in the legacy code, not inferred from the new one.
+5. **"Guard the thresholds with `#ifdef __MPLAB_DEBUGGER_SIMULATOR__` and force safe values" is the
+   wrong shape of fix, twice over.** Forcing `g_thresholds` to magic numbers makes the test pass by
+   disabling the behaviour under test; and if a threshold really had loaded as 0, the honest fix is
+   to make `load_settings()` fail closed and report, not to paper over it in a simulator-only branch.
+   Reject any proposal that makes the suite green by changing what the firmware does when it is
+   being tested.
+6. **A probe script was requested that could not run as written.** The brief specified a five-line
+   MDB fragment (`print g_state`, `print g_trip_reason`, `print ADRES`, `print ADPCH`, `print ADREF`)
+   that is not a runnable script: it has no `Device`/`Halt`/`Step` sequence, so it would be echoed and
+   ignored, and `print ADRES`/`print ADPCH`/`print ADREF` name *registers*, not the firmware symbols
+   `SYSTEM_SYMBOLS` allows. MDB symbol reads work on the firmware's own variable names; the adapter
+   raises `KeyError` on anything else **before the simulator starts**. Extend
+   `tools/simulate/probe_q10_ptt_path.py` instead of hand-writing a script fragment.
+
+**The one-line test that catches all six:** name the file and line that proves it, or the command
+whose output proves it, before acting on it. If neither exists, the claim is a hypothesis to test,
+not a finding to act on.
+
 ## Failure triage
 
 - `Frequency counter failed to classify ...`: inspect the scenario name, `FREQ_DEBUG` lines, Timer1 writes, measured `frequency_khz`, `current_band`, `band_locked`, PTT state, and sequence stage.
@@ -1202,7 +1281,9 @@ artefact - and both were avoidable:
 Report:
 
 0. **Commit and push as you go - local and remote.** As soon as a change is verified green, commit
-   it and push to `origin/main`. Do not batch a session's work into one large commit at the end, and
+   it and push to the branch you are working on - `origin/main` only when that *is* the branch; the
+   Q10 work is on `upgrade/pic18f47q10` and pushing it to `main` is wrong. Do not batch a session's
+   work into one large commit at the end, and
    never leave verified work sitting only in the working tree. Small verified commits are the rule;
    the only acceptable reason to hold one is a verdict that is still running, and then it is
    committed the moment that verdict reads green. This is a standing user instruction - it has been
