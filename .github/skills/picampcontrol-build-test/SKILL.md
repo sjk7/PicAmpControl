@@ -30,18 +30,28 @@ re-toggle FileTail after any recreation. The delete/create step is only safe *be
 may be on stable - check for `code-insiders` first and fall back to `code`, in every command and
 script, so the workflow works either way (sticky user instruction, 2026-09-22).
 
-**Hard rule: Windows Defender real-time exclusions must be in place, and you must prompt for them.**
-Without them Defender scans every MDB/JVM object and every build output, and the machine spends its
-CPU on the scanner (user report: "Defender is killing my pc"). The installer is
-`tools/setup/windows-defender-exclusions.ps1` and it needs an **elevated** PowerShell; a non-elevated
-shell cannot even read the exclusion list back, so the script leaves a marker file and
-`tools/simulate/cleanup_sim_processes.py` prints a prompt when the marker is missing. Run that check
-as part of the pre-flight, and if it reports the exclusions are absent, ask the user to run the
-installer rather than silently proceeding.
+**Hard rule: Windows Defender real-time exclusions must be in place.** Without them Defender scans
+every MDB/JVM object and every build output, and the machine spends its CPU on the scanner (user
+report: "Defender is killing my pc"). `tools/setup/windows-defender-exclusions.ps1` installs them and
+needs an **elevated** shell, so a non-elevated process cannot even read the list back. Launch it as:
 
-**Hard rule: clean up leftover processes before starting anything.** Run
-`python tools/simulate/cleanup_sim_processes.py` before a build or a simulator job. It shares its
-patterns with the launcher and also does the Defender pre-flight above.
+```powershell
+Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass',`
+  '-File',"$PWD\tools\setup\windows-defender-exclusions.ps1",'-NoPause','-AutoCloseSeconds','20'
+```
+
+It verifies each entry, prints `ADDED`/`PRESENT`/`SKIPPED` per line with a `SUCCESS` or `FAILED`
+verdict, exits 1 on failure, writes `%TEMP%\pac_defender_exclusions.log` always and
+`%TEMP%\pac_defender_exclusions.ok` **only on success**, and with `-AutoCloseSeconds` closes its own
+window so it does not sit open. On failure it dumps the whole report and waits for Enter instead -
+that window is the one thing the user must be able to read.
+
+**Hard rule: at session start, run `python tools/simulate/cleanup_sim_processes.py`.** It kills
+leftovers using the launcher's own pattern list, then checks Defender: it reads the real exclusion
+list when elevated, else trusts the marker file, else **raises the elevated installer itself** (rate
+limited to one request per 10 minutes, since every request is a UAC prompt). A non-elevated
+`Get-MpPreference` returns "N/A: Must be an administrator" placeholders rather than failing, so those
+are treated as *unreadable*, never as *missing* - otherwise every run would ask for another UAC.
 
 Use this skill for firmware builds, simulator verification and simulator debugging. Do not claim success from a missing or truncated terminal response; require a fresh exit code and final output.
 
