@@ -100,28 +100,67 @@ void freq_counter_isr(void) {
     }
 }
 
-void freq_counter_tick_10ms(void) {
-    // Disable interrupt briefly or atomic read to capture counter and overflows cleanly
+/* Atomic read of the async counter.
+ *
+ * T1CON.nSYNC = 1 means Timer1 counts RD1 asynchronously, with no relationship to the CPU clock.
+ * That is what makes the frequency counter work at all, and it is also what makes reading it
+ * racy: while Timer1 is running, the CPU can be preempted between the two byte reads of the
+ * 16-bit value, or the counter can carry into the high byte between them, and the ISR can bump
+ * `g_tmr1_overflows` at any instant. The old code disabled the *interrupt* around the read, which
+ * stops the ISR but not the counter - so a carry could still land between the low and high byte
+ * and produce a value that is too high by 256, in the middle of the band classification.
+ *
+ * The fix is to read from a state that cannot change: stop Timer1, take the 16-bit value and the
+ * overflow count, then restart. `RD16 = 1` makes `TMR1` a single 16-bit access, so with the
+ * counter stopped the value is inherently consistent; and because the counter is stopped, the
+ * overflow count cannot change underneath us either.
+ *
+ * Both halves matter for the same reason. The gate window is 10 ms, so losing a few cycles of
+ * counting to the stop/start is 0.05% - far below the tolerance of a band classification that
+ * separates 40m (7.0 MHz) from 20m (14 MHz). A torn read, by contrast, can shift the count by
+ * 65536/4 = 16384 Hz-worth of pulses=*4 prescale = a whole band. Correctness is worth more than
+ * the handful of cycles.
+ *
+ * This is deliberately written so it is correct regardless of which device is running: it makes
+ * no assumption about clock ratio between the CPU and the counted signal, which is exactly the
+ * assumption that stops holding when the core moves from 32 MHz to 64 MHz.
+ */
+static unsigned long read_counter_atomically(unsigned int *counter_out)
+{
     bool ie_save = PIE4bits.TMR1IE;
-    PIE4bits.TMR1IE = 0;
+    bool was_on = T1CONbits.ON;
 
-    unsigned int tmr1_val = TMR1;
+    PIE4bits.TMR1IE = 0;      /* stop the ISR from bumping the overflow count */
+    T1CONbits.ON = 0;         /* stop the counter: the value cannot move now */
+
+    unsigned int counter = TMR1;
     unsigned int overflows = g_tmr1_overflows;
 
-    // Handle overflow that occurred just before reading
-    if (PIR4bits.TMR1IF && tmr1_val < 32768U) {
-        overflows++;
+    /* An overflow that completed before we stopped the counter may have set TMR1IF without the
+       ISR having run yet. A low value means the counter wrapped on the way to us, so account for
+       it exactly once - the flag is cleared here so the ISR does not later double-count it. */
+    if (PIR4bits.TMR1IF) {
         PIR4bits.TMR1IF = 0;
+        if (counter < 0x8000U) {
+            overflows++;
+        }
     }
 
-    // Reset counter for next 10ms gate window
-    TMR1 = 0;
+    TMR1 = 0;                 /* restart the gate window from a known state */
     g_tmr1_overflows = 0;
 
+    if (was_on) {
+        T1CONbits.ON = 1;
+    }
     PIE4bits.TMR1IE = ie_save;
 
-    // Calculate raw pulses in 10ms
-    unsigned long total_pulses = ((unsigned long)overflows * 65536UL) + tmr1_val;
+    *counter_out = counter;
+    return ((unsigned long)overflows * 65536UL) + counter;
+}
+
+void freq_counter_tick_10ms(void) {
+    unsigned int tmr1_val = 0;
+    unsigned long total_pulses = read_counter_atomically(&tmr1_val);
     g_fc_status.raw_pulses = total_pulses;
 
     // Frequency calculation:

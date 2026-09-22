@@ -104,8 +104,11 @@ Always clean up an earlier run before starting another. The MDB suite can outliv
 ## Repository facts
 
 - CMake source directory: `cmake/My_Pic_Project/default`
-- Debug build directory: `_build/My_Pic_Project/debug`
-- Release build directory: `_build/My_Pic_Project/release`
+- Debug build directory: `_build/My_Pic_Project/debug` (PIC16F18875, legacy)
+- Release build directory: `_build/My_Pic_Project/release` (PIC16F18875, legacy)
+- **Q10 build directories: `_build/My_Pic_Project/q10` (Debug) and `_build/My_Pic_Project/q10_release`
+  (Release)**. Configure the device with `-DPICAMP_DEVICE=PIC18F47Q10`; VS Code tasks
+  `Build PicAmpControl Q10 (Debug/Release)` do both steps.
 - Firmware ELF used by MDB: `out/My_Pic_Project/default.elf`
 - Merged simulator suite: `tools/simulate/trace_ptt_sequence.py --suite`
 - Cleanup-aware suite launcher: `tools/simulate/run_suite_with_watchdog.py`
@@ -295,7 +298,52 @@ cmake --build _build/My_Pic_Project/debug -j4
   PTT sequencing cannot damage the amplifier** - the silicon in this project is expensive and the
   safety argument has to be airtight. No gaps, no excuses.
 
-Known reduction levers, in rough order of value:
+# WHICH CONFIGURATION TO TEST IN - THE RULE (standing user instruction, 2026-09-22):
+# **"Run suite as fast as possible, with full optimisations. Only ever run suite in debug mode if
+# there are known issues."**
+
+On the PIC18F47Q10 branch (`upgrade/pic18f47q10`) that rule is now directly satisfiable, and the
+old advice to test in Debug is obsolete **on this branch**:
+
+| | PIC18F47Q10 Release | PIC18F47Q10 Debug | PIC16F18875 Debug (legacy) |
+|---|---|---|---|
+| Optimisation | `-Os`, full | `-O1` | `-O1` |
+| Program space | 11,136 B = 8.5% | 12,732 B = 9.7% | 8,159 words = **99.6%** |
+| Symbols for MDB | **complete** | complete | complete |
+
+**Q10 Release is fully optimised AND symbol-complete, so that is what the suite runs.** Verified
+2026-09-22 by reading every global the harnesses depend on out of the *Release* `default.sym`:
+`g_state`, `g_fc_status`, `g_ptt_active`, `g_sequence_stage`, `g_band_cache_idle_ms`,
+`g_band_cache_band`, `g_fault_latched`, `g_snoop_active` - all present with addresses. `-gdwarf-3`
+plus a fresh `.sym` is what preserves them; the `-O1` in the Debug rule was never about symbols
+per se, it was about the 16F's flash budget, and that constraint does not exist here.
+
+Consequences to hold to:
+- **Default the suite to the Q10 Release build.** Use Debug only to chase a specific problem, then
+  go back to Release. Do not run both "to be safe" - the suite is minutes long and the point of the
+  rule is speed.
+- **Do not add `-O1` for Q10 "to be safe".** It would slow every run down for a 16F constraint that
+  does not apply, and it is exactly the advice this section used to give.
+- The `lcd_parallel.c` `-Os`-in-Debug override still exists and is still harmless; it is a 16F
+  concern now.
+
+## PIC16F18875 flash budget (LEGACY - do not apply to the Q10 branch)
+
+The user has said "forget the 16F now" for this work (2026-09-22); the Q10 branch is Q10-only. This
+is retained so nobody re-derives it, and because the numbers document *why* the 16F was replaced.
+
+- Debug is the binding configuration at **8,159/8,192 words = 99.6%** (2026-09-22, after the
+  frequency-counter atomic-read fix cost 36 words). Earlier snapshots: 8,123 (99.2%), 8,117 (99.1%).
+  Always read the current figure from `memoryfile.xml`; `Ai-Notes.txt` tracks the same numbers.
+- Release is ~84% used. Debug is closer to the limit than the shipped build **only because of the
+  `-O1`**, so budget against the Debug number if the change must build on 16F.
+- A link error reporting exhausted program space reads `(1347) can't find 0xN words ... for psect
+  "<name>" in class "<class>"`. Read the exact figure from `memoryfile.xml` rather than guessing at
+  the wording.
+- `-O1` must stay in the 16F Debug rule: dropping to `-Os` there is what breaks MDB symbol
+  resolution *on the 16F*, where space forces the compromise in the first place.
+
+Known reduction levers if 16F work ever resumes, in rough order of value:
 
 1. Table-drive the long `if`/`else` chain in `adjust_selected_setting()` (est. 80-100 words). The
    per-setting min/max/step bounds are irregular, so it needs a new menu-edit scenario in the suite.
@@ -305,25 +353,15 @@ Known reduction levers, in rough order of value:
    last wins) and the file was forced to recompile by deleting its object, yet the linked Debug image
    was **8117/8192 words before and after - identical**. XC8's linker runs its own optimisation pass at
    the `-O1` in the link rule, which appears to normalise the per-TU level, so per-file `-O`
-   overrides are the wrong layer. It also costs MDB symbol resolution *inside* that file. The only
-   lever at this layer is lowering the **link** step's `-O`, which weakens symbol resolution
-   everywhere and needs the user's consent (item 3).
+   overrides are the wrong layer. It also costs MDB symbol resolution *inside* that file.
 3. Bit-pack the menu metadata (`g_menu_setting_offsets[]` 20 B + `g_menu_setting_types[]` 20 B).
-4. Shorten the remaining display strings.
-5. Only if the user explicitly agrees: build the whole Debug image `-Os` - it costs ~1200 words but
-   silently breaks MDB symbol and breakpoint resolution.
+4. Shorten the remaining display strings. The cheapest room is in string literals (`STRCODE`), which
+   the linker fails to place first; on 2026-09-21 the LCD menu labels and boot text were shortened to
+   reclaim ~72 words. It is a user-visible change - ask.
+5. Only if the user explicitly agrees: build the whole Debug image `-Os`.
 
-Flash is the binding constraint on this project, and it is easy to trip from a test change:
-
-- Release (shipping) uses ~6899/8192 words = ~84% used; Debug is the binding one at 8117/8192 = 99.1%
-  (2026-09-21 snapshot - always read the current value from `memoryfile.xml`, and note that the same
-  figures are tracked in `Ai-Notes.txt` under "Device memory usage").
-- Debug is deliberately compiled `-O1` (not `-Os`) so MDB can resolve symbols and breakpoints. That is why the build the simulator loads is far closer to the limit than the shipped build. Budget against the Release number.
-- A link error reporting that program space is exhausted reproduces in the Debug build first, long before Release breaks. It reads as `(1347) can't find 0xN words ... for psect "<name>" in class "<class>"` and lists several psects, because the last few words are fragmented. Treat it as a signal that the test image needs `-O1` kept and the change needs to be smaller — not as a reason to switch Debug to `-Os`, which would silently break MDB symbol resolution. Read the exact figure from `memoryfile.xml` rather than guessing at the wording of the linker message.
-- The cheapest room is in string literals (`STRCODE`), which the linker fails to place first. On
-  2026-09-21 the LCD menu labels and boot text were shortened to reclaim ~72 words; that is the
-  precedent to follow before reaching for anything structural, but it is a user-visible change - ask.
-- Prefer table-driven logic over long if/else chains when adding firmware code, and ask before adding code.
+Prefer table-driven logic over long if/else chains when adding firmware code, and ask before adding
+code to the 16F.
 
 ## Simulator verification
 
@@ -621,7 +659,12 @@ Two ways in, both against the simulator:
 
 Prerequisites that decide whether debugging works at all:
 
-- **Symbols come from the Debug build.** `user.cmake` compiles Debug with `-O1` and Release with `-Os` per configuration precisely so breakpoints and symbol reads resolve; a bare `-Os` overriding an `-O0` is a past bug that silently broke them, so if breakpoints on functions or statics stop resolving, read that file first.
+- **Symbols come from whichever configuration was built last, and BOTH devices write the same
+  `out/My_Pic_Project/default.elf` + `.sym`.** The `-O1`-in-Debug rule exists for the 16F's flash
+  budget; Q10 Release keeps full symbols at `-Os` (verified 2026-09-22, see the configuration-policy
+  section). If breakpoints or symbol reads stop resolving, first check *which device and
+  configuration* produced the current `out/` artefact - a 16F Debug `.sym` read by a Q10 run looks
+  like a firmware fault and is not.
 - **You cannot write a C variable by name.** `write g_x 1` fails with `For input string: "<addr> "`, and `print /a g_x` fails the same way. Inject state by address from `out/My_Pic_Project/default.sym`, using `write /r 0x<addr> <lo> <hi>` (little-endian, one byte per word). Addresses move on every rebuild, so parse the `.sym` at run time.
 - **The simulator is a debugger model, not silicon.** Timer1's external clock is not modelled and the suite injects `TMR1H`/`TMR1L` instead (see the triage section); exact timing still needs the bench. The simulator notes in `Ai-Notes.txt` are the reference for what the model does and does not implement.
 - If the CPU appears stuck at the interrupt vector with continuous `W0223-ADC` spam on every `Halt`, suspect the ADC-ISR starvation bug class recorded in `bugfixes.md` rather than a debugger fault.

@@ -3,7 +3,8 @@
 
 Spec: docs/first-dit-band-detection.md
 
-Runs one MDB session against out/My_Pic_Project/default.elf (build Debug first - mdb
+Runs one MDB session against the current device's image (see PICAMP_DEVICE), e.g.
+    PIC18F47Q10 Release: out/My_Pic_Project_18F47Q10/default.elf
 needs the debug symbols) and proves, clause by clause:
 
   (a) PTT with no decoded band latches PTT but holds the amplifier in bypass: every TX
@@ -40,7 +41,7 @@ Simulator caveats (see TESTING.md):
     pin, PPS routing and prescaler are therefore NOT covered here.
   * mdb cannot write a C variable by symbol name in this version (it fails with
     `For input string: "<addr> "`), so the two fault-injection writes below address the
-    variables through out/My_Pic_Project/default.sym. Regression-tested 2026-09-21.
+    variables through the current device's out/My_Pic_Project_<mcpu>/default.sym. Regression-tested 2026-09-21.
   * Simulating the full BAND_CACHE_IDLE_TIMEOUT_MS (60 s) would need ~480M instructions,
     which is far too slow (~6 min of wall clock for this one clause). Clause (d) therefore
     proves the timer really advances 1 ms/ms and then injects an idle count just below the
@@ -67,8 +68,8 @@ from first_dit_invariants import (  # noqa: E402
 )
 import first_dit_invariants as inv  # noqa: E402
 
-ELF_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.elf"
-SYM_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.sym"
+ELF_PATH = harness.ELF_PATH
+SYM_PATH = harness.IMAGE_DIR / "default.sym"
 
 # ---------------------------------------------------------------- device selection
 # This harness has to drive either part, because the Q10 port is validated by running THIS test

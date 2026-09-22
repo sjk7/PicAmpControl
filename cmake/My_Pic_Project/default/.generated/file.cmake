@@ -24,7 +24,8 @@ set(My_Pic_Project_default_image_name "default.elf")
 set(My_Pic_Project_default_image_base_name "default")
 
 # The output directory of the final image.
-set(My_Pic_Project_default_output_dir "${CMAKE_CURRENT_SOURCE_DIR}/../../../out/My_Pic_Project")
+set(My_Pic_Project_default_output_dir
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../out/My_Pic_Project_${PICAMP_MCPU}")
 
 # The full path to the final image.
 set(My_Pic_Project_default_full_path_to_image ${My_Pic_Project_default_output_dir}/${My_Pic_Project_default_image_name})

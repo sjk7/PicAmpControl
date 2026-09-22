@@ -31,9 +31,6 @@ import first_dit_invariants as invariants  # noqa: E402
 import platform_process as procutil  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-HEX_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.hex"
-# Loaded instead of the .hex so mdb can resolve C variable names (debug symbols).
-ELF_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.elf"
 
 # Which part the simulator models. `PICAMP_DEVICE` selects it so the same harness can drive the
 # PIC18F47Q10 during the upgrade; PIC16F18875 stays the default so nothing changes for the
@@ -41,6 +38,21 @@ ELF_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.elf"
 # rather than something each harness decides for itself. An empty value counts as unset - a shell
 # that exports `PICAMP_DEVICE=` should not be a hard error.
 DEVICE = os.environ.get("PICAMP_DEVICE") or "PIC16F18875"
+
+# The image directory carries the device name. It has to, because both devices would otherwise
+# write `out/My_Pic_Project/default.elf` and the harness would load whichever was built last -
+# with no error, just a wrong verdict, and fault injection poking addresses from the other
+# device's .sym. CMake writes `<device>` via PICAMP_MCPU; the MCPU spelling is derived here from
+# the long device name to keep one source of truth.
+_DEVICE_MCPU = {
+    "PIC16F18875": "16F18875",
+    "PIC18F47Q10": "18F47Q10",
+}.get(DEVICE, DEVICE)
+IMAGE_DIR = REPO_ROOT / "out" / f"My_Pic_Project_{_DEVICE_MCPU}"
+
+HEX_PATH = IMAGE_DIR / "default.hex"
+# Loaded instead of the .hex so mdb can resolve C variable names (debug symbols).
+ELF_PATH = IMAGE_DIR / "default.elf"
 
 # Firmware globals that explain why PTT/TX may be blocked (see main.c).
 STATE_VARS = [

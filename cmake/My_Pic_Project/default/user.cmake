@@ -4,9 +4,25 @@ set_property(TARGET My_Pic_Project_default_default_XC8_compile PROPERTY SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/freq_counter.c"
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/nvm.c")
 
-# Optimize Debug builds with -O1 to avoid XC8 -O0 string section code bloat, and Release with -Os.
-target_compile_options(My_Pic_Project_default_default_XC8_compile PRIVATE "$<$<CONFIG:Debug>:-O1>" "$<$<CONFIG:Release>:-Os>")
-target_link_options(My_Pic_Project_default_image_LRxgA9DB PRIVATE "$<$<CONFIG:Debug>:-O1>" "$<$<CONFIG:Release>:-Os>")
+# Optimisation policy, by device.
+#
+# PIC16F18875: Debug carries -O1 (not -O0) purely because the 16F Debug image sits at ~99.6% of
+# flash and -O0 bloat does not fit. That was always a workaround for a full part, and the tests
+# depend on the symbols it preserves.
+#
+# PIC18F47Q10: 8.5% of flash in Release, so there is no bloat problem to work around and no reason
+# to pay for it. Release is the default configuration on this device and is FULLY OPTIMISED (-Os)
+# while keeping complete symbols through -gdwarf-3 - verified 2026-09-22 by reading every symbol
+# the harnesses depend on (g_state, g_fc_status, g_ptt_active, g_sequence_stage, g_band_cache_*,
+# g_fault_latched, g_snoop_active) straight out of the Release `default.sym`. The suite therefore
+# runs at full speed on Q10; Debug exists only to chase a known problem.
+#
+# So: Q10 Release = optimised + symbol-complete + fast. Do not re-introduce -O1 for Q10 "to be
+# safe" - it would only slow the suite down for a constraint that does not apply here.
+target_compile_options(My_Pic_Project_default_default_XC8_compile PRIVATE
+    "$<$<CONFIG:Debug>:-O1>" "$<$<CONFIG:Release>:-Os>")
+target_link_options(My_Pic_Project_default_image_LRxgA9DB PRIVATE
+    "$<$<CONFIG:Debug>:-O1>" "$<$<CONFIG:Release>:-Os>")
 # Build the LCD transport with -Os even in Debug. Debug carries -O1 (not -Os) only so MDB can
 # resolve symbols and breakpoints, and the simulator harnesses read globals that live in main.c
 # and freq_counter.c - never in lcd_parallel.c - so this file does not need the -O1 encoding for

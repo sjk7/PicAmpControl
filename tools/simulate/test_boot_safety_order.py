@@ -43,7 +43,7 @@ sys.path.insert(0, str(TOOLS_DIR))
 import platform_process as procutil  # noqa: E402
 import trace_ptt_sequence as harness  # noqa: E402
 
-ELF_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.elf"
+ELF_PATH = harness.ELF_PATH
 GRAPH_DIR = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"
 DEVICE = harness.DEVICE
 # The steps-per-simulated-millisecond table lives with the first-dit harness, which owns the
