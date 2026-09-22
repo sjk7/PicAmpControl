@@ -4,6 +4,48 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-22 — Almost every physical pin number in the pin map was wrong
+
+Found while evaluating a device upgrade: comparing the pin map against the datasheet made it
+obvious that the map's own figures could not be right.
+
+`docs/hardware/PIC16F18875_pin_map.md` claimed VSS on pins 1 and 19, VDD on 10 and 20, RB0-RB7 on
+21-28, RC0-RC7 on 11-18, RD0-RD7 on 29-36 and RE0/RE2/RE3 on 37/39/40, with a "VREF+ (ADC ref)"
+on pin 38. The actual PDIP-40 pinout (datasheet DS40001802H) is VPP/MCLR/RE3 on 1, RA0-RA5 on 2-7,
+RE0/RE1/RE2 on 8/9/10, VDD on 11 and 32, VSS on 12 and 31, RA7/RA6 on 13/14, RC0-RC3 on 15-18,
+RD0/RD1 on 19/20, RD2/RD3 on 21/22, RC4-RC7 on 23-26, RD4-RD7 on 27-30 and RB0-RB7 on 33-40.
+**Only RA0-RA5 (pins 2-7) were correct.** The map even carried the hedge "(Pin numbers assume
+standard PDIP-40 package conventions)" - the numbers had been assumed, not looked up.
+
+Three separate errors, the first two actively dangerous for anyone wiring from that document:
+
+- `RD2-RD7` were listed both as the six LPF band-select outputs *and* as "genuinely free (not
+  claimed by any `pin_map.h` define)". Anyone trusting the free-pin list would have left the
+  band-select bus unconnected.
+- `VREF+` was given a dedicated pin (38). It has none: it is an alternate function of **RA3**
+  (`RA3/ANA3/C1IN1+/VREF+/MDCARL`). Harmless in effect only because `firmware/src/main.c`
+  references VDD with the FVR off, so the design never uses it - but RA3 is also `ADC_SWR2_REF`,
+  so a future move to an external reference would have silently collided with an ADC input.
+- `RE3` was listed as free GPIO while `firmware/src/main.c` sets `#pragma config MCLRE = ON`,
+  which makes it the MCLR/VPP pin. The datasheet is explicit: "general purpose input only when
+  MCLR is disabled". RE1 was missing from the document entirely.
+
+Verified before editing, because a PCB-facing table is worse than useless if it is confidently
+wrong. The datasheet's pin *diagram* was read twice - once in extraction order and once by pairing
+text fragments on their y-coordinates - and both agree: each side of the package yields twenty
+names and twenty numbers in strictly matching order, and the result is a complete permutation of
+pins 1-40 with every port pin appearing exactly once. A third reading via the 40/44-pin allocation
+table was abandoned: its columns interleave under extraction and its numbers sit a row out of step
+with its names, so it was rejected rather than used to "confirm" anything.
+
+Also corrected in the same pass: the free-GPIO count (9 -> 3; the old figure counted RD2-RD7),
+the stale "RE0/RE2/RE3 remain spare" line in the future-uses list, and the document version.
+
+Not changed, and flagged instead: the Power & Ground table labels the rail "VDD (3.3V)", while
+`firmware/src/main.c`'s ADC comments assume a 5 V reference (~4.88 mV per count) and the part is
+rated 1.8-5.5 V. Only a pin numbering question was in scope here, so the rail voltage is left
+alone - but the two statements cannot both be right and one of them should be settled.
+
 ## 2026-09-22 — The simulator harnesses were POSIX-only, and the launcher never reached the simulator on Windows
 
 Found by running the previously macOS-only test workflow on Windows 10 for the first time. The

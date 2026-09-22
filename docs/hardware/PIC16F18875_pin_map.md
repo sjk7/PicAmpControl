@@ -38,47 +38,47 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 | RA3 | 5 | Analog In | ADC_SWR2_REF | SWR2 reflected detection (sensor preamp output) |
 | RA4 | 6 | GPIO Out | OUTPUT_LCD_RS | Parallel LCD register-select |
 | RA5 | 7 | Analog In | ADC_TEMP | Temperature monitoring (thermistor preamp output) |
-| RA6 | 8 | GPIO Out | OUTPUT_LCD_E | Parallel LCD enable/strobe |
-| RA7 | 9 | GPIO Out | OUTPUT_LCD_D4 | Parallel LCD data bit 4 |
+| RA6 | 14 | GPIO Out | OUTPUT_LCD_E | Parallel LCD enable/strobe |
+| RA7 | 13 | GPIO Out | OUTPUT_LCD_D4 | Parallel LCD data bit 4 |
 
 ## Port B (Universal I/O)
 
 | Pin | Number | Mode | Signal | Purpose |
 |-----|--------|------|--------|---------|
-| RB0 | 21 | GPIO In | INPUT_ENCODER_B | Rotary encoder (quadrature phase B) |
-| RB1 | 22 | Analog In | ADC_CURRENT | Drain/collector current measurement (current sense amp) |
-| RB2 | 23 | Analog In | ADC_OVERDRIVE | Overdrive detection input |
-| RB3 | 24 | Analog In | ADC_DRAIN_PEAK | Peak drain stress input |
-| RB4 | 25 | GPIO In | INPUT_OVERCURRENT_FAULT | Comparator latch output (hardware overcurrent trip) |
-| RB5 | 26 | PWM Out | OUTPUT_FAN_PWM | Fan motor PWM (active-high, 5V @ ~8A peak) |
-| RB6 | 27 | GPIO In | INPUT_ENCODER_SWITCH | Rotary encoder switch (push-to-select) |
-| RB7 | 28 | GPIO Out | OUTPUT_TRIP_STATUS | Trip event indicator (active-low to ground, ~20mA sink) |
+| RB0 | 33 | GPIO In | INPUT_ENCODER_B | Rotary encoder (quadrature phase B) |
+| RB1 | 34 | Analog In | ADC_CURRENT | Drain/collector current measurement (current sense amp) |
+| RB2 | 35 | Analog In | ADC_OVERDRIVE | Overdrive detection input |
+| RB3 | 36 | Analog In | ADC_DRAIN_PEAK | Peak drain stress input |
+| RB4 | 37 | GPIO In | INPUT_OVERCURRENT_FAULT | Comparator latch output (hardware overcurrent trip) |
+| RB5 | 38 | PWM Out | OUTPUT_FAN_PWM | Fan motor PWM (active-high, 5V @ ~8A peak) |
+| RB6 | 39 | GPIO In | INPUT_ENCODER_SWITCH | Rotary encoder switch (push-to-select), ICSPCLK |
+| RB7 | 40 | GPIO Out | OUTPUT_TRIP_STATUS | Trip event indicator (active-low to ground, ~20mA sink), ICSPDAT |
 
 ## Port C (Digital I/O + Peripheral Interfaces)
 
 | Pin | Number | Mode | Signal | Purpose |
 |-----|--------|------|--------|---------|
-| RC0 | 11 | GPIO In | INPUT_PTT | Push-to-talk / transmit enable (active-low) |
-| RC1 | 12 | GPIO Out | OUTPUT_COMP_RESET | Comparator (CMP1) latch reset (active-high pulse) |
-| RC2 | 13 | GPIO In | INPUT_ENCODER_A | Rotary encoder (quadrature phase A) |
-| RC3 | 14 | GPIO Out | OUTPUT_LCD_D5 | Parallel LCD data bit 5 |
-| RC4 | 15 | GPIO Out | OUTPUT_LCD_D6 | Parallel LCD data bit 6 |
-| RC5 | 16 | GPIO Out | OUTPUT_TX | TX enable / amplifier control (active-low, ~50mA sink) |
-| RC6 | 17 | GPIO Out | OUTPUT_TX_VCC | TX VCC / amplifier supply switch (active-low, ~100mA sink) |
-| RC7 | 18 | GPIO Out | OUTPUT_TX_BIAS | TX bias / amplifier idle condition (active-low, ~50mA sink) |
+| RC0 | 15 | GPIO In | INPUT_PTT | Push-to-talk / transmit enable (active-low) |
+| RC1 | 16 | GPIO Out | OUTPUT_COMP_RESET | Comparator (CMP1) latch reset (active-high pulse) |
+| RC2 | 17 | GPIO In | INPUT_ENCODER_A | Rotary encoder (quadrature phase A) |
+| RC3 | 18 | GPIO Out | OUTPUT_LCD_D5 | Parallel LCD data bit 5 |
+| RC4 | 23 | GPIO Out | OUTPUT_LCD_D6 | Parallel LCD data bit 6 |
+| RC5 | 24 | GPIO Out | OUTPUT_TX | TX enable / amplifier control (active-low, ~50mA sink) |
+| RC6 | 25 | GPIO Out | OUTPUT_TX_VCC | TX VCC / amplifier supply switch (active-low, ~100mA sink) |
+| RC7 | 26 | GPIO Out | OUTPUT_TX_BIAS | TX bias / amplifier idle condition (active-low, ~50mA sink) |
 
 ## Port D (New on PIC16F18875)
 
 | Pin | Number | Mode | Signal | Purpose |
 |-----|--------|------|--------|---------|
-| RD0 | 29 | GPIO Out | OUTPUT_LCD_D7 | Parallel LCD data bit 7 |
-| RD1 | 30 | GPIO In | INPUT_FREQ_COUNTER | Timer1 external clock (T1CKI via PPS), frequency counter input |
-| RD2 | 31 | GPIO | OUTPUT_BAND_160M | Active-high LPF band-select output for 160 m |
-| RD3 | 32 | GPIO | OUTPUT_BAND_80M | Active-high LPF band-select output for 80 m |
-| RD4 | 33 | GPIO | OUTPUT_BAND_40M | Active-high LPF band-select output for 40 m |
-| RD5 | 34 | GPIO | OUTPUT_BAND_20M | Active-high LPF band-select output for 20 m |
-| RD6 | 35 | GPIO | OUTPUT_BAND_15M | Active-high LPF band-select output for 15 m |
-| RD7 | 36 | GPIO | OUTPUT_BAND_10M | Active-high LPF band-select output for 10 m |
+| RD0 | 19 | GPIO Out | OUTPUT_LCD_D7 | Parallel LCD data bit 7 |
+| RD1 | 20 | GPIO In | INPUT_FREQ_COUNTER | Timer1 external clock (T1CKI via PPS), frequency counter input |
+| RD2 | 21 | GPIO | OUTPUT_BAND_160M | Active-high LPF band-select output for 160 m |
+| RD3 | 22 | GPIO | OUTPUT_BAND_80M | Active-high LPF band-select output for 80 m |
+| RD4 | 27 | GPIO | OUTPUT_BAND_40M | Active-high LPF band-select output for 40 m |
+| RD5 | 28 | GPIO | OUTPUT_BAND_20M | Active-high LPF band-select output for 20 m |
+| RD6 | 29 | GPIO | OUTPUT_BAND_15M | Active-high LPF band-select output for 15 m |
+| RD7 | 30 | GPIO | OUTPUT_BAND_10M | Active-high LPF band-select output for 10 m |
 
 > Pull-up notes for Port D:
 > - `RD1 / INPUT_FREQ_COUNTER` is a Timer1 clock input, not a switch input. It should not get a generic pull-up; it needs a valid external clock signal or proper conditioning. If the source is open-circuit or weakly driven, the fix belongs in the signal source/conditioning network, not a random pull-up.
@@ -88,20 +88,22 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 
 | Pin | Number | Mode | Signal | Purpose |
 |-----|--------|------|--------|---------|
-| RE0 | 37 | GPIO | (free) | Available |
-| RE2 | 39 | GPIO | (free) | Available |
-| RE3 | 40 | GPIO | (free) | Available |
-| (VREF+) | 38 | Power | ADC Ref | Voltage reference for ADC (see Power & Ground section) |
+| RE0 | 8 | GPIO | (free) | Available |
+| RE1 | 9 | GPIO | (free) | Available |
+| RE2 | 10 | GPIO | (free) | Available |
+| RE3 | 1 | Reset | VPP/MCLR/RE3 | Master clear / programming voltage; not free GPIO while `MCLRE = ON` |
 
 ## Power & Ground
 
 | Signal | Pin Numbers | Qty |
 |--------|-------------|-----|
-| VDD (3.3V) | 10, 20 | 2 |
-| VSS (GND) | 1, 19 | 2 |
-| VREF+ (ADC ref) | 38 | 1 |
+| VDD | 11, 32 | 2 |
+| VSS (GND) | 12, 31 | 2 |
 
-(Pin numbers assume standard PDIP-40 package conventions)
+Pin numbers are the PDIP-40 numbers from the PIC16(L)F18855/75 datasheet (DS40001802H), taken
+from the 40-pin PDIP pin diagram and cross-checked against Table 3 (40/44-pin allocation table).
+There is **no dedicated VREF+ pin**: VREF+ is an alternate function of RA3, and the ADC is
+VDD-referenced (`firmware/src/main.c`, FVR off), so the design does not consume it.
 
 ## ADC Channel Assignments
 
@@ -140,10 +142,11 @@ The following pins are genuinely free (not claimed by any `pin_map.h` define):
 - **RE3 is not free GPIO.** `firmware/src/main.c` sets `#pragma config MCLRE = ON`, so RE3 is the MCLR/VPP pin and is input-only general purpose at best (the datasheet lists it as "general purpose input only when MCLR is disabled").
 - `VREF+` is **not a dedicated pin** on this device: it is an alternate function of **RA3** (datasheet: `RA3/ANA3/C1IN1+/VREF+/MDCARL`). The ADC uses VDD as its reference (`firmware/src/main.c`, FVR off), so no VREF+ pin is consumed by the design.
 
-**Total free GPIO available:** 9 pins (plus potential VREF+ if externalized ADC reference is needed)
+**Total free GPIO available:** 3 pins (RE0, RE1, RE2). RE3 is claimed by MCLR and RA3 can supply an
+external VREF+ if a ratiometric reference is ever needed, but neither is currently free.
 
 ### Possible Future Uses
-- **Filter/Band Selection:** One output pin per RF band (6 bands: 160/80/40/20/15/10m) fits within RD2–RD7 with no bit-encoding needed; RE0/RE2/RE3 remain spare
+- **Filter/Band Selection:** One output pin per RF band (6 bands: 160/80/40/20/15/10m) fits within RD2–RD7 with no bit-encoding needed; RE0/RE1/RE2 remain spare
 - Additional sensor inputs (ADC or digital)
 - Extended relay/switch control logic
 - Serial communication (UART, CAN)
@@ -151,6 +154,6 @@ The following pins are genuinely free (not claimed by any `pin_map.h` define):
 
 ---
 
-**Document Version:** 2.2  
-**Last Updated:** 2026-09-21  
+**Document Version:** 2.3  
+**Last Updated:** 2026-09-22  
 **Device Migration:** PIC16F18855-I/SP (28-pin, 8KB) → PIC16F18875-I/P (40-pin, 16KB)
