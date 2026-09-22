@@ -81,7 +81,7 @@ CI/release workflows change - don't let it go stale.
   command here - link to the skill.
 
 ## Date
-2026-09-21
+2026-09-22
 
 ## Session handoff (carry-over for a NEW session)
 - This is the ONLY AI carry-over file. `AI-HANDOFF.md` was deleted on 2026-09-21 (it duplicated
@@ -89,19 +89,28 @@ CI/release workflows change - don't let it go stale.
   handoff file - update this one.
 - Working tree should be clean; read the current commit with `git --no-pager log --oneline -1`
   rather than trusting a SHA written here.
+- **The project now runs on Windows 10 as well as macOS** (MPLAB X 6.35 / XC8 4.00 / Python 3.14.7).
+  MDB is ~2.4x slower on Windows: the merged suite is ~356 s there against ~150 s on macOS. All
+  platform-specific harness code lives in `tools/simulate/platform_process.py`. Build/test procedure,
+  the Windows gotchas and the timeout policy are in the skill - do not restate them here.
 - Last verified run: `ctest --test-dir _build/My_Pic_Project/debug --output-on-failure`, verdict read
-  from the log file: `100% tests passed out of 2` (PTT_SequencerAndTripSuite ~2.5 min,
-  FirstDit_BandDetectionAndHotSwitchGuards ~18 s), `CTEST_EXIT=0`.
+  from the log file: `100% tests passed, 0 tests failed out of 2`, `CTEST_EXIT=0`, total 408 s
+  (PTT_SequencerAndTripSuite 355 s, FirstDit_BandDetectionAndHotSwitchGuards 53 s). That was the
+  Windows run; the equivalent macOS figures are ~150 s and ~20 s.
 - The standing process rule that produced the most friction last session: never judge a test run
   from terminal output. MDB emits megabytes of trace and a command that "returned no output" can
-  still have passed - always redirect to a log file, append `EXIT=$?`, and read the file.
-- Code landed this session: firmware/src/main.c (STATE_BYPASS_SNOOP, band cache, settle, verify,
-  g_band_established gate), firmware/src/freq_counter.c + include header (measured/confirmed/
-  restore_locked_band API, lock-independent stability tracker, dead helpers removed),
-  tools/simulate/test_first_dit.py (standalone proof, phases a-g), tools/simulate/
-  first_dit_invariants.py (shared I1-I5 checks), tools/simulate/trace_ptt_sequence.py (invariants
-  wired into the merged suite + stimulus fixes), cmake/My_Pic_Project/default/user.cmake (both
-  tests registered), docs/first-dit-band-detection.md, TESTING.md, bugfixes.md.
+  still have passed - always redirect to a log file, append the exit code, and read the file.
+- Work landed in the 2026-09-22 session (all committed and pushed; details in `bugfixes.md`):
+  * `tools/simulate/platform_process.py` (new), with all four harnesses rewired through it - the
+    simulator workflow did not run on Windows at all before this. Five defects fixed.
+  * Timeouts re-sized for the slower platform: `run_mdb(timeout=1500)` as a last-resort net sitting
+    above the launcher's `--timeout 1200`. Do not shrink them back to macOS-sized numbers.
+  * `docs/hardware/PIC16F18875_pin_map.md`: every physical pin number was wrong and is now corrected
+    against the datasheet; the "RD2-RD7 are free" error and the phantom VREF+ pin are gone.
+  * The supply rail is stated explicitly as 5 V (the map had mislabelled it 3.3 V).
+  * SCL/stimulus claims corrected: MDB SCL is NOT usable here, so the frequency counter remains
+    verified only by injecting TMR1H/TMR1L.
+  * The PIC18F47Q10 spike is gated and briefed under Remaining work. It has NOT been started.
 
 ## Simulator timing limitation (IMPORTANT)
 - The firmware uses Timer2 for the approximately 1 ms scheduler tick because MDB's Timer0 model stalled during earlier testing.
