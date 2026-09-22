@@ -397,16 +397,27 @@ results as they pass, and a final `END code=…`. `delta=0` with `mdb_bytes` fro
 hung; growing `mdb_bytes` means slow but healthy. If you want the ctest log itself to move, use
 `ctest -V` (streams test output live) rather than `--output-on-failure`.
 
-**Bring the heartbeat log up for the user when a run is launched** (standing user instruction,
-2026-09-22). Open it in a VS Code editor tab at the start of the run and leave it visible, so a
-several-minute suite is watchable rather than silent:
+**Open the log in TAIL mode in the VS Code UI for any long-running job - on Windows too** (standing
+user instruction, 2026-09-22, generalised and then restated for tail mode the same day). The user
+wants to watch long jobs - suites, builds, spike runs - live in the UI, so delete the log, recreate it
+fresh for the run, and open a *follow*, not a static editor tab: VS Code reloads a changed file but
+does not track the end of a growing one.
 
 ```powershell
-code-insiders -r "$env:TEMP\picampcontrol_suite_progress.log"   # fall back to `code -r` if needed
+# Windows - there is no `tail` binary here; Get-Content -Wait is the equivalent
+Get-Content "$env:TEMP\picampcontrol_suite_progress.log" -Wait -Tail 30
 ```
 
-This is a convenience for visibility only. It does not change how a verdict is judged: the pass/fail
-line and the appended exit code still come from the run's own log file, never from the terminal.
+```sh
+# macOS / Linux
+tail -f /tmp/picampcontrol_suite_progress.log
+```
+
+Start that in its own terminal and leave it up for the duration. Recreate the log *before* starting
+the tail: writing to a log that is already open in an editor tab makes VS Code raise its own "file
+changed on disk" prompt. Tailing a log for visibility is sanctioned by the user; judging a run from
+terminal output is not, so the pass/fail line and the appended exit code still come from the run's own
+log file.
 
 Both tests run by default. Windows is about 2.4x slower than macOS - the first-dit proof is ~20 s
 on macOS / ~55 s on Windows, and the merged suite ~150 s / ~356 s (measured 2026-09-22) - so read

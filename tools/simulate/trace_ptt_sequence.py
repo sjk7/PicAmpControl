@@ -401,6 +401,29 @@ def build_script(trip_name=None) -> str:
     lines.append("quit")
     return "\n".join(lines)
 
+# Benign, expected MDB noise. The simulator has no clock-source mux for TMR1/TMR3/TMR5,
+# and this firmware never configures those timers, so the warning fires on every reset and
+# means nothing here (see Ai-Notes.txt). It is stripped from everything the harness shows or
+# logs, because it otherwise buries the progress lines and turns up in the stderr tail of an
+# unrelated failure. run_sim.sh/.ps1 have filtered the same token for exactly this reason.
+#
+# Stripping is display-only: these lines match no parser pattern, so removing them cannot
+# change a pin/variable reading. A chunk boundary could in principle split the token, which
+# would leave a harmless partial line - it can never corrupt a value the parser accepts.
+MDB_NOISE_TOKENS = ("W0106-SIM",)
+
+
+def strip_mdb_noise(text: str) -> str:
+    """Drop lines containing a benign MDB noise token, leaving everything else verbatim."""
+    if not any(token in text for token in MDB_NOISE_TOKENS):
+        return text
+    return "".join(
+        line
+        for line in text.splitlines(keepends=True)
+        if not any(token in line for token in MDB_NOISE_TOKENS)
+    )
+
+
 def run_mdb(mdb_path: Path, script: str, timeout: float = 1500) -> str:
     """Run one mdb session to completion and return its combined output.
 
@@ -438,6 +461,12 @@ def run_mdb(mdb_path: Path, script: str, timeout: float = 1500) -> str:
 
             def drain_stream(stream_name, stream):
                 for chunk in iter(lambda: stream.read(4096), ""):
+                    # Filtered here, at the single capture point, so the transcript the parser
+                    # sees, the live debug log, the heartbeat byte counts and the stderr tail
+                    # printed on failure are all free of the benign reset warning.
+                    chunk = strip_mdb_noise(chunk)
+                    if not chunk:
+                        continue
                     captured[stream_name].append(chunk)
                     byte_counts[stream_name] += len(chunk.encode(errors="replace"))
                     if byte_counts[stream_name] - logged_counts[stream_name] >= 65536:

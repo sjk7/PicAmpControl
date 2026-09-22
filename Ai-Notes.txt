@@ -25,14 +25,24 @@ CI/release workflows change - don't let it go stale.
   `.github/skills/picampcontrol-build-test/SKILL.md` remain the sources of truth, and its own
   `<session_state>` block ("Awaiting the first hardware assignment") is stale and does not describe
   this project.
-- WHEN RUNNING SIMULATOR TESTS, OPEN THE PROGRESS LOG IN VS CODE FOR THE USER (user instruction,
-  2026-09-22, sticky/permanent). The file that "updates often with progress" is the watchdog's
-  heartbeat log - `%TEMP%\picampcontrol_suite_progress.log` on Windows, `/tmp/...` on macOS - so open
-  it in a VS Code editor tab at launch (`code-insiders -r "$env:TEMP\picampcontrol_suite_progress.log"`,
-  falling back to `code -r`) and leave it up for the duration of the run. It is NOT the ctest log:
-  ctest prints nothing until a test completes, so its log sits at four lines for the whole ~400 s
-  and looks hung. Opening the heartbeat log for the user does not change the verdict rule below -
-  verdicts are still read from the run's own log file and exit-code line, never from the terminal.
+- FOR LONG-RUNNING JOBS, DELETE/RECREATE THE LOG AND TAIL IT IN THE VS CODE UI - EVEN ON WINDOWS (user
+  instruction, 2026-09-22, sticky/permanent; generalised, then restated for tail mode, then again for
+  the delete-first ordering, all the same day). The order matters: delete the old log, create a fresh
+  one, and only then open or tail it - writing to a log that is already open in the UI makes VS Code
+  raise its own "file changed on disk" prompt. Open it as a *follow*, not a static editor tab, because
+  a tab does not track the end of a growing file: Windows has no `tail`, so use
+  `Get-Content <file> -Wait -Tail 30` in a VS Code terminal; macOS/Linux use `tail -f`. This applies to
+  every long job - suites, builds, spike runs, anything that takes minutes - not just the simulator
+  tests. For the mdb suite the file that "updates often with progress" is the watchdog heartbeat log
+  (`%TEMP%\picampcontrol_suite_progress.log` on Windows, `/tmp/...` on macOS), NOT the ctest log: ctest
+  prints nothing until a test completes, so its log sits at four lines for the whole ~400 s and looks
+  hung. Tailing a log for visibility is sanctioned; judging a run from terminal output is not -
+  verdicts are still read from the run's own log file and exit-code line.
+- DO NOT ASK FOR PERMISSION TO OVERWRITE FILES - JUST DO IT (user instruction, 2026-09-22). The user
+  does not want to be prompted about overwriting, nor asked "say the word" before an edit that was
+  already agreed; when the intent is to change a file, change it. Related and worth avoiding: writing
+  to a file the user has open in an editor tab makes VS Code raise its own "file changed on disk"
+  prompt, so clear/recreate such a log *before* opening it in the editor rather than after.
 - FLASH REDUCTION IS A STANDING WORK ITEM (user instruction, 2026-09-21). A near-full Debug image
   is not an acceptable steady state: when a build or test leaves you waiting, spend the time finding
   space. Inline assembly is allowed if every block carries an equivalent-C comment for review. The
