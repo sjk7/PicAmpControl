@@ -30,31 +30,19 @@ const lastSize = new Map();
 /** Live file watchers, one per followed uri, so an append scrolls immediately. */
 const watchers = new Map();
 
-/** Last observed file size per followed uri, to detect growth cheaply. */
+/** When we last scrolled this uri programmatically, to absorb the immediate echo of our own move. */
 const lastSelfMove = new Map();
-/**
- * Count of programmatic scrolls whose resulting events have not yet been seen, per uri.
- *
- * This is a COUNT, not a timestamp, and that is the whole point. A timestamp grace window leaks:
- * during a fast burst the extension scrolls, then the resulting selection/visible-range event can
- * arrive after the window has expired and is read as "the user took control", so the follow pauses
- * itself part-way down the file (measured twice - line 15 of 501, then line 15 of 201). Counting
- * ignores exactly the events we caused and no more, however fast the writes arrive.
- */
-const pendingSelfScroll = new Map();
 
-/** Mark one programmatic scroll as owing an event to be ignored. */
-function noteSelfScroll(uriString) {
-  pendingSelfScroll.set(uriString, (pendingSelfScroll.get(uriString) || 0) + 1);
-}
-
-/** Consume one owed self-event. True if the event was ours, so the caller must ignore it. */
-function consumeSelfScroll(uriString) {
-  const owed = pendingSelfScroll.get(uriString) || 0;
-  if (owed <= 0) return false;
-  pendingSelfScroll.set(uriString, owed - 1);
-  return true;
-}
+// There is deliberately NO event counter or "owed events" bookkeeping here. Two attempts at that
+// both leaked, in opposite directions, and both are recorded in the skill so they are not retried:
+//   * a timestamp grace window leaks under fast writes - our own event arrives after it expires and
+//     is read as user action, so the follow paused itself part-way down (line 15 of 501, then of
+//     201);
+//   * a pending-event count leaks the other way - two were registered per scroll but a reveal does
+//     not always emit two, so the surplus swallowed every genuine user event and interaction
+//     stopped pausing the follow at all.
+// Whether the follow should pause is now decided by POSITION (is the tail still on screen?), which
+// cannot drift. See isShowingTail() and pauseInteractive().
 
 const SELF_MOVE_GRACE_MS = 150;
 
@@ -87,6 +75,19 @@ function editorFor(uriString) {
   );
 }
 
+/** True when the editor is scrolled to the tail - the last line is visible near the bottom.
+ *
+ * This is the honest answer to "did the user scroll away?", and it is what decides whether the
+ * follow pauses. A couple of lines of slack covers the viewport edge and a trailing render.
+ */
+function isShowingTail(editor) {
+  const doc = editor.document;
+  if (doc.lineCount === 0) return true;
+  const ranges = editor.visibleRanges;
+  if (ranges.length === 0) return true;
+  return ranges[ranges.length - 1].end.line >= doc.lineCount - 3;
+}
+
 function scrollToEnd(editor) {
   const doc = editor.document;
   if (doc.lineCount === 0) return;
@@ -103,11 +104,9 @@ function scrollToEnd(editor) {
   // down as it can go and the newest line is pinned to the bottom edge - which is what a tail
   // looks like. Doing both, in this order, is what makes it settle correctly.
   //
-  // Each of these two calls can raise an event, so both are registered as owed-and-ignored BEFORE
-  // they are made; see pendingSelfScroll. The timestamp is also stamped for the trailing-event
-  // case, where VS Code re-emits a coalesced event after the counted ones are used up.
-  noteSelfScroll(key(doc.uri));
-  noteSelfScroll(key(doc.uri));
+  // Stamp before making the calls, so the immediate echo of our own move is ignored by the grace
+  // window. Whether a user has actually taken over is decided by POSITION in pauseInteractive(),
+  // never by this stamp alone.
   lastSelfMove.set(key(doc.uri), Date.now());
   if (!editor.selection.active.isEqual(end)) {
     editor.selection = new vscode.Selection(end, end);
@@ -125,7 +124,6 @@ function startFollow() {
   following.add(k);
   userTookOver.delete(k);
   lastSize.delete(k);
-  pendingSelfScroll.delete(k);
   armWatcher(k);
   scrollToEnd(editor);
 }
@@ -135,7 +133,6 @@ function stopFollow() {
   const k = key(editor.document.uri);
   following.delete(k);
   lastSize.delete(k);
-  pendingSelfScroll.delete(k);
   releaseWatcher(k);
 }
 
@@ -146,7 +143,6 @@ function toggleFollow() {
   if (following.has(k) && !userTookOver.has(k)) {
     following.delete(k);
     lastSize.delete(k);
-    pendingSelfScroll.delete(k);
     releaseWatcher(k);
     vscode.window.setStatusBarMessage('Log Follower: stopped', 2000);
   } else {
@@ -155,7 +151,6 @@ function toggleFollow() {
     following.add(k);
     userTookOver.delete(k);
     lastSize.delete(k);
-    pendingSelfScroll.delete(k);
     armWatcher(k);
     scrollToEnd(editor);
     vscode.window.setStatusBarMessage('Log Follower: following (interact to pause)', 3000);
@@ -280,10 +275,23 @@ function activate(context) {
   const pauseInteractive = (uriString, why) => {
     if (!following.has(uriString)) return;
     if (userTookOver.has(uriString)) return;
-    // An event we caused by scrolling is not the user taking control: consume it and return.
-    if (consumeSelfScroll(uriString)) return;
-    // A trailing event from our own move can still arrive a moment later (VS Code coalesces and
-    // re-emits), so also ignore anything inside the post-scroll grace window.
+
+    // Was the view where we put it? If the editor is still showing the tail - the last line is
+    // visible at the bottom - then this event cannot be a person scrolling away to read something,
+    // so it is either our own scroll echoing back or a click that moved the caret without leaving
+    // the tail. Either way: do NOT pause.
+    //
+    // This is a POSITION test, not a counting or timing test, and that matters. Two earlier
+    // attempts to tell "ours" from "theirs" both failed:
+    //   * a timestamp grace window leaks under fast writes (our event arrives after it expires);
+    //   * a pending-count leaks the other way - scrollToEnd registered two owed events per scroll
+    //     but a reveal does not always emit two, so the surplus swallowed every genuine user event
+    //     and interaction stopped pausing the follow at all (measured 2026-09-22).
+    // Position cannot drift: if the newest line is on screen, nothing has been taken away from the
+    // user, so there is nothing to pause for.
+    const editor = editorFor(uriString);
+    if (editor && isShowingTail(editor)) return;
+
     const self = lastSelfMove.get(uriString) || 0;
     if (Date.now() - self < SELF_MOVE_GRACE_MS) return;
     userTookOver.add(uriString);
@@ -318,7 +326,6 @@ function activate(context) {
       userTookOver.delete(k);
       lastSize.delete(k);
       lastSelfMove.delete(k);
-      pendingSelfScroll.delete(k);
       releaseWatcher(k);
     }),
     vscode.commands.registerCommand('logFollower.start', startFollow),
@@ -327,11 +334,27 @@ function activate(context) {
     vscode.commands.registerCommand('logFollower.followThis', startFollow),
   );
 
+  // Adopt every matching document that is ALREADY OPEN when the extension activates.
+  //
+  // `onDidOpenTextDocument` only fires for documents opened *after* activation, so without this a
+  // log tab that was already open when the editor started - or when the extension was reloaded -
+  // is never followed, and the user sees a perfectly live log that simply does not move. That is
+  // the single most likely way to hit "the log is not following" even though everything works
+  // (measured 2026-09-22, on a suite run started with the progress tab already open).
   const { globs } = config();
   for (const doc of vscode.workspace.textDocuments) {
     if (matchesGlob(doc.uri.path.split('/').pop() || '', globs)) {
-      following.add(key(doc.uri));
+      const k = key(doc.uri);
+      following.add(k);
+      userTookOver.delete(k);
+      lastSize.delete(k);
+      armWatcher(k);
     }
+  }
+  // A visible editor for an adopted document may not exist yet at activation, so scroll the ones
+  // that are on screen as soon as the extension is active.
+  for (const editor of vscode.window.visibleTextEditors) {
+    if (following.has(key(editor.document.uri))) scrollToEnd(editor);
   }
 }
 
@@ -340,7 +363,6 @@ function deactivate() {
   userTookOver.clear();
   lastSize.clear();
   lastSelfMove.clear();
-  pendingSelfScroll.clear();
 }
 
 module.exports = { activate, deactivate };

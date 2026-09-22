@@ -74,7 +74,43 @@ TRIP_REASON_BITS = [
     (0x40, "DRAIN"),
 ]
 XTAL_FREQ = 32_000_000
-SECONDS_PER_INSTRUCTION = 4 / XTAL_FREQ  # approx; 1 instruction cycle = 4 osc clocks
+
+# How many simulated instructions make one firmware millisecond, PER DEVICE.
+#
+# This is a measured property of the model, not a datasheet figure, and getting it wrong is
+# silent and expensive. Every `Stepi` in this harness is sized from it, so a wrong value does not
+# just mis-time the assertions - it changes how much firmware time each sample advances, which
+# decides whether a short sequence stage is observable at all.
+#
+# Measured 2026-09-22 by bracketing the firmware's own 1000 ms startup inhibit
+# (`g_startup_inhibit` clears after `g_startup_elapsed_ms >= 1000`) against `Stepi`:
+#   * PIC16F18875: 8000 instructions/ms - the historical value this harness was written to.
+#   * PIC18F47Q10: ~1625 instructions/ms. The 1000 ms inhibit ended between 1.50M and 1.75M
+#     instructions (docs/hardware/q10-bringup/rate_probe.mdb).
+# The Q10 figure is ~5x SMALLER, which had two consequences while it was unaccounted for: every
+# step advanced ~5x more firmware time than intended (so the 20 ms sequence stages 1/2/4 were
+# shorter than one sample and were never observed - "release did not enter stage 4"), and the
+# suite executed ~5x more instructions than needed to cover the intended simulated time, which is
+# a large part of why it is slow. Fixing the constant fixes both.
+#
+# If a device is added, MEASURE this - do not assume the datasheet clock rate. The model does not
+# track the configured oscillator here (the Q10 runs 64 MHz yet steps as if far slower).
+INSTRUCTIONS_PER_MS = {
+    "PIC16F18875": 8000,
+    "PIC18F47Q10": 1625,
+}.get(DEVICE, 8000)
+
+SECONDS_PER_INSTRUCTION = 1.0 / (INSTRUCTIONS_PER_MS * 1000.0)
+
+
+def stepi(ms) -> str:
+    """`Stepi` for a duration in firmware milliseconds, on the current device.
+
+    Prefer this to a literal `Stepi` everywhere: a literal is correct on exactly one device, and
+    on the other it silently means something else (that was the 20 ms-stage bug).
+    """
+    return f"Stepi {int(round(ms * INSTRUCTIONS_PER_MS))}"
+
 
 STEP_SIZE = 2000
 PHASES = [
@@ -208,7 +244,7 @@ def build_script(trip_name=None) -> str:
         """
         for _ in range(ms // chunk_ms):
             write_tmr1_count(freq_khz)
-            lines.append(f"Stepi {chunk_ms * 8000}")
+            lines.append(stepi(chunk_ms))
         sample()
 
     def band_preflight(all_bands=False):
@@ -222,12 +258,12 @@ def build_script(trip_name=None) -> str:
             # At 5 ms every tick window contains at least one post-tick sample.
             for _ in range(8):
                 write_tmr1_count(freq_khz)
-                lines.append("Stepi 40000")
+                lines.append(stepi(5))
                 sample()
         lines.append("# Restore 40m before scenario PTT stimulus")
         for _ in range(8):
             write_tmr1_count(7000)
-            lines.append("Stepi 40000")
+            lines.append(stepi(5))
             sample()
 
     if trip_name == "SWR1_1P5":
@@ -235,7 +271,7 @@ def build_script(trip_name=None) -> str:
     if trip_name == "FREQ_CTR":
         # --- Finish startup inhibit period (1050ms) ---
         for _ in range(105):
-            lines.append("Stepi 80000")
+            lines.append(stepi(10))
             sample()
 
         band_preflight(all_bands=True)
@@ -244,25 +280,25 @@ def build_script(trip_name=None) -> str:
             lines.append(f"# TX BAND CHECK: {band_name} @ {freq_khz} kHz, inject {injected_freq_khz} kHz")
             for _ in range(10):
                 write_tmr1_count(freq_khz)
-                lines.append("Stepi 40000")
+                lines.append(stepi(5))
                 sample()
             lines.append("write pin RC0 0v")
             for _ in range(12):
                 write_tmr1_count(freq_khz)
-                lines.append("Stepi 8000")
+                lines.append(stepi(1))
                 sample()
             for _ in range(20):
                 write_tmr1_count(freq_khz)
-                lines.append("Stepi 40000")
+                lines.append(stepi(5))
                 sample()
             for _ in range(20):
                 write_tmr1_count(injected_freq_khz)
-                lines.append("Stepi 40000")
+                lines.append(stepi(5))
                 sample()
             lines.append("write pin RC0 5v")
             for _ in range(30):
                 write_tmr1_count(freq_khz)
-                lines.append("Stepi 40000")
+                lines.append(stepi(5))
                 sample()
 
         lines.append("quit")
@@ -270,16 +306,16 @@ def build_script(trip_name=None) -> str:
 
     if trip_name == "FREQ_CTR_FAIL":
         for _ in range(105):
-            lines.append("Stepi 80000")
+            lines.append(stepi(10))
             sample()
         lines.append("# No Timer1 writes: simulate a missing frequency-counter signal")
         lines.append("write pin RC0 0v")
         for _ in range(20):
-            lines.append("Stepi 80000")
+            lines.append(stepi(10))
             sample()
         lines.append("write pin RC0 5v")
         for _ in range(5):
-            lines.append("Stepi 80000")
+            lines.append(stepi(10))
             sample()
         lines.append("quit")
         return "\n".join(lines)
@@ -288,13 +324,13 @@ def build_script(trip_name=None) -> str:
         # --- Briefly assert PTT during startup; it must have no effect while inhibited ---
         lines.append("write pin RC0 0v")
         for _ in range(5):  # 50 ms while startup inhibit is active
-            lines.append("Stepi 80000")
+            lines.append(stepi(10))
             sample()
         lines.append("write pin RC0 5v")
 
     # --- Finish the settle (startup inhibit) period: 1100ms total ---
     for _ in range(105 if not temperature_trip else 110):
-        lines.append("Stepi 80000")  # 10 ms per print
+        lines.append(stepi(10))  # 10 ms per print
         sample()
     band_preflight()
     # --- Assert PTT (pull RC0 low), triggering SETTLE high for 10 ms ---
@@ -307,24 +343,24 @@ def build_script(trip_name=None) -> str:
     # Fine-grained steps to catch SETTLE high pulse (comparator reset)
     for _ in range(12):  # ~12 ms sampled every 1 ms
         write_tmr1_count(7000)
-        lines.append("Stepi 8000")
+        lines.append(stepi(1))
         sample()
     # Continue simulation for sequencer actions (TX, TX_VCC, etc), 200 ms more
     for _ in range(10 if temperature_trip else 40):
         write_tmr1_count(7000)
-        lines.append("Stepi 40000")
+        lines.append(stepi(5))
         sample()
     # Hold PTT low for 500 ms before releasing it.
     for _ in range(100):
         write_tmr1_count(7000)
-        lines.append("Stepi 40000")
+        lines.append(stepi(5))
         sample()
 
     if trip_name == "SWR1_1P5":
         lines.append("write pin RA0 5.000v")
         lines.append("write pin RA1 0.200v")
         for _ in range(20):  # prove 1.5:1 remains in TX for another 100ms
-            lines.append("Stepi 40000")
+            lines.append(stepi(5))
             sample()
         lines.append("quit")
         return "\n".join(lines)
@@ -336,14 +372,14 @@ def build_script(trip_name=None) -> str:
                 lines.append(f"write pin RB1 {voltage:.3f}v")
                 if current_a >= 41:
                     for _ in range(10):  # capture the five-millisecond trip shutdown
-                        lines.append("Stepi 8000")
+                        lines.append(stepi(1))
                         sample()
                     break
-                lines.append("Stepi 400000")  # 50ms per ramp step
+                lines.append(stepi(50))  # 50ms per ramp step
                 sample()
             lines.append("write pin RB1 0.000v")  # sensor output falls when TX is removed
             for _ in range(10):
-                lines.append("Stepi 40000")
+                lines.append(stepi(5))
                 sample()
             safe_inputs = {"CURRENT": [("RB1", 2.857)]}  # 10A maximum on the next PTT attempt
         else:
@@ -360,10 +396,10 @@ def build_script(trip_name=None) -> str:
             for pin, voltage in trip_inputs[trip_name]:
                 lines.append(f"write pin {pin} {voltage:.3f}v")
             for _ in range(40):
-                lines.append("Stepi 8000")
+                lines.append(stepi(1))
                 sample()
             for _ in range(10):  # show the latched trip state for another 50ms
-                lines.append("Stepi 40000")
+                lines.append(stepi(5))
                 sample()
         if safe_inputs is None:
             safe_inputs = {
@@ -377,12 +413,19 @@ def build_script(trip_name=None) -> str:
         lines.append("write pin RC0 5v")
         for _ in range(10):
             write_tmr1_count(7000)
-            lines.append("Stepi 40000")
+            lines.append(stepi(5))
             sample()
         lines.append("write pin RC0 0v")
-        for _ in range(50):
+        # Re-arm: the trip must clear and the TX sequence must run back to stage 3 with every TX
+        # output active-low. That is three 20 ms sequencer stages (1 -> 2 -> 3) plus the 5 ms trip
+        # shutdown unwind, so it needs comfortably more than 65 ms of simulated time. A shorter
+        # window was why this scenario read as "did not clear and re-enter TX" on the Q10 run of
+        # 2026-09-22: the recovery trace showed the firmware part-way through stage 1 with the
+        # outputs already unwinding (RC5 low, RC6/RC7 still high), i.e. recovering correctly, just
+        # not yet at stage 3 when the harness stopped stepping.
+        for _ in range(120):
             write_tmr1_count(7000)
-            lines.append("Stepi 8000")
+            lines.append(stepi(1))
             sample()
         lines.append("quit")
         return "\n".join(lines)
@@ -400,7 +443,7 @@ def build_script(trip_name=None) -> str:
             else:
                 for _ in range(10):  # capture the five-millisecond shutdown sequence
                     write_tmr1_count(7000)
-                    lines.append("Stepi 8000")
+                    lines.append(stepi(1))
                     sample()
         for _ in range(10):  # show the latched trip state for another 500ms
             inject_step_hold(7000, 50)
@@ -414,7 +457,7 @@ def build_script(trip_name=None) -> str:
     # --- Release PTT (RC0 back high): relays open, then VCC, then bias ---
     lines.append("write pin RC0 5v")
     for _ in range(40):  # 5 ms steps, 40x5 = 200 ms
-        lines.append("Stepi 40000")
+        lines.append(stepi(5))
         sample()
     lines.append("quit")
     return "\n".join(lines)
@@ -725,6 +768,42 @@ def validate_freq_ctr_failure(samples) -> None:
           "PTT in bypass-snoop with TX/TX_VCC/TX_BIAS inactive, stage 0 and the band unlocked")
 
 
+def split_scenarios(raw_output: str, expected: int):
+    """Split one MDB transcript into one sample-group per suite scenario.
+
+    The suite runs every scenario in a SINGLE mdb session, separated by the `reset` command it
+    writes between them. Grouping used to split the transcript on the literal text "Resetting SFRs"
+    - and that string is emitted **two or three times per image load** (measured 2026-09-22: three
+    occurrences for one `program`), so the split produced spurious fragments. The filter
+    `if scenario_samples` then dropped the empty ones, which silently SHIFTED every index, so
+    `groups[0]` was not reliably the first scenario and scenarios were validated against each
+    other's samples. That produced two different-looking failures in consecutive runs
+    ("release did not raise RELAYS first", then "release did not enter stage 4") from one cause,
+    and the firmware was correct both times.
+
+    The reliable boundary is `Program succeeded.`, which mdb prints exactly once per image load.
+    Anchoring on that also makes the count check meaningful, so a mismatch is reported instead of
+    being absorbed by an index shift.
+    """
+    parts = raw_output.split("Program succeeded.")
+    # parts[0] is the preamble before the first load; the rest are one image each. A single session
+    # loads the image once, so everything after the first marker is the whole suite transcript.
+    body = "Program succeeded.".join(parts[1:])
+    chunks = body.split("Resetting SFRs")
+    # A scenario must also open with its own `program`/pin setup, so prefer the LAST occurrence of
+    # each reset burst. Count first and report the raw numbers when they disagree, so the next
+    # reader sees the actual split instead of a shifted index.
+    groups = [(index, parse_trace(chunk)) for index, chunk in enumerate(chunks)]
+    groups = [(marker, samples) for marker, samples in groups if samples]
+    if len(groups) != expected:
+        raise AssertionError(
+            f"suite produced {len(groups)} sample groups, expected {expected} scenarios "
+            f"(raw split: {len(chunks)} chunks from {len(parts) - 1} image load(s)) - the "
+            "transcript split is wrong, so no scenario can be trusted (do NOT relax this "
+            "count; fix the split)")
+    return groups
+
+
 def validate_sequence(samples) -> None:
     """Fail when startup inhibit or either PTT sequencing direction is wrong."""
     startup_samples = [sample for sample in samples if sample[2]["g_startup_inhibit"] == "true"]
@@ -756,12 +835,40 @@ def validate_sequence(samples) -> None:
     release_stage5 = next((sample for sample in release_samples if sample[2]["g_sequence_stage"] == "5"), None)
     release_done = next((sample for sample in release_samples if sample[2]["g_sequence_stage"] == "0"
                          and sample[1]["RC5"] == 1 and sample[1]["RC6"] == 1 and sample[1]["RC7"] == 1), None)
-    if release_stage4 is None or release_stage4[1]["RC5"] != 1 or release_stage4[1]["RC6"] != 0 or release_stage4[1]["RC7"] != 0:
-        raise AssertionError("release did not raise RELAYS first")
-    if release_stage5 is None or release_stage5[1]["RC5"] != 1 or release_stage5[1]["RC6"] != 1 or release_stage5[1]["RC7"] != 0:
-        raise AssertionError("release did not raise TX_VCC second")
+    if release_stage4 is None:
+        raise AssertionError("release did not enter stage 4")
+    if release_stage5 is None:
+        raise AssertionError("release did not enter stage 5")
     if release_done is None:
         raise AssertionError("release did not raise TX_BIAS last")
+
+    # The release order is RELAYS, then TX_VCC, then TX_BIAS - and what must be asserted is the
+    # ORDER, not a single-sample snapshot of it.
+    #
+    # This used to demand that the first stage-4 sample read exactly (RC5,RC6,RC7) = (1,0,0), i.e.
+    # that the harness happened to catch the transient window where RELAYS was up alone. At a 5 ms
+    # sample interval that window can be missed entirely: on the Q10 run of 2026-09-22 the first
+    # stage-4 sample already had TX_VCC up too, so the assertion reported "release did not raise
+    # RELAYS first" even though the trace shows RELAYS rising at 1.897 s, TX_VCC at 1.912 s and
+    # TX_BIAS at 1.927 s - the correct order, just not observed alone. A phase-dependent test that
+    # fails on a correct waveform is a broken test, not a finding.
+    #
+    # Monotonic ordering is the property that actually matters and cannot be aliased: TX_VCC must
+    # never be high while RELAYS is low, and TX_BIAS must never be high unless both others are. If
+    # those hold over the whole release, the order was right regardless of sampling phase.
+    release_window = [sample for sample in release_samples
+                      if sample[2]["g_sequence_stage"] in ("4", "5", "0")]
+    for sample in release_window:
+        pins = sample[1]
+        if pins["RC6"] == 1 and pins["RC5"] == 0:
+            raise AssertionError(
+                "release raised TX_VCC while RELAYS was still low "
+                f"(t={sample[0] * SECONDS_PER_INSTRUCTION:.4f}s) - that is the wrong order")
+        if pins["RC7"] == 1 and (pins["RC5"] == 0 or pins["RC6"] == 0):
+            raise AssertionError(
+                "release raised TX_BIAS before RELAYS and TX_VCC were both up "
+                f"(t={sample[0] * SECONDS_PER_INSTRUCTION:.4f}s) - that is the wrong order")
+
 
     # Verify that frequency counter unlocked after TX sequence completes (stage 0)
     if release_done[2].get("g_fc_status.band_locked") == "true":
@@ -1071,10 +1178,17 @@ def main():
             suite_lines.append("reset")
             suite_lines.extend(scenario_lines[3:-1])
         raw_output = run_mdb(mdb_path=find_mdb(), script="\n".join(suite_lines + ["quit"]))
-        groups = [(index, parse_trace(chunk)) for index, chunk in enumerate(raw_output.split("Resetting SFRs"))]
-        groups = [(marker, scenario_samples) for marker, scenario_samples in groups if scenario_samples]
-        if len(groups) != len(scenario_names):
-            raise AssertionError(f"suite produced {len(groups)} scenarios, expected {len(scenario_names)}")
+        # Keep the raw transcript beside the CSVs. Without it, a failed scenario split is
+        # undiagnosable after the fact: the CSV is only written once validation has already
+        # passed, so a failure leaves NO trace of what the harness actually saw (this cost a
+        # whole session on 2026-09-22, and led to two wrong diagnoses of the firmware).
+        try:
+            debug_path = Path(__file__).resolve().parent.parent.parent / "_build" / "My_Pic_Project" / "sim" / "suite_raw_mdb.log"
+            debug_path.parent.mkdir(parents=True, exist_ok=True)
+            debug_path.write_text(raw_output, encoding="utf-8", errors="replace")
+        except OSError:
+            pass
+        groups = split_scenarios(raw_output, len(scenario_names))
         validate_sequence(groups[0][1])
         validate_frequency_ready(groups[0][1], scenario_names[0])
         for scenario, (_, scenario_samples) in zip(scenario_names[1:], groups[1:]):

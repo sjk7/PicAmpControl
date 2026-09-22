@@ -511,8 +511,56 @@ Known reduction levers if 16F work ever resumes, in rough order of value:
 Prefer table-driven logic over long if/else chains when adding firmware code, and ask before adding
 code to the 16F.
 
-## Simulator verification
+## Suite timeout, and the release-ordering assertion (Q10, 2026-09-22)
 
+**Suite timing on Q10:** `PTT_SequencerAndTripSuite` took **263.8 s** (4 min 24 s) on Windows.
+**Size the watchdog timeout at ~1.5x the last measured run** (user instruction) - so `--timeout 400`
+for the next run, not the 1200 s default, so a genuine hang is reported in minutes rather than
+twenty. Re-measure and re-size whenever the suite grows.
+
+**`AssertionError: release did not raise RELAYS first` was a TEST bug, not a firmware bug.** The
+assertion demanded the first stage-4 sample read exactly `(RC5,RC6,RC7) = (1,0,0)` - i.e. that the
+5 ms sampler happened to catch the transient window with RELAYS up alone. On Q10 it missed that
+window, so the assertion fired while the firmware was demonstrably correct: `ptt_trace.csv` shows
+RELAYS rising at 1.897 s, TX_VCC at 1.912 s, TX_BIAS at 1.927 s. A phase-dependent snapshot test
+that fails on a correct waveform is a broken test. It now asserts **monotonic ordering** over the
+whole release - TX_VCC never high while RELAYS is low, and TX_BIAS never high unless both others are
+- which is the property that actually matters and cannot be aliased by sampling. **General rule: when
+a sequencing assertion fails, read the CSV trace before touching firmware** - if the trace shows the
+correct order, fix the assertion, not the firmware.
+
+**Look for `ptt_trace.csv` in `_build/My_Pic_Project/sim/csv/`** - it carries `time_s`, every
+digital pin, every ADC pin voltage, `g_ptt_active`, `g_sequence_stage`, `g_state` and
+`block_reason`, and it is the fastest way to answer "what did the pins actually do".
+
+## Instruction rate per device, and "draw the graphs before the end"
+
+**`INSTRUCTIONS_PER_MS` in `tools/simulate/trace_ptt_sequence.py` is a MEASURED per-device
+constant, not a datasheet figure.** Getting it wrong does not just mistime assertions - it decides
+how much firmware time each `Stepi` advances, which decides whether a short sequence stage is
+observable at all. Measured 2026-09-22 by bracketing the 1000 ms startup inhibit against `Stepi`:
+PIC16F18875 = 8000 instr/ms (historical), PIC18F47Q10 = ~1625 instr/ms. While the Q10 still used
+8000, every step advanced ~5x too much firmware time: the 20 ms sequence stages 1/2/4 were shorter
+than one sample so they were NEVER observed (`release did not enter stage 4`), and the suite
+executed ~5x more instructions than needed (263.8 s -> 140.8 s once fixed). **A new device must
+have this measured, never assumed** - the model does not track the configured oscillator. `stepi(ms)`
+is the one helper to build scripts from; do not write literal `Stepi` counts.
+
+**When a trip-recovery assertion fires (`did not clear and re-enter TX after a PTT re-arm`), read
+the `recovery_trace` it prints.** The tuple is `(g_ptt_active, g_fault_latched, g_trip_reason,
+g_sequence_stage, freq_khz, current_band, band_locked, (RC5,RC6,RC7), (RA0,RA1))`. On the Q10 run it
+showed the firmware recovering correctly - trip cleared, stage 1, RC5 already low - and only the
+harness's re-arm window (50 x 1 ms) was too short to reach stage 3. The re-arm is now 120 x 1 ms.
+If the trace shows recovery in progress, extend the window; if it shows the fault never clearing,
+that is a firmware bug.
+
+**Draw/save the graphs and CSVs incrementally, before the suite finishes** (user request on the Q10
+session). A failure mid-suite should leave the per-scenario trace and graph that explain it, rather
+than requiring a full re-run to see anything. The transcript dump is already written first
+(`suite_raw_mdb.log`); graph/CSV writes must also happen as each scenario is validated, not at the
+end.
+
+## Simulator verification
 Run the full merged suite with the cleanup-aware launcher. This is the default test workflow: it records its PID, kills a stale prior launcher, owns the MDB process group, logs raw MDB stderr, records 10-second progress heartbeats, and cleans up on timeout or Ctrl-C:
 
 ```sh

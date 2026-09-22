@@ -1,0 +1,41 @@
+device PIC18F47Q10
+hwtool sim
+program E:/hamcode/PicAmpControl/out/My_Pic_Project_18F47Q10/default.elf
+write pin RA0 0v
+write pin RA1 0v
+write pin RA2 0v
+write pin RA3 0v
+write pin RA5 2.5v
+write pin RB1 0v
+write pin RB2 0v
+write pin RB3 0v
+write pin RB4 0v
+write pin RC2 5v
+write pin RB0 5v
+write pin RB6 5v
+Stepi 250000
+print g_startup_inhibit
+Stepi 250000
+print g_startup_inhibit
+Stepi 250000
+print g_startup_inhibit
+Stepi 250000
+print g_startup_inhibit
+Stepi 250000
+print g_startup_inhibit
+Stepi 250000
+print g_startup_inhibit
+Stepi 250000
+print g_startup_inhibit
+Stepi 250000
+print g_startup_inhibit
+Stepi 250000
+print g_startup_inhibit
+Stepi 250000
+print g_startup_inhibit
+Stepi 250000
+print g_startup_inhibit
+Stepi 250000
+print g_startup_inhibit
+print g_sequence_stage
+quit
