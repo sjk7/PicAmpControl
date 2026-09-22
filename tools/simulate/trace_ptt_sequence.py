@@ -34,7 +34,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 HEX_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.hex"
 # Loaded instead of the .hex so mdb can resolve C variable names (debug symbols).
 ELF_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.elf"
-DEVICE = "PIC16F18875"
+
+# Which part the simulator models. `PICAMP_DEVICE` selects it so the same harness can drive the
+# PIC18F47Q10 during the upgrade; PIC16F18875 stays the default so nothing changes for the
+# existing device. The simulated part must match the image loaded into it, so this is one setting
+# rather than something each harness decides for itself. An empty value counts as unset - a shell
+# that exports `PICAMP_DEVICE=` should not be a hard error.
+DEVICE = os.environ.get("PICAMP_DEVICE") or "PIC16F18875"
 
 # Firmware globals that explain why PTT/TX may be blocked (see main.c).
 STATE_VARS = [
