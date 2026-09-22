@@ -202,6 +202,35 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
 - As of v0.0.25 (commit 3a49285): program flash 54.2% free (4440/8192 words), data RAM 84.2% free (862/1024 bytes). Superseded by the 2026-09-21 numbers above.
 
 ## Remaining work
+
+### Open items carried out of the relay-ordering work (2026-09-22)
+
+All three are OPEN. Each states what "done" means, so a later session can close it rather than
+re-derive it.
+
+1. **Prove clause (h) on its own.** Clause (h) checks that the LPF relay selection HOLDS through RX
+   instead of following the 160m no-signal default. Re-introducing that defect does fail the test, but
+   it fails *earlier*, at `clause (c): the remembered 20m band was not restored`, because one phase of
+   the single MDB session feeds the next - so clause (h)'s own proof is outstanding. To close it, make
+   the injection narrower: give clause (h) its own session, or restructure the phases so (a)-(c) do not
+   depend on the selection surviving the previous release. Either way record the observed failure
+   message in the defect table in docs/first-dit-band-detection.md.
+2. **Measure per-function flash, then cut the biggest genuinely safe win.** Do NOT trust the earlier
+   "table-drive `adjust_selected_setting()`, save 80-100 words" estimate: several of those settings are
+   16-bit, so a closed-form `{min,max,step}` row costs ~6 bytes and a 20-page table is ~120 bytes plus
+   lookup code - probably MORE than the branch chain it replaces. Measure real sizes first (the map's
+   psects, or build-delta experiments on a scratch branch), then implement only what actually wins.
+   Policy, lever list and the inline-assembly rule: the skill's `## Flash space`.
+3. **Bench-confirm the relay timings and the Timer1 path.** The 20 ms relay assumption is what both
+   `BAND_SETTLE_MS` and `tx_vcc_delay_ms` rest on, and invariant I6 asserts only a 10 ms floor
+   (deliberately below 20 ms and above the 1-6 ms a defect produces) at 1-5 ms sampling, so the margin
+   is thin: measure the fitted K1-K6 and T/R relay operate times and confirm or adjust both constants.
+   Separately the simulator does NOT model Timer1's external clock (`W0106-SIM`), so T1CKI, the PPS
+   routing, the 1:4 prescaler and the overflow path are untested - the first burst is injected by
+   writing `TMR1H`/`TMR1L`. That gap closes on the bench only.
+
+### General
+
 The open work is hardware validation: final sensor calibration, comparator thresholds and polarity, ADC transient protection, TX timing, fan implementation, LCD/menu/internal EEPROM persistence testing, final PCB review, and CI validation. First-dit specifics to confirm on the bench: BAND_CACHE_IDLE_TIMEOUT_MS (60 s) against real band-change habits, BAND_SETTLE_MS (20 ms) against the fitted LPF relay's operate time, and BAND_VERIFY_MS (20 ms) - i.e. how long a wrong remembered band may stay engaged before fold-back, which is the one figure that trades amplifier protection against nuisance drop-outs on a noisy first dit.
 
 Flash space is the next constraint. Measure before you refactor - the earlier estimates here were
