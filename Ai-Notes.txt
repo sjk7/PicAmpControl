@@ -72,6 +72,24 @@ CI/release workflows change - don't let it go stale.
   implemented to act as input to Comparator` - the comparator is in the overcurrent safety path. No
   PIC18F-Q10 DFP is installed. Any attempt must start by proving the model on the existing
   boot/PTT harness, exactly as the 18877 was proved unviable.
+  **The "no PIC18F-Q10 DFP is installed" line immediately above is WRONG** (corrected 2026-09-22):
+  MPLAB X 6.35 ships `PIC18F-Q_DFP/1.30.487` inside its own install
+  (`C:\Program Files\Microchip\MPLABX\v6.35\packs\Microchip\`), which is a different root from the
+  user pack repository `%USERPROFILE%\.mchp_packs` that was checked. A Q10 build needs no download;
+  the toolchain was never the blocker. See the skill for the pack-search rule.
+- DEVICE UPGRADE ATTEMPTED AND REJECTED - PIC18F47Q10 (2026-09-22, branch `spike/pic18f47q10`,
+  abandoned, nothing left behind). The gated spike was run with the user's explicit go-ahead.
+  Verdict: the simulator models PTT and digital I/O correctly on this device (unlike the 18877) but
+  runs **no time base at all**. With `T2CON=0xE0` / `T2PR=124` / `T2CLKCON=0` written and read back
+  correct, `T2TMR`/`TMR2` stayed `0`; Timer1 (`T1CON=1`) and Timer4 (`T4CON=0xE0`) stayed `0` over
+  800,000 stepped instructions; and `OSCCON3.ORDY` never asserted in two different `RSTOSC`
+  configurations. With no ~1 ms tick the scheduler ISR never fires, so every timed behaviour this
+  project rests on - PTT sequencing and its inter-stage delays, `BAND_SETTLE_MS`, `BAND_VERIFY_MS`
+  fold-back, trip latching, the first-dit decode window - is unverifiable in simulation, and a
+  suite that cannot see timing defects is worse than no suite. Flash pressure therefore stays
+  addressed by the software levers under Remaining work. Exact register values, config words, build
+  command and two incidental gotchas (notably `write T0CON` aborting a script, because Q10 splits
+  Timer0 into `T0CON0`/`T0CON1`): `bugfixes.md` 2026-09-22. **Do not retry this part.**
 - The firmware is the single source of truth for which PIC we are using: `-mcpu=16F18875` in `cmake/My_Pic_Project/default/.generated/rule.cmake` (mirrored in `.clangd`), i.e. PIC16F18875-I/P, 40-pin PDIP. If a document disagrees with the firmware about the target device, the firmware wins and the document is the bug.
 - Do NOT reintroduce schematic automation. Both attempts were abandoned outright and every trace of them has been removed. Gone for good: the EasyEDA generator/SVG-validation pipeline (`easyeda_pro_generator.py`, `svg_renderer.py`, `visual_validator.py`, `watch_and_render.py`, `pic_amp_control_full.yaml`, `out/picampcontrol_easyeda_*.json`, and the `easyeda-agent` / `easyeda-copilot` routes), the KiCad MCP `schematic-design` skill with its `generated/` `.kicad_sch` tree and `mcp-server-kicad`, all node/npm scaffolding (`package.json`, `node_modules`, `@jlceda`), the workflow documents that described them, and every KiCad symbol/toolchain reference in the docs. The user's instruction: EasyEDA "was a disaster and can be removed entirely", then "same for kicad stuff. Another disaster... it can all go". Do not add generators, MCP schematic servers, `.kicad_sch`/`.eext` tooling or node/npm back, and do not re-add tool-specific symbol references to the pin map. The schematic package at docs/hardware/project_schematic_package/ is deliberately static design inputs (block diagram, connection table, component list, wiring checklist), captured by hand end to end. Netlist-verification tooling (exporting the EDA netlist and diffing it against `connection_table.csv`) was offered as a lighter-weight alternative and has been declined as well, so this means no schematic automation of any kind - not drawing generation, not verification.
 - `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their configured active levels (active-low by default); keep it transient, then restore the user's saved home page.
@@ -102,7 +120,9 @@ CI/release workflows change - don't let it go stale.
 - Last verified run: `ctest --test-dir _build/My_Pic_Project/debug --output-on-failure`, verdict read
   from the log file: `100% tests passed, 0 tests failed out of 2`, `CTEST_EXIT=0`, total 408 s
   (PTT_SequencerAndTripSuite 355 s, FirstDit_BandDetectionAndHotSwitchGuards 53 s). That was the
-  Windows run; the equivalent macOS figures are ~150 s and ~20 s.
+  Windows run; the equivalent macOS figures are ~150 s and ~20 s. The PIC18F47Q10 spike that
+  followed changed no `main` firmware and ran no suite, so this is still the latest verdict - the
+  spike's evidence is register-level, from its own minimal image.
 - The standing process rule that produced the most friction last session: never judge a test run
   from terminal output. MDB emits megabytes of trace and a command that "returned no output" can
   still have passed - always redirect to a log file, append the exit code, and read the file.
@@ -116,7 +136,13 @@ CI/release workflows change - don't let it go stale.
   * The supply rail is stated explicitly as 5 V (the map had mislabelled it 3.3 V).
   * SCL/stimulus claims corrected: MDB SCL is NOT usable here, so the frequency counter remains
     verified only by injecting TMR1H/TMR1L.
-  * The PIC18F47Q10 spike is gated and briefed under Remaining work. It has NOT been started.
+  * The PIC18F47Q10 spike was RUN on `spike/pic18f47q10` with the user's go-ahead and REJECTED at
+    the step-3 gate: the simulator presents PTT and drives outputs correctly on that device, but
+    counts no timer and never asserts `OSCCON3.ORDY`, so the ~1 ms tick cannot advance. Branch
+    abandoned and the attempt removed; the durable record is `bugfixes.md` 2026-09-22.
+  * The skill gained the Windows shell traps that silently no-op a build (nested `cmd /c` quoting, a
+    mangled multi-line call that returned exit 0 and compiled nothing) and the rule to look for DFPs
+    inside the MPLAB X install before concluding a device is unbuildable.
 
 ## Simulator timing limitation (IMPORTANT)
 - The firmware uses Timer2 for the approximately 1 ms scheduler tick because MDB's Timer0 model stalled during earlier testing.
@@ -273,50 +299,22 @@ re-derive it.
    routing, the 1:4 prescaler and the overflow path are untested - the first burst is injected by
    writing `TMR1H`/`TMR1L`. That gap closes on the bench only.
 
-### DEVICE UPGRADE SPIKE (GATED) - brief for the session that runs it
+### DEVICE UPGRADE SPIKE (CLOSED) - PIC18F47Q10 evaluated and rejected, 2026-09-22
 
-Read the standing instruction "DO NOT START A DEVICE UPGRADE WITHOUT ASKING FIRST..." before
-anything else. This work only happens when the user has explicitly said go.
+The gated spike in the previous revision of this file has been RUN and is now closed. The outcome:
 
-**Purpose.** Decide whether MPLAB's simulator models the PIC18F47Q10 equivalently enough that this
-project's only verification mechanism - the mdb harnesses - still means anything. It is NOT to port
-the firmware. Do not begin a full port before the gate in step 3 passes.
-
-**Why it is worth a day.** Flash is the binding constraint on the safety argument: the
-Debug/simulator image sits at 8117/8192 words (75 free) and that is what limits how much test
-evidence can be added. A PIC18F47Q10 has ~8x the flash, ~3.5x the RAM and 2x the clock for ~£1.85,
-and it is the same 40-pin PDIP footprint. It is a different family, so it is a port, not a swap.
-
-**Branch.** Create `spike/pic18f47q10` from `main`. Never work on `main`. The spike ends either
-merged (if the gate passes) or abandoned with nothing left behind.
-
-**Order of work - each step is a stop/go gate.**
-1. Install the **PIC18F-Q10 DFP**. It is not installed (only `PIC16F1xxxx_DFP`, `PIC16Fxxx_DFP`
-   and `Simulator_TP` are present).
-2. Minimal bring-up only: `-mcpu=18F47Q10`, the DFP path in `.generated/rule.cmake`, `.clangd`,
-   config words, oscillator/PLL, the ~1 ms Timer tick, PTT input, one output, one Timer read.
-   Deliberately do NOT port ADC, comparators, EEPROM/NVM or PPS yet.
-3. **THE GATE.** Run the existing harnesses: `tools/simulate/scenarios/boot_smoke.mdb`, then the
-   first-dit clause (a) check. Does the firmware see PTT asserted? Does the tick advance? Does the
-   output toggle?
-4. If PTT is invisible or the tick does not run: **STOP.** Record it in `bugfixes.md` with the
-   observed evidence, note it here, abandon the branch, report. That is exactly how the
-   PIC16F18877 was rejected - do not treat it as a puzzle to work around.
-
-**Known device-specific hazards to check during step 3.** Each is a magic number or module that
-must be re-derived from the Q10 datasheet, never copied:
-- `firmware/src/freq_counter.c`: `T1CKIPPS = 0x19` (T1CKI -> RD1). PPS input codes differ per device.
-- Comparators are in the **overcurrent safety path**, and the Q10 uses a 5-bit DAC reference. MPLAB
-  6.35 already warns `W9602-COMP:DAC Voltage Source Peripheral not yet implemented to act as input
-  to Comparator` - verify what that leaves unmodelled before trusting any protection test.
-- The ADC is ADCC/ADC2 on the Q10, with different registers and conversion model.
-- `#pragma config MCLRE = ON` and the config-word layout differ by family.
-- The pin map must be re-derived from the Q10 datasheet (the single-source-of-truth rule applies).
-
-**Do not:** change firmware source for a new device on `main`; accept "it builds" as evidence (a
-clean build said nothing about the 18877); shrink the harness timeouts to make a slow spike run
-pass. Note the pin map was corrected on 2026-09-22 (see `bugfixes.md`) - firmware addresses ports
-by name, so that correction touches only the schematic/PCB side, not code.
+- PTT, digital inputs and outputs are modelled correctly on the Q10 - the 18877's failure mode does
+  not reproduce - but **no timer counts**, so the ~1 ms scheduler tick cannot run and none of this
+  project's timed safety behaviour is verifiable in simulation. `OSCCON3.ORDY` never asserts, in
+  either of two `RSTOSC` configurations, which is what points at the clock model rather than at any
+  timer mux.
+- The device is therefore rejected for the same class of reason as the 18877, and the standing
+  instruction above (state + `bugfixes.md` 2026-09-22) carries the evidence. Do not retry the part.
+- The device-specific hazards the brief listed (PPS `T1CKIPPS` codes, the 5-bit-DAC comparator that
+  feeds the overcurrent path, ADCC/ADC2, per-family config-word layout, a pin map re-derived from the
+  Q10 datasheet) were never reached, because the gate stops before any port begins. They remain
+  correct for any *future* different-device evaluation, which still needs its own gate and its own
+  branch.
 
 ### General
 

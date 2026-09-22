@@ -4,7 +4,102 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
-## 2026-09-22 — Almost every physical pin number in the pin map was wrong
+## 2026-09-22 — PIC18F47Q10 spike rejected at the gate: MPLAB's simulator runs no time base on that device
+
+Second device-upgrade attempt, run on branch `spike/pic18f47q10` (never on `main`) under the gated
+brief in `Ai-Notes.txt`. It fails the step-3 gate and the device is rejected. Recorded because the
+failure mode is **not** the same as the PIC16F18877's, so without this entry it would be retried by
+someone reading only "the 18877 did not see PTT" and expecting a different-looking result.
+
+### What was tested
+
+A deliberately minimal bring-up image (`main_q10_spike.c`, ~200 bytes of program space) - no ADC,
+comparators, EEPROM/NVM, PPS, LCD or sequencer, exactly as the brief requires. It contains:
+config words for the Q10 family, an oscillator setup, a Timer2 ~1 ms tick with an ISR that
+increments `g_tick`, a heartbeating output, a read of `TMR2`, and an active-low PTT input on RC0
+driving an output on RC5. Compiled with the DFP that MPLAB X 6.35 already ships
+(`PIC18F-Q_DFP/1.30.487`, see the skill - it is not in the user pack repository):
+
+```text
+xc8-cc -mcpu=18F47Q10 -mdfp=<…>\PIC18F-Q_DFP\1.30.487\xc8 -O1 -gdwarf-3 -std=c99 \
+       -o spike_q10.elf -Wl,-Map=spike_q10.map main_q10_spike.c
+```
+
+Config words used (names and values taken from the DFP's `18f47q10.cfgmap`, never copied from the
+PIC16F): `FEXTOSC=OFF`, `RSTOSC=HFINTOSC_1MHZ`, `CLKOUTEN=OFF`, `CSWEN=OFF`, `FCMEN=OFF`,
+`MCLRE=EXTMCLR`, `PWRTE=OFF`, `WDTE=OFF`, `BOREN=ON`, `BORV=VBOR_190`, `LVP=OFF`, `CP=OFF`,
+`CPD=OFF`, `SCANE=OFF`, all `WRT*` and `EBTR*` = OFF. The build is clean: 214 bytes program
+(0.2%), 12 bytes data, 6/6 config words; the only warning is
+`(1311) missing configuration setting for config word 0x300005; using default`.
+
+### What actually worked
+
+Two of the three gate questions pass, and this is the part that makes the rejection non-obvious:
+
+- **The firmware DOES see PTT.** Driven `RC0` high, then low, then high again across 100 ms steps,
+  `g_ptt_active` read back `[0, 0, 0, 1, 1, 0]`. The 18877's killer (PTT invisible to the firmware)
+  does **not** reproduce here.
+- **Outputs toggle.** `RC5` read `[1, 1, 1, 0, 0, 1]`, following PTT.
+- **The CPU executes**, and the main loop runs (`g_loops` advanced 37 → 158 → 24 → 180 → 81 → 202,
+  wrapping as a `uint8_t`).
+
+### The blocker: no timer counts, and the oscillator never reports ready
+
+`g_tick` stayed `0` across every sample, so the ISR never ran. Reading the SFRs back after 800,000
+stepped instructions shows the configuration is intact and the peripherals are simply not moving:
+
+| Register | Read back | Meaning |
+|---|---|---|
+| `T2CON` | `224` (0xE0) | Timer2 ON, CKPS=110 (1:64), OUTPS=0 - as written |
+| `T2PR` | `124` | period register as written (1 ms at an 8 MHz instruction clock) |
+| `T2TMR` / `TMR2` | `0` | **counter never advances** (`TMR2` and `T2TMR` are the same address, 0xFBA) |
+| `T2CLKCON` | `0` | reset-default clock selection |
+| `T1CON` | `1` | Timer1 enabled from mdb, internal clock |
+| `T1CLK`, `TMR1L`, `TMR1H` | `0`, `0`, `0` | **Timer1 never advances either** |
+| `T4CON`, `T4CLKCON`, `T4TMR` | `224`, `0`, `0` | **Timer4 never advances either** |
+| `OSCCON1` | `96` (0x60) | NOSC=0b110 (HFINTOSC), NDIV=0 - the system clock source is selected |
+| `OSCFRQ` | `7` | the requested HFINTOSC frequency code took |
+| `OSCCON3` | `0` | **ORDY never asserts - the oscillator never reports ready** |
+| `PIE4` / `PIR4` | `2` / `0` | `TMR2IE` is enabled; no `TMR2IF` is ever set |
+| `INTCON` | `135` (0x87) | `GIE` set |
+
+Three independent timers, all enabled, all on their internal/reset-default clock selections, all
+flat at zero over 800,000 instructions - while `Stepi` happily executes those instructions. A
+second build with `RSTOSC=HFINTOSC_64MHZ` instead of `HFINTOSC_1MHZ` behaves identically
+(`OSCCON1=0`, `OSCCON3=0`, all three counters `0`), so this is not one oscillator-code choice.
+`OSCCON3.ORDY` never asserting points at the clock model itself rather than at any timer mux.
+
+The control is that the *same* Timer2 recipe (`T2CON` CKPS=1:64, period register 124, 8 MHz
+instruction clock) does count on the PIC16F18875 - the project's entire suite depends on that tick.
+
+The device also emits `W0106-SIM` warnings for TMR1/TMR3/TMR5 only (the same three the 16F warns
+about) plus the `W9602-COMP` DAC-to-comparator warning already noted for this part. Nothing warns
+that timers generally are unsupported; the model simply does not advance them.
+
+### Why this is a hard stop rather than something to configure around
+
+Every safety property this project asserts is *time-based*: the PTT sequencing order and its
+inter-stage delays, `BAND_SETTLE_MS` before the T/R relay closes, `BAND_VERIFY_MS` fold-back,
+trip latching, the first-dit decode window, the band-cache expiry. A simulator with no running time
+base cannot verify any of them, and worse, it would let a timing defect pass silently - a green
+suite that means nothing is more dangerous here than no suite at all. Trading verified behaviour
+for flash headroom was the wrong trade for the 18877 and it is the wrong trade for the Q10.
+
+Deliberately not tried, per the brief's instruction not to treat a non-ticking model as a puzzle:
+alternative clock sources (external oscillator, PLL), non-default `T2CLKCON`/`T4CLKCON` codes, and
+PPS. The ORDY evidence above makes those unlikely to help, and a port that only runs on one
+hand-tuned simulator clock configuration would not be trustworthy evidence anyway.
+
+### Two smaller gotchas found on the way
+
+- **`write T0CON 0x80` aborts an mdb script on this device** (it prints `null` and ends with exit
+  `-1`): PIC18F-Q10 splits Timer0 into `T0CON0`/`T0CON1`, so the PIC16F register name does not
+  exist. An unknown name kills the rest of the script, so keep speculative register reads last.
+- **`print <variable>` and `write <SFR> <value>` do work on this device** - the transcript format is
+  the same as the 16F's, so the existing harness parsing contract would have carried over.
+
+The branch was abandoned and the attempt removed; the recipe above is the durable record.
+
 
 Found while evaluating a device upgrade: comparing the pin map against the datasheet made it
 obvious that the map's own figures could not be right.
