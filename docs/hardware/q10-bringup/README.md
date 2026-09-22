@@ -56,3 +56,32 @@ The probe ran six specific assumptions, not the firmware. The full image has sti
 executed on the Q10, and none of the analogue path (comparators, DAC gap flagged by
 `W9602-COMP`), the ADC scan, or the PPS *output* assignments for the band relays has been
 exercised on this device. The probe is the positive control those findings now need.
+
+## Follow-up: the full firmware image, on Q10 (2026-09-22, later the same day)
+
+`q10_firmware.elf` in this directory is the **actual firmware** - all four translation units,
+`-mcpu=18F47Q10`, 317Ah / 12,666 bytes - and `firmware_run.mdb` / `firmware_run_results.log` are
+the script that stepped it on the model and the transcript it produced.
+
+It boots. It reaches `g_state = 5` (`STATE_RESET_WAIT`) through the main loop without crashing, and
+the analogue-select and direction registers come up exactly as the 16F design intends
+(`ANSELA = 47`, `ANSELB = 14`, `ANSELC = 0`, `ANSELD = 0`, `TRISC = 5`). So the port's
+initialisation sequence survives contact with the device.
+
+It also surfaced something worth acting on. After 200,000 steps the timer registers read
+`T2CON = 0`, `PR2 = 255`, `T2CLK = 0`, `OSCCON1 = 0`: **the system tick is not running yet.**
+That is an ordering fact, not a port defect - `main()` calls `adc_init()`, `load_settings()`,
+`lcd_init()` and `show_boot_message()` *before* `timer0_init()`, and the LCD boot path is slow
+enough that the sample lands first. Two things follow:
+
+1. When asking "does the tick run" of any early sample, sample past `timer0_init()` - a zero
+   `T2CON` early means "not initialised", not "broken".
+2. More importantly, on the real product the 1 ms protection tick is armed *after* the LCD boot
+   sequence. A stall in `lcd_init()`/`show_boot_message()` therefore leaves the amplifier with no
+   periodic supervision during startup. That ordering deserves a deliberate review on hardware,
+   independently of the Q10 port.
+
+Still not exercised on Q10: the ADC scan, the PPS input path's *effect* (only the register
+write was checked), the band-settle and trip timing under the real 64 MHz clock, and the LCD
+timing itself.
+

@@ -651,6 +651,25 @@ Prerequisites that decide whether debugging works at all:
   | the NVM unlock + `WR` sequence completes | `g_nvm_done = 1`, `NVMDATL` read back `165` (0xA5) |
   | 64 MHz core runs the tick at 1.000 ms | 106 ticks per 200,000 `Stepi` steps; `OSCCON1` reads `96` |
 
+  **THE FULL FIRMWARE IMAGE NOW RUNS ON THE Q10 MODEL (2026-09-22), and the first run found a
+  real bug.** The image (not just the bring-up probe) was linked for `-mcpu=18F47Q10` at 317Ah /
+  12,666 bytes and stepped under MDB. It boots and reaches `g_state = 5` (STATE_RESET_WAIT) via the
+  main loop with no crash. What the run exposed: after 200,000 steps, `T2CON = 0`, `PR2 = 255`,
+  `T2CLK = 0` and `OSCCON1 = 0` - i.e. **`timer0_init()`', and the clock config behind it, have not
+  executed yet and the system tick is not running**. The cause is initialisation order, not the
+  port: `main()` runs `adc_init(); load_settings(); lcd_init(); show_boot_message(); ...;
+  timer0_init();` and the LCD boot path is slow enough under the simulator that the sample lands
+  before the tick is armed. Two consequences worth keeping:
+  - **When judging "does the tick run" on a probe run, sample late enough to be past
+    `timer0_init()`, or arm the timer first.** A zero `T2CON` early in a run means "has not been
+    initialised", not "broken".
+  - It re-confirms the project rule that a boot-path stall is a real risk: `lcd_init()` and
+    `show_boot_message()` run *before* the protection tick is armed, so a hang there leaves the
+    amplifier with no 1 ms supervision. That ordering is worth a deliberate look on hardware,
+    independent of the Q10 port.
+  The registers that *are* set by then match the 16F design exactly (`ANSELA = 47`, `ANSELB = 14`,
+  `ANSELC = 0`, `ANSELD = 0`, `TRISC = 5`), so the port sequence is behaving as intended.
+
   **PPS ON Q10: ONLY ONE ASSIGNMENT EXISTS, AND IT IS AN INPUT (2026-09-22).** The firmware's
   entire PPS surface is `T1CKIPPS = 0x19` in `freq_counter.c` - the Timer1 clock *input* from RD1.
   No `RPnR`/`*PPS` **output** register is written anywhere: every other pin is a plain LAT/PORT pin.
