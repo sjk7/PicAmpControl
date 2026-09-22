@@ -457,7 +457,12 @@ def run_mdb(mdb_path: Path, script: str, timeout: float = 1500) -> str:
             debug_lock = threading.Lock()
             captured = {"stdout": [], "stderr": []}
             byte_counts = {"stdout": 0, "stderr": 0}
-            logged_counts = {"stdout": 0, "stderr": 0}
+            # Partial lines carried between reads. A pipe read of 4096 bytes splits MDB output
+            # wherever it happens to land, so writing each chunk straight through put half-lines
+            # in the log - the reader watching it saw `ault_latched` rather than
+            # `g_fault_latched` and reasonably called it strange output (user report, 2026-09-22).
+            # Nothing is written until a full line is available; the tail of a read is held here.
+            partial = {"stdout": "", "stderr": ""}
 
             def drain_stream(stream_name, stream):
                 for chunk in iter(lambda: stream.read(4096), ""):
@@ -469,21 +474,21 @@ def run_mdb(mdb_path: Path, script: str, timeout: float = 1500) -> str:
                         continue
                     captured[stream_name].append(chunk)
                     byte_counts[stream_name] += len(chunk.encode(errors="replace"))
-                    if byte_counts[stream_name] - logged_counts[stream_name] >= 65536:
-                        logged_counts[stream_name] = byte_counts[stream_name]
+                    # Raw text, deliberately NOT a repr: `{chunk!r}` turns every newline into a
+                    # literal "\n" and every tab into "\t", and MDB's pin dumps are
+                    # tab-separated tables, so escaping renders the log unreadable for the
+                    # human watching the run (user feedback, 2026-09-22).
+                    #
+                    # One `os`-level write per complete line (for stderr, a line at a time) so
+                    # a reader tailing this file always sees whole records.
+                    buffered = partial[stream_name] + chunk
+                    sep = "\n" if stream_name == "stdout" else "\r\n"
+                    if sep in buffered:
+                        head, _, partial[stream_name] = buffered.rpartition(sep)
                         with debug_lock:
-                            # Raw text, deliberately NOT a repr. `{chunk!r}` turns every
-                            # newline into a literal "\n" and every tab into "\t", and MDB's
-                            # pin dumps are tab-separated tables, so escaping them renders the
-                            # log unreadable for the human watching the run (user feedback,
-                            # 2026-09-22). Emit the bytes verbatim, inside markers.
-                            debug_file.write(
-                                f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] "
-                                f"MDB_OUTPUT stream={stream_name} bytes={byte_counts[stream_name]}\n"
-                                f"{chunk}\n"
-                                f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_OUTPUT_END "
-                                f"stream={stream_name}\n"
-                            )
+                            debug_file.write(head + sep)
+                    else:
+                        partial[stream_name] = buffered[:8192]
 
             debug_file.write(
                 f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_START pid={proc.pid}\n"

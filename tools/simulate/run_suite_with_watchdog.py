@@ -58,8 +58,32 @@ def stamp():
     return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+# The test writes its own instrumentation into the same log the heartbeat reads
+# (`MDB_OUTPUT stream=... bytes=...`, `MDB_OUTPUT_END`, `MDB_START`, `MDB_STDERR_*`,
+# `MDB_TIMEOUT`). Those are bookkeeping, not simulator output, and reporting them made the
+# heartbeat say `MDB ... MDB_OUTPUT stream=stdout bytes=1641680` - a byte counter, and often
+# no line at all, where the user wanted the simulator's actual output (user report,
+# 2026-09-22: "I still do not see bytes (string) outputs since the last tick"). Skip them.
+MDB_NOISE_PREFIXES = ("MDB_OUTPUT", "MDB_OUTPUT_END", "MDB_START", "MDB_STDERR",
+                      "MDB_TIMEOUT")
+
+
+def _is_mdb_noise(line: str) -> bool:
+    """True for the test's own instrumentation lines, including its timestamped forms.
+
+    The test stamps them as `[2026-09-22T11:49:20+0100] MDB_OUTPUT ...`, so a prefix test alone
+    misses them; the marker can sit after one `] ` group.
+    """
+    body = line
+    if body.startswith("["):
+        close = body.find("]")
+        if close != -1:
+            body = body[close + 1:].lstrip()
+    return body.startswith(MDB_NOISE_PREFIXES)
+
+
 def last_mdb_line(mdb_log: Path, offset: dict, limit: int = 70, tail_bytes: int = 65536) -> str:
-    """The most recent non-empty MDB line, from where the caller last looked.
+    """The most recent line of the simulator's own output, since the caller last looked.
 
     Byte counts alone say whether the run is moving, not what it is doing, and the MDB text
     otherwise sits in a separate log. A *line* says what the simulator is doing, where a hex
@@ -67,10 +91,19 @@ def last_mdb_line(mdb_log: Path, offset: dict, limit: int = 70, tail_bytes: int 
     fresh write from bytes already counted (user report, 2026-09-22). The offset advances by
     what was actually read, so the next heartbeat cannot re-report the same bytes.
 
-    Two bounds, both deliberate: only the last `tail_bytes` of new output are read (the newest
-    line is at the end, and the MDB log grows without limit inside a test), and the newest line
-    is preferred over the *last complete* line, because mid-write MDB output means an empty
-    newest line and "did not print anything" beats "printed a line from 40 s ago".
+    Only **complete** lines are eligible, and the newest complete one wins. Sampling an
+    in-progress write is what produced the fragments the user reported as "strange output"
+    (`MDB ault_latched` is the tail of `g_fault_latched`, `MDB ence_stage` of `g_sequence_stage`).
+    Two things guarantee completeness:
+
+      * the read stops at the last newline, so a half-written final line is never examined; and
+      * the offset advances only to the end of the last complete line, so those unread bytes are
+        picked up (and shown whole) on a later beat instead of being discarded.
+
+    The tail read is bounded because the MDB log grows without limit inside a test. Losing the
+    oldest bytes of a huge burst is acceptable - MDB output is repetitive pin dumps - but showing
+    half a line is not, so a bound that leaves no complete line reports nothing and lets the next
+    beat catch up. A line also has to carry a word: MDB's own progress traces are runs of dots.
     """
     try:
         size = mdb_log.stat().st_size if mdb_log.exists() else 0
@@ -88,12 +121,20 @@ def last_mdb_line(mdb_log: Path, offset: dict, limit: int = 70, tail_bytes: int 
             chunk = handle.read(size - read_from)
     except OSError:
         return ""
-    offset["value"] = size
-    text = chunk.decode("utf-8", "replace")
+    complete = chunk.rfind(b"\n")
+    if complete == -1:
+        # No newline in the window at all: either the write is mid-line or the producer writes
+        # very long lines. Re-readable later; do not report a fragment now.
+        return ""
+    offset["value"] = read_from + complete + 1
+    text = chunk[:complete].decode("utf-8", "replace")
     lines = text.splitlines()
-    for line in lines[1:] if read_from != start else lines:
+    # The first line is a fragment whenever the read started mid-log; drop it.
+    if read_from != start:
+        lines = lines[1:]
+    for line in reversed(lines):
         collapsed = " ".join(line.split())
-        if collapsed:
+        if collapsed and not _is_mdb_noise(collapsed) and any(c.isalnum() for c in collapsed):
             return collapsed[-limit:]
     return ""
 
@@ -129,8 +170,10 @@ def heartbeat_loop(log, mdb_log: Path, test_name: str, timeout: float, started_w
             f"timeout={timeout:.0f} mdb_bytes={mdb_size} delta={mdb_size - previous_size}"
         )
         latest = last_mdb_line(mdb_log, offset)
-        if latest:
-            log.write(f"[{stamp()}] MDB {latest}")
+        # Always emit the line, even when there is nothing new: the user watches this file to
+        # confirm the run is alive, and a visible "" reads as a stalled heartbeat whereas an
+        # absent line reads as a heartbeat that skipped its MDB tail.
+        log.write(f"[{stamp()}] MDB {'(no new output)' if not latest else latest}")
         previous_size = mdb_size
         # Self-limiting: if the launcher is killed outright this must not outlive the test
         # by much. A later launcher's orphan sweep also matches it (see ORPHAN_PATTERNS).
@@ -192,6 +235,23 @@ def main():
         return 0
     mdb_log = args.log.with_name("picampcontrol_mdb_progress.log")
     mdb_log.unlink(missing_ok=True)
+
+    # A new run owns the log from line 1: start it fresh rather than appending to the previous
+    # run's output. Appending across runs was the earlier design, and it left a watcher unable to
+    # tell where the current run began - the user saw the old run's lines interleaved with the new
+    # one's and said so twice (2026-09-22: "I still see all the last log's run as well as this
+    # one"). One run, one log. Truncate, never delete: the file has to keep its identity in the
+    # editor tab the user is watching, and a deleted-and-recreated path drops that tab's handle.
+    # TEST_BEGIN/TEST_END still bracket each *test* inside the run, so a ctest run of two tests is
+    # still readable; it is runs, not tests, that start a fresh file.
+    args.log.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with args.log.open("w", encoding="utf-8", newline="\n"):
+            pass
+    except OSError:
+        pass
+    # A lock left behind by a killed run would otherwise stall this one for its first write.
+    args.log.with_name(args.log.name + ".lock").unlink(missing_ok=True)
 
     if args.test == "suite":
         test_name = "PTT_SequencerAndTripSuite"
