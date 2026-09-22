@@ -135,8 +135,10 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 
 The following pins are genuinely free (not claimed by any `pin_map.h` define):
 
-- **Port D:** RD2–RD7 (6 pins)
-- **Port E:** RE0, RE2, RE3 (3 pins; pin 38 is VREF+ ADC reference)
+- **Port D:** none — RD0-RD7 are all claimed (RD0 = LCD_D7, RD1 = frequency counter, RD2-RD7 = the six LPF band-select outputs).
+- **Port E:** RE0, RE1, RE2 (3 pins). RE2 is also the only Port E pin with a second function worth noting.
+- **RE3 is not free GPIO.** `firmware/src/main.c` sets `#pragma config MCLRE = ON`, so RE3 is the MCLR/VPP pin and is input-only general purpose at best (the datasheet lists it as "general purpose input only when MCLR is disabled").
+- `VREF+` is **not a dedicated pin** on this device: it is an alternate function of **RA3** (datasheet: `RA3/ANA3/C1IN1+/VREF+/MDCARL`). The ADC uses VDD as its reference (`firmware/src/main.c`, FVR off), so no VREF+ pin is consumed by the design.
 
 **Total free GPIO available:** 9 pins (plus potential VREF+ if externalized ADC reference is needed)
 

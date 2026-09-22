@@ -50,6 +50,21 @@ CI/release workflows change - don't let it go stale.
   not retry this as a trivial change, and do not assume pin/peripheral equivalence from a clean
   build: evidence and reproduction are in the skill's Known snags. The PIC16F18875-I/P remains the
   target, and flash pressure is instead addressed by the software levers listed under Remaining work.
+- DO NOT START A DEVICE UPGRADE WITHOUT ASKING FIRST, AND DO IT ON A NEW BRANCH (user instruction,
+  2026-09-22). Evaluating PIC18F47Q10 (or any other part) as a replacement is explicitly gated: do
+  not change `-mcpu`, the DFP, `.clangd`, the pin map, or any firmware source for a new device until
+  the user has said go. When they do, create a dedicated git branch for the attempt and do the work
+  there - never on `main`. Rationale: the 18877 attempt showed that a clean build says nothing about
+  simulator equivalence, and a port touches every peripheral driver (PPS codes, comparators, ADC,
+  timers, EEPROM/NVM, oscillator), so it must be reversible and isolated.
+  Rejected-scope note (analysis only, 2026-09-22, nothing changed in the tree): PIC18F47Q10-I/P is
+  40-pin PDIP and so fits the same footprint, but it is a different family - 128 KB flash / 3615 B
+  RAM / 1024 B EEPROM / 64 MHz vs 8192 words / 1024 B / 256 B / 32 MHz, and `firmware/src/
+  freq_counter.c` carries a device-specific `T1CKIPPS = 0x19`. MPLAB X 6.35 accepts `device
+  PIC18F47Q10` + `hwtool sim`, but warns `W9602-COMP:DAC Voltage Source Peripheral not yet
+  implemented to act as input to Comparator` - the comparator is in the overcurrent safety path. No
+  PIC18F-Q10 DFP is installed. Any attempt must start by proving the model on the existing
+  boot/PTT harness, exactly as the 18877 was proved unviable.
 - The firmware is the single source of truth for which PIC we are using: `-mcpu=16F18875` in `cmake/My_Pic_Project/default/.generated/rule.cmake` (mirrored in `.clangd`), i.e. PIC16F18875-I/P, 40-pin PDIP. If a document disagrees with the firmware about the target device, the firmware wins and the document is the bug.
 - Do NOT reintroduce schematic automation. Both attempts were abandoned outright and every trace of them has been removed. Gone for good: the EasyEDA generator/SVG-validation pipeline (`easyeda_pro_generator.py`, `svg_renderer.py`, `visual_validator.py`, `watch_and_render.py`, `pic_amp_control_full.yaml`, `out/picampcontrol_easyeda_*.json`, and the `easyeda-agent` / `easyeda-copilot` routes), the KiCad MCP `schematic-design` skill with its `generated/` `.kicad_sch` tree and `mcp-server-kicad`, all node/npm scaffolding (`package.json`, `node_modules`, `@jlceda`), the workflow documents that described them, and every KiCad symbol/toolchain reference in the docs. The user's instruction: EasyEDA "was a disaster and can be removed entirely", then "same for kicad stuff. Another disaster... it can all go". Do not add generators, MCP schematic servers, `.kicad_sch`/`.eext` tooling or node/npm back, and do not re-add tool-specific symbol references to the pin map. The schematic package at docs/hardware/project_schematic_package/ is deliberately static design inputs (block diagram, connection table, component list, wiring checklist), captured by hand end to end. Netlist-verification tooling (exporting the EDA netlist and diffing it against `connection_table.csv`) was offered as a lighter-weight alternative and has been declined as well, so this means no schematic automation of any kind - not drawing generation, not verification.
 - `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their configured active levels (active-low by default); keep it transient, then restore the user's saved home page.
