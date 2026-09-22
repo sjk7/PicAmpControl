@@ -35,17 +35,15 @@ def run_logged(command, log, label="", interval=2.0, max_repeats=DEFAULT_MAX_REP
                env=None):
     """Run `command`, streaming collapsed output to `log`, and heartbeat it.
 
-    Returns the child's exit code. The log is truncated at the START of the run (a fresh, followable
-    log per run - user confirmed this is fine), never at the END: nothing may wipe a finished run's
-    tail after it completes. Truncate, never delete - the Log Follower tab holds the path.
+    Returns the child's exit code. The log is APPENDED TO, never truncated (user instruction,
+    2026-09-22, repeated angrily: truncating wipes the previous run's tail - a warning, a verdict -
+    from under the user). Each run is delimited by a timestamped RUN_BEGIN header.
     """
     log = Path(log)
-    log.write_text("", encoding="utf-8")  # truncate at START only, never at the end of a run
 
     appender = procutil.AppendLog(log)
     # Write a delimited header BEFORE opening the tab: the Log Follower attaches when a matching
-    # file is opened, and a header line gives it something to latch onto (and tells the user where
-    # this run starts).
+    # file is opened, and a header line tells the user where this run starts in an accumulating log.
     appender.write(f"RUN_BEGIN {time.strftime('%Y-%m-%dT%H:%M:%S%z')} "
                    f"{label or command[0]} :: {' '.join(str(c) for c in command)}")
     open_progress_log.open_in_editor([log])

@@ -245,11 +245,10 @@ def main():
     # TEST_BEGIN/TEST_END still bracket each *test* inside the run, so a ctest run of two tests is
     # still readable; it is runs, not tests, that start a fresh file.
     args.log.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with args.log.open("w", encoding="utf-8", newline="\n"):
-            pass
-    except OSError:
-        pass
+    # APPEND, never truncate (user instruction, 2026-09-22, repeated angrily): truncating wipes the
+    # previous run's output - a warning, a verdict - from under the user, who is reading the log as
+    # the next run starts. TEST_BEGIN/TEST_END bracket every run, so a reader can always tell where
+    # one run ends and the next begins.
     # A lock left behind by a killed run would otherwise stall this one for its first write.
     args.log.with_name(args.log.name + ".lock").unlink(missing_ok=True)
 
