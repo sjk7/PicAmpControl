@@ -380,6 +380,34 @@ In PowerShell use `*>` (all streams), not `2>&1`: the native-command merge turns
 into terminating `ErrorRecord`s when `$ErrorActionPreference = 'Stop'`, which aborts the run.
 `run_tests.ps1` does this for you.
 
+**A ctest log is NOT a progress indicator - do not watch it and conclude the run has hung.** With
+`--output-on-failure` ctest prints nothing for a test that is still running and discards a passing
+test's output entirely, so that file can sit at its first four lines (`Internal ctest changing into
+directory`, `Test project`, `Start 1: ...`) for the whole run - ~400 s for the suite on Windows -
+and then jump straight to `Passed` and `100% tests passed`. That is by design, not a stall. For
+intermediate progress read the watchdog's heartbeat log instead, which the launcher updates every
+10 s whether ctest says anything or not:
+
+```powershell
+Get-Content "$env:TEMP\picampcontrol_suite_progress.log" -Tail 12
+```
+
+It carries `HEARTBEAT elapsed=… timeout=… mdb_bytes=… delta=…` lines, the per-scenario invariant
+results as they pass, and a final `END code=…`. `delta=0` with `mdb_bytes` frozen means genuinely
+hung; growing `mdb_bytes` means slow but healthy. If you want the ctest log itself to move, use
+`ctest -V` (streams test output live) rather than `--output-on-failure`.
+
+**Bring the heartbeat log up for the user when a run is launched** (standing user instruction,
+2026-09-22). Open it in a VS Code editor tab at the start of the run and leave it visible, so a
+several-minute suite is watchable rather than silent:
+
+```powershell
+code-insiders -r "$env:TEMP\picampcontrol_suite_progress.log"   # fall back to `code -r` if needed
+```
+
+This is a convenience for visibility only. It does not change how a verdict is judged: the pass/fail
+line and the appended exit code still come from the run's own log file, never from the terminal.
+
 Both tests run by default. Windows is about 2.4x slower than macOS - the first-dit proof is ~20 s
 on macOS / ~55 s on Windows, and the merged suite ~150 s / ~356 s (measured 2026-09-22) - so read
 the elapsed time against the platform before calling a slow run anomalous. Run one at a time when
