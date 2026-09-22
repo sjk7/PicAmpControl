@@ -38,9 +38,18 @@ OUT_DIR = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"
 VARS = ["g_state", "g_startup_inhibit", "g_ptt_active", "g_snoop_active",
         "g_band_established", "g_fault_latched"]
 
-# The startup inhibit must expire before PTT can do anything. It is counted in 1 ms ticks; give it
-# plenty of margin and let the firmware settle.
-BOOT_STEPS = 800_000
+# The startup inhibit must expire before PTT can do anything. It is a 1000 ms settle delay counted
+# in main-loop passes, and it is counted in SIMULATED time - which on the Q10 is much faster in
+# wall-clock terms than the step count suggests:
+#
+#   Q10 at 64 MHz = 16 MIPS, so one instruction is 62.5 ns.
+#   1000 ms needs ~16,000,000 steps.
+#
+# An earlier revision used 800,000 steps, which is only 50 ms of simulated time - 20x too early.
+# The probe then reported "startup inhibit never expired" as a firmware fault, when it was purely
+# the probe cutting off before the gate. That wrong conclusion is recorded in the skill; this
+# constant is the correction (from blockers.txt, 2026-09-22).
+BOOT_STEPS = 16_500_000
 
 
 def script() -> str:

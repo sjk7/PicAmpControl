@@ -883,6 +883,37 @@ Prerequisites that decide whether debugging works at all:
      **assert that its stimulus took effect** and fail loudly if it did not. The first version of
      the boot sad-path test did not, and reported a PASS while exercising nothing - see
      `test_boot_safety_order.py`'s `hold_applied()`.
+- **CHECK THE SIMULATED-TIME ARITHMETIC BEFORE CALLING ANYTHING A HANG - and note that "steps per
+  ms" differs from "steps per PR2 tick" (2026-09-22; this cost a whole wrong verdict).** A staged
+  probe ran 800,000 `Stepi` steps on Q10, saw `g_startup_inhibit` still `true` with `g_state` stuck
+  at `STATE_RESET_WAIT`, and reported "the startup-inhibit timer never expires" as a firmware fault.
+  It was pure arithmetic: **Q10 at 64 MHz runs at 16 MIPS, so one instruction is 62.5 ns, and
+  800,000 steps is only 50 ms of simulated time** - against a 1000 ms startup gate. The probe cut
+  off 20x too early. With `Stepi 16500000` everything passes: the inhibit clears, PTT latches,
+  bypass-snoop engages. Nothing was ever broken.
+  Two rules fall out of it:
+  1. **Before reporting a timing fault, convert your step count into simulated milliseconds** and
+     compare it to the gate you are testing. `steps = ms * MIPS * 1000`. 16F: 8 MIPS. Q10: 16 MIPS.
+  2. **"steps per simulated millisecond" is not "steps per PR2 tick".** The `INSTRUCTIONS_PER_MS`
+     values in `test_first_dit.py` (8000 on 16F, 1887 on Q10) are *steps per 1 ms hardware tick*, a
+     measured conversion factor for that device's clock chain - they are not MIPS and must not be
+     used to convert a step count into elapsed real time. Conflating the two produced the wrong
+     verdict above.
+  The general trap, worth stating plainly: **a probe built on a false premise will confirm the false
+  premise.** This one was designed to walk the PTT path and found exactly the "fault" it was primed
+  to look for. Positive controls (above) would have caught it - the control proves the *stimulus*
+  works, and a second control on the *timing* would have proved the gate could be reached.
+- **`FEXTOSC = OFF` plus `ANSELA` bit 6 clear is NOT enough to free RA6 on Q10 in MDB - and it does
+  not matter (2026-09-22, from `blockers.txt`).** RA6 is multiplexed with the external-oscillator
+  gate OSC2, and the Q10 model keeps reporting it as analogue (`RA6 Ain ... CLKOUT/OSC2`) even with
+  `FEXTOSC = OFF`, `RSTOSC = HFINTOSC_64MHZ`, `ANSELA = 0x2F` (bit 6 clear) and `TRISA6 = 0` all in
+  place. The model appears to keep the oscillator's claim on the pin, and `write pin RA6 ...` does
+  nothing.
+  **The practical impact is nil, and that is the part worth remembering:** RA6/RA7 are the LCD
+  strobe and data line, they are **write-only**, and nothing in the firmware ever reads them back.
+  The three pins that *are* read back for safety are `SENSE_TX`/`SENSE_TX_VCC`/`SENSE_TX_BIAS` =
+  RC5/RC6/RC7, none of which is multiplexed with a special function. So RA6 is **untestable in
+  simulation, not broken** - check it on the bench. Do not spend time trying to make MDB drive it.
 - **When several symptoms share one cause, find the cause before chasing the symptoms (2026-09-22).**
   "0 keyed runs" looked like a PTT problem. A staged probe (`probe_q10_ptt_path.py`) walked the path
   one stage at a time - startup inhibit expired? PTT latched? snoop entered? - and showed
