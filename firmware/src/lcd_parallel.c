@@ -1,7 +1,7 @@
 #include <xc.h>
 #include <stdbool.h>
 #include "../include/pin_map.h"
-#include "../include/lcd_i2c.h"
+#include "../include/lcd_parallel.h"
 
 /* Parallel LCD in 4-bit mode using freed pins:
    RS=RA4, E=RA6, D4=RA7, D5=RC3, D6=RC4, D7=RD0 */
@@ -152,20 +152,5 @@ void lcd_init(void) {
     __delay_ms(2);
 }
 
-bool internal_eeprom_read(unsigned char address, unsigned char *data, unsigned char length) {
-    unsigned char index;
-
-    for (index = 0; index < length; index++) {
-        data[index] = eeprom_read((unsigned char)(address + index));
-    }
-    return true;
-}
-
-bool internal_eeprom_write(unsigned char address, const unsigned char *data, unsigned char length) {
-    unsigned char index;
-
-    for (index = 0; index < length; index++) {
-        eeprom_write((unsigned char)(address + index), data[index]);
-    }
-    return true;
-}
+/* Internal EEPROM access now lives in firmware/src/nvm.c: the two devices need different
+   implementations, so it no longer belongs in the LCD driver. */

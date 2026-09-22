@@ -25,19 +25,23 @@ CI/release workflows change - don't let it go stale.
   `.github/skills/picampcontrol-build-test/SKILL.md` remain the sources of truth, and its own
   `<session_state>` block ("Awaiting the first hardware assignment") is stale and does not describe
   this project.
-- FOR LONG-RUNNING JOBS, DELETE/RECREATE THE LOG AND TAIL IT IN THE VS CODE UI - EVEN ON WINDOWS (user
-  instruction, 2026-09-22, sticky/permanent; generalised, then restated for tail mode, then again for
-  the delete-first ordering, all the same day). The order matters: delete the old log, create a fresh
-  one, and only then open or tail it - writing to a log that is already open in the UI makes VS Code
-  raise its own "file changed on disk" prompt. Open it as a *follow*, not a static editor tab, because
-  a tab does not track the end of a growing file: Windows has no `tail`, so use
-  `Get-Content <file> -Wait -Tail 30` in a VS Code terminal; macOS/Linux use `tail -f`. This applies to
-  every long job - suites, builds, spike runs, anything that takes minutes - not just the simulator
-  tests. For the mdb suite the file that "updates often with progress" is the watchdog heartbeat log
-  (`%TEMP%\picampcontrol_suite_progress.log` on Windows, `/tmp/...` on macOS), NOT the ctest log: ctest
-  prints nothing until a test completes, so its log sits at four lines for the whole ~400 s and looks
-  hung. Tailing a log for visibility is sanctioned; judging a run from terminal output is not -
-  verdicts are still read from the run's own log file and exit-code line.
+- FOR LONG-RUNNING JOBS, WRITE THE LOG TO A FILE AND FOLLOW IT IN A VS CODE *TAB* WITH FILETAIL -
+  NEVER TAIL IT IN THE CONSOLE (user instruction, 2026-09-22, sticky/permanent, restated several
+  times as the method was refined: generalised to all long jobs, then "tail mode", then "delete and
+  recreate first", then "not in the console, open it in a tab", then "use FileTail"). The final
+  method: delete the old log, recreate it fresh, write the job's output there, open that file in a VS
+  Code tab, and toggle **FileTail** (`filetail.toggle`) so the tab reloads and auto-scrolls to the end
+  while the user is at the end - stopping as soon as they interact. **The FileTail extension
+  (`spacetown.filetail`) MUST be installed; install it before starting anything long.** A console tail
+  is forbidden, and it was also silently broken: `Get-Content -Wait` holds the handle to the file it
+  opened, and the suite launcher unlinks and recreates its log at startup, so a console tail started
+  before the run reads a deleted file and shows nothing. This applies to every long job - suites,
+  cmake builds, ctest runs, spike runs, anything taking minutes. For the mdb suite the file that
+  "updates often with progress" is the watchdog heartbeat log (`%TEMP%\picampcontrol_suite_progress.log`
+  on Windows, `/tmp/...` on macOS), NOT the ctest log: ctest prints nothing until a test completes, so
+  its log sits at four lines for the whole run and looks hung. Watching a log for visibility is
+  sanctioned; judging a run from terminal output is not - verdicts are still read from the run's own
+  log file and exit-code line.
 - DO NOT ASK FOR PERMISSION TO OVERWRITE FILES - JUST DO IT (user instruction, 2026-09-22). The user
   does not want to be prompted about overwriting, nor asked "say the word" before an edit that was
   already agreed; when the intent is to change a file, change it. Related and worth avoiding: writing
@@ -263,7 +267,7 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
   LCD data lines, so a port read-modify-write can clobber a relay latch from an unrelated write.
 - Hardware comparators combine at INPUT_HARD_FAULT for independent overdrive, drain-peak, and overcurrent protection.
 - The sequencer runs TX, TX_VCC, and TX_BIAS with two configurable inter-stage delays, defaulting to 20 ms.
-- The LCD is a 1602 driven in 4-bit parallel mode by firmware/src/lcd_parallel.c; there is no I2C backpack. firmware/include/lcd_i2c.h is the (legacy-named) interface header for the LCD plus internal EEPROM. Pin assignments: see the single-source-of-truth rule above.
+- The LCD is a 1602 driven in 4-bit parallel mode by firmware/src/lcd_parallel.c, with its interface header at firmware/include/lcd_parallel.h (renamed from lcd_i2c.h on 2026-09-22 - a prototype-era name that kept misleading readers; there is no I2C backpack and no I2C code). Internal EEPROM access lives in firmware/src/nvm.c + firmware/include/nvm.h, device-guarded so the PIC16F18875 keeps XC8's legacy eeprom helpers while the PIC18F-Q10 drives its own NVM block. Pin assignments: see the single-source-of-truth rule above.
 - Menu settings and the last display page are stored in the PIC's internal EEPROM in a versioned, checksummed record; no external EEPROM module is used.
 
 ## Display

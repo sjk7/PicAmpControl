@@ -1,7 +1,8 @@
 set_property(TARGET My_Pic_Project_default_default_XC8_compile PROPERTY SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/main.c"
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/lcd_parallel.c"
-    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/freq_counter.c")
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/freq_counter.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/nvm.c")
 
 # Optimize Debug builds with -O1 to avoid XC8 -O0 string section code bloat, and Release with -Os.
 target_compile_options(My_Pic_Project_default_default_XC8_compile PRIVATE "$<$<CONFIG:Debug>:-O1>" "$<$<CONFIG:Release>:-Os>")

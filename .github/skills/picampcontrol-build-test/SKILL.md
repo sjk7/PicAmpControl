@@ -11,6 +11,15 @@ times on 2026-09-22 *after* the rule already existed in `Ai-Notes.txt` - the thi
 quoted the word straight back. A bullet buried in a long list did not stop it, so it lives here too.
 State the finding, or the uncertainty, plainly, and move on.
 
+**Hard environment rule: the FileTail extension (`spacetown.filetail`) MUST be installed.** Long jobs
+- suites, builds, spike runs - write their output to a log file, and that file is opened in a VS Code
+**tab** with FileTail toggled on (`filetail.toggle`) so it reloads and scrolls to the end while the
+user is still at the end: auto-scrolling until they interact, then stopping. **Never tail these logs
+in a terminal/console** - the user has forbidden it explicitly and more than once. If FileTail is
+missing, install it (`spacetown.filetail`) before starting anything long. This rule exists because
+the log is the user's window into a multi-minute run; console tails were both unwanted and, worse,
+silently broken (see the log-viewing note under Simulator verification).
+
 Use this skill for firmware builds, simulator verification and simulator debugging. Do not claim success from a missing or truncated terminal response; require a fresh exit code and final output.
 
 Always use the **file-based pattern**: redirect every test command's output to a log file, append the exit code, and read the verdict from that file. MDB emits megabytes of trace, and the terminal scrollback and output capture regularly lose the pass/fail line (a command can even come back with no captured output while the run is still going). Never conclude anything from an empty terminal response - check the log and the exit-code line.
@@ -403,6 +412,20 @@ results as they pass, and a final `END code=…`. `delta=0` with `mdb_bytes` fro
 hung; growing `mdb_bytes` means slow but healthy. If you want the ctest log itself to move, use
 `ctest -V` (streams test output live) rather than `--output-on-failure`.
 
+**The heartbeat log goes quiet during the second test - that is expected, not a hang.** It is written
+by `run_suite_with_watchdog.py`, which wraps only `PTT_SequencerAndTripSuite`. When that test passes
+and `FirstDit_BandDetectionAndHotSwitchGuards` starts, nothing appends to the heartbeat log for its
+~80 s, so a watcher sees `delta=0` and frozen bytes *while the run is perfectly healthy* (2026-09-22:
+this was read as "the file is not updating" twice). Test-level progress, and the freeze that means
+test 1 finished, is in the ctest job log instead: it prints `1/2 ... Passed` then `Start 2: ...`. So
+the two logs answer different questions - heartbeat = progress *inside* the suite, ctest log = which
+test is running - and neither one alone shows the whole run.
+
+**Delete the log before you launch the job, not after.** The sequence is: delete -> create fresh ->
+*start the job* -> open the file in a tab -> FileTail on. Opening a tab that a previous run already
+created, or reusing one mid-run, leaves the user looking at a stale buffer and was called out on
+2026-09-22.
+
 **Open the log in TAIL mode in the VS Code UI for any long-running job - on Windows too** (standing
 user instruction, 2026-09-22, generalised and then restated for tail mode the same day). The user
 wants to watch long jobs - suites, builds, spike runs - live in the UI, so delete the log, recreate it
@@ -410,20 +433,27 @@ fresh for the run, and open a *follow*, not a static editor tab: VS Code reloads
 does not track the end of a growing one.
 
 ```powershell
-# Windows - there is no `tail` binary here; Get-Content -Wait is the equivalent
-Get-Content "$env:TEMP\picampcontrol_suite_progress.log" -Wait -Tail 30
+# Windows: open in a TAB and let FileTail follow it (never a console tail - see the hard rule above)
+code-insiders -r "$env:TEMP\picampcontrol_suite_progress.log"
+# then run the command `filetail.toggle` with that tab active
 ```
 
 ```sh
 # macOS / Linux
-tail -f /tmp/picampcontrol_suite_progress.log
+code -r /tmp/picampcontrol_suite_progress.log   # then `filetail.toggle`
 ```
 
-Start that in its own terminal and leave it up for the duration. Recreate the log *before* starting
-the tail: writing to a log that is already open in an editor tab makes VS Code raise its own "file
-changed on disk" prompt. Tailing a log for visibility is sanctioned by the user; judging a run from
-terminal output is not, so the pass/fail line and the appended exit code still come from the run's own
-log file.
+Recreate the log *before* opening it: writing to a log that is already open in an editor tab makes VS
+Code raise its own "file changed on disk" prompt.
+
+**Why not a console tail (learned the hard way, 2026-09-22).** `Get-Content -Wait` holds a handle to
+the file it opened. The suite launcher *unlinks and recreates* its log at startup, so a console tail
+started before the run keeps reading the deleted file and goes permanently silent - the user sees an
+empty pane and reasonably concludes nothing is happening. That is the second reason this is a tab
+with FileTail rather than a terminal follow. (The first is that the user asked for it.)
+
+Watching a log for visibility is sanctioned; judging a run from terminal output is not, so the
+pass/fail line and the appended exit code still come from the run's own log file.
 
 **A freshly recreated log is empty, and that is expected - say so.** Immediately after the
 delete/create step there is no run in progress, so the tab and the tail both show nothing, which looks
@@ -470,6 +500,55 @@ Prerequisites that decide whether debugging works at all:
 
 ## Known snags (each one cost real time - do not rediscover them)
 
+- **PIC18F-Q10 port findings (2026-09-22, sticky - add to this list as they are found; the port is in
+  flight on branch `upgrade/pic18f47q10`).** Compiling the *unmodified* firmware for
+  `-mcpu=18F47Q10` against the shipping Q DFP is far closer than expected: all three translation
+  units compile with only seven errors, all of a single kind.
+  1. **Analog-select bitfield names differ by family.** `firmware/src/freq_counter.c` used
+     `ANSELDbits.ANSD1..ANSD7`, which do not exist on the Q10 - the same register (0xF21) has
+     members named `ANSELD1..7` there. Fixed by clearing the whole register (`ANSELD = 0x00`), which
+     is family-neutral and correct here because every PORTD pin in this design is digital (RD0 LCD,
+     RD1 T1CKI, RD2-RD7 band relays). Prefer a whole-register write whenever only the *names*
+     differ.
+  2. **Config words are named per family, and only three differ here.** The Q10 rejects
+     `RSTOSC = HFINT32` (`error: (1363) unknown configuration setting/register`), `MCLRE = ON` and
+     `BORV = 19`. It wants `RSTOSC = HFINTOSC_1MHZ`/`HFINTOSC_64MHZ`, `MCLRE = EXTMCLR`/`INTMCLR`,
+     `BORV = VBOR_190`. Guarded with `#if defined(__18F47Q10__)` in `main.c`; `FEXTOSC`, `WDTE`,
+     `PWRTE`, `CP` and `BOREN` are identical on both devices. Read the names from the DFP's
+     `<device>.cfgmap`, never from memory.
+  3. **BLOCKER: the legacy EEPROM API does not exist on the Q10.** `eeprom_read`/`eeprom_write`
+     expand through `pic18.h` to `Read_b_eep`/`Write_b_eep`/`Busy_eep`; XC8 warns
+     `unsupported: The Read_b_eep routine is no longer supported` and the link fails with
+     `error: (2096) undefined symbol "_Write_b_eep"` (plus `_Busy_eep`, `_Read_b_eep`). The Q10
+     needs the NVM-register API instead. `firmware/src/lcd_parallel.c` is the only user (the
+     versioned, checksummed settings record), so that is the whole scope - but it is a real driver
+     change, not a rename.
+     **Read `Eeprom-changes.md` in the repo root before touching any EEPROM/NVM code** (user
+     instruction, 2026-09-22): it is the owner's notes on this exact migration, and it is tracked
+     precisely so a future session finds it. Use it for the *procedure* - the 0x55/0xAA unlock
+     written to `NVMCON2` matches this device - but take the **bit names from the DFP header, not
+     from that file**: the notes name `NVMCON1bits.NVMREG`, `NVMCON0bits.GO`, `NVMCMD`, `WREN` and
+     `INTCON0`, and none of those exist in `PIC18F-Q_DFP/1.30.487`. This part has
+     `NVMCON1` = {`RD`, `SECRD`, `WR`, `SECWR`, `SECER`}, `NVMCON0` = {`NVMERR`, `NVMEN`}, and the
+     global interrupt enable is `INTCON.GIE`. The compiler is the arbiter: code that trusts the
+     notes' names fails to build, and a driver that trusts them at runtime would be guessing.
+     (Same class of error as the assumed `T2CLKCON` value - a plausible-looking external source is
+     not a datasheet.)
+  Generalisation worth keeping: family differences surface as **names** far more often than as
+  behaviour, and a device-guarded block or whole-register write is usually smaller and clearer than
+  a per-symbol shim.
+- **Log presentation the user actually wants (2026-09-22, after two rounds of feedback).** These logs
+  are read by a human *during* the run, so: emit MDB output as raw text, never as a repr
+  (`{bytes!r}` renders every newline as `\n` and every tab as `\t`, and MDB's pin dumps are
+  tab-separated tables, so escaping makes them unreadable); and on the heartbeat line show the recent
+  bytes as the *text column of a dump* - printable bytes kept, everything else as `.` - which
+  collapses MDB's blank-line spam into one compact, scannable string on the line that already
+  carries the timestamp. The user does **not** want a full hex dump: they want the existing
+  timestamp/heartbeat line with the recent bytes beside it, compact.
+- **A returned terminal command of "no output" is not evidence about the run.** Learned twice this
+  session: a command with everything redirected prints nothing, and a killed/cleaned terminal can
+  swallow a pipeline's output entirely (`Write-Output` included). Verify state with a *fresh*
+  command before concluding anything, and never read a test verdict out of terminal text.
 - **An assumed register value can reject a whole device - and it did (2026-09-22, this cost most of
   a session and produced a wrong verdict that had to be retracted).** While writing minimal bring-up
   for the PIC18F47Q10 the Timer2 clock select was written as `T2CLKCON = 0x00` with the comment

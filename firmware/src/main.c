@@ -2,17 +2,39 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "../include/pin_map.h"
-#include "../include/lcd_i2c.h"
+#include "../include/lcd_parallel.h"
+#include "../include/nvm.h"
 #include "../include/freq_counter.h"
 
 #pragma config FEXTOSC = OFF
+
+/* Config words are named per family, so the three that differ are guarded. On the
+   PIC16F18875 the reset oscillator is selected as RSTOSC = HFINT32, MCLR is simply ON, and
+   the brown-out level is a bare number. On the PIC18F-Q10 RSTOSC must name the HFINTOSC rate,
+   MCLR is EXTMCLR/INTMCLR, and BORV uses VBOR_xxx names - see the DFP's 18f47q10.cfgmap. */
+#if defined(__18F47Q10__)
+#pragma config RSTOSC = HFINTOSC_1MHZ
+#else
 #pragma config RSTOSC = HFINT32
+#endif
+
 #pragma config WDTE = OFF
 #pragma config PWRTE = OFF
+
+#if defined(__18F47Q10__)
+#pragma config MCLRE = EXTMCLR
+#else
 #pragma config MCLRE = ON
+#endif
+
 #pragma config CP = OFF
 #pragma config BOREN = ON
+
+#if defined(__18F47Q10__)
+#pragma config BORV = VBOR_190
+#else
 #pragma config BORV = 19
+#endif
 
 typedef enum {
     STATE_STANDBY = 0,
@@ -373,6 +395,16 @@ void timer0_init(void) {
     TMR2 = 0;
     PIR4bits.TMR2IF = 0;
     PIE4bits.TMR2IE = 1;
+
+#if defined(__18F47Q10__)
+    /* This family needs its priority mechanism armed before anything is dispatched. Measured on
+       the simulator: with IPEN = 0 no interrupt ever reaches the ISR, even though TMR2IF sets and
+       the peripheral enable is set. IPEN = 1, the source's IPRx priority bit, and the matching
+       global (GIE/GIEH) make it run at once. */
+    INTCONbits.IPEN = 1;
+    IPR4bits.TMR2IP = 1;    /* system tick at high priority */
+#endif
+
     T2CONbits.ON = 1;
 
     freq_counter_init();

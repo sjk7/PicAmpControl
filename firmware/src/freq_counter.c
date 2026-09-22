@@ -55,15 +55,14 @@ static void update_band_outputs(rf_band_t band) {
 void freq_counter_init(void) {
     // Configure RD1 as digital input for T1CKI
     TRISDbits.TRISD1 = 1;
-    ANSELDbits.ANSD1 = 0;
 
     // RD2-RD7: one digital output per band, driving the LPF relays.
-    ANSELDbits.ANSD2 = 0;
-    ANSELDbits.ANSD3 = 0;
-    ANSELDbits.ANSD4 = 0;
-    ANSELDbits.ANSD5 = 0;
-    ANSELDbits.ANSD6 = 0;
-    ANSELDbits.ANSD7 = 0;
+    // The analog-select register is cleared as a whole rather than bit by bit, because the
+    // bitfield names differ by family (ANSDn on the PIC16F18875, ANSELDn on the PIC18F-Q10)
+    // and every PORTD pin in this design is digital anyway: RD0 drives the LCD, RD1 is the
+    // T1CKI frequency-counter input, RD2-RD7 are the band relays. Selecting all-digital is
+    // therefore correct on either device and keeps this driver family-neutral.
+    ANSELD = 0x00;
     TRISDbits.TRISD2 = 0;
     TRISDbits.TRISD3 = 0;
     TRISDbits.TRISD4 = 0;

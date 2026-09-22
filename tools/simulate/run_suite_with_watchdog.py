@@ -108,47 +108,41 @@ def main():
         stop_heartbeat = threading.Event()
 
         mdb_read_pos = {"offset": 0}
-        # MDB writes in 4096-byte chunks that need not end on a line boundary, so a partial
-        # trailing line is carried over rather than printed half-finished.
-        pending_mdb = {"text": ""}
 
-        def mdb_since_last(limit_bytes: int = 1200) -> str:
-            """The MDB output that arrived since the previous heartbeat, as raw text.
+        def hxd_text(data: bytes, limit: int = 160) -> str:
+            """The text column of a hex dump: printable bytes kept, everything else shown as '.'.
 
-            Byte counts alone say whether the run is moving, not what it is doing, and the
-            MDB text otherwise sits in a separate log. Putting it here makes the one log the
-            user watches readable while the run is in progress (sticky user instruction,
-            2026-09-22).
+            A newline collapses to a single '.' instead of an escaped "\\n" or a blank line, so
+            MDB's sparse, tab-separated output compresses into one compact, scannable string that
+            fits on the heartbeat line (user request, 2026-09-22).
+            """
+            rendered = "".join(chr(b) if 32 <= b < 127 else "." for b in data)
+            return rendered[-limit:]
 
-            Emitted verbatim, NOT as a repr: `{!r}` renders every newline as a literal "\\n"
-            and every tab as "\\t", and MDB's pin dumps are tab-separated tables, so escaping
-            them turns a readable dump into a wall of backslashes (user feedback, 2026-09-22).
+        def mdb_since_last(limit_bytes: int = 400) -> bytes:
+            """New MDB bytes since the previous heartbeat.
+
+            Byte counts alone say whether the run is moving, not what it is doing, and the MDB
+            text otherwise sits in a separate log. Showing it here makes the log the user watches
+            useful while a long run is in progress (sticky user instruction, 2026-09-22).
             """
             try:
                 size = mdb_log.stat().st_size if mdb_log.exists() else 0
             except OSError:
-                return ""
+                return b""
             offset = mdb_read_pos["offset"]
             if size < offset:      # the log was recreated under us
                 offset = 0
-                pending_mdb["text"] = ""
             if size <= offset:
-                return ""
+                return b""
             try:
                 with mdb_log.open("rb") as handle:
                     handle.seek(offset)
                     chunk = handle.read(min(size - offset, limit_bytes))
             except OSError:
-                return ""
+                return b""
             mdb_read_pos["offset"] = offset + len(chunk)
-            text = pending_mdb["text"] + chunk.decode("utf-8", errors="replace")
-            # Print whole lines only, so the live view never ends mid-line.
-            cut = text.rfind("\n")
-            if cut == -1:
-                pending_mdb["text"] = text
-                return ""
-            pending_mdb["text"] = text[cut + 1:]
-            return text[: cut + 1]
+            return chunk
 
         def heartbeat():
             # `time.monotonic()` is uptime, not elapsed time, so it has to be taken
@@ -158,14 +152,15 @@ def main():
             previous_mdb_size = 0
             while not stop_heartbeat.wait(10):
                 mdb_size = mdb_log.stat().st_size if mdb_log.exists() else 0
-                log.write(
+                line = (
                     f"[{stamp()}] HEARTBEAT elapsed={time.monotonic() - started:.1f} "
                     f"timeout={args.timeout:.0f} child_poll={proc.poll()} mdb_bytes={mdb_size} "
-                    f"delta={mdb_size - previous_mdb_size}\n"
+                    f"delta={mdb_size - previous_mdb_size}"
                 )
-                new_text = mdb_since_last()
-                if new_text:
-                    log.write(f"[{stamp()}] MDB_BEGIN\n{new_text}\n[{stamp()}] MDB_END\n")
+                new_bytes = mdb_since_last()
+                if new_bytes:
+                    line += f' mdb="{hxd_text(new_bytes)}"'
+                log.write(line + "\n")
                 previous_mdb_size = mdb_size
 
         heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)

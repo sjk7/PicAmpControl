@@ -74,7 +74,7 @@ Overdrive and drain voltage each have a separate, conditioned ADC path. The ADC 
 
 Use a standard low-cost 16x2 character LCD driven in **4-bit parallel** mode. There is no PCF8574 I2C backpack; the earlier I2C design was dropped in favour of the direct parallel interface.
 
-The driver lives in `firmware/src/lcd_parallel.c` (its interface header is `firmware/include/lcd_i2c.h`, a legacy filename). It owns the HD44780 4-bit transfers; protection and menu logic remain in `main.c`. Settings persist via the PIC's internal EEPROM (256 bytes) using the XC8 `eeprom_read`/`eeprom_write` runtime functions, wrapped by `internal_eeprom_read`/`internal_eeprom_write`. Every operator page or value change stores a versioned, checksummed record. Startup accepts only a valid record and otherwise restores compiled safe defaults. Final PCB validation must include read/write and interrupted-power recovery tests.
+The driver lives in `firmware/src/lcd_parallel.c` (its interface header is `firmware/include/lcd_parallel.h`). It owns the HD44780 4-bit transfers; protection and menu logic remain in `main.c`. Settings persist via the PIC's internal EEPROM (256 bytes) using the XC8 `eeprom_read`/`eeprom_write` runtime functions, wrapped by `internal_eeprom_read`/`internal_eeprom_write`. Every operator page or value change stores a versioned, checksummed record. Startup accepts only a valid record and otherwise restores compiled safe defaults. Final PCB validation must include read/write and interrupted-power recovery tests.
 
 ## State model
 

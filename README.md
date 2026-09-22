@@ -28,7 +28,7 @@ The project is in a working firmware-validation stage:
 - Firmware entry point: [firmware/src/main.c](firmware/src/main.c)
 - Pin definitions: [firmware/include/pin_map.h](firmware/include/pin_map.h)
 - Parallel LCD driver (4-bit): [firmware/src/lcd_parallel.c](firmware/src/lcd_parallel.c)
-- LCD and EEPROM interface: [firmware/include/lcd_i2c.h](firmware/include/lcd_i2c.h)
+- LCD interface: [firmware/include/lcd_parallel.h](firmware/include/lcd_parallel.h); EEPROM: [firmware/include/nvm.h](firmware/include/nvm.h)
 - Frequency counter: [firmware/src/freq_counter.c](firmware/src/freq_counter.c)
 - Display/menu state diagram: [_build/My_Pic_Project/sim/graphs/lcd/display_menu_state_diagram.png](_build/My_Pic_Project/sim/graphs/lcd/display_menu_state_diagram.png)
 - 16x2 LCD lifecycle diagram: [_build/My_Pic_Project/sim/graphs/lcd/lcd_lifecycle_16x2.png](_build/My_Pic_Project/sim/graphs/lcd/lcd_lifecycle_16x2.png)
