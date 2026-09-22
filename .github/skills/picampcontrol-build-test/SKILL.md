@@ -165,9 +165,16 @@ that looks dead (this cost a whole session on 2026-09-22 - the log was written, 
    - A tab opened *after* output already exists must scroll to the end on first sight (adopt the
      current size and reveal), or it sits at the top until the next append.
 
-   Current version: **0.4.0**; `logFollower.coalesceMs = 250` ms, watcher-driven with the poll as
+   Current version: **0.5.0**; `logFollower.coalesceMs = 250` ms, watcher-driven with the poll as
    the safety net. **Verified working 2026-09-22**: a 200-line burst on an open log left the tab on
    `growing line 200`. Before that fix the same test stopped at 136, and before that at 15.
+   **Pause on interaction:** the follow must stop the moment the user touches the text or the
+   scrollbar (user instruction), which needs **three** listeners - selection change, visible-range
+   change, and active-editor change - because no single one covers clicking, wheeling, dragging the
+   scrollbar and switching tabs. **Resume is deliberate (the toggle command) and never automatic:**
+   an earlier revision resumed as soon as the last line was merely visible, which re-armed the
+   follow on a short log or a single wheel notch and yanked the view away from whatever the user
+   had scrolled up to read.
    **After changing the extension, repackage and reinstall, then restart VS Code:**
 
 ```powershell

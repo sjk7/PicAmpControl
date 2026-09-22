@@ -112,18 +112,20 @@ function toggleFollow() {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   const k = key(editor.document.uri);
-  if (following.has(k)) {
+  if (following.has(k) && !userTookOver.has(k)) {
     following.delete(k);
     lastSize.delete(k);
     releaseWatcher(k);
     vscode.window.setStatusBarMessage('Log Follower: stopped', 2000);
   } else {
+    // Covers both "never followed" and "paused by interaction": either way, this is the explicit
+    // resume, so it clears the pause as well as arming the follow.
     following.add(k);
     userTookOver.delete(k);
     lastSize.delete(k);
     armWatcher(k);
     scrollToEnd(editor);
-    vscode.window.setStatusBarMessage('Log Follower: following (click or scroll to pause)', 3000);
+    vscode.window.setStatusBarMessage('Log Follower: following (interact to pause)', 3000);
   }
 }
 
@@ -221,36 +223,42 @@ function activate(context) {
   // externally-written log, and poll-only is always up to one interval stale.
   setInterval(pollOnce, settings.coalesceMs);
 
+  // --- Pause on ANY interaction with the tab, resume only deliberately. -------------------
+  //
+  // The requirement is "stop scrolling the moment I touch the text or the scrollbar". Three
+  // separate events have to be watched, because none of them covers the others:
+  //   1. selection change      - clicking in the text, arrow keys, selecting a range;
+  //   2. visible-range change  - wheeling / dragging the scrollbar (fires with no selection change);
+  //   3. active-editor change  - focusing another tab, which must not leave this one scrolling.
+  // Our own programmatic moves are filtered out by the self-move grace window, or the extension
+  // would pause itself the first time it scrolled.
+  //
+  // Resume is DELIBERATE (the toggle command), never automatic. An earlier version resumed whenever
+  // the last line merely became visible, so a short log - or one wheel notch near the bottom -
+  // silently re-armed the follow and the view jumped out from under someone reading further up.
+  const pauseInteractive = (uriString, why) => {
+    if (!following.has(uriString)) return;
+    if (userTookOver.has(uriString)) return;
+    const self = lastSelfMove.get(uriString) || 0;
+    if (Date.now() - self < SELF_MOVE_GRACE_MS) return;
+    userTookOver.add(uriString);
+    vscode.window.setStatusBarMessage(
+      `Log Follower: paused (${why}); run "Log Follower: Toggle" to resume`, 4000,
+    );
+  };
+
   context.subscriptions.push(
     { dispose: () => { for (const w of watchers.values()) w.dispose(); watchers.clear(); } },
-    // A genuine user selection change means they are reading; our own cursor move is ignored.
     vscode.window.onDidChangeTextEditorSelection((event) => {
-      const k = key(event.textEditor.document.uri);
-      if (!following.has(k)) return;
       if (event.kind === undefined) return;
-      const self = lastSelfMove.get(k) || 0;
-      if (Date.now() - self < SELF_MOVE_GRACE_MS) return;
-      userTookOver.add(k);
-      vscode.window.setStatusBarMessage(
-        'Log Follower: paused (you took control; "Log Follower: Toggle" resumes)', 3000,
-      );
+      pauseInteractive(key(event.textEditor.document.uri), 'you took control');
     }),
-    // Scrolling back to the bottom is the natural way to resume; anywhere else is a takeover.
-    //
-    // Guarded by the same self-move grace window as the selection listener: our own revealRange()
-    // changes the visible range too, and without the guard the extension could pause itself a
-    // moment after scrolling - which looks exactly like "it stopped following".
     vscode.window.onDidChangeTextEditorVisibleRanges((event) => {
-      const k = key(event.textEditor.document.uri);
-      if (!following.has(k)) return;
-      const self = lastSelfMove.get(k) || 0;
-      if (Date.now() - self < SELF_MOVE_GRACE_MS) return;
-      const doc = event.textEditor.document;
-      if (doc.lineCount === 0) return;
-      const ranges = event.textEditor.visibleRanges;
-      if (ranges.length === 0) return;
-      if (ranges[ranges.length - 1].end.line >= doc.lineCount - 2) userTookOver.delete(k);
-      else userTookOver.add(k);
+      pauseInteractive(key(event.textEditor.document.uri), 'you scrolled');
+    }),
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (!editor) return;
+      pauseInteractive(key(editor.document.uri), 'you switched tabs');
     }),
     // Opening a matching log follows it automatically, so the common case needs no command.
     vscode.workspace.onDidOpenTextDocument((doc) => {

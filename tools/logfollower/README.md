@@ -20,18 +20,20 @@ code-insiders --install-extension pac-log-follower.vsix --force   # or: code
 ## What it does
 
 - **Follows the tail.** As the file grows, the view scrolls to the end, so the tab always shows the
-  newest output instead of the run's first three lines.
-- **Yields to you, instantly.** Click in the tab, move the cursor, or scroll up, and following
-  pauses. Scroll back to the bottom and it resumes. Nothing fights you for the scroll position.
-- **Stays cheap.** There are no timers and no polling. Scrolls happen only on file-change events and
-  are coalesced, so the cost does not grow with how fast the file is written. Idle, it costs
-  nothing.
+  newest output instead of the run's first three lines. A `FileSystemWatcher` drives the refresh,
+  with a poll as the safety net, so an append scrolls straight away rather than up to one interval
+  late.
+- **Yields to you, instantly.** Clicking in the text, moving the cursor, selecting, wheeling,
+  dragging the scrollbar, or switching to another tab all pause the follow. Resume is *deliberate*
+  (the toggle command) - it never re-arms itself behind your back.
+- **Stays cheap.** Following costs one file stat per interval plus one reveal per actual growth
+  (plus watcher events). Paused, it costs nothing.
 
 ## Commands
 
 | Command | Effect |
 |---|---|
-| `Log Follower: Toggle auto-scroll for this file` | Start or stop following the active file |
+| `Log Follower: Toggle auto-scroll for this file` | Start following, or stop; also resumes after a pause |
 | `Log Follower: Start auto-scroll for this file` | Follow the active file |
 | `Log Follower: Stop auto-scroll for this file` | Stop following the active file |
 
