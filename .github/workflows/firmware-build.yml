@@ -9,11 +9,18 @@ on:
 
 jobs:
   build:
-    name: Build firmware
+    name: Build firmware (${{ matrix.device }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both devices are built. PIC16F18875 is the legacy part (very tight flash budget, so a
+        # 16F-only regression must fail CI); PIC18F47Q10 is the current target. Passing
+        # -DPICAMP_DEVICE selects the device facts and the DFP pack in cmake/.../device.cmake.
+        device: [PIC16F18875, PIC18F47Q10]
 
     steps:
       - name: Check out repository
@@ -21,14 +28,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Cache XC8 Toolchain & DFP
+      - name: Cache XC8 Toolchain & DFPs
         id: cache-xc8
         uses: actions/cache@v4
         with:
           path: /opt/microchip
-          key: xc8-v4.00-dfp-1.32.471
+          key: xc8-v4.00-dfp-16f1-1.32.471-q-1.30.487
 
-      - name: Install XC8 Toolchain & DFP
+      - name: Install XC8 Toolchain & DFPs
         if: steps.cache-xc8.outputs.cache-hit != 'true'
         run: |
           mkdir -p /tmp/xc8
@@ -37,9 +44,14 @@ jobs:
           chmod +x xc8-installer.run
           sudo ./xc8-installer.run --mode unattended --unattendedmodeui none --prefix /opt/microchip/xc8/v4.00
 
-          curl -sSL -A "Mozilla/5.0 (X11; Linux x86_64)" "https://packs.download.microchip.com/Microchip.PIC16F1xxxx_DFP.1.32.471.atpack" -o dfp.atpack
+          curl -sSL -A "Mozilla/5.0 (X11; Linux x86_64)" "https://packs.download.microchip.com/Microchip.PIC16F1xxxx_DFP.1.32.471.atpack" -o dfp16.atpack
           sudo mkdir -p /opt/microchip/packs/Microchip/PIC16F1xxxx_DFP/1.32.471
-          sudo unzip -q dfp.atpack -d /opt/microchip/packs/Microchip/PIC16F1xxxx_DFP/1.32.471
+          sudo unzip -q dfp16.atpack -d /opt/microchip/packs/Microchip/PIC16F1xxxx_DFP/1.32.471
+
+          curl -sSL -A "Mozilla/5.0 (X11; Linux x86_64)" "https://packs.download.microchip.com/Microchip.PIC18F-Q_DFP.1.30.487.atpack" -o dfpq.atpack
+          sudo mkdir -p /opt/microchip/packs/Microchip/PIC18F-Q_DFP/1.30.487
+          sudo unzip -q dfpq.atpack -d /opt/microchip/packs/Microchip/PIC18F-Q_DFP/1.30.487
+
           sudo chown -R $USER:$USER /opt/microchip
           rm -rf /tmp/xc8
 
@@ -50,6 +62,7 @@ jobs:
         run: |
           cmake -S cmake/My_Pic_Project/default -B _build/My_Pic_Project/release -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DPICAMP_DEVICE="${{ matrix.device }}" \
             -DCMAKE_TOOLCHAIN_FILE="${PWD}/cmake/My_Pic_Project/default/.generated/toolchain.cmake" \
             -DCMAKE_USER_MAKE_RULES_OVERRIDE="${PWD}/cmake/My_Pic_Project/default/.generated/overrides.cmake" \
             -DCMAKE_C_COMPILER="${XC8_DIR}/xc8-cc" \
@@ -67,12 +80,13 @@ jobs:
         run: |
           mkdir -p dist/hardware
           find _build out -type f \( -name "*.hex" -o -name "*.elf" -o -name "*.map" -o -name "*.xml" \) -exec cp {} dist/ \;
-          cp docs/hardware/PIC16F18875_pin_map.md dist/hardware/
+          cp docs/hardware/PIC16F18875_pin_map.md dist/hardware/ || true
+          cp docs/hardware/PIC18F47Q10_pin_map_and_setup.md dist/hardware/ || true
           ls -lhR dist/
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ github.sha }}
+          name: firmware-${{ matrix.device }}-${{ github.sha }}
           path: dist/**
 
