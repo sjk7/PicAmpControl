@@ -11,9 +11,17 @@
 /* Config words are named per family, so the three that differ are guarded. On the
    PIC16F18875 the reset oscillator is selected as RSTOSC = HFINT32, MCLR is simply ON, and
    the brown-out level is a bare number. On the PIC18F-Q10 RSTOSC must name the HFINTOSC rate,
-   MCLR is EXTMCLR/INTMCLR, and BORV uses VBOR_xxx names - see the DFP's 18f47q10.cfgmap. */
+   MCLR is EXTMCLR/INTMCLR, and BORV uses VBOR_xxx names - see the DFP's 18f47q10.cfgmap.
+   
+   THE Q10 CLOCK IS NOT A FREE CHOICE: the Q10 config map offers only two reset oscillator
+   settings, `HFINTOSC_64MHZ` and `HFINTOSC_1MHZ` (there is no HFINT32 there - that is a
+   16F-only name, and it is why this originally landed on 1 MHz). The rest of the firmware
+   assumes _XTAL_FREQ = 32 MHz, so 1 MHz would run the amplifier at 1/32 the design clock and
+   silently stretch the 1 ms tick, every band-settle delay and the trip response by 32x. Choose
+   64 MHz and keep the design clock honest at 32 MHz instead, by using Fosc/8 for Timer2.
+   64 MHz is the Q10's highest internal oscillator rate. */
 #if defined(__18F47Q10__)
-#pragma config RSTOSC = HFINTOSC_1MHZ
+#pragma config RSTOSC = HFINTOSC_64MHZ
 #else
 #pragma config RSTOSC = HFINT32
 #endif
@@ -387,8 +395,20 @@ void __interrupt() timer0_isr(void) {
 void timer0_init(void) {
     /* Timer2 (not Timer0) drives the ~1ms system tick: TMR0's Fosc/4 overflow model
        stalls under MDB after the first interrupt, and Timer2's simpler compare-based
-       architecture doesn't hit that issue on either real hardware or the simulator. */
-    T2CLKCON = 0x01; /* Fosc/4 */
+       architecture doesn't hit that issue on either real hardware or the simulator.
+
+       Both devices are clocked so that (clock / prescale / (PR2+1)) = 1 kHz, which means the
+       prescale differs because the internal oscillator rate differs:
+         PIC16F18875: 32 MHz core, Fosc/4 = 8 MHz, 1:64, PR2 = 124 -> 8e6/64/125   = 1.000 kHz
+         PIC18F47Q10: 64 MHz core, Fosc/8 = 8 MHz, 1:64, PR2 = 124 -> 8e6/64/125   = 1.000 kHz
+       The Q10 has no 32 MHz internal setting, so it takes the Fosc/8 clock divider to reach the
+       same 8 MHz Timer2 input and keep _XTAL_FREQ = 32 MHz meaningful for the rest of the
+       firmware. T2CLK is a code, not a divisor: 0x01 = Fosc/4, 0x02 = Fosc/8 (per the DFP). */
+#if defined(__18F47Q10__)
+    T2CLK = 0x02;         /* Fosc/8: 64 MHz core -> 8 MHz Timer2 input */
+#else
+    T2CLKCON = 0x01;      /* Fosc/4: 32 MHz core -> 8 MHz Timer2 input */
+#endif
     T2CONbits.CKPS = 6;   /* 1:64 prescale */
     T2CONbits.OUTPS = 0;  /* 1:1 postscale */
     PR2 = 124;            /* (124+1) * 64 / 8MHz = 1.000ms */

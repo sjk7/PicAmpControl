@@ -512,11 +512,30 @@ suppress it. For a job the launcher does not wrap, open the log yourself with th
 and if neither CLI exists, say so explicitly rather than continuing silently, because that silence
 is what made the missing log look like a non-event.
 
-**Delete the log before you launch the job, not after.** The sequence is: delete -> create fresh ->
-*start the job* -> open the file in a tab -> FileTail on. Opening a tab that a previous run already
-created, or reusing one mid-run, leaves the user looking at a stale buffer and was called out on
-2026-09-22. Note the launcher now *appends* (one file across both tests, never recreated per run), so
-once the tab exists use `Clear-Content` - deleting the file would drop the watcher.
+**Hard rule: the LAUNCHER clears the log for a new run - nobody clears it by hand.** A new run owns
+its log from line 1. `run_suite_with_watchdog.py` truncates the progress log (and removes any stale
+`.lock`) as its first act, before it writes `TEST_BEGIN`, so a watcher never sees the previous run's
+lines mixed with the current one's. This was got wrong twice on 2026-09-22 - the user said "you did not
+delete the file before starting! I still see all the last log's run as well as this one", and before
+that had to ask for a restart because a hand-cleared file was the only thing standing between them
+and a readable log. Rules that follow from it:
+
+- **Truncate, never delete.** The file has to keep its path so the editor tab watching it stays
+  valid; deleting it kills the watcher. `Clear-Content` / open-in-`"w"`-and-close, not `Remove-Item`.
+- **Do not clear logs by hand before a run.** If a log still shows old content after a launcher
+  started, that is a harness bug to fix, not a step to add to a checklist - a manual step is one the
+  next session will forget, and the user should never have to ask for it.
+- **One file per *run*, one `TEST_BEGIN`/`TEST_END` pair per *test*.** A ctest run of two tests still
+  tells you which test is running; it is runs, not tests, that start a fresh file.
+- For a job the launcher does not wrap, the same rule applies: clear it yourself as part of starting
+  the job, then open it. Never open a log you have not cleared.
+
+**Hard rule: never put run output in a terminal - file output only.** Standing user instruction,
+2026-09-22: "stop putting stuff in terminals, if you please. File output only." Command output is not
+evidence and is not for the user to read; it costs CPU to render, it scrolls away, and the user has
+twice had to point out that they cannot see it. So: redirect long commands to a file, read the file
+with `-Tail`/`Select-String`, and report one line plus the path. A verdict comes from the run's own log
+file plus its appended exit code - never from terminal text.
 
 **Open the log in the VS Code UI for any long-running job - on Windows too** (standing user
 instruction, 2026-09-22, generalised and then restated for tail mode the same day). The user wants to
@@ -630,6 +649,25 @@ Prerequisites that decide whether debugging works at all:
   | `T1CKIPPS = 0x19` is accepted | read back `25` |
   | PTT on RC0 with `ANSELCbits.ANSELC0 = 0`, pull-up on | `ANSELC = 254` (bit 0 cleared), `WPUC = 1` |
   | the NVM unlock + `WR` sequence completes | `g_nvm_done = 1`, `NVMDATL` read back `165` (0xA5) |
+  | 64 MHz core runs the tick at 1.000 ms | 106 ticks per 200,000 `Stepi` steps; `OSCCON1` reads `96` |
+
+  **THE Q10 CLOCK IS A DESIGN DECISION, NOT A CONFIG DETAIL (2026-09-22).** The Q10 config map
+  offers exactly two reset-oscillator settings - `HFINTOSC_64MHZ` and `HFINTOSC_1MHZ` - and no
+  `HFINT32`, which is a 16F-only name. The port had landed on `HFINTOSC_1MHZ`, i.e. running the
+  whole amplifier at 1/32 of the design clock, because the 32 MHz name it wanted does not exist
+  on this part. That silently stretches the 1 ms tick, every band-settle delay and the trip
+  response by 32x - a wrong clock is a *safety* defect here, not a performance one. The rule that
+  follows: **pick the highest available internal oscillator rate (64 MHz) and reach the design's
+  8 MHz Timer2 input with the clock divider instead of lowering the core.** The tick chain is
+  then 64 MHz -> `T2CLK = Fosc/8` (`T2CLK` is a code: `0x01` = Fosc/4, `0x02` = Fosc/8) -> 1:64 ->
+  `PR2 = 124` -> 1.000 kHz, identical to the 16F's 32 MHz -> Fosc/4 -> 1:64 -> 125.
+  The per-family difference is therefore in `T2CLK` (and the config word), guarded in `main.c`,
+  not in `PR2` or `CKPS`.
+  Independently verified on the simulator: `OSCCON1` reads `96` (0x60, the 64 MHz HFINTOSC rate),
+  and 200,000 `Stepi` steps advance the tick by 106 - a measured ~1,887 steps per simulated
+  millisecond against a 1.000 ms `PR2` tick. That is ~0.24x the 8,000 instructions/ms that
+  `tools/simulate/test_first_dit.py` assumes from the 16F era, so **that constant is wrong for
+  Q10 and every Q10 timing assertion is meaningless until it is recalibrated**.
   **`NVMCON1` on this device has NO `WREN` bit** - its members are `RD`, `SECRD`, `WR`, `SECWR`,
   `SECER`, straight from the DFP header. `Eeprom-changes.md` names `WREN`, `NVMCMD`,
   `NVMCON0bits.GO` and `INTCON0`; none of those exist here, so take the *procedure* from that file
