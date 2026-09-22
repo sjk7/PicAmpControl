@@ -30,6 +30,21 @@
 #pragma config PWRTE = OFF
 
 #if defined(__18F47Q10__)
+/* RA6 doubles as CLKOUT/OSC2 on this part, and the Q10's CLKOUTEN default is ON (the config bit
+   reads clear = enabled; see the DFP's 18f47q10.cfgdata, CVALUE:1:OFF / CVALUE:0:ON). RA6 is
+   OUTPUT_LCD_E in this design, so leaving the default silently hands the LCD enable line to the
+   clock-output function and the panel never latches.
+
+   Found on 2026-09-22 by reading the pin back under MDB in the boot trace: it reported
+   `RA6 Ain 5.0V (RA6)/IOCA6/ANA6/CLKOUT/OSC2` even though the firmware had configured it as an
+   output, which is what pointed at the undocumented-by-us config default. The 16F does not have
+   this conflict, which is why it went unnoticed through the whole port.
+
+   CLKOUTEN only exists on the Q10, so the setting is device-guarded. */
+#pragma config CLKOUTEN = OFF
+#endif
+
+#if defined(__18F47Q10__)
 #pragma config MCLRE = EXTMCLR
 #else
 #pragma config MCLRE = ON

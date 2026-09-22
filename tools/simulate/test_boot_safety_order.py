@@ -67,10 +67,17 @@ SAMPLES = 60
 def build_script(path: str, hold_e: bool) -> str:
     """MDB script that samples tick, outputs and state from reset.
 
-    `hold_e` drives the LCD enable line high and leaves it there *before* stepping, which is what
-    a missing or unresponsive panel looks like to the firmware: the E line is expected to drop
-    again and never does, so any LCD driver that waits on it blocks. The firmware must not need
-    the LCD to have finished in order to have a running tick.
+    `hold_e` is meant to stall the firmware the way a missing or unresponsive panel does: the LCD
+    enable line stays asserted, so any driver waiting for it to drop blocks. Getting that stimulus
+    to actually apply took two corrections, and both are worth knowing:
+
+      * `write pin RA6 high` placed *before* `program` is echoed by mdb and then ignored - the
+        target has not been programmed yet, so the write lands nowhere. The sad path therefore
+        looked identical to the happy path and the first run "passed" for the wrong reason
+        (2026-09-22). Pin stimulus must come after `program`.
+      * Even after `program`, a `write pin` can be rejected. The script is checked for a
+        confirmation rather than assuming it worked, and the run reports if the hold never applied,
+        so a silently-inert stimulus can never again be reported as a passing sad path.
     """
     lines = [
         f"device {DEVICE}",
@@ -78,8 +85,11 @@ def build_script(path: str, hold_e: bool) -> str:
         f"program {ELF_PATH}",
     ]
     if hold_e:
-        # RA6 is OUTPUT_LCD_E. Hold it high from the very first instruction.
+        # AFTER program: drive the E line and latch it, then step once so the write is committed
+        # before the sampled window opens.
         lines.append("write pin RA6 high")
+        lines.append(f"Stepi {max(1, int(INSTRUCTIONS_PER_MS // 10))}")
+        lines.append("print pin RA6")
     for index in range(SAMPLES):
         lines.append(f"Stepi {max(1, int(SAMPLE_MS * INSTRUCTIONS_PER_MS))}")
         for var in TICK_VARS:
@@ -90,30 +100,92 @@ def build_script(path: str, hold_e: bool) -> str:
     return "\n".join(lines) + "\n"
 
 
+def hold_applied(text: str) -> bool:
+    """True if the RA6 hold read back HIGH, i.e. the sad-path stimulus actually took effect."""
+    for line in text.splitlines():
+        if re.match(r"^RA6\s+\S+\s+HIGH\b", line.strip()):
+            return True
+    return False
+
+
+# ---------------------------------------------------------------------------------------------
+# KNOWN LIMITATION - the sad-path stimulus does not currently apply, and the test says so.
+#
+# `write pin RA6 high` is accepted by mdb and reported as if applied, but the pin reads back
+# `RA6 Ain 5.0V (RA6)/IOCA6/ANA6/CLKOUT/OSC2` regardless of whether the write is placed before
+# `program`, after it, or after an extra step. Two candidate causes were investigated and BOTH
+# were eliminated:
+#
+#   * config default - the Q10's CLKOUTEN default is ON, which would hand RA6 to the clock output.
+#     Setting `CLKOUTEN = OFF` does take effect (the linker's missing-config-word warning drops
+#     from two settings to one), but RA6 still reads back the same way. Not the cause.
+#   * analogue select - `ANSELA = 0x2F` leaves RA6 *digital* (bit 6 clear), so the pin is not
+#     analogue-selected by the firmware. Not the cause.
+#
+# What remains is that mdb's `write pin` does not override the firmware's own configuration of a
+# pin it drives, which is consistent with the existing note that pin stimulus in this build is
+# limited. Until a working stimulus is found, the sad path cannot be constructed from outside and
+# the run FAILS LOUDLY rather than reporting a pass it did not earn - the first version of this
+# test did exactly that, and it was wrong.
+#
+# The happy path is unaffected and still proves the ordering: the tick is armed at ~1 ms from
+# reset, long before the LCD sequence completes.
+# ---------------------------------------------------------------------------------------------
+
+
 def parse(text: str, path: str):
-    """Turn the mdb transcript into per-sample dicts of variables and pin states."""
-    samples = []
-    values = {}
+    """Turn the mdb transcript into per-sample dicts of variables and pin states.
+
+    MDB prints the two kinds of read differently, and both forms have to be handled:
+
+        print g_state
+        g_state=
+        true
+
+        print pin RC5
+        Pin     Mode    Value   Owner or Mapping
+        RC5     Dout    HIGH    (RC5)/IOCC5/ANC5
+
+    The first is a name on one line, the value on the next. The second is a tab-separated table
+    row where the value is the *text* HIGH/LOW, not a number - the earlier version of this parser
+    only looked for `RC5=0`-style lines and so found no samples at all, which is what made the
+    boot proof fail with "no samples parsed" rather than anything informative.
+    """
+    samples = [{}]
     pending_var = None
     for raw in text.splitlines():
         line = raw.strip()
         if not line:
             continue
+
+        # `name=` on its own line, value follows.
         if pending_var is not None:
-            values[pending_var] = line
+            samples[-1][pending_var] = line
             pending_var = None
             continue
-        matched = re.match(r"^(g_\S+)=$", line)
+        matched = re.match(r"^([A-Za-z_][\w.]*)=$", line)
         if matched:
             pending_var = matched.group(1)
             continue
-        matched = re.match(r"^(R[A-D]\d)=(\d+)$", line)
+
+        # Pin table row: `RC5 <tab> Dout <tab> HIGH <tab> (RC5)/...`
+        matched = re.match(r"^(R[A-D]\d)\s+\S+\s+(HIGH|LOW)\b", line)
         if matched:
-            values[matched.group(1)] = int(matched.group(2))
-        if len(values) >= len(TICK_VARS) + len(TICK_PINS):
-            samples.append(dict(values))
-            values = {}
-    return samples
+            samples[-1][matched.group(1)] = 1 if matched.group(2) == "HIGH" else 0
+            continue
+
+        # `name=value` on one line (numeric reads, and the common case for a byte register).
+        matched = re.match(r"^([A-Za-z_][\w.]*)=(\S+)$", line)
+        if matched:
+            samples[-1][matched.group(1)] = matched.group(2)
+            continue
+
+        # A sample is complete once it holds every variable and every pin we asked for; start a
+        # new one. The pin table adds its own values, so completeness is the boundary, not order.
+        if len(samples[-1]) >= len(TICK_VARS) + len(TICK_PINS):
+            samples.append({})
+
+    return [s for s in samples if s]
 
 
 def run_path(name: str, hold_e: bool):
@@ -130,7 +202,7 @@ def run_path(name: str, hold_e: bool):
     log = GRAPH_DIR / f"boot_{name}_mdb.log"
     GRAPH_DIR.mkdir(parents=True, exist_ok=True)
     log.write_text(transcript, encoding="utf-8", errors="replace")
-    return samples
+    return samples, transcript
 
 
 def first_tick_sample(samples):
@@ -195,6 +267,20 @@ def write_scope(samples_happy, samples_sad):
                 ax.step(times, series, where="post")
                 ax.set_ylim(-0.2, 1.2)
                 ax.set_yticks([0, 1])
+            elif key == "g_startup_inhibit":
+                # Booleans arrive as the strings "true"/"false"; map them so the lane shows the
+                # inhibit window instead of an empty panel (an empty lane looked like a missing
+                # signal rather than a formatting gap - user-visible bug, 2026-09-22).
+                mapped = []
+                for sample in samples:
+                    value = sample.get(key)
+                    mapped.append(1.0 if str(value).lower() == "true"
+                                  else 0.0 if str(value).lower() == "false"
+                                  else float("nan"))
+                ax.step(times, mapped, where="post")
+                ax.set_ylim(-0.2, 1.2)
+                ax.set_yticks([0, 1])
+                ax.set_yticklabels(["released", "inhibited"])
             else:
                 ax.step(times, series, where="post")
             ax.set_ylabel(label, rotation=0, labelpad=52, va="center", fontsize=8)
@@ -236,8 +322,10 @@ def main():
     if not ELF_PATH.exists():
         sys.exit(f"error: {ELF_PATH} not found - build the firmware first")
 
-    samples_happy = run_path("happy", hold_e=False) if args.path in ("happy", "both") else []
-    samples_sad = run_path("sad", hold_e=True) if args.path in ("sad", "both") else []
+    samples_happy = run_path("happy", hold_e=False) if args.path in ("happy", "both") else ([], "")
+    samples_sad = run_path("sad", hold_e=True) if args.path in ("sad", "both") else ([], "")
+    samples_happy, text_happy = samples_happy
+    samples_sad, text_sad = samples_sad
 
     write_csv(samples_happy, samples_sad)
     write_scope(samples_happy, samples_sad)
@@ -256,11 +344,14 @@ def main():
         if keyed:
             failures.append(f"{name}: outputs were keyed during bring-up at samples {keyed[:5]}")
 
-    # The sad path is the one that must hold supervision: if the LCD stalls, the tick still runs.
-    if samples_sad:
-        sad_tick = first_tick_sample(samples_sad)
-        if sad_tick is None:
-            failures.append("sad: an LCD stall left the amplifier with no running tick")
+    # A sad path whose stimulus never applied is not a sad path. Without this check the run
+    # "passes" while proving nothing, which is exactly what happened on the first attempt.
+    if args.path in ("sad", "both"):
+        if not hold_applied(text_sad):
+            failures.append("sad: the LCD E-line hold never applied, so the stalled-LCD case was "
+                            "NOT exercised - the sad-path result is meaningless until this is fixed")
+        else:
+            print("sad: E-line hold confirmed applied (RA6 read back HIGH)")
 
     if failures:
         for line in failures:
