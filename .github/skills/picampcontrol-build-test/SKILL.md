@@ -5,6 +5,12 @@ description: "Use when building, testing or debugging PicAmpControl firmware on 
 
 # PicAmpControl Build, Test and Debug
 
+**Hard writing rule: never write "Hmm". Not in a reply, not in a reasoning trace, not as a preamble
+or a hedge.** The user reads the reasoning as well as the final answer, and this was repeated three
+times on 2026-09-22 *after* the rule already existed in `Ai-Notes.txt` - the third time the user
+quoted the word straight back. A bullet buried in a long list did not stop it, so it lives here too.
+State the finding, or the uncertainty, plainly, and move on.
+
 Use this skill for firmware builds, simulator verification and simulator debugging. Do not claim success from a missing or truncated terminal response; require a fresh exit code and final output.
 
 Always use the **file-based pattern**: redirect every test command's output to a log file, append the exit code, and read the verdict from that file. MDB emits megabytes of trace, and the terminal scrollback and output capture regularly lose the pass/fail line (a command can even come back with no captured output while the run is still going). Never conclude anything from an empty terminal response - check the log and the exit-code line.

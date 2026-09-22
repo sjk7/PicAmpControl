@@ -472,10 +472,17 @@ def run_mdb(mdb_path: Path, script: str, timeout: float = 1500) -> str:
                     if byte_counts[stream_name] - logged_counts[stream_name] >= 65536:
                         logged_counts[stream_name] = byte_counts[stream_name]
                         with debug_lock:
+                            # Raw text, deliberately NOT a repr. `{chunk!r}` turns every
+                            # newline into a literal "\n" and every tab into "\t", and MDB's
+                            # pin dumps are tab-separated tables, so escaping them renders the
+                            # log unreadable for the human watching the run (user feedback,
+                            # 2026-09-22). Emit the bytes verbatim, inside markers.
                             debug_file.write(
                                 f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] "
-                                f"MDB_OUTPUT stream={stream_name} bytes={byte_counts[stream_name]} "
-                                f"tail={chunk[-240:]!r}\n"
+                                f"MDB_OUTPUT stream={stream_name} bytes={byte_counts[stream_name]}\n"
+                                f"{chunk}\n"
+                                f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] MDB_OUTPUT_END "
+                                f"stream={stream_name}\n"
                             )
 
             debug_file.write(

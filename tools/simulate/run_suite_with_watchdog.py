@@ -107,6 +107,49 @@ def main():
         log.write(f"[{stamp()}] CHILD pid={proc.pid}\n")
         stop_heartbeat = threading.Event()
 
+        mdb_read_pos = {"offset": 0}
+        # MDB writes in 4096-byte chunks that need not end on a line boundary, so a partial
+        # trailing line is carried over rather than printed half-finished.
+        pending_mdb = {"text": ""}
+
+        def mdb_since_last(limit_bytes: int = 1200) -> str:
+            """The MDB output that arrived since the previous heartbeat, as raw text.
+
+            Byte counts alone say whether the run is moving, not what it is doing, and the
+            MDB text otherwise sits in a separate log. Putting it here makes the one log the
+            user watches readable while the run is in progress (sticky user instruction,
+            2026-09-22).
+
+            Emitted verbatim, NOT as a repr: `{!r}` renders every newline as a literal "\\n"
+            and every tab as "\\t", and MDB's pin dumps are tab-separated tables, so escaping
+            them turns a readable dump into a wall of backslashes (user feedback, 2026-09-22).
+            """
+            try:
+                size = mdb_log.stat().st_size if mdb_log.exists() else 0
+            except OSError:
+                return ""
+            offset = mdb_read_pos["offset"]
+            if size < offset:      # the log was recreated under us
+                offset = 0
+                pending_mdb["text"] = ""
+            if size <= offset:
+                return ""
+            try:
+                with mdb_log.open("rb") as handle:
+                    handle.seek(offset)
+                    chunk = handle.read(min(size - offset, limit_bytes))
+            except OSError:
+                return ""
+            mdb_read_pos["offset"] = offset + len(chunk)
+            text = pending_mdb["text"] + chunk.decode("utf-8", errors="replace")
+            # Print whole lines only, so the live view never ends mid-line.
+            cut = text.rfind("\n")
+            if cut == -1:
+                pending_mdb["text"] = text
+                return ""
+            pending_mdb["text"] = text[cut + 1:]
+            return text[: cut + 1]
+
         def heartbeat():
             # `time.monotonic()` is uptime, not elapsed time, so it has to be taken
             # relative to the spawn. Printing it raw made a stalled run look like a
@@ -120,6 +163,9 @@ def main():
                     f"timeout={args.timeout:.0f} child_poll={proc.poll()} mdb_bytes={mdb_size} "
                     f"delta={mdb_size - previous_mdb_size}\n"
                 )
+                new_text = mdb_since_last()
+                if new_text:
+                    log.write(f"[{stamp()}] MDB_BEGIN\n{new_text}\n[{stamp()}] MDB_END\n")
                 previous_mdb_size = mdb_size
 
         heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
