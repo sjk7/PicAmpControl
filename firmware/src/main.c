@@ -892,6 +892,22 @@ void handle_ptt_transition(bool ptt_asserted) {
                been keyed), so use the band decoded from the previous transmission and engage
                immediately. The remembered band is verified against the first measurement of
                this transmission by update_tx_sequence(). */
+            /* Decisive guard: if the counter already holds a stable live measurement that
+               disagrees with the remembered band, the live RF wins. Restoring the stale band
+               would move the relay to the wrong position, then the verify step would fold it
+               back - a transient where current_band and the relay disagree (I4) and, worse,
+               a hot-switch if the fold-back happens after keying. Prefer the live band and let
+               the snoop path decode it cleanly. */
+            rf_band_t live = freq_counter_measured_band();
+            if (live != BAND_OUT_OF_SPEC && live != g_band_cache_band) {
+                freq_counter_unlock_band();
+                g_snoop_active = true;
+                g_band_verify_active = false;
+                g_band_verify_mismatch_ms = 0;
+                g_band_cache_valid = false;
+                g_state = STATE_BYPASS_SNOOP;
+                return;
+            }
             if (freq_counter_restore_locked_band(g_band_cache_band)) {
                 /* The remembered band differs from the one the LPF relays are sitting on, so
                    they have just been commanded to move. The T/R relay must not close onto a
@@ -1332,11 +1348,22 @@ void update_tx_sequence(void) {
         freq_counter_get_status(&status);
         if (measured == BAND_OUT_OF_SPEC) {
             g_band_verify_mismatch_ms = 0;   /* nothing usable to compare against yet */
+            /* No usable measurement yet: the radio has not started transmitting. Hold bypass
+               rather than engaging on an unverified remembered band. */
+            apply_bypass();
+            g_sequence_stage = 0;
+            return;
         } else if (measured == status.locked_band) {
             g_band_verify_active = false;    /* the remembered band is confirmed */
             g_band_verify_mismatch_ms = 0;
         } else if (g_band_verify_mismatch_ms < BAND_VERIFY_MS) {
+            /* A mismatch is being counted toward fold-back. Hold bypass so the amplifier is not
+               keyed onto the remembered band while the measured band is settling, and so the
+               relay can fold back cold once the mismatch window elapses. */
+            apply_bypass();
+            g_sequence_stage = 0;
             g_band_verify_mismatch_ms++;
+            return;
         } else {
             apply_bypass();
             freq_counter_unlock_band();

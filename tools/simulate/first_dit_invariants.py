@@ -83,7 +83,11 @@ def describe(sample, extra=()):
               ("idle_ms", "g_band_cache_idle_ms"),
               ("cur_band", "g_fc_status.current_band"),
               ("locked", "g_fc_status.band_locked"),
-              ("freq_khz", "g_fc_status.frequency_khz"))
+              ("freq_khz", "g_fc_status.frequency_khz"),
+              ("settle", "g_band_settle_active"),
+              ("settle_ms", "g_band_settle_elapsed_ms"),
+              ("verify", "g_band_verify_active"),
+              ("verify_ms", "g_band_verify_mismatch_ms"))
     detail = " ".join(f"{label}={state.get(name, '?')}" for label, name in fields)
     for label, name in extra:
         detail += f" {label}={state.get(name, '?')}"

@@ -60,7 +60,9 @@ STATE_VARS = [
     "g_ptt_active", "g_sequence_stage", "g_state", "g_trip_shutdown_active",
     "g_ptt_complete_display_active", "g_transient_menu_display",
     "g_fc_status.current_band", "g_fc_status.band_locked", "g_fc_status.frequency_khz",
-    "g_snoop_active", "g_band_established"
+    "g_snoop_active", "g_band_established",
+    "g_band_settle_active", "g_band_settle_elapsed_ms",
+    "g_band_verify_active", "g_band_verify_mismatch_ms",
 ]
 # STATE_BYPASS_SNOOP in firmware/src/main.c (appended last so existing numbering is stable).
 STATE_BYPASS_SNOOP = 6
