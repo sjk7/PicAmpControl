@@ -1,3 +1,9 @@
+# DEVICE SELECTION (hand-edited by tools/setup/parameterise_device.py, 2026-09-22).
+# The device tokens below are CMake variables from device.cmake, so this one tree builds either
+# the PIC16F18875 or the PIC18F47Q10 image. See device.cmake for why a generated file is edited
+# here, and for the flash/RAM asymmetry between the two parts.
+include("${CMAKE_CURRENT_LIST_DIR}/../device.cmake")
+
 # The following functions contains all the flags passed to the different build stages.
 
 # $ENV{HOME} is not set on Windows; fall back to $ENV{USERPROFILE} there.
@@ -12,9 +18,9 @@ function(My_Pic_Project_default_default_XC8_assemble_rule target)
     set(options
         "-c"
         "${MP_EXTRA_AS_PRE}"
-        "-mcpu=16F18875"
+        "-mcpu=${PICAMP_MCPU}"
         "${DEBUGGER_NAME}"
-        "-mdfp=${PACK_REPO_PATH}/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8"
+        "-mdfp=${PICAMP_DFP_PATH}"
         "-fno-short-double"
         "-fno-short-float"
         "-O0"
@@ -36,7 +42,7 @@ function(My_Pic_Project_default_default_XC8_assemble_rule target)
     list(REMOVE_ITEM options "")
     target_compile_options(${target} PRIVATE "${options}")
     target_compile_definitions(${target}
-        PRIVATE "__16F18875__"
+        PRIVATE "${PICAMP_DEFINE}"
         PRIVATE "__DEBUG=1"
         PRIVATE "XPRJ_default=default")
 endfunction()
@@ -44,10 +50,10 @@ function(My_Pic_Project_default_default_XC8_assemblePreprocess_rule target)
     set(options
         "-c"
         "${MP_EXTRA_AS_PRE}"
-        "-mcpu=16F18875"
+        "-mcpu=${PICAMP_MCPU}"
         "-x"
         "assembler-with-cpp"
-        "-mdfp=${PACK_REPO_PATH}/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8"
+        "-mdfp=${PICAMP_DFP_PATH}"
         "-fno-short-double"
         "-fno-short-float"
         "-O0"
@@ -69,7 +75,7 @@ function(My_Pic_Project_default_default_XC8_assemblePreprocess_rule target)
     list(REMOVE_ITEM options "")
     target_compile_options(${target} PRIVATE "${options}")
     target_compile_definitions(${target}
-        PRIVATE "__16F18875__"
+        PRIVATE "${PICAMP_DEFINE}"
         PRIVATE "__DEBUG=1"
         PRIVATE "XPRJ_default=default")
 endfunction()
@@ -77,9 +83,9 @@ function(My_Pic_Project_default_default_XC8_compile_rule target)
     set(options
         "-c"
         "${MP_EXTRA_CC_PRE}"
-        "-mcpu=16F18875"
+        "-mcpu=${PICAMP_MCPU}"
         "${DEBUGGER_NAME}"
-        "-mdfp=${PACK_REPO_PATH}/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8"
+        "-mdfp=${PICAMP_DFP_PATH}"
         "-fno-short-double"
         "-fno-short-float"
         "-O0"
@@ -101,7 +107,7 @@ function(My_Pic_Project_default_default_XC8_compile_rule target)
     list(REMOVE_ITEM options "")
     target_compile_options(${target} PRIVATE "${options}")
     target_compile_definitions(${target}
-        PRIVATE "__16F18875__"
+        PRIVATE "${PICAMP_DEFINE}"
         PRIVATE "__DEBUG=1"
         PRIVATE "XPRJ_default=default")
 endfunction()
@@ -109,10 +115,10 @@ function(My_Pic_Project_default_link_rule target)
     set(options
         "-Wl,-Map=mem.map"
         "${MP_EXTRA_LD_PRE}"
-        "-mcpu=16F18875"
+        "-mcpu=${PICAMP_MCPU}"
         "${DEBUGGER_NAME}"
         "-Wl,--defsym=__MPLAB_BUILD=1"
-        "-mdfp=${PACK_REPO_PATH}/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8"
+        "-mdfp=${PICAMP_DFP_PATH}"
         "-fno-short-double"
         "-fno-short-float"
         "-O0"
