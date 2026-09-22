@@ -55,16 +55,28 @@ CI/release workflows change - don't let it go stale.
   words: "Always write to the skill for silly mistakes like this. Always. Not just in this session."
   Silly mistakes are precisely the ones that recur, and a lesson left only in this file or only in
   the conversation that produced it does not reach the next session.
-- DEVICE UPGRADE EVALUATED AND REJECTED (2026-09-22). PIC16F18877-I/P (same family, 40-pin PDIP,
-  4x flash = 32768 words, 4x RAM = 4096 bytes, ~£1.95 DigiKey UK / ~£2 Mouser, both in stock)
-  builds fine with a one-line `-mcpu` change and gives a very comfortable 24.8% flash, BUT MPLAB's
-  simulator does not model it equivalently: the firmware never sees PTT asserted (0 keyed runs, no
-  STATE_BYPASS_SNOOP), so tools/simulate/test_first_dit.py fails at clause (a). Since every suite in
-  this project runs on the simulator, swapping would trade verified behaviour for headroom - the
-  wrong trade for a safety controller. Reverted; the tree is byte-identical to the last commit. Do
-  not retry this as a trivial change, and do not assume pin/peripheral equivalence from a clean
-  build: evidence and reproduction are in the skill's Known snags. The PIC16F18875-I/P remains the
-  target, and flash pressure is instead addressed by the software levers listed under Remaining work.
+- DEVICE UPGRADE PIC16F18877 EVALUATED, *PROVISIONALLY* REJECTED - THE VERDICT IS NOT SOUND
+  (2026-09-22; requalified later the same day, see the Q10 entry below). PIC16F18877-I/P (same
+  family, 40-pin PDIP, 4x flash = 32768 words, 4x RAM = 4096 bytes, ~£1.95 DigiKey UK / ~£2 Mouser,
+  both in stock) builds fine with a one-line `-mcpu` change and gives a very comfortable 24.8%
+  flash. What was actually OBSERVED on the simulator: the firmware never sees PTT asserted (0 keyed
+  runs, no STATE_BYPASS_SNOOP), so tools/simulate/test_first_dit.py aborts at clause (a); band-change
+  timing was unchanged (1161/1705 ms against 1162/1699 ms). Reverted; the tree was byte-identical to
+  the last commit.
+  **Why the verdict is not sound:** it was reached from a single configuration, with no positive
+  control - the exact method that then produced TWO wrong verdicts for the PIC18F47Q10 in the same
+  session (an assumed `T2CLKCON` value, then a missing `IPEN`/priority enable), both of which blamed
+  the simulator for firmware configuration that had never been written. The symptoms above are real,
+  but "MPLAB does not model it equivalently" is not established by them: a wrong register value, a
+  pin-table difference in the model, or a different interrupt-enable form would all look identical
+  from outside. The unchanged band-change timing also implies the timer tick *was* running, which
+  sits badly with a blanket non-equivalence claim.
+  **Before any further 18877 work:** derive its register/peripheral values from the DFP rather than
+  assuming 18875 equivalence, and use the discipline the Q10 re-test settled on - minimal bring-up,
+  one variant per suspect setting, and a positive control behind every negative finding. Do not
+  retry it as a one-line `-mcpu` change, and do not assume pin/peripheral equivalence from a clean
+  build. The PIC16F18875-I/P remains the shipping target, and flash pressure is instead addressed by
+  the software levers listed under Remaining work.
 - DO NOT START A DEVICE UPGRADE WITHOUT ASKING FIRST, AND DO IT ON A NEW BRANCH (user instruction,
   2026-09-22). Evaluating PIC18F47Q10 (or any other part) as a replacement is explicitly gated: do
   not change `-mcpu`, the DFP, `.clangd`, the pin map, or any firmware source for a new device until

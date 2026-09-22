@@ -487,10 +487,22 @@ Prerequisites that decide whether debugging works at all:
   difference, and `ANSELC = 0x00` / `TRISC0 = 1` / `WPUC0 = 1` are already set in `main.c`, which
   rules out a pin-config omission. The pattern says the firmware never sees PTT asserted on the
   18877 model. Reverted.
-  **The lesson: a clean build says nothing about the simulator.** Every suite in this project runs on
-  `mdb`, so a device whose model is not verification-equivalent trades verified behaviour for
-  headroom - never worth it here. Check the simulator first, and treat an unexplained behaviour change
-  on the new device as a blocker, not a puzzle to work around.
+  **REQUALIFIED 2026-09-22, later the same day: treat this rejection as provisional, not settled.**
+  It was reached from a single configuration with no positive control - the method that then produced
+  TWO wrong verdicts for the PIC18F47Q10 (an assumed `T2CLKCON` value, then a missing `IPEN`/priority
+  enable), each of which blamed the model for firmware configuration nobody had written. The 18877
+  *symptoms* above are real and recorded, but "MPLAB does not model it equivalently" is not
+  established by them, because a wrong register value, a pin-table difference in the model, and a
+  different interrupt-enable form all look identical from outside. Note too that the unchanged
+  band-change timing implies the timer tick *was* running, which sits badly with a blanket
+  non-equivalence claim. Before any further 18877 work, derive its register values from the DFP
+  instead of assuming 18875 equivalence, and apply the discipline the Q10 re-test settled on:
+  minimal bring-up, one variant per suspect setting, and a positive control behind every negative
+  finding.
+  **The lesson that survives the requalification: a clean build says nothing about the simulator.**
+  Every suite in this project runs on `mdb`, so before trusting a device swap, check the simulator.
+  Treat an unexplained behaviour change on a new device as something to investigate properly - not
+  as a puzzle to work around, and not as a verdict to record after one attempt.
 - **Delete large logs as soon as their verdict is read.** MDB transcripts and captured suite output
   run to megabytes. Remove them (`rm -f /tmp/<log>`) the moment the verdict has been extracted, and
   do not leave them on disk even in `/tmp`. Keep a log only while its run's verdict is still needed;
