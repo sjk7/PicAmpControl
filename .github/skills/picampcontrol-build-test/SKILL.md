@@ -75,6 +75,22 @@ the DFP packs (`$HOME/.mchp_packs` on macOS). Use `$HOME`/`%USERPROFILE%` rather
 home directory: the committed docs and config must not carry a developer's account name, and the
 paths differ per machine.
 
+**Check MPLAB X's own pack directory before concluding a DFP is not installed.**
+`%USERPROFILE%\.mchp_packs` is only the *user* pack repository. MPLAB X also ships a full pack set
+inside its own install, e.g. `C:\Program Files\Microchip\MPLABX\v6.35\packs\Microchip\` (~130
+DFPs, including `PIC18F-Q_DFP` 1.30.487, which contains `xc8/pic/include/proc/pic18f47q10.h`). One
+of those paths works directly as `-mdfp=<pack>/<version>/xc8` with no download. A device can
+therefore be fully buildable while the user pack repository shows only three packs - check both
+roots before spending a cycle fetching anything. (2026-09-22: the PIC18F47Q10 was assumed
+unbuildable for exactly this reason.)
+
+A device's config-word names and values are authoritative in the DFP, not in memory:
+`<pack>/<version>/xc8/pic/dat/cfgmap/<device>.cfgmap` lists every `#pragma config` setting and its
+legal values, and `<pack>/<version>/xc8/pic/include/proc/<device>.h` lists every SFR and bitfield
+member. Read both before writing device setup code - PIC18F-Q10, for example, wants
+`MCLRE = EXTMCLR` where the PIC16F wants `MCLRE = ON`, and its Timer2 interrupt enable lives in
+`PIE4bits.TMR2IE` with `T2PR` in place of `PR2`.
+
 Verify the compiler exists before blaming a build; both halves of the checks below are copy-paste
 ready.
 
@@ -551,6 +567,33 @@ first runs on Windows. Assume any new POSIX-flavoured helper needs the same scru
   that launches `mdb` and dumps matching command lines found the whole Windows process picture in
   one run, where reading code would have only produced guesses. Delete the probe when you are done;
   the build tree is not a scratch directory.
+
+### Invoking XC8 / MPLAB tools directly from the Windows shell
+
+Some work (a device spike, a one-off probe) needs a compiler or `mdb` call that is *not* the CMake
+build. Two shell habits produced silent no-op runs on Windows - exit code 0, no error message, no
+artefact - and both were avoidable:
+
+- **Never wrap an executable in `cmd /c ""C:\Program Files\...\xc8-cc.exe" args 2>&1"`.** The
+  nested double quotes collapse and `cmd` reports
+  `'C:\Program' is not recognized as an internal or external command, operable program or batch file.`
+  Use PowerShell's `&` call operator and quote **each** argument separately, so a path with spaces
+  stays one token: `& 'C:\Program Files\Microchip\xc8\v4.00\bin\xc8-cc.exe' '-mcpu=18F47Q10'
+  "-mdfp=C:\Program Files\Microchip\MPLABX\v6.35\packs\Microchip\PIC18F-Q_DFP\1.30.487\xc8" ...`.
+- **Do not build the call out of a multi-line snippet that assigns a variable and then interpolates
+  it into `&`** (`$p='C:\Program Files\...'; & '...xc8-cc.exe' "-mdfp=$p" ...`). One such command
+  reached the shell mangled, compiled nothing, and still reported `XCC_EXIT=0`; its redirected log
+  contained only that exit-code line. Prefer a single-line command with literal absolute paths over
+  a multi-line one, and treat a mangled terminal echo as "the command did not run", not as noise.
+- **For a build, verify the artefact rather than the exit code.** Redirecting to a log and appending
+  `$LASTEXITCODE` is the right verdict pattern for a *test* run, but for a compile it proves nothing
+  on its own: check the `.elf`/`.hex`/`.map` exist (`Get-ChildItem _build/...`). XC8 also prints its
+  memory summary on stdout, so an empty log next to exit 0 always means "the compiler never ran".
+- **A device spike's compiler flags can be passed directly** - no CMake needed. For the PIC18F47Q10
+  bring-up the whole command was `xc8-cc -mcpu=18F47Q10 -mdfp=<Q_DFP>/xc8 -O1 -gdwarf-3 -std=c99
+  -o <elf> -Wl,-Map=<map> <source>.c`, which linked 202 bytes of program space and warned only
+  `(1311) missing configuration setting for config word 0x300005; using default` (benign - one
+  config word was left at its DFP default).
 
 ## Failure triage
 

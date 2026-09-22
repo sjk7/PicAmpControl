@@ -41,6 +41,12 @@ CI/release workflows change - don't let it go stale.
 - NEVER WRITE "Hmmm" - INCLUDING IN YOUR INTERNAL REASONING (user instruction, 2026-09-22, restated the same day because it was still happening). The user can see the thinking as well as the reply, so this covers reasoning traces, preambles to tool calls, and final answers alike. Do not use it as filler, as a thinking-out-loud opener, or as a hedge. State the finding, or the uncertainty, plainly. It was missed once already by reading "anywhere in a reply" as excluding the thinking - the first fix was too narrow, so do not repeat that misreading.
 - docs/hardware/PIC16F18875_pin_map.md is the SINGLE source of truth for MCU pin assignments. Never restate pin numbers or pin tables in README, architecture, schematic-package, or checklist docs - link to it instead. Keep it in sync with firmware/include/pin_map.h. The same rule applies to nets (project_schematic_package/connection_table.csv) and the BOM (component_list.csv).
 - Any new "remember this" instruction from the user must be added to this section, not just kept in assistant memory.
+- ALWAYS WRITE SILLY MISTAKES INTO THE SKILL, EVERY TIME - NOT JUST IN THE SESSION THEY HAPPENED
+  (user instruction, 2026-09-22). Whenever a mistake costs a cycle, feed the lesson back into
+  `.github/skills/picampcontrol-build-test/SKILL.md` as part of that same piece of work. The user's
+  words: "Always write to the skill for silly mistakes like this. Always. Not just in this session."
+  Silly mistakes are precisely the ones that recur, and a lesson left only in this file or only in
+  the conversation that produced it does not reach the next session.
 - DEVICE UPGRADE EVALUATED AND REJECTED (2026-09-22). PIC16F18877-I/P (same family, 40-pin PDIP,
   4x flash = 32768 words, 4x RAM = 4096 bytes, ~£1.95 DigiKey UK / ~£2 Mouser, both in stock)
   builds fine with a one-line `-mcpu` change and gives a very comfortable 24.8% flash, BUT MPLAB's
