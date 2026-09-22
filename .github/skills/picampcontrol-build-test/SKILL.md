@@ -438,6 +438,20 @@ Prerequisites that decide whether debugging works at all:
   4. **A negative simulator finding needs a positive control.** "No timer counts" is only evidence
      if the same firmware counts with a different code - otherwise it measures your configuration.
   This is `deepseek-pic.md`'s "never guess configuration" rule applied to SFRs, not just config words.
+- **A family can need a different *enabling mechanism*, not just a different value - and the model
+  will look broken until you use it (2026-09-22, same session as the bullet above).** With
+  `IPEN = 0` - the PIC16F-style plain path - the PIC18F47Q10 model dispatches **no** interrupts at
+  all: two independent sources (Timer2 overflow, and an RC0 interrupt-on-change driven from mdb)
+  raised and cleared their request flags under polling, with `GIE = 1` (`INTCON=135`), `PIE4 = 2`
+  and `PIE0 = 16`, while `g_isr_any` stayed `0`. That was written up as a simulator limitation. It
+  was wrong: with `IPEN = 1` plus the source's priority bit (`IPR4bits.TMR2IP = 1`) the ISR runs
+  immediately - `g_isr_any` and `g_tick` both `56 -> 172`, and a polled counter falls to `6 -> 18`
+  because the ISR now consumes the flags first. Before declaring that a device model cannot do X,
+  enumerate the ways X can be *enabled* on that family and try each: it is a one-line change and one
+  mdb run per variant, and two such "the simulator can't do it" verdicts in one day both turned out
+  to be unwritten firmware configuration. Related trap from the same run: `OSCCON3.ORDY` reads `0`
+  on this part *while its timer demonstrably runs*, so a wrong-looking status flag is not evidence
+  about the thing it names.
 - **`write <SFR> <value>` is not universally supported by this mdb build.** `write T1CON 0x01` and
   `write TMR1L 0xAB` work, but `write T2CLKCON 0x00` fails with `For input string: "fbe "` and
   **aborts the rest of the script** (`MDB_EXIT=-1`). Inject peripheral registers through a rebuilt

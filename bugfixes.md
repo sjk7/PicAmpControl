@@ -4,37 +4,52 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
-## 2026-09-22 — PIC18F47Q10 spike: a wrongly assumed register code produced a wrong rejection
+## 2026-09-22 — PIC18F47Q10 spike: two wrong verdicts in a day, both from untested assumptions
 
-**CORRECTION, same day.** The verdict originally recorded under this heading - "MPLAB's simulator
-runs no time base on the Q10" - is **WRONG and retracted**. It was caused by my own error, and it is
-the most expensive kind: an assumed value, not a measured one. The minimal bring-up wrote
-`T2CLKCON = 0x00` annotated "Fosc/4 (the reset default)", while `firmware/src/main.c`'s own
-`timer0_init()` has carried `T2CLKCON = 0x01; /* Fosc/4 */` for this project's Timer2 all along.
-Rebuilt with `0x01`, `T2TMR` moves immediately (`106` then `92`): with `0x00` the timer had simply
-been clocked from nothing.
+The Q10 spike produced two retractions on the same day. Both were my error, both were avoidable, and
+the sequence is the reason this entry is long.
 
-Corrected findings, from three controlled builds on branch `spike/pic18f47q10-retest`:
+**Wrong verdict 1: "the simulator runs no time base on the Q10".** The minimal bring-up wrote
+`T2CLKCON = 0x00`, annotated "Fosc/4 (the reset default)" - an assumed value - while
+`firmware/src/main.c`'s own `timer0_init()` has carried `T2CLKCON = 0x01; /* Fosc/4 */` all along.
+Rebuilt with `0x01`, `T2TMR` counts immediately (`106` then `92`): the earlier build had simply been
+clocked from nothing.
+
+**Wrong verdict 2: "the simulator does not dispatch interrupts".** Two independent sources (Timer2
+overflow, and an RC0 interrupt-on-change driven from mdb) raised and cleared their flags under
+polling with `GIE=1`, `PIE4=2`, `PIE0=16`, while `g_isr_any` stayed `0`. That looked conclusive. It
+was not: those builds left `IPEN = 0`, the PIC16F-style plain path. With `IPEN = 1` and
+`IPR4bits.TMR2IP = 1`, the ISR runs immediately - `g_isr_any` and `g_tick` both `56 -> 172` over
+800,000 instructions, while the polled counter falls to `6 -> 18` because the ISR now consumes the
+flags first (`INTCON=231`, `IPR4=63`, `g_ipen=1`, `g_gie=1`).
+
+**What the PIC18F47Q10 actually does**, measured on branch `spike/pic18f47q10-retest`:
 
 | Question | Result |
 |---|---|
-| Does PTT reach the firmware? | yes - `g_ptt_active` tracks a driven RC0 |
-| Do outputs toggle? | yes - `RC5` tracks PTT |
-| Does the time base run? | **yes** - with `T2CLKCON=0x01`, `T2TMR` counts and a main-loop poll of `TMR2IF` counts ticks: `g_poll_ticks` `30 -> 161 -> 292` over three 800,000-instruction steps |
-| Measured tick period | ~6,100 instructions/tick, against the 8,000 the harness assumes for 1 ms at 32 MHz - a port would need that recalibrated |
-| Is the interrupt delivered to the ISR? | **no** - `g_isr_any` stayed `0` with `INTCON=135` (GIE=1), `PIE4=2` (TMR2IE), `PIR4=2` (TMR2IF) |
-| Is that specific to the timer? | no - an RC0 interrupt-on-change (`IOCCP=1`, `PIE0=16`, edges driven from mdb) raised and cleared its flag under polling (`g_ioc_poll` `0 -> 1 -> 2`) while `g_isr_any` and `g_ioc_irq` stayed `0` |
+| PTT reaches the firmware | yes - `g_ptt_active` tracks a driven RC0 |
+| Outputs toggle | yes - `RC5` tracks PTT |
+| Time base runs | yes - `T2TMR` counts with `T2CLKCON=0x01`; polled tick `g_poll_ticks` `30 -> 161 -> 292` |
+| Interrupt reaches the ISR | yes - **with `IPEN=1` and the source's `IPRx` priority bit set**; with `IPEN=0` it never does |
+| Tick calibration | ~6,100-6,900 instructions/tick, against the 8,000 the harness assumes for 1 ms at 32 MHz |
 
-So the device and the model both do the basics. What is actually missing is **interrupt dispatch**:
-two independent sources request service with the global enable set, and the ISR is never entered.
-`OSCCON3.ORDY` additionally reads `0` throughout *while the timer and the IOC demonstrably run*, so
-that flag was a red herring and must not be cited as evidence about the clock.
+The `IPEN` difference is a real family difference, not a model defect: the Q10 has a priority
+interrupt controller, and with `IPEN = 0` the model does not dispatch. A port must set `IPEN = 1`,
+assign a priority per source via `IPRx`, and enable the matching global (`GIE`/`GIEH`, plus
+`PEIE`/`GIEL` for low priority) instead of the 16F's plain `GIE = 1`.
 
-The narrow consequence: the scheduler in this firmware is ISR-driven (`timer0_isr`), so its timed
-behaviour still cannot be exercised as written on this model - but the reason is a missing
-*vectoring* path, not a missing clock, and a test-only polling variant is a plausible route to
-coverage. That is a decision for the owner, not a silent workaround, because polling would bend the
-firmware's architecture to suit a simulator rather than the hardware.
+`OSCCON3.ORDY` reads `0` throughout, even while the timer and the interrupt-on-change demonstrably
+run, so it must not be cited as evidence about the clock.
+
+**The lesson.** Each verdict was reached after *one* configuration, and each was wrong in the same
+direction: the model was blamed for a value or an enable the firmware had not set correctly. Before
+concluding "the simulator cannot do X", exhaust the configuration space for X - here two clock-select
+values and two interrupt-enabling mechanisms - and A/B the suspect constant. The experiment that
+settles it takes minutes; both wrong verdicts cost far more than that.
+
+**Recommendation:** the Q10 is a viable candidate, not a rejected one. No `main` firmware has been
+touched, the PIC16F18875 remains the shipping target, and any port is the owner's call. The first two
+items of any port are the interrupt-enable form and the tick calibration.
 
 The original entry follows, unaltered, so the mistake stays on the record.
 

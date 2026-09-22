@@ -85,21 +85,21 @@ CI/release workflows change - don't let it go stale.
   (`C:\Program Files\Microchip\MPLABX\v6.35\packs\Microchip\`), which is a different root from the
   user pack repository `%USERPROFILE%\.mchp_packs` that was checked. A Q10 build needs no download;
   the toolchain was never the blocker. See the skill for the pack-search rule.
-- DEVICE UPGRADE PIC18F47Q10 - RE-TESTED AFTER A WRONG FIRST VERDICT (2026-09-22). The gated spike
-  was run with the user's go-ahead and first reported as rejected; **that rejection was my error and
-  is retracted**. The minimal bring-up wrote `T2CLKCON = 0x00` and *assumed* it meant Fosc/4, while
-  `firmware/src/main.c` already used `T2CLKCON = 0x01; /* Fosc/4 */`. With `0x01` the timer counts
-  (`T2TMR` `106` then `92`) and a polled tick advances (`g_poll_ticks` `30 -> 161 -> 292` over three
-  800,000-instruction steps). PTT, outputs, Timer2, interrupt-on-change and the interrupt flags all
-  work. What is genuinely missing on this simulator is **interrupt dispatch**: two independent
-  sources (TMR2 overflow and an RC0 interrupt-on-change) raise and clear their flags with `GIE=1`,
-  `PIE4=2` and `PIE0=16`, yet the ISR is never entered (`g_isr_any` stays `0`). `OSCCON3.ORDY` also
-  reads `0` while the timer demonstrably runs, so it is a red herring and must not be cited about
-  the clock. Consequences: the ISR-driven scheduler still cannot be exercised as written, and the
-  measured tick is ~6,100 instructions against the harness's 8,000 for 1 ms, so a port would need
-  that recalibrated. A test-only polling variant is a plausible route to coverage - the owner's
-  decision, because it would bend firmware architecture to suit a simulator rather than the
-  hardware. Details and the corrected entry: `bugfixes.md` 2026-09-22.
+- PIC18F47Q10 PROVED VIABLE AFTER TWO WRONG VERDICTS IN ONE DAY (2026-09-22). Both retractions are
+  mine; the sequence is the lesson. (1) The bring-up wrote `T2CLKCON = 0x00` and *assumed* it meant
+  Fosc/4 - `firmware/src/main.c` already used `T2CLKCON = 0x01; /* Fosc/4 */`. With `0x01` the timer
+  counts (`T2TMR` `106` then `92`). (2) Interrupts appeared dead - two independent sources raised
+  and cleared their flags under polling with `GIE=1`, but `g_isr_any` stayed `0`. That was also
+  wrong: those builds left `IPEN = 0`. With `IPEN = 1` plus the source's priority bit
+  (`IPR4bits.TMR2IP = 1`) the ISR runs at once - `g_isr_any` and `g_tick` both `56 -> 172`, and the
+  polled counter drops to `6 -> 18` because the ISR consumes the flags first. Measured on the Q10:
+  PTT reaches the firmware, outputs toggle, Timer2 counts, interrupt-on-change works, interrupts are
+  dispatched. The two real differences from the PIC16F are that the Q10 needs the *priority*
+  interrupt form (`IPEN = 1` + `IPRx`, not a plain `GIE = 1`) and that the tick calibrates at
+  ~6,100-6,900 instructions against the harness's 8,000 for 1 ms. `OSCCON3.ORDY` reads `0` while the
+  timer demonstrably runs - never cite it about the clock. **No `main` firmware has been touched,
+  nothing has been ported, and the PIC16F18875 remains the shipping target; a port is the owner's
+  call.** Evidence: `bugfixes.md` 2026-09-22; branch `spike/pic18f47q10-retest` holds the images.
 - The firmware is the single source of truth for which PIC we are using: `-mcpu=16F18875` in `cmake/My_Pic_Project/default/.generated/rule.cmake` (mirrored in `.clangd`), i.e. PIC16F18875-I/P, 40-pin PDIP. If a document disagrees with the firmware about the target device, the firmware wins and the document is the bug.
 - Do NOT reintroduce schematic automation. Both attempts were abandoned outright and every trace of them has been removed. Gone for good: the EasyEDA generator/SVG-validation pipeline (`easyeda_pro_generator.py`, `svg_renderer.py`, `visual_validator.py`, `watch_and_render.py`, `pic_amp_control_full.yaml`, `out/picampcontrol_easyeda_*.json`, and the `easyeda-agent` / `easyeda-copilot` routes), the KiCad MCP `schematic-design` skill with its `generated/` `.kicad_sch` tree and `mcp-server-kicad`, all node/npm scaffolding (`package.json`, `node_modules`, `@jlceda`), the workflow documents that described them, and every KiCad symbol/toolchain reference in the docs. The user's instruction: EasyEDA "was a disaster and can be removed entirely", then "same for kicad stuff. Another disaster... it can all go". Do not add generators, MCP schematic servers, `.kicad_sch`/`.eext` tooling or node/npm back, and do not re-add tool-specific symbol references to the pin map. The schematic package at docs/hardware/project_schematic_package/ is deliberately static design inputs (block diagram, connection table, component list, wiring checklist), captured by hand end to end. Netlist-verification tooling (exporting the EDA netlist and diffing it against `connection_table.csv`) was offered as a lighter-weight alternative and has been declined as well, so this means no schematic automation of any kind - not drawing generation, not verification.
 - `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their configured active levels (active-low by default); keep it transient, then restore the user's saved home page.
@@ -146,11 +146,14 @@ CI/release workflows change - don't let it go stale.
   * The supply rail is stated explicitly as 5 V (the map had mislabelled it 3.3 V).
   * SCL/stimulus claims corrected: MDB SCL is NOT usable here, so the frequency counter remains
     verified only by injecting TMR1H/TMR1L.
-  * The PIC18F47Q10 spike was RUN on `spike/pic18f47q10` with the user's go-ahead; the first verdict
-    (rejected, "no time base") was WRONG and is retracted. The cause was an assumed register code
-    (`T2CLKCON = 0x00` instead of the `0x01` `firmware/src/main.c` already used). A re-test on
-    `spike/pic18f47q10-retest` shows the timer, the polled tick, PTT, outputs and the IOC all work;
-    what is missing is interrupt *dispatch*. Correction and evidence: `bugfixes.md` 2026-09-22.
+  * The PIC18F47Q10 spike was RUN on `spike/pic18f47q10` with the user's go-ahead. It produced TWO
+    wrong verdicts, both retracted the same day: first "no time base" (an assumed `T2CLKCON = 0x00`
+    where `firmware/src/main.c` uses `0x01`), then "no interrupt dispatch" (the builds left
+    `IPEN = 0`; with `IPEN = 1` plus `IPR4bits.TMR2IP = 1` the ISR runs immediately). The device does
+    the basics: PTT, outputs, Timer2, interrupt-on-change and interrupt dispatch all work. Remaining
+    real differences for a port: the priority interrupt form, and a tick that calibrates at
+    ~6,100-6,900 instructions rather than the harness's 8,000. Branch `spike/pic18f47q10-retest`
+    holds the images; `bugfixes.md` 2026-09-22 holds the evidence.
   * The skill gained the Windows shell traps that silently no-op a build (nested `cmd /c` quoting, a
     mangled multi-line call that returned exit 0 and compiled nothing) and the rule to look for DFPs
     inside the MPLAB X install before concluding a device is unbuildable.
@@ -310,23 +313,21 @@ re-derive it.
    routing, the 1:4 prescaler and the overflow path are untested - the first burst is injected by
    writing `TMR1H`/`TMR1L`. That gap closes on the bench only.
 
-### DEVICE UPGRADE SPIKE (RE-OPENED 2026-09-22) - PIC18F47Q10 does the basics; interrupt dispatch is the open question
+### DEVICE UPGRADE SPIKE (RE-OPENED 2026-09-22) - PIC18F47Q10 does the basics; port not started
 
-The gated spike was run, first reported as rejected, and then **re-tested because that rejection was
-wrong** (an assumed `T2CLKCON` value, see the standing instruction above). Current state:
+The gated spike was run, reported wrongly twice, and re-tested until the measurements held up. State:
 
-- **Working on the Q10 model:** PTT reaches the firmware, outputs toggle, Timer2 counts, an RC0
-  interrupt-on-change works, and both interrupt flags set and clear correctly under polling. The
-  ~1 ms tick exists and is measurable by polling.
-- **Not working:** interrupts are never dispatched to the ISR - two independent sources, both
-  enabled, both requesting, with `GIE=1`, and `g_isr_any` never leaves `0`.
-- **Not yet decided:** whether to get simulator coverage for the timed behaviour via a test-only
-  polling variant, or to leave the Q10 on the shelf. Either way it is the owner's call, and the
-  device-specific hazards the brief listed (PPS `T1CKIPPS` codes, the 5-bit-DAC comparator feeding
-  the overcurrent path, ADCC/ADC2, per-family config-word layout, a pin map re-derived from the Q10
-  datasheet) have still not been reached, because no port has begun.
-- Branch `spike/pic18f47q10-retest` holds the three diagnostic images. Nothing has touched `main`
-  firmware, and the PIC16F18875 remains the shipping target.
+- **Working on the Q10 model:** PTT reaches the firmware, outputs toggle, Timer2 counts
+  (`T2TMR` with `T2CLKCON = 0x01`), an RC0 interrupt-on-change works, and interrupts are dispatched
+  once `IPEN = 1` with a per-source priority bit (`IPR4bits.TMR2IP`).
+- **The two differences a port must handle:** (1) the priority interrupt form instead of the 16F's
+  plain `GIE = 1`; (2) a measured tick of ~6,100-6,900 instructions against the harness's 8,000 for
+  1 ms, so timing assumptions need recalibrating rather than copying.
+- **Not yet reached:** ADC/ADCC, the comparators in the overcurrent safety path (MPLAB warns
+  `W9602-COMP` for the DAC-to-comparator input), EEPROM/NVM, PPS and its device-specific codes, and
+  the pin map re-derived from the Q10 datasheet. A port touches all of those.
+- **Nothing has touched `main` firmware** and the PIC16F18875 remains the shipping target. Whether
+  to port is the owner's decision; the diagnostic images are on `spike/pic18f47q10-retest`.
 
 ### General
 
