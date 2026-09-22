@@ -56,3 +56,31 @@ once, at the START of a run (`run_suite_with_watchdog.py` opens `"w"` before the
 NEVER truncate in a failure/error path. `TEST_END` / `PROBE_END` is appended at suite exit after
 whatever the run wrote, so a finished log reads begin -> heartbeats -> scenario output -> failure
 detail -> end marker. A failure must leave the full tail, not a one-line `code=1`.
+
+**Finding (2026-09-22): FREQ_CTR I5 hot-switch root cause and fix.** The remembered-band rekey
+engaged on the stale remembered band, then the band-verify mismatch folded the relay back to the
+measured band *after* the amplifier was keyed, moving the band relay under a keyed amp (I5/I1
+"HOT SWITCH"). Two firmware fixes in `main.c`:
+1. `update_tx_sequence()` band-verify block: the `BAND_OUT_OF_SPEC` and mismatch-accumulating
+   branches must `apply_bypass(); g_sequence_stage = 0; return;` - the original fell through to the
+   PTT keying block and keyed on the unverified remembered band.
+2. `handle_ptt_transition()` remembered-band branch: guard - if `freq_counter_measured_band()` is a
+   real band that differs from the remembered band, the live RF wins (go to snoop), never restore the
+   stale band. Without this the restore moves the relay to the wrong band and the fold-back creates
+   an I4 transient (`current_band` disagrees with the relay output) and a keyed relay move.
+
+**Open item (2026-09-22): "80m TX lock failed while injecting 1800 kHz".** After the two fixes the
+80m band holds its lock correctly (`current_band=2`, `locked=true`, `stage=3` throughout the
+injection window), but `validate_freq_ctr` asserts an EXACT `frequency_khz == "1800"` sample and the
+Timer1 register-injection aliases with the firmware's 10 ms TMR1 reset, so the sampled value lands on
+1740/1756/0 instead of exactly 1800. This is a harness sampling artifact, not a lock loss. Fix by
+asserting the injected band is REJECTED (current_band stays the band under test) rather than requiring
+an exact `frequency_khz` string match; or sample the injection window more finely.
+
+**Harness note: sample settle/verify state when debugging band timing.** `STATE_VARS` in
+`trace_ptt_sequence.py` now carries `g_band_settle_active`, `g_band_settle_elapsed_ms`,
+`g_band_verify_active`, `g_band_verify_mismatch_ms`, and `first_dit_invariants.describe()` prints
+them as `settle`/`settle_ms`/`verify`/`verify_ms`. Without these the settle/verify interaction is
+invisible and only the symptom (the hot-switch sample) is seen. `tools/simulate/repro_i5_15m_10m.py`
+is the minimal single-band repro (set `BAND_TESTS` to isolate a band); it runs
+`validate_band_changes_are_cold` + `validate_freq_ctr` so the isolated verdict matches the suite.
