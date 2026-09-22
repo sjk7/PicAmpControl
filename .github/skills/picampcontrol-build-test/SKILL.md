@@ -55,6 +55,23 @@ found it is the only one that still has the context.
 a fix, a test, a doc, a skill update - rather than accumulating a large diff, so that a finding
 cannot be lost by a later rebuild or revert.
 
+**Commit/push discipline - do NOT chain `git commit | Select-Object; git push`** (mistake repeated
+2026-09-22, cost many cycles). Piping the commit output through `Select-Object -Last N` hides
+`fatal:` errors (a bad pathspec from `git add`, "nothing to commit"), yet the `;` still runs
+`git push`, which then pushes the PREVIOUS commit - so the new change appears pushed when it was
+never committed. Three rules:
+1. `git add <explicit paths>` FIRST, then check `git --no-pager status --short` shows exactly the
+   intended set staged (a `fatal: pathspec ... did not match` in the add output means the file
+   does not exist - stop and look).
+2. `git commit` alone, and READ its output: the `N files changed` count must match what you staged.
+   A commit saying "2 files changed" when you staged 4 means the other 2 were already committed -
+   understand that before pushing, do not shrug it off.
+3. Only then `git push`, and only after the commit is confirmed. Never `git push` in the same
+   pipeline as the commit.
+Also: when a change is reverted or its policy is flip-flopped (e.g. the log truncate-vs-append
+debate), do NOT commit each direction in a hurry - settle the spec with the user first, or the
+history fills with contradictory commits that each needed a follow-up.
+
 **Hard rule: follow logs in a VS Code tab, and treat FileTail as conditional.** Long jobs - suites,
 builds, spike runs - write their output to a log file, and the user watches that file in a VS Code
 **tab**. **Opening that tab is part of doing the job, not a courtesy done afterwards.** The user had
