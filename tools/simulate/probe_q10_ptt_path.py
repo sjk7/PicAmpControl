@@ -36,7 +36,17 @@ DEVICE = harness.DEVICE
 OUT_DIR = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"
 
 VARS = ["g_state", "g_startup_inhibit", "g_ptt_active", "g_snoop_active",
-        "g_band_established", "g_fault_latched"]
+        "g_band_established", "g_fault_latched", "g_trip_reason"]
+
+# Physical ADC pins (MDB reads them as voltages) and the firmware's computed globals, which are the
+# numbers the trip thresholds are compared against each main-loop pass.
+ADC_PINS = ["RA0", "RA1", "RA2", "RA3", "RA5", "RB1", "RB2", "RB3"]
+LIVE_VARS = ["g_live_temperature_c", "g_live_current_a", "g_live_overdrive_mw"]
+# Trip thresholds straight from the settings struct. Reading them proves whether a trip is
+# "threshold loaded as 0/garbage" (the NVM suspicion) versus "genuine reading over a sane limit".
+THRESHOLD_VARS = ["g_thresholds.temp_trip_c", "g_thresholds.current_trip_a",
+                  "g_thresholds.drain_trip_v", "g_thresholds.overdrive_trip_tenths_w",
+                  "g_thresholds.swr1_trip_tenths", "g_thresholds.swr2_trip_tenths"]
 
 # The startup inhibit must expire before PTT can do anything. It is a 1000 ms settle delay counted
 # in main-loop passes, and it is counted in SIMULATED time - which on the Q10 is much faster in
@@ -57,52 +67,85 @@ def script() -> str:
         f"device {DEVICE}",
         "hwtool sim",
         f"program {ELF_PATH}",
-        f"Stepi {BOOT_STEPS}",
     ]
+    # Drive every analogue input to a safe, in-range value before boot, exactly as the suite does.
+    # Without this the ADC pins float and read near full-scale, which trips TEMP and CURRENT by
+    # itself - a probe artefact, not a firmware finding. (The first probe run omitted this and
+    # reported temp=150C / current=8905A from floating pins.)
+    lines += [
+        "write pin RA0 0v", "write pin RA1 0v", "write pin RA2 0v", "write pin RA3 0v",
+        "write pin RA5 2.5v", "write pin RB1 0v", "write pin RB2 0v", "write pin RB3 0v",
+        "write pin RB4 0v", "write pin RC2 5v", "write pin RB0 5v", "write pin RB6 5v",
+    ]
+    lines.append(f"Stepi {BOOT_STEPS}")
     lines.append("print PORTC")
     lines.append("print ANSELC")
     for var in VARS:
         lines.append(f"print {var}")
-    # Assert PTT and step; re-read after each step so a latch appearing late is still caught.
+    # Thresholds do not change after load_settings(); read them once.
+    for var in THRESHOLD_VARS:
+        lines.append(f"print {var}")
+    # Assert PTT and step; re-read after each step so a latch/trip appearing late is caught.
     lines.append("write pin RC0 low")
     for _ in range(4):
         lines.append(f"Stepi {200_000}")
         lines.append("print PORTC")
         for var in VARS:
             lines.append(f"print {var}")
+        for pin in ADC_PINS:
+            lines.append(f"print pin {pin}")
+        for var in LIVE_VARS:
+            lines.append(f"print {var}")
     lines.append("quit")
     return "\n".join(lines) + "\n"
 
 
 def collect(text: str):
-    """Return a list of {var: value} blocks in transcript order, plus ordered PORTC reads."""
+    """Return a list of {var: value} snapshots, one per step, in transcript order.
+
+    MDB prints `print <var>` as `<var>=` on one line and the value on the next, `print PORTC`
+    as `PORTC=<decimal>` inline, and `print pin X` as `X  <level|volts>`."""
     blocks = []
     current = {}
     pending = None
+    pin_re = re.compile(r"^(R[A-Z]\d+)\s+\S+\s+(?:(HIGH|LOW)|([\d.]+)V)$")
     for raw in text.splitlines():
         line = raw.strip()
         if pending is not None:
             current[pending] = line
             pending = None
             continue
-        matched = re.match(r"^([A-Za-z_][\w.]*)=$", line)
-        if matched:
-            pending = matched.group(1)
+        m = re.match(r"^([A-Za-z_][\w.]*)=$", line)
+        if m:
+            pending = m.group(1)
             continue
-        matched = re.match(r"^PORTC=(\d+)$", line)
-        if matched:
-            current["PORTC"] = matched.group(1)
+        m = re.match(r"^PORTC=(\d+)$", line)
+        if m:
+            if current and "PORTC" in current:
+                blocks.append(current)
+                current = {}
+            current["PORTC"] = m.group(1)
             continue
-        matched = re.match(r"^ANSELC=(\d+)$", line)
-        if matched:
-            current["ANSELC"] = matched.group(1)
+        m = re.match(r"^ANSELC=(\d+)$", line)
+        if m:
+            current["ANSELC"] = m.group(1)
             continue
-        if len(current) >= len(VARS) + 1:
-            blocks.append(current)
-            current = {}
+        m = pin_re.match(line)
+        if m:
+            current["pin_" + m.group(1)] = m.group(2) if m.group(2) else m.group(3) + "V"
+            continue
     if current:
         blocks.append(current)
     return blocks
+
+
+def decode_trip_reason(value: str) -> str:
+    try:
+        bits = int(value)
+    except ValueError:
+        return value
+    names = [name for bit, name in harness.TRIP_REASON_BITS if bits & bit]
+    return ("|".join(names) if names else "none") + f" ({bits})"
 
 
 def main() -> int:
@@ -126,6 +169,17 @@ def main() -> int:
         for key in ["PORTC", "ANSELC"] + VARS:
             if key in block:
                 report.append(f"    {key:22s} = {block[key]}")
+        for key in THRESHOLD_VARS:
+            if key in block:
+                report.append(f"    {key:22s} = {block[key]}")
+        for pin in ADC_PINS:
+            if "pin_" + pin in block:
+                report.append(f"    pin {pin:20s} = {block['pin_' + pin]}")
+        for key in LIVE_VARS:
+            if key in block:
+                report.append(f"    {key:22s} = {block[key]}")
+        if "g_trip_reason" in block:
+            report.append(f"    trip reason: {decode_trip_reason(block['g_trip_reason'])}")
 
     failures = []
     if not blocks:
@@ -138,13 +192,23 @@ def main() -> int:
         ptt_latched = any(b.get("g_ptt_active") == "true" for b in blocks[1:])
         snooped = any(b.get("g_snoop_active") == "true" or b.get("g_state") == "6"
                       for b in blocks[1:])
+        tripped = any(b.get("g_fault_latched") == "true" or b.get("g_state") == "3"
+                      for b in blocks[1:])
         report.append("")
         report.append(f"PTT latched at any step: {ptt_latched}")
         report.append(f"bypass-snoop entered:   {snooped}")
+        report.append(f"fault latched / TRIP:   {tripped}")
         if not ptt_latched:
             failures.append("stage 3: PTT never latched. The pin reads correctly under stimulus "
                             "(positive control passes), so the fault is in the firmware's sampling "
                             "of INPUT_PTT or its configuration on this device.")
+        elif tripped:
+            reason = next((b.get("g_trip_reason") for b in blocks[1:]
+                           if b.get("g_fault_latched") == "true"), "0")
+            failures.append(f"stage 5: PTT latched, snoop entered, then the amplifier TRIPPED - "
+                            f"g_trip_reason = {decode_trip_reason(reason)}. Read the ADC pin and "
+                            f"live-value lines in the block above to see which reading crossed "
+                            f"which threshold.")
         elif not snooped:
             failures.append("stage 4: PTT latched but bypass-snoop never entered. The fault is "
                             "downstream of the pin: look at the band/startup gating, not at PTT.")

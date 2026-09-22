@@ -1,0 +1,19 @@
+device PIC18F47Q10
+hwtool sim
+program E:/hamcode/PicAmpControl/docs/hardware/q10-bringup/temp_probe.elf
+write pin RA5 2.5v
+Stepi 200000
+print g_raw
+print g_res_h
+print g_res_l
+print g_con0
+print g_con2
+print g_pch
+print g_done
+print ADRES
+print ADRESH
+print ADRESL
+print ADCON0
+print ADCON2
+print ADPCH
+quit

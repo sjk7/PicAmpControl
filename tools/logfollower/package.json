@@ -1,0 +1,39 @@
+{
+  "name": "log-follower",
+  "displayName": "Log Follower",
+  "description": "Keeps a growing log file scrolled to its tail in the editor, and yields the moment you take control of the tab.",
+  "version": "0.3.0",
+  "license": "MIT",
+  "publisher": "log-follower",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "keywords": ["log", "tail", "follow", "autoscroll", "scroll to end", "growing file", "build output"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "capabilities": { "untrustedWorkspaces": { "supported": true } },
+  "contributes": {
+    "commands": [
+      { "command": "logFollower.toggle", "title": "Log Follower: Toggle auto-scroll for this file" },
+      { "command": "logFollower.start", "title": "Log Follower: Start auto-scroll for this file" },
+      { "command": "logFollower.stop", "title": "Log Follower: Stop auto-scroll for this file" }
+    ],
+    "configuration": {
+      "title": "Log Follower",
+      "properties": {
+        "logFollower.autoFollowGlobs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["*.log", "*progress.log", "*.out"],
+          "description": "File-name patterns (simple * wildcards) followed automatically when opened. Matching is on the file name only, so no machine-specific path is needed."
+        },
+        "logFollower.coalesceMs": {
+          "type": "number",
+          "default": 250,
+          "minimum": 100,
+          "maximum": 5000,
+          "description": "How often the followed file is checked for growth, in milliseconds. Each check is a file stat and only a growing file causes a scroll, so this is the whole CPU cost of following. Raise it to reduce cost further."
+        }
+      }
+    }
+  }
+}

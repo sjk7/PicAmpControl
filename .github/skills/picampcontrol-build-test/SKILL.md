@@ -5,6 +5,12 @@ description: "Use when building, testing or debugging PicAmpControl firmware on 
 
 # PicAmpControl Build, Test and Debug
 
+**Hard rule: be maximally token-efficient at ALL times.** The user has flagged thinking/reasoning
+output as wasteful more than once (2026-09-22). Keep every reply, every reasoning trace and every
+tool-call preamble to the absolute minimum; no filler, no step-by-step narration, no restating what
+was just done. Batch tool calls; filter command output; put detail in files, not the chat. This is a
+standing, permanent constraint, not a one-off.
+
 **Hard writing rule: never write "Hmm". Not in a reply, not in a reasoning trace, not as a preamble
 or a hedge.** The user reads the reasoning as well as the final answer, and this was repeated three
 times on 2026-09-22 *after* the rule already existed in `Ai-Notes.txt` - the third time the user
@@ -102,10 +108,77 @@ verdict, exits 1 on failure, writes `%TEMP%\pac_defender_exclusions.log` always 
 window so it does not sit open. On failure it dumps the whole report and waits for Enter instead -
 that window is the one thing the user must be able to read.
 
-**Hard rule: at session start, run `python tools/simulate/cleanup_sim_processes.py`.** It kills
-leftovers using the launcher's own pattern list, then checks Defender.
+## Watching a log: the three parts, and the two that were missing
 
-The exclusion *list* is not readable without elevation - verified 2026-09-22: `Get-MpPreference`,
+Watching a long job needs **three** things, and doing two of them still leaves the user with a tab
+that looks dead (this cost a whole session on 2026-09-22 - the log was written, opened, and still
+"not working"):
+
+1. **Write the log.** Redirect the job's output to a file. Done from the start.
+2. **Fold the repeats.** MDB repeats warnings thousands of times: a 20 s temperature probe emitted
+   `W0223-ADC: ADC input voltage low.  ADC output underflow.` **8,638 times**, i.e. 99% of the log
+   was one line. The job still takes the same wall clock, but the user has to scroll past 8,000
+   identical lines to reach the result, and the renderer pays for every one. `run_logged.py` now
+   collapses a consecutive run of identical lines to `max_repeats` copies plus one
+   `... (N more repeats of the line above)` marker. Measured: **8,707 lines -> 87**, with the
+   key `g_*` reads and the exit code intact.
+3. **Make the tab follow the tail.** Writing and folding a log the user has to scroll by hand is
+   still a broken workflow. The follow is done by the **Log Follower extension**, whose source of
+   truth is **`tools/logfollower/`** (command `Log Follower: Toggle auto-scroll for this file`).
+   **It must live under `tools/`, not `_build/`.** It was originally only at
+   `_build/logfollower/`, which `.gitignore` excludes - so every fix to it was uncommittable and
+   lost, and the same following bugs came back session after session. `_build/logfollower/` is now
+   only a build/staging copy. **Its automatic mode is driven by `logFollower.autoFollowGlobs`**,
+   which matches on the file *name* only, so no path is needed. When it does not follow, check
+   these in order - all were real on 2026-09-22 and the symptom of each is identical ("the tab
+   never moves"):
+
+   - **`main` in `package.json` must point at the polling file.** Two sources exist:
+     `extension.js` (polls the file size) and `extension.eventdriven.js` (reacts only to
+     `onDidChangeTextDocument`). **The event-driven one does not work for a log written by an
+     external process** - VS Code does not reliably deliver appends to an unfocused document, so
+     the extension never hears about them. `main` must be `./extension.js`.
+   - **The extension must not hard-code the log names.** An earlier revision only auto-followed
+     `/picampcontrol_(suite|mdb)_progress\.log$/` and ignored the setting entirely, so setting
+     `autoFollowGlobs` did nothing and every other log silently never followed.
+   - **`workbench.action.files.revert` is the WRONG primitive and froze the tab part-way down the
+     file.** It acts on the **active** editor, not on the log's. With focus in the terminal - the
+     normal case while a job runs - it reverted some other tab and left the log's stale in-memory
+     buffer alone, so the poll kept firing while the visible text never changed. Measured: the tab
+     sat on **line 15 of a 501-line file**. Use the per-document `TextDocument.revert()` instead;
+     it does not care about focus.
+   - Guard the visibility listener with the same self-move grace window as the selection listener,
+     or the extension's own `revealRange()` is read back as "the user scrolled away" and the follow
+     pauses itself.
+
+   Current version: **0.3.0**, poll interval `logFollower.coalesceMs = 250` ms. **After changing
+   the extension, repackage and reinstall, then restart VS Code:**
+
+```powershell
+cd tools/logfollower
+npx --yes @vscode/vsce package --no-dependencies --allow-missing-repository -o pac-log-follower.vsix
+code-insiders --install-extension pac-log-follower.vsix --force   # or: code
+# restart the editor - a running extension host keeps the old version loaded
+```
+
+   **A `url.parse()` DeprecationWarning printed during packaging comes from `vsce`'s own
+   dependencies, not from this extension** - it is harmless and nothing here can fix it.
+
+**Use `run_logged.py` for every long job - never hand-roll the spawn/heartbeat/fold logic.**
+`tools/simulate/run_with_log.py` (any command) and `tools/simulate/run_mdb_probe.py` (one MDB
+script) are thin CLIs over `run_logged.run_logged()`. Folding was added to one runner and missed in
+the other, which is what produced "your folding thing clearly didn't work either"; one shared
+implementation is the fix, and new runners must call it rather than copy it.
+
+```powershell
+# Build (any command), with folding + follow + heartbeat
+python tools/simulate/run_with_log.py --log "$env:TEMP\pac_build.log" -- cmake --build _build/My_Pic_Project/q10_release -j4
+# A single MDB probe
+python tools/simulate/run_mdb_probe.py docs/hardware/q10-bringup/temp_verify.mdb
+```
+
+**Hard rule: at session start, run `python tools/simulate/cleanup_sim_processes.py`.** It kills
+leftovers using the launcher's own pattern list, then checks Defender.The exclusion *list* is not readable without elevation - verified 2026-09-22: `Get-MpPreference`,
 the `MSFT_MpPreference` CIM class, the `...\Windows Defender\Exclusions\Paths` registry key and even
 `MpCmdRun.exe -CheckExclusion` all deny access unelevated. `Get-MpComputerStatus` *does* work, so the
 check uses the only question that matters, all unelevated:
@@ -144,6 +217,21 @@ Always clean up an earlier run before starting another. The MDB suite can outliv
 - Harness fault injection reads symbol addresses from `out/My_Pic_Project/default.sym` (regenerated every build).
 - Design reference for the first-dit model, the invariants, and the defects each test is proven to catch: `docs/first-dit-band-detection.md`.
 - Evidence log for defects found while testing: `bugfixes.md` (read it before "fixing" a suspicious harness assertion).
+- **Q10 temperature-fault docs already exist — do not re-derive or search for them.** The
+  AI-generated resolution analysis is `pic18f47q10_fault_resolution.md` (repo root); the
+  hand-written pin-map + setup + fault reference is
+  `docs/hardware/PIC18F47Q10_pin_map_and_setup.md`; the minimal temperature-only probe is
+  `docs/hardware/q10-bringup/temp_probe.c` (built ELF + `temp_probe.mdb` script sit beside it).
+  Both docs and the probe reach the same root cause: **the Q10 ADCC is 12-bit, `temperature_c()`
+  assumes 10-bit, so 2.5 V reads 2048 and `2048 >> 2 = 512 > 250` trips the 150°C sentinel even
+  after the `ADFM=1` justification fix.** MEASURED 2026-09-22 on the simulator
+  (`docs/hardware/q10-bringup/temp_probe.c` + `run_mdb_probe.py`): 2.5 V on RA5 → `ADRES = 2048`
+  (`ADRESH = 0x08`, `ADRESL = 0x00`), `ADCON0 = 0x84` (`ADON=1`, `ADFM=1`), `ADPCH = 5`. So the
+  ADCC **is 12-bit and `ADFM=1` right-justifies correctly** (2048, not 32768) — but the 10-bit
+  scaling in `temperature_c()` still trips. **The fix is to right-shift the raw result by 2 at
+  capture (12-bit → 10-bit), not to keep fiddling with justification.** Run the probe with
+  `python tools/simulate/run_mdb_probe.py docs/hardware/q10-bringup/temp_probe.mdb` (opens the log
+  in VS Code and heartbeats it).
 - VS Code debug config: `.vscode/launch.json` → `Simulate PicAmpControl (Debug)` (`mplab-core-da`, tool `Simulator`, device `PIC16F18875`, program `out/My_Pic_Project/default.elf`).
 - Symbol table for breakpoints and harness state reads: `out/My_Pic_Project/default.sym`.
 - **The workspace build tasks in `.vscode/tasks.json` are portable** - they use

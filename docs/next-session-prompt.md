@@ -6,55 +6,63 @@ Copy the block below into a new chat session.
 PicAmpControl — continue the PIC18F47Q10 upgrade.
 
 FIRST, before anything else:
-1. Read .github/skills/picampcontrol-build-test/SKILL.md — it holds the hard rules and the
-   Windows/Q10 traps we already paid for.
+1. Read .github/skills/picampcontrol-build-test/SKILL.md — hard rules + Windows/Q10/ADCC traps.
 2. Read Ai-Notes.txt (sticky user rules), deepseek-pic.md and mistakes.md.
-3. Never write the word "Hmm" anywhere, including in your reasoning.
-4. Output discipline is a hard rule: terse answers, never restate context, never paste file
-   contents/logs/raw output tables into the chat, batch tool calls, filter command output
-   (-Tail/-First/Select-String). The skill is where durable knowledge goes, not the chat.
+3. Never write "Hmm" anywhere, including reasoning.
+4. Be maximally token-efficient at all times; stream long-op output to a VS Code tab (heartbeat),
+   never run long tasks silently. The user has complained repeatedly (and again in this session)
+   that long tasks (suite, probe, build) run with no visible output in VS Code. Opening the log in
+   a VS Code tab and streaming a heartbeat to it is part of doing the job, not a courtesy. Use
+   tools/simulate/open_progress_log.py and the AppendLog heartbeat from
+   tools/simulate/platform_process.py; never just redirect to a temp file and report the tail.
 
-Branch: upgrade/pic18f47q10 (HEAD 9215035). Never work on main.
-  - 2997d47  nvm.c split out of lcd_parallel.c, lcd_parallel.h rename, Q10 config/interrupt
-             guards, docs.
-  - a508666  harness: separate-process progress heartbeat, TEST_BEGIN/TEST_END per test,
-             cleanup_sim_processes.py pre-flight, tools/setup/windows-defender-exclusions.ps1.
-  - 9854809  Defender installer reports ADDED/PRESENT/SKIPPED + SUCCESS/FAILED, auto-closes on
-             success, auto-runs from the pre-flight.
-  - 1a2b4f6  unelevated Defender check (RTP status + install record; the exclusion list itself
-             is admin-only on Windows).
-  - 9215035  output discipline as a sticky lever; FileTail conditional, not mandatory.
-Both Q10 and harness changes were verified green on the 16F18875 (full suite 100% pass). The Q10
-image links clean (12,666 bytes) but has NEVER been run on the simulator.
+Branch: upgrade/pic18f47q10. Never work on main.
 
-Work in this order:
-A. Run the Q10 firmware under MDB for real: PTT visibility, tick, interrupt dispatch
-   (IPEN + IPR4 TMR2IP). Recalibrate INSTRUCTIONS_PER_MS in tools/simulate/test_first_dit.py —
-   Q10 measured ~6,100-6,900 instructions/tick vs the 8,000 assumed for the 16F.
-B. Settle the comparators: W9602-COMP flags a DAC gap in the overcurrent safety path. Resolve
-   before spending more engineering time.
-C. Then ADC/ADCC, PPS codes (T1CKIPPS = 0x19 is 16F-specific), and re-derive the pin map from
-   the Q10 datasheet.
-D. PIC16F18877 rejection is only PROVISIONAL in bugfixes.md — same single-configuration method
-   that produced two wrong Q10 verdicts. Re-test with a positive control, deriving its register
-   values from the DFP instead of assuming 18875 equivalence.
+## The one problem left
+On the Q10 the amplifier TRIPS as soon as PTT asserts: g_state=STATE_TRIP(3), g_fault_latched=true.
+g_trip_reason = 0x10 = TEMPERATURE only. g_live_temperature_c = 150 (max sentinel) with the temp
+pin driven to 2.5V (should be ~25-30C). current/overdrive/drain all read 0 correctly.
 
-Before every build or simulator run: python tools/simulate/cleanup_sim_processes.py
-It kills leftovers using the launcher's own pattern list and checks Defender (raising the
-elevated installer itself only if there is no record of it being applied).
+## Already ruled out (do NOT re-chase)
+- Floating pins: probe now drives all ADC pins to safe values; trip persists.
+- ADFM justification alone: adc_init() sets ADCON0bits.ADFM=1 under #if defined(__18F47Q10__)
+  (working tree, UNCOMMITTED). ELF rebuilt (14:50 > main.c 14:40) and temp STILL reads 150C.
+- ADREF: no ADREF write exists and none should be added (reset = VDD/VSS).
 
-Watching jobs:
-  - Never tail in the console. Truncate the log with Clear-Content (never delete a file a watcher
-    has open), start the job, have the file open in a VS Code tab.
-  - FileTail (~110% of one core to follow a log) is optional and only while a job is running.
-    Read on demand instead if it shows that load.
-  - Resolve the VS Code CLI (code-insiders, else code); never assume Insiders.
-  - Progress log: %TEMP%\picampcontrol_suite_progress.log — appended across both tests,
-    TEST_BEGIN/TEST_END per test, heartbeat every 5 s naming the running test.
-Verdicts come from the run's own log file plus its appended exit code, never from terminal text.
+## Leading hypothesis (untested)
+The Q10 ADCC result is NOT necessarily 10-bit. If it runs 12-bit (or wider), 2.5V = ~2048 raw,
+and temperature_c() does raw>>=2 -> 512 > 250 -> returns 150. Matches exactly; 0V channels stay 0.
 
-Pending non-urgent: build the reusable "follow a growing file" skill (sticky TODO in Ai-Notes.txt)
-— do it only when there is slack, never mid-task.
+## Next concrete step
+Extend tools/simulate/probe_q10_ptt_path.py to also `print` ADCON0/1/2/3 (result width/mode,
+esp. ADCON2 ADMD + ADCRS resolution bits), ADRES (raw), ADPCH (channel). Confirm whether 2.5V
+yields ~512 (10-bit) or ~2048 (12-bit). Then set the ADCC to 10-bit right-justified (or shift the
+result) and re-run.
 
+Rebuild (cmake --build alone can fail the regenerate — run the full configure first):
+  cmake -S cmake/My_Pic_Project/default -B _build/My_Pic_Project/q10_release -G Ninja \
+    -DPICAMP_DEVICE=PIC18F47Q10 -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_TOOLCHAIN_FILE=$PWD/cmake/My_Pic_Project/default/.generated/toolchain.cmake \
+    -DCMAKE_USER_MAKE_RULES_OVERRIDE=$PWD/cmake/My_Pic_Project/default/.generated/overrides.cmake \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+  cmake --build _build/My_Pic_Project/q10_release --verbose -j4
+Probe: $env:PICAMP_DEVICE="PIC18F47Q10"; python tools/simulate/probe_q10_ptt_path.py
+(report _build/My_Pic_Project/sim/q10_ptt_probe_report.txt).
+
+## Probe parse bug
+`print pin RAx` emits a TABLE ("Pin Mode Value Owner or Mapping" header + row), so the probe's
+pin_re (requires line to end in V) drops all ADC pin reads. Fix the regex or drop pin reads and
+rely on the g_live_* globals.
+
+## Working tree (UNCOMMITTED — decide what to keep)
+- firmware/src/main.c — ADFM=1 fix.
+- tools/simulate/probe_q10_ptt_path.py — pin setup + trip decode + live/threshold reads.
+- .github/skills/picampcontrol-build-test/SKILL.md — ADCC register map + six mistakes +
+  token-efficiency rule.
+- DELETED (working tree shows D): docs/pin-write-question-ELI5.txt,
+  docs/remaining-blocker-ELI5.txt, q10_trip_resolution.txt. Confirm intentional before committing.
+
+Before every build/sim run: python tools/simulate/cleanup_sim_processes.py
+Verdicts come from the run's own log file + appended exit code, never terminal text.
 Everything must be green on this branch before it goes near main.
 ```

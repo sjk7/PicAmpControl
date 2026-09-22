@@ -1,0 +1,4 @@
+# Files the extension does not need at runtime - keep the package to the two real files.
+package.local.json
+package.publish.json
+*.vsix

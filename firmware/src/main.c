@@ -385,6 +385,16 @@ void __interrupt() timer0_isr(void) {
         unsigned int sample = (unsigned int)ADRES;
         PIR1bits.ADIF = 0;
 
+#if defined(__18F47Q10__)
+        /* The Q10 ADCC is 12-bit (0..4095) while every converter below - temperature_c(),
+           drain_voltage(), overdrive_power_mw(), current_amperes() and the SWR maths - treats
+           the raw value as 10-bit (0..1023). Downscale once here, at capture, so all eight
+           channels stay on the 10-bit scale the firmware already assumes. Measured 2026-09-22:
+           without this, 2.5 V on the temp pin reads 2048 and temperature_c(2048) -> 2048>>2 =
+           512 > 250 -> 150C fault sentinel. */
+        sample >>= 2;
+#endif
+
         /* Indexed store rather than an 8-case switch: g_adc_active_index is always a valid
            channel index (it is only ever loaded from g_adc_scan_index), and the switch cost
            eight copies of the same store in flash. */
@@ -772,10 +782,18 @@ void adc_init(void) {
     ANSELB = 0x0E;
     ADCON1 = 0x20;
     ADPCH = 0;
-    // ADFM<1:0>=10 (legacy right-justified 10-bit result in ADRESH:ADRESL):
-    // temperature_c/drain_voltage/overdrive_power_mw all treat the raw ADC value
-    // as a plain 0-1023 reading, not left-shifted or accumulator-formatted.
+    // The result must be a plain right-justified 0-1023 count: temperature_c(),
+    // drain_voltage() and overdrive_power_mw() all treat the raw ADC value as 0-1023.
+    //
+    // PIC16F18875: ADFM is ADCON1<7:6>; ADCON1=0x20 above sets ADFM<1:0>=10 = right-justified.
+    // PIC18F47Q10 (ADCC): ADFM is a SINGLE bit, ADCON0<2>, and 0 means LEFT-justified. The
+    // 10-bit result then sits in ADRES<15:6>, so a 2.5V temperature input (raw 512) reads as
+    // 512<<6 = 32768 and temperature_c() returns its 150C fault sentinel, which is exactly the
+    // spurious TEMPERATURE trip the Q10 bring-up hit (probe_q10_ptt_path.py, 2026-09-22).
     ADCON0 = 0x88;
+#if defined(__18F47Q10__)
+    ADCON0bits.ADFM = 1;
+#endif
     PIR1bits.ADIF = 0;
     PIE1bits.ADIE = 1;
     INTCONbits.PEIE = 1;
