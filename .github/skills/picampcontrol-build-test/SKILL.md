@@ -452,6 +452,24 @@ Prerequisites that decide whether debugging works at all:
   to be unwritten firmware configuration. Related trap from the same run: `OSCCON3.ORDY` reads `0`
   on this part *while its timer demonstrably runs*, so a wrong-looking status flag is not evidence
   about the thing it names.
+- **`W0106-SIM` is scoped to PPS / clock-source routing - it is NOT a statement that a peripheral,
+  the core CPU, or the interrupt controller is unmodelled. Do not generalise it.** The warning text
+  (`... partial support for TMR1 peripheral. Use internal oscillator as timer clock slection is not
+  implemented`) names one thing: the simulator cannot route a virtual pin or `.scl` stimulus through
+  the PPS multiplexer into a peripheral's clock input. Microchip's own guidance (supplied by the user
+  in `mistakes.md` at the repo root; restated here so it does not depend on that file) is explicit
+  that the engine handles the core and the interrupt controller correctly - a register such as TMR1
+  that overflows to `0x0000` sets its interrupt flag, breaks execution, and steps into the ISR. Two
+  consequences worth acting on:
+  - **Never convert a W0106 warning into "interrupts do not work in the simulator".** That claim was
+    made here on 2026-09-22 and was wrong; the interrupts were simply not enabled correctly (see the
+    `IPEN` bullet above). The bounded limitation is external pin-routing, nothing more.
+  - **The sanctioned workaround for a pin-routing gap is register injection in software**, optionally
+    behind `#ifdef __MPLAB_DEBUGGER_SIMULATOR` so test-only register manipulation cannot reach
+    silicon. That is exactly what this project already does when the suite writes `TMR1H`/`TMR1L`
+    instead of clocking T1CKI - it is the recommended technique, not a compromise, so do not
+    re-open it by trying to make a stimulus drive the pin (see the SCL notes above: it cannot, and
+    the timer clock-source mux is not modelled in any case).
 - **`write <SFR> <value>` is not universally supported by this mdb build.** `write T1CON 0x01` and
   `write TMR1L 0xAB` work, but `write T2CLKCON 0x00` fails with `For input string: "fbe "` and
   **aborts the rest of the script** (`MDB_EXIT=-1`). Inject peripheral registers through a rebuilt

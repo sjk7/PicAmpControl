@@ -33,10 +33,15 @@ flags first (`INTCON=231`, `IPR4=63`, `g_ipen=1`, `g_gie=1`).
 | Interrupt reaches the ISR | yes - **with `IPEN=1` and the source's `IPRx` priority bit set**; with `IPEN=0` it never does |
 | Tick calibration | ~6,100-6,900 instructions/tick, against the 8,000 the harness assumes for 1 ms at 32 MHz |
 
-The `IPEN` difference is a real family difference, not a model defect: the Q10 has a priority
-interrupt controller, and with `IPEN = 0` the model does not dispatch. A port must set `IPEN = 1`,
-assign a priority per source via `IPRx`, and enable the matching global (`GIE`/`GIEH`, plus
-`PEIE`/`GIEL` for low priority) instead of the 16F's plain `GIE = 1`.
+The `IPEN` difference is a real family difference in how interrupts are *enabled*, and the interrupt
+system itself is modelled correctly - with `IPEN = 1` a pending flag breaks execution and the ISR is
+entered, exactly as it should. What this model does not dispatch is the datasheet-legal `IPEN = 0`
+path, which is a narrow deviation to work around rather than evidence that interrupts are
+unimplemented. So a port must set `IPEN = 1`, assign a priority per source via `IPRx`, and enable the
+matching global (`GIE`/`GIEH`, plus `PEIE`/`GIEL` for low priority) instead of the 16F's plain
+`GIE = 1`. The scoping of `W0106-SIM` to PPS/clock-source routing, and the explicit statement that
+the core and the interrupt controller are modelled, came from the user's `mistakes.md` and is
+recorded in the skill.
 
 `OSCCON3.ORDY` reads `0` throughout, even while the timer and the interrupt-on-change demonstrably
 run, so it must not be cited as evidence about the clock.
