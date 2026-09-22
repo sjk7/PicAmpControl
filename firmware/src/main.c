@@ -1573,13 +1573,32 @@ int main(void) {
     set_fan_output(false);
     set_trip_output(false);
 
+    /* ORDER MATTERS, AND IT IS A SAFETY PROPERTY.
+     *
+     * The 1 ms system tick is the only periodic supervision this amplifier has: it is what
+     * advances the startup-inhibit window, the band-settle delay, the band-verify timeout and
+     * every trip debounce. Nothing below this point may run with the amplifier able to key and
+     * no tick, because a stall anywhere in the remaining bring-up would then leave the outputs
+     * latched with no supervision at all.
+     *
+     * It used to run at the *end* of initialisation - after `lcd_init()` and
+     * `show_boot_message()` - and the Q10 bring-up run on 2026-09-22 showed exactly why that is
+     * wrong: 200,000 simulator steps in, `T2CON` and `OSCCON1` still read 0 because the LCD boot
+     * sequence had not finished, so the tick was not yet armed. The LCD is the slowest and least
+     * trustworthy thing in the boot path (a held E line or a missing panel can block it), and it
+     * must never be a prerequisite for the protection tick.
+     *
+     * So the sequence is now: force every output safe -> arm the tick -> then talk to the LCD and
+     * the rest. `apply_startup_inhibit()` immediately follows, so the outputs stay inhibited while
+     * the slow peripherals come up. */
+    timer0_init();
+    apply_startup_inhibit();
+
     adc_init();
     load_settings();
     lcd_init();
     show_boot_message();
     g_boot_message_active = true;
-    timer0_init();
-    apply_startup_inhibit();
 
     while (1) {
         swr1_fwd_raw = ADC_SAMPLE_SWR1_FWD;
