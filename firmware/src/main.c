@@ -878,6 +878,12 @@ void handle_ptt_transition(bool ptt_asserted) {
             g_snoop_active = false;
             g_band_verify_active = false;
             g_band_verify_mismatch_ms = 0;
+            /* The confirmed band can be one the relay was only just commanded to (the counter
+               reclassifies on a band change), so hold bypass for the relay settle exactly like the
+               remembered-band path. Without this the T/R relay closes onto a still-moving relay -
+               measured 2026-09-22 as a 7.0ms HOT SWITCH in the FREQ_CTR scenario. */
+            g_band_settle_active = true;
+            g_band_settle_elapsed_ms = 0;
             g_band_established = true;
             return;
         }
