@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pre-flight for a build or simulator run: leftovers killed, Defender checked.
+r"""Pre-flight for a build or simulator run: leftovers killed, Defender checked.
 
 Run this before any build or simulator job (sticky user instruction, 2026-09-22): an
 interrupted wrapper, or a VS Code terminal that was closed mid-run, leaves MDB and its
@@ -12,13 +12,19 @@ It also checks the Windows Defender exclusions, at session start, because withou
 Defender real-time scanning of the simulator, XC8 and `_build` eats most of the CPU during a
 run (user report: "Defender is killing my pc").
 
-Reading the exclusion list needs administrator rights, so the check tries three things in
-order: read the real list (only possible when elevated), else trust the installer's success
-marker, else run the installer elevated. Installing needs a UAC approval, so a request is
-rate-limited to one per RATE_LIMIT_SECONDS and the elevated window closes itself a few seconds
-after a SUCCESS run (it stays open on failure, showing why).
+The exclusion *list* cannot be read without elevation on Windows - verified 2026-09-22:
+`Get-MpPreference` and the `MSFT_MpPreference` CIM class both answer "N/A: Must be an
+administrator", the `...\Windows Defender\Exclusions\Paths` registry key denies access, and
+even `MpCmdRun.exe -CheckExclusion` returns 0x80070005. `Get-MpComputerStatus` *does* work
+unelevated, so the check uses it for the only question that matters here:
+
+  real-time protection OFF   -> exclusions are moot, nothing to do
+  ON + our record present    -> nothing to do
+  ON + no record             -> raise the elevated installer (idempotent, self-closing)
+
+That keeps the common case free of UAC prompts while still fixing a machine that has never
+had the exclusions applied. The elevated installer does the authoritative per-entry check.
 """
-import json
 import os
 import subprocess
 import sys
@@ -33,69 +39,55 @@ import run_suite_with_watchdog as launcher  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = REPO_ROOT / "tools/setup/windows-defender-exclusions.ps1"
 DEFENDER_MARKER = procutil.temp_dir() / "pac_defender_exclusions.ok"
+DEFENDER_REPORT = procutil.temp_dir() / "pac_defender_exclusions.log"
 DEFENDER_REQUEST = procutil.temp_dir() / "pac_defender_request.stamp"
 RATE_LIMIT_SECONDS = 600
-EXPECTED_PATHS = (
-    r"E:\hamcode\PicAmpControl",
-    r"C:\Program Files\Microchip",
-    r"C:\Python314",
-    r"C:\Python313",
-)
-EXPECTED_PROCS = (
-    "xc8-cc.exe", "xc8.exe", "xc8-ld.exe", "mdb.bat", "java.exe", "javaw.exe",
-    "mplab_backend64.exe", "python.exe", "python3.13.exe", "pythonw.exe",
-    "cmake.exe", "ctest.exe", "ninja.exe", "clangd.exe",
-)
 
 
-def read_defender_lists():
-    """(paths, processes) as the machine reports them, or None if we cannot read them.
-
-    A non-elevated Get-MpPreference does not fail: it returns placeholder strings saying an
-    administrator is required. Those are reported as "unreadable" rather than as "no
-    exclusions", because treating them as missing would mean installing on every single run.
-    """
-    script = ("$p=Get-MpPreference; @{paths=@($p.ExclusionPath);"
-              "procs=@($p.ExclusionProcess)} | ConvertTo-Json -Compress")
+def powershell(script, timeout=60):
     try:
         out = subprocess.run(["powershell", "-NoProfile", "-Command", script],
-                             capture_output=True, text=True, timeout=60)
+                             capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError):
         return None
-    if out.returncode != 0 or not out.stdout.strip():
+    return out.stdout.strip() if out.returncode == 0 else None
+
+
+def real_time_protection_enabled():
+    """True/False, or None when it cannot be determined.
+
+    `Get-MpComputerStatus` is readable unelevated; the exclusion arrays next to it are not.
+    """
+    out = powershell("(Get-MpComputerStatus).RealTimeProtectionEnabled")
+    if out is None:
         return None
+    return out.lower().startswith("true")
+
+
+def record_present():
+    """Has a SUCCESS run recorded the exclusions on this machine?
+
+    The marker file is the primary record; the installer's report is accepted as well, so
+    losing the marker does not force another UAC prompt.
+    """
+    if DEFENDER_MARKER.exists():
+        return True
     try:
-        data = json.loads(out.stdout.strip())
-    except json.JSONDecodeError:
-        return None
-    paths = [str(v) for v in (data.get("paths") or [])]
-    procs = [str(v) for v in (data.get("procs") or [])]
-    if any("administrator" in v.lower() for v in paths + procs):
-        return None
-    return paths, procs
+        text = DEFENDER_REPORT.read_text(errors="replace")
+    except OSError:
+        return False
+    return "VERDICT SUCCESS" in text and "FAILED" not in text
 
 
-def missing_exclusions(lists):
-    if lists is None:
-        return None
-    paths, procs = lists
-    lowered_paths = {p.rstrip("\\").lower() for p in paths}
-    lowered_procs = {p.lower() for p in procs}
-    missing = [p for p in EXPECTED_PATHS
-               if Path(p).exists() and p.rstrip("\\").lower() not in lowered_paths]
-    missing += [p for p in EXPECTED_PROCS if p.lower() not in lowered_procs]
-    return missing
-
-
-def install_defender_exclusions(missing):
+def install_defender_exclusions(why):
     if DEFENDER_REQUEST.exists():
         age = time.time() - DEFENDER_REQUEST.stat().st_mtime
         if age < RATE_LIMIT_SECONDS:
             print(f"  (installer already requested {int(age)}s ago; not asking again)")
             return
     DEFENDER_REQUEST.write_text(str(time.time()))
-    args = f"'-NoProfile','-ExecutionPolicy','Bypass','-File','{INSTALLER}'," \
-           f"'-NoPause','-AutoCloseSeconds','20'"
+    args = (f"'-NoProfile','-ExecutionPolicy','Bypass','-File','{INSTALLER}',"
+            f"'-NoPause','-AutoCloseSeconds','20'")
     try:
         subprocess.Popen(["powershell", "-NoProfile", "-Command",
                           f"Start-Process -FilePath powershell -Verb RunAs "
@@ -103,34 +95,28 @@ def install_defender_exclusions(missing):
     except OSError as exc:
         print(f"  could not raise the elevated installer: {exc}")
         return
-    print("  Raised the elevated installer - approve the UAC prompt and it will fix this.")
+    print(f"  {why} - raised the elevated installer; approve the UAC prompt and it will fix it.")
 
 
 def check_defender() -> None:
     if os.name != "nt":
         return
-    lists = read_defender_lists()
-    missing = missing_exclusions(lists)
-    if missing is None:
-        if DEFENDER_MARKER.exists():
-            print("Defender exclusions: marker present (cannot read the list unelevated).")
-            return
-        print("=" * 78)
-        print("DEFENDER EXCLUSIONS NOT VERIFIED ON THIS MACHINE")
-        print("Defender real-time scanning of the simulator, XC8 and _build eats most of the")
-        print("machine's CPU during a run. Asking for the elevated installer now.")
-        print("=" * 78)
-        install_defender_exclusions(missing)
+    rtp = real_time_protection_enabled()
+    if rtp is False:
+        print("Defender exclusions: real-time protection is off, so exclusions are moot.")
         return
-    if not missing:
-        DEFENDER_MARKER.write_text(f"verified {time.strftime('%Y-%m-%dT%H:%M:%S')}")
-        print("Defender exclusions: all present.")
+    if rtp is None:
+        print("Defender exclusions: could not read the Defender status; trying the record only.")
+    if record_present():
+        print("Defender exclusions: recorded as applied on this machine.")
         return
     print("=" * 78)
-    print("DEFENDER EXCLUSIONS MISSING: " + ", ".join(missing[:6])
-          + (" ..." if len(missing) > 6 else ""))
+    print("DEFENDER EXCLUSIONS NOT RECORDED ON THIS MACHINE")
+    print("Defender real-time scanning of the simulator, XC8 and _build eats most of the")
+    print("machine's CPU during a run. (The exclusion list itself is admin-only, so this")
+    print("check cannot read it without elevation - it uses the installer's own record.)")
     print("=" * 78)
-    install_defender_exclusions(missing)
+    install_defender_exclusions("no record of the exclusions")
 
 
 def main():

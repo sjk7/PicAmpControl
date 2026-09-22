@@ -47,11 +47,20 @@ window so it does not sit open. On failure it dumps the whole report and waits f
 that window is the one thing the user must be able to read.
 
 **Hard rule: at session start, run `python tools/simulate/cleanup_sim_processes.py`.** It kills
-leftovers using the launcher's own pattern list, then checks Defender: it reads the real exclusion
-list when elevated, else trusts the marker file, else **raises the elevated installer itself** (rate
-limited to one request per 10 minutes, since every request is a UAC prompt). A non-elevated
-`Get-MpPreference` returns "N/A: Must be an administrator" placeholders rather than failing, so those
-are treated as *unreadable*, never as *missing* - otherwise every run would ask for another UAC.
+leftovers using the launcher's own pattern list, then checks Defender.
+
+The exclusion *list* is not readable without elevation - verified 2026-09-22: `Get-MpPreference`,
+the `MSFT_MpPreference` CIM class, the `...\Windows Defender\Exclusions\Paths` registry key and even
+`MpCmdRun.exe -CheckExclusion` all deny access unelevated. `Get-MpComputerStatus` *does* work, so the
+check uses the only question that matters, all unelevated:
+
+- real-time protection off -> exclusions are moot, nothing to do;
+- on + a recorded successful install -> nothing to do;
+- on + no record -> **raise the elevated installer itself** (rate limited to one request per 10 min,
+  since each one is a UAC prompt; the installer closes its own window after a SUCCESS run).
+
+Do not try to read the exclusion list unelevated and treat the placeholder string as "missing" -
+that asks for a UAC prompt on every single run.
 
 Use this skill for firmware builds, simulator verification and simulator debugging. Do not claim success from a missing or truncated terminal response; require a fresh exit code and final output.
 
