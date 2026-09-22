@@ -57,6 +57,14 @@ CI/release workflows change - don't let it go stale.
   `-First`, `Select-String`) instead of dumping whole files into the terminal panel, which is rendered
   too; do not print a code block unless the user asked for it. The skill is where durable knowledge
   goes - not the chat.
+- TODO (sticky, user instruction, 2026-09-22): WRITE OUR OWN REUSABLE "FOLLOW A GROWING FILE" SKILL.
+  FileTail (`spacetown.filetail`) measured ~110% of one core in the extension host just to follow a log,
+  so that capability should come from a skill instead of from that extension. The skill owns the whole
+  flow: truncate the log, start the job, show the user the file in a VS Code tab, and let them (or the
+  agent, on request) re-read it cheaply - a one-shot `Get-Content -Tail N`, or a compact summary file
+  the job itself rewrites every few seconds - without burning a core. It is generic, not
+  PicAmpControl-specific, so it belongs in its own skill rather than inside picampcontrol-build-test.
+  Not built yet; do it when there is slack, never mid-task.
 - DO NOT ASK FOR PERMISSION TO OVERWRITE FILES - JUST DO IT (user instruction, 2026-09-22). The user
   does not want to be prompted about overwriting, nor asked "say the word" before an edit that was
   already agreed; when the intent is to change a file, change it. Related and worth avoiding: writing
