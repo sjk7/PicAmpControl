@@ -252,9 +252,11 @@ guesses and at least one is probably wrong:
    *plus* lookup code - likely MORE than the branch chain it replaces, whose branches are a handful
    of words each. Measure the actual function size first; if the table does not win, say so and drop
    the idea rather than implementing it for appearance.
-2. Compile the translation units the harness does NOT read (`lcd_parallel.c`) at `-Os` in the Debug
-   build. The harness reads symbols only from `main.c` and `freq_counter.c`, so MDB resolution should
-   be unaffected.
+2. ~~Compile the translation units the harness does NOT read (`lcd_parallel.c`) at `-Os` in the Debug
+   build.~~ **MEASURED 2026-09-22: this reclaims NOTHING - do not retry it.** The per-source override
+   does apply and the file genuinely recompiled, but the Debug image stayed at 8117/8192 words exactly.
+   XC8's linker optimises at the `-O1` in the link rule, normalising the per-file level, so per-TU `-O`
+   overrides are the wrong layer. Detail and the reproduction: the skill's `## Flash space`.
 3. Compile the whole simulator/tests image `-Os` instead of `-O1` (user.cmake). Est. 1200 words off
    the Debug number, but degrades mdb symbol/breakpoint resolution for the VS Code "Simulate
    PicAmpControl (Debug)" session - the whole reason Debug is -O1 today. Needs explicit user consent.

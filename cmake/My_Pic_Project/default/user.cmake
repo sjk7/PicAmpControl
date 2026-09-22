@@ -6,7 +6,16 @@ set_property(TARGET My_Pic_Project_default_default_XC8_compile PROPERTY SOURCES
 # Optimize Debug builds with -O1 to avoid XC8 -O0 string section code bloat, and Release with -Os.
 target_compile_options(My_Pic_Project_default_default_XC8_compile PRIVATE "$<$<CONFIG:Debug>:-O1>" "$<$<CONFIG:Release>:-Os>")
 target_link_options(My_Pic_Project_default_image_LRxgA9DB PRIVATE "$<$<CONFIG:Debug>:-O1>" "$<$<CONFIG:Release>:-Os>")
-
+# Build the LCD transport with -Os even in Debug. Debug carries -O1 (not -Os) only so MDB can
+# resolve symbols and breakpoints, and the simulator harnesses read globals that live in main.c
+# and freq_counter.c - never in lcd_parallel.c - so this file does not need the -O1 encoding for
+# anything the tests depend on. Release is -Os throughout anyway.
+# Trade accepted: function/static symbol resolution *inside* lcd_parallel.c is weaker in the Debug
+# image, so breakpointing the LCD driver itself is harder. The sequencer, protection and band
+# logic - the code the harnesses step through and that the safety argument rests on - is untouched.
+set_source_files_properties(
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/lcd_parallel.c"
+    PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Debug>:-Os>")
 enable_testing()
 
 # The simulator suite is Python 3 only. Search for python3 first and verify the

@@ -118,8 +118,15 @@ Known reduction levers, in rough order of value:
 
 1. Table-drive the long `if`/`else` chain in `adjust_selected_setting()` (est. 80-100 words). The
    per-setting min/max/step bounds are irregular, so it needs a new menu-edit scenario in the suite.
-2. Compile the translation units the harness does NOT read (`lcd_parallel.c`) at `-Os` in the Debug
-   build; the harness only needs symbols from `main.c` and `freq_counter.c`.
+2. ~~Compile `lcd_parallel.c` at `-Os` in the Debug build.~~ **MEASURED 2026-09-22: this reclaims
+   NOTHING - do not retry it.** The override does apply (`set_source_files_properties(... lcd_parallel.c
+   PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Debug>:-Os>")` gives `-O0 -O1 -Os` on the command line,
+   last wins) and the file was forced to recompile by deleting its object, yet the linked Debug image
+   was **8117/8192 words before and after - identical**. XC8's linker runs its own optimisation pass at
+   the `-O1` in the link rule, which appears to normalise the per-TU level, so per-file `-O`
+   overrides are the wrong layer. It also costs MDB symbol resolution *inside* that file. The only
+   lever at this layer is lowering the **link** step's `-O`, which weakens symbol resolution
+   everywhere and needs the user's consent (item 3).
 3. Bit-pack the menu metadata (`g_menu_setting_offsets[]` 20 B + `g_menu_setting_types[]` 20 B).
 4. Shorten the remaining display strings.
 5. Only if the user explicitly agrees: build the whole Debug image `-Os` - it costs ~1200 words but
