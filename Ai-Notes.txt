@@ -29,10 +29,15 @@ CI/release workflows change - don't let it go stale.
   NEVER TAIL IT IN THE CONSOLE (user instruction, 2026-09-22, sticky/permanent, restated several
   times as the method was refined: generalised to all long jobs, then "tail mode", then "delete and
   recreate first", then "not in the console, open it in a tab", then "use FileTail"). The final
-  method: delete the old log, recreate it fresh, write the job's output there, open that file in a VS
-  Code tab, and toggle **FileTail** (`filetail.toggle`) so the tab reloads and auto-scrolls to the end
-  while the user is at the end - stopping as soon as they interact. **The FileTail extension
-  (`spacetown.filetail`) MUST be installed; install it before starting anything long.** A console tail
+  method: truncate the old log (`Clear-Content` - the launcher appends now, and deleting a file a
+  watcher has open kills the watcher), write the job's output there, open that file in a VS Code tab,
+  and toggle **FileTail** (`filetail.toggle`) ONLY while a job is actually running. **FileTail is
+  conditional now, not mandatory - this supersedes the earlier "must be installed" rule (user
+  instruction, 2026-09-22). It measured ~110% of one core in the VS Code extension host plus ~24% in
+  the main process while following a log; toggling it off dropped both to roughly 1%. A tool that eats
+  a core to follow a text file is badly written and must not be used: turn it off when the run ends,
+  and if it shows that load again stop using it and read the log on demand instead (a one-shot
+  `Get-Content -Tail 20` is a read, not a console tail).** A console tail
   is forbidden, and it was also silently broken: `Get-Content -Wait` holds the handle to the file it
   opened, and the suite launcher unlinks and recreates its log at startup, so a console tail started
   before the run reads a deleted file and shows nothing. This applies to every long job - suites,
@@ -42,6 +47,16 @@ CI/release workflows change - don't let it go stale.
   its log sits at four lines for the whole run and looks hung. Watching a log for visibility is
   sanctioned; judging a run from terminal output is not - verdicts are still read from the run's own
   log file and exit-code line.
+- KEEP TOKEN AND CPU USE DOWN - OUTPUT DISCIPLINE (user instruction, 2026-09-22, sticky/permanent).
+  The chat transcript is re-rendered on every streamed token: this session reached 2,041 lines / 2.2 MB,
+  and that drove the renderer to ~225% of one core and the extension host to ~112% for the whole of
+  each assistant turn. So: answer in as few words as the answer allows and never restate the context;
+  never paste file contents, logs, tables of raw output, or exit-code dumps into the chat unless asked;
+  put findings in the run's log file, the skill, or a repo doc and report one line plus the path; batch
+  work into fewer, longer tool calls rather than many small ones; filter command output (`-Tail`,
+  `-First`, `Select-String`) instead of dumping whole files into the terminal panel, which is rendered
+  too; do not print a code block unless the user asked for it. The skill is where durable knowledge
+  goes - not the chat.
 - DO NOT ASK FOR PERMISSION TO OVERWRITE FILES - JUST DO IT (user instruction, 2026-09-22). The user
   does not want to be prompted about overwriting, nor asked "say the word" before an edit that was
   already agreed; when the intent is to change a file, change it. Related and worth avoiding: writing

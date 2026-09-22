@@ -11,14 +11,33 @@ times on 2026-09-22 *after* the rule already existed in `Ai-Notes.txt` - the thi
 quoted the word straight back. A bullet buried in a long list did not stop it, so it lives here too.
 State the finding, or the uncertainty, plainly, and move on.
 
-**Hard environment rule: the FileTail extension (`spacetown.filetail`) MUST be installed.** Long jobs
-- suites, builds, spike runs - write their output to a log file, and that file is opened in a VS Code
-**tab** with FileTail toggled on (`filetail.toggle`) so it reloads and scrolls to the end while the
-user is still at the end: auto-scrolling until they interact, then stopping. **Never tail these logs
-in a terminal/console** - the user has forbidden it explicitly and more than once. If FileTail is
-missing, install it (`spacetown.filetail`) before starting anything long. This rule exists because
-the log is the user's window into a multi-minute run; console tails were both unwanted and, worse,
-silently broken (see the log-viewing note under Simulator verification).
+**Hard rule: keep token and CPU output down.** The chat transcript is re-rendered on every streamed
+token, and this is not theoretical: a 2,041-line / 2.2 MB session drove the VS Code renderer to ~225%
+of one core and the extension host to ~112% for the whole of each assistant turn (measured
+2026-09-22; the transcript is at
+`...\workspaceStorage\<hash>\GitHub.copilot-chat\transcripts\<session>.jsonl` if it needs checking).
+Therefore, permanently:
+
+- reply in as few words as the answer allows; never restate the context or re-list what was just done;
+- never paste file contents, logs, tables of raw output or exit-code dumps into the chat unless asked;
+  put findings in the run's log file, this skill, or a repo doc, and report one line plus the path;
+- batch work into fewer, longer tool calls instead of many small ones;
+- filter command output (`-Tail`, `-First`, `Select-String`); the terminal panel is rendered too, so a
+  whole-file dump costs CPU as well as tokens;
+- no code blocks unless the user asked for one. Durable knowledge goes in this skill, not the chat.
+
+**Hard rule: follow logs in a VS Code tab, and treat FileTail as conditional.** Long jobs - suites,
+builds, spike runs - write their output to a log file, and the user watches that file in a VS Code
+**tab**. **Never tail in a terminal/console**: forbidden explicitly and more than once, and also
+silently broken, because `Get-Content -Wait` holds a handle to a file the launcher used to unlink and
+recreate. FileTail (`spacetown.filetail`, command `filetail.toggle`) is the follow mechanism *only
+while a job is actually running*: it measured ~110% of one core in the extension host plus ~24% in the
+main process while following a log, and toggling it off dropped both to ~1% (2026-09-22, user
+instruction: "if FileTail hogs CPU, it is badly written and should not be used"). Turn it off when the
+run ends; if it shows that load again, stop using it and read the log on demand instead - a one-shot
+`Get-Content -Tail 20` is a read, not a console tail. Truncate logs with `Clear-Content`, never delete
+one a watcher has open. Watching a log for visibility is sanctioned; judging a run from terminal
+output is not - verdicts come from the run's own log file plus its appended exit code.
 
 **Hard rule: never delete or recreate a file a FileTail tab is already watching.** Deleting the log
 between runs drops the watcher: the tab keeps rendering its old buffer and the file looks frozen even
@@ -469,11 +488,11 @@ created, or reusing one mid-run, leaves the user looking at a stale buffer and w
 2026-09-22. Note the launcher now *appends* (one file across both tests, never recreated per run), so
 once the tab exists use `Clear-Content` - deleting the file would drop the watcher.
 
-**Open the log in TAIL mode in the VS Code UI for any long-running job - on Windows too** (standing
-user instruction, 2026-09-22, generalised and then restated for tail mode the same day). The user
-wants to watch long jobs - suites, builds, spike runs - live in the UI, so delete the log, recreate it
-fresh for the run, and open a *follow*, not a static editor tab: VS Code reloads a changed file but
-does not track the end of a growing one.
+**Open the log in the VS Code UI for any long-running job - on Windows too** (standing user
+instruction, 2026-09-22, generalised and then restated for tail mode the same day). The user wants to
+watch long jobs - suites, builds, spike runs - live in the UI, so truncate the log, start the job, and
+have the file open in a tab. Follow it with FileTail while the job runs, subject to the conditional
+rule above.
 
 ```powershell
 # Windows: open in a TAB and let FileTail follow it (never a console tail - see the hard rule above)
