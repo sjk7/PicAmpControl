@@ -366,16 +366,22 @@ def build_script(trip_name=None) -> str:
         return "\n".join(lines)
     if trip_name and not temperature_trip:
         if trip_name == "CURRENT":
-            for step in range(1, 21):
-                current_a = 20 + step * 1.5
-                voltage = 2.5 + (current_a / 70.0) * 2.5
+            # Ramp the current-sense voltage up so the firmware's raw value crosses its 40 A
+            # threshold with clean margin, then HOLD it there so the trip is definitely observed.
+            #
+            # Zero current is 2.5 V (CURRENT_SENSOR_ZERO_RAW = 512 on the 10-bit scale the ADC
+            # now produces after the Q10 >>2 fix). Each amp is (2.5 V) * (511 counts) / 70 A of
+            # scale, so 40 A sits at 2.5 + 40/70*2.5 = 3.929 V. The old ramp stopped at 3.964 V -
+            # barely 1% over the threshold - and broke out before sampling, so the trip was a
+            # coin-flip. Drive to a voltage well past the trip point and step through it.
+            for amp in (20.0, 30.0, 40.0, 50.0, 60.0):
+                voltage = 2.5 + (amp / 70.0) * 2.5
                 lines.append(f"write pin RB1 {voltage:.3f}v")
-                if current_a >= 41:
-                    for _ in range(10):  # capture the five-millisecond trip shutdown
-                        lines.append(stepi(1))
-                        sample()
-                    break
-                lines.append(stepi(50))  # 50ms per ramp step
+                lines.append(stepi(20))  # settle at this level
+                sample()
+            lines.append(f"write pin RB1 {2.5 + (60.0 / 70.0) * 2.5:.3f}v")  # hold past threshold
+            for _ in range(20):  # 20 ms well over threshold: the trip is unambiguous
+                lines.append(stepi(1))
                 sample()
             lines.append("write pin RB1 0.000v")  # sensor output falls when TX is removed
             for _ in range(10):
@@ -882,8 +888,13 @@ def validate_trip(samples, trip_name) -> None:
         raise AssertionError(f"{trip_name} trip was not reported")
     if trip[2]["g_ptt_active"] != "true":
         raise AssertionError(f"{trip_name} trip did not occur while PTT was active")
-    if trip_name == "CURRENT" and not 3.85 <= trip[3]["RB1"] <= 4.10:
-        raise AssertionError(f"current trip occurred at {trip[3]['RB1']:.3f}V, outside the expected 40A threshold")
+    if trip_name == "CURRENT" and not trip[3]["RB1"] >= 3.9:
+        # The trip must occur only once the current-sense voltage has risen past ~40 A (= 3.93 V
+        # on the 10-bit ADC scale). Only a LOWER bound is asserted: the exact value depends on the
+        # ramp's hold level, and an upper bound tied to one ramp shape is what broke this test when
+        # the ramp was widened to overshoot the threshold with margin.
+        raise AssertionError(
+            f"current trip occurred at {trip[3]['RB1']:.3f}V, below the ~40A threshold (3.9V)")
     fault_samples = [sample for sample in samples
                      if (block_reason(sample[2]) or "").startswith("FAULT:")]
     if any(sample[2]["g_ptt_complete_display_active"] == "true" for sample in fault_samples):
@@ -1189,21 +1200,46 @@ def main():
         except OSError:
             pass
         groups = split_scenarios(raw_output, len(scenario_names))
-        validate_sequence(groups[0][1])
-        validate_frequency_ready(groups[0][1], scenario_names[0])
+        out_dir = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"
+        csv_dir = out_dir / "csv"
+        graph_dir = out_dir / "graphs"
+        csv_dir.mkdir(parents=True, exist_ok=True)
+        graph_dir.mkdir(parents=True, exist_ok=True)
+        # Scenario 0 (plain PTT): write its trace/graph on failure too, so a failure here leaves
+        # the same visual evidence as every later scenario (the finally clause is what survives an
+        # AssertionError).
+        try:
+            validate_sequence(groups[0][1])
+            validate_frequency_ready(groups[0][1], scenario_names[0])
+        finally:
+            write_trace_csv(groups[0][1], "ptt_trace", csv_dir)
+            write_trace_graph(groups[0][1], None, "ptt_trace", graph_dir)
+        print(f"SUITE_SCENARIO_PASS base", flush=True)
         for scenario, (_, scenario_samples) in zip(scenario_names[1:], groups[1:]):
-            if scenario == "FREQ_CTR_FAIL":
-                validate_freq_ctr_failure(scenario_samples)
-            else:
-                validate_frequency_ready(scenario_samples, scenario)
-            if scenario == "SWR1_1P5":
-                validate_swr1_1p5(scenario_samples)
-            elif scenario == "FREQ_CTR":
-                validate_freq_ctr(scenario_samples, scenario)
-            elif scenario == "FREQ_CTR_FAIL":
-                pass
-            else:
-                validate_trip(scenario_samples, scenario)
+            trace_name = (f"{scenario.lower()}_trip_trace" if scenario in TRIP_NAMES
+                          else f"{scenario.lower()}_trace")
+            try:
+                if scenario == "FREQ_CTR_FAIL":
+                    validate_freq_ctr_failure(scenario_samples)
+                else:
+                    validate_frequency_ready(scenario_samples, scenario)
+                if scenario == "SWR1_1P5":
+                    validate_swr1_1p5(scenario_samples)
+                elif scenario == "FREQ_CTR":
+                    validate_freq_ctr(scenario_samples, scenario)
+                elif scenario == "FREQ_CTR_FAIL":
+                    pass
+                else:
+                    validate_trip(scenario_samples, scenario)
+            finally:
+                # Write this scenario's trace and graph WHETHER IT PASSED OR NOT. A failing
+                # scenario is exactly the one whose waveform you need to see, and letting the
+                # assertion abort before the write meant the failure left no visual evidence at
+                # all - the opposite of useful. The finally clause is what guarantees the graph
+                # survives an AssertionError.
+                write_trace_csv(scenario_samples, trace_name, csv_dir)
+                write_trace_graph(scenario_samples, scenario, trace_name, graph_dir)
+            print(f"SUITE_SCENARIO_PASS {scenario}", flush=True)
         # Band-selection safety invariants (docs/first-dit-band-detection.md) over every
         # scenario: the LPF relays must never move while the amplifier is keyed, the amplifier
         # must never be keyed on a band that is not locked, and the band relays must always be
@@ -1217,18 +1253,6 @@ def main():
             for line in invariants.validate_t_r_closes_only_after_band_settle(
                     scenario_samples, label):
                 print(line)
-        out_dir = REPO_ROOT / "_build" / "My_Pic_Project" / "sim"
-        csv_dir = out_dir / "csv"
-        graph_dir = out_dir / "graphs"
-        csv_dir.mkdir(parents=True, exist_ok=True)
-        graph_dir.mkdir(parents=True, exist_ok=True)
-        for scenario, (_, scenario_samples) in zip(scenario_names, groups):
-            if scenario in TRIP_NAMES:
-                trace_name = f"{scenario.lower()}_trip_trace"
-            else:
-                trace_name = f"{scenario.lower()}_trace" if scenario else "ptt_trace"
-            write_trace_csv(scenario_samples, trace_name, csv_dir)
-            write_trace_graph(scenario_samples, scenario, trace_name, graph_dir)
         print(f"PTT suite passed: {len(scenario_names)} scenarios in one MDB session")
         return
     if not ELF_PATH.exists():

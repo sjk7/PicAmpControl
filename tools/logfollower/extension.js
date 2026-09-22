@@ -30,21 +30,18 @@ const lastSize = new Map();
 /** Live file watchers, one per followed uri, so an append scrolls immediately. */
 const watchers = new Map();
 
-/** When we last scrolled this uri programmatically, to absorb the immediate echo of our own move. */
-const lastSelfMove = new Map();
-
-// There is deliberately NO event counter or "owed events" bookkeeping here. Two attempts at that
-// both leaked, in opposite directions, and both are recorded in the skill so they are not retried:
-//   * a timestamp grace window leaks under fast writes - our own event arrives after it expires and
-//     is read as user action, so the follow paused itself part-way down (line 15 of 501, then of
-//     201);
-//   * a pending-event count leaks the other way - two were registered per scroll but a reveal does
-//     not always emit two, so the surplus swallowed every genuine user event and interaction
-//     stopped pausing the follow at all.
-// Whether the follow should pause is now decided by POSITION (is the tail still on screen?), which
-// cannot drift. See isShowingTail() and pauseInteractive().
-
-const SELF_MOVE_GRACE_MS = 150;
+/** Uris we have programmatically scrolled at least once.
+ *
+ * This is a ONE-TIME FLAG, not a timestamp, and it is the whole answer to "is this event ours or
+ * the user's?". Before our first scroll a document-open event fires a visible-range change with the
+ * tail off-screen (a long log opens at the top), which must NOT count as the user scrolling away.
+ * After our first scroll, whether to pause is decided purely by POSITION (is the tail visible?),
+ * which cannot drift and needs no timing. The earlier attempts all failed on timing: a grace-window
+ * timestamp leaked under fast writes (our own event arrives after it expires), and while the log
+ * grew, scrollToEnd re-stamped it on every append so it never expired and the user's scrolls were
+ * swallowed forever - the bug the user reported. No timestamps, no counters.
+ */
+const hasScrolled = new Set();
 
 function key(uri) {
   return uri.toString();
@@ -103,11 +100,7 @@ function scrollToEnd(editor) {
   // viewport. Because it is the last line, "top of viewport" means the document is scrolled as far
   // down as it can go and the newest line is pinned to the bottom edge - which is what a tail
   // looks like. Doing both, in this order, is what makes it settle correctly.
-  //
-  // Stamp before making the calls, so the immediate echo of our own move is ignored by the grace
-  // window. Whether a user has actually taken over is decided by POSITION in pauseInteractive(),
-  // never by this stamp alone.
-  lastSelfMove.set(key(doc.uri), Date.now());
+  hasScrolled.add(key(doc.uri));
   if (!editor.selection.active.isEqual(end)) {
     editor.selection = new vscode.Selection(end, end);
   }
@@ -275,25 +268,15 @@ function activate(context) {
   const pauseInteractive = (uriString, why) => {
     if (!following.has(uriString)) return;
     if (userTookOver.has(uriString)) return;
-
-    // Was the view where we put it? If the editor is still showing the tail - the last line is
-    // visible at the bottom - then this event cannot be a person scrolling away to read something,
-    // so it is either our own scroll echoing back or a click that moved the caret without leaving
-    // the tail. Either way: do NOT pause.
-    //
-    // This is a POSITION test, not a counting or timing test, and that matters. Two earlier
-    // attempts to tell "ours" from "theirs" both failed:
-    //   * a timestamp grace window leaks under fast writes (our event arrives after it expires);
-    //   * a pending-count leaks the other way - scrollToEnd registered two owed events per scroll
-    //     but a reveal does not always emit two, so the surplus swallowed every genuine user event
-    //     and interaction stopped pausing the follow at all (measured 2026-09-22).
-    // Position cannot drift: if the newest line is on screen, nothing has been taken away from the
-    // user, so there is nothing to pause for.
+    // Before our first scroll there is nothing for the user to have taken control of: the only
+    // event that can fire with the tail off-screen is the document OPENING, not a person reading.
+    if (!hasScrolled.has(uriString)) return;
+    // After that, the ONLY question is: is the tail still on screen? Our own scroll always leaves
+    // the tail visible, so a tail-visible event is ours (or a click at the bottom - harmless to
+    // keep following). A tail-off-screen event can only be the user scrolling away to read, so
+    // pause. No timing, no counting - position cannot drift.
     const editor = editorFor(uriString);
     if (editor && isShowingTail(editor)) return;
-
-    const self = lastSelfMove.get(uriString) || 0;
-    if (Date.now() - self < SELF_MOVE_GRACE_MS) return;
     userTookOver.add(uriString);
     vscode.window.setStatusBarMessage(
       `Log Follower: paused (${why}); run "Log Follower: Toggle" to resume`, 4000,
@@ -325,7 +308,7 @@ function activate(context) {
       following.delete(k);
       userTookOver.delete(k);
       lastSize.delete(k);
-      lastSelfMove.delete(k);
+      hasScrolled.delete(k);
       releaseWatcher(k);
     }),
     vscode.commands.registerCommand('logFollower.start', startFollow),
@@ -362,7 +345,7 @@ function deactivate() {
   following.clear();
   userTookOver.clear();
   lastSize.clear();
-  lastSelfMove.clear();
+  hasScrolled.clear();
 }
 
 module.exports = { activate, deactivate };
