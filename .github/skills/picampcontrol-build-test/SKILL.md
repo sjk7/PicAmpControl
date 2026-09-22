@@ -575,11 +575,22 @@ first runs on Windows. Assume any new POSIX-flavoured helper needs the same scru
 - Band/frequency-counter coverage is deliberately indirect. The MPLAB X simulator does not
   model Timer1's external clock (it warns `W0106-SIM: ... partial support for TMR1 ...
   timer clock selection is not implemented`), so the suite injects `TMR1H`/`TMR1L` rather than
-  clocking the pin. Do not try to "fix" a frequency-counter failure by driving RD1: an SCL
-  stimulus (`stim <file>.scl`) does drive the pin correctly — verified, `print pin RD1`
-  reports HIGH/Din — but `TMR1L`/`TMR1H` still stay 0. T1CKI, PPS routing, the 1:4 prescaler
-  and the Timer1 overflow path can only be validated on the bench. For SCL syntax note that
-  pin/SFR assignment uses `<=` (`:=` is for user variables); `RD1 = '1';` breaks the simulator.
+  clocking the pin. T1CKI, PPS routing, the 1:4 prescaler and the Timer1 overflow path can only be
+  validated on the bench.
+- **An SCL stimulus cannot rescue the timer test - it is not even loadable here.** Re-tested
+  2026-09-22: `help stim` documents `stim <file>` as loading an SCL stimulus file, but this MDB
+  build rejected both a `configuration for "pic16f18875" is ... end configuration;` block with a
+  named `testbench`/`process` (`Error: syntax error`, `Error: stack underflow. aborting...`,
+  `E0101-SIM: Failed to disassemble instruction (line 3)`) and the same file without the
+  configuration block (`... (line 1)`). So an earlier claim in this file that SCL "does drive the
+  pin correctly - verified" is **wrong** and has been removed: it rested on a run whose SCL file
+  was never recorded. Treat SCL as unavailable, and treat any stimulus that has not been confirmed
+  with `print pin <name>` as undelivered. Do not spend a cycle trying to make SCL work for T1CKI -
+  even if it loaded, the timer clock-source mux is not modelled, so TMR1 could never advance.
+- A handler that drives `RC0` is a **PTT** handler, not a frequency-counter one: `RC0` is
+  `INPUT_PTT`. T1CKI is `RD1`, routed by PPS (`T1CKIPPS = 0x19` in `firmware/src/freq_counter.c`).
+  Scripts offered from outside the project get this wrong routinely - check the pin against
+  `pin_map.h` before believing a stimulus claim.
 - MDB output ending without a final validator line is inconclusive; inspect the saved log and process table.
 - Keep source fixes separate from test-harness timing fixes. Re-run the narrow failing scenario first, then the full suite.
 - If the terminal wrapper reports a command as finished while the PID file remains, the run is still active or the wrapper lost control of it. Kill the recorded tree before doing anything else. To see what survived, use `ps -axo pid=,command=` on macOS or
