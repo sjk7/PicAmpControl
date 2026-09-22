@@ -35,18 +35,19 @@ def run_logged(command, log, label="", interval=2.0, max_repeats=DEFAULT_MAX_REP
                env=None):
     """Run `command`, streaming collapsed output to `log`, and heartbeat it.
 
-    Returns the child's exit code. The log is truncated first (never deleted: a FileTail / Log
-    Follower watcher holds the path) and opened in the editor before the child starts, so the user
-    is watching from line one rather than from the first heartbeat.
+    Returns the child's exit code. The log is truncated at the START of the run (a fresh, followable
+    log per run - user confirmed this is fine), never at the END: nothing may wipe a finished run's
+    tail after it completes. Truncate, never delete - the Log Follower tab holds the path.
     """
     log = Path(log)
-    log.write_text("", encoding="utf-8")  # truncate, never delete: the tab stays valid
+    log.write_text("", encoding="utf-8")  # truncate at START only, never at the end of a run
 
     appender = procutil.AppendLog(log)
-    # Write a first line BEFORE opening the tab: the Log Follower attaches when a matching file is
-    # opened, and an empty file gives it nothing to latch onto (and nothing for the user to see
-    # while the child's first bytes are still in flight).
-    appender.write(f"PROBE_BEGIN {label or command[0]} :: {' '.join(str(c) for c in command)}")
+    # Write a delimited header BEFORE opening the tab: the Log Follower attaches when a matching
+    # file is opened, and a header line gives it something to latch onto (and tells the user where
+    # this run starts).
+    appender.write(f"RUN_BEGIN {time.strftime('%Y-%m-%dT%H:%M:%S%z')} "
+                   f"{label or command[0]} :: {' '.join(str(c) for c in command)}")
     open_progress_log.open_in_editor([log])
 
     started = time.monotonic()

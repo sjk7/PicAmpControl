@@ -46,7 +46,15 @@ BAND_SETTLE_MIN_MS = 10.0
 BAND_PIN_FOR = {1: "RD2", 2: "RD3", 3: "RD4", 4: "RD5", 5: "RD6", 6: "RD7"}
 BAND_NAME = {1: "160m", 2: "80m", 3: "40m", 4: "20m", 5: "15m", 6: "10m"}
 BAND_OUT_OF_SPEC = 7
-SECONDS_PER_INSTRUCTION = 4 / 32_000_000
+
+# Instruction rate per device, MEASURED (see trace_ptt_sequence.py INSTRUCTIONS_PER_MS). This
+# file MUST stay in sync with that one - a wrong value makes every timing invariant (I6, hot-switch)
+# measure time ~5x short on the Q10, which reported a bogus "HOT SWITCH at 7.3ms" when the real
+# gap was 36.5ms against a 20ms settle. Read the rate from the same place; do not re-derive it.
+import os  # noqa: E402
+_DEVICE = os.environ.get("PICAMP_DEVICE") or "PIC16F18875"
+_INSTRUCTIONS_PER_MS = {"PIC16F18875": 8000, "PIC18F47Q10": 1625}.get(_DEVICE, 8000)
+SECONDS_PER_INSTRUCTION = 1.0 / (_INSTRUCTIONS_PER_MS * 1000.0)
 
 
 def keyed(sample):
@@ -182,7 +190,13 @@ def validate_band_changes_are_cold(all_samples, label):
                 f"      now:  {describe(all_samples[index])}")
         changes.append((all_samples[index - 1], all_samples[index]))
     if not changes:
-        raise AssertionError(f"{label} I5: no band-select change was observed at all")
+        # A scenario with no band-select change is NOT a violation: the invariant guards "changes
+        # must be cold", and a scenario that changes nothing has nothing to guard. This fired on
+        # FREQ_CTR_FAIL once the state-leak was fixed - with clean RAM there is no RF, so no band
+        # is ever selected, so no relay ever moves. Report it, do not fail it (mirrors I6's
+        # handling of "no T/R relay close").
+        return [f"  PASS  {label} I5: no band-select change in this scenario, so the "
+                "cold-change invariant was not exercised"]
     evidence = [f"  PASS  {label} I5: all {len(changes)} observed band-select changes were "
                 "seen with the amplifier cold (every TX output inactive)"]
     for previous, current in changes:

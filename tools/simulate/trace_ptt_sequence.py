@@ -777,36 +777,21 @@ def validate_freq_ctr_failure(samples) -> None:
 def split_scenarios(raw_output: str, expected: int):
     """Split one MDB transcript into one sample-group per suite scenario.
 
-    The suite runs every scenario in a SINGLE mdb session, separated by the `reset` command it
-    writes between them. Grouping used to split the transcript on the literal text "Resetting SFRs"
-    - and that string is emitted **two or three times per image load** (measured 2026-09-22: three
-    occurrences for one `program`), so the split produced spurious fragments. The filter
-    `if scenario_samples` then dropped the empty ones, which silently SHIFTED every index, so
-    `groups[0]` was not reliably the first scenario and scenarios were validated against each
-    other's samples. That produced two different-looking failures in consecutive runs
-    ("release did not raise RELAYS first", then "release did not enter stage 4") from one cause,
-    and the firmware was correct both times.
-
-    The reliable boundary is `Program succeeded.`, which mdb prints exactly once per image load.
-    Anchoring on that also makes the count check meaningful, so a mismatch is reported instead of
-    being absorbed by an index shift.
+    Each scenario now re-programs the ELF (see the suite builder), and `Program succeeded.` is
+    printed EXACTLY once per `program` - so it is the reliable per-scenario boundary. The older
+    scheme split on "Resetting SFRs", which MDB prints two or three times per load, so the split
+    produced spurious fragments and the empty-group filter silently shifted every index
+    (scenarios were validated against each other's samples). Splitting on `Program succeeded.`
+    and keeping every part - even an empty one - makes the count check honest.
     """
     parts = raw_output.split("Program succeeded.")
-    # parts[0] is the preamble before the first load; the rest are one image each. A single session
-    # loads the image once, so everything after the first marker is the whole suite transcript.
-    body = "Program succeeded.".join(parts[1:])
-    chunks = body.split("Resetting SFRs")
-    # A scenario must also open with its own `program`/pin setup, so prefer the LAST occurrence of
-    # each reset burst. Count first and report the raw numbers when they disagree, so the next
-    # reader sees the actual split instead of a shifted index.
-    groups = [(index, parse_trace(chunk)) for index, chunk in enumerate(chunks)]
-    groups = [(marker, samples) for marker, samples in groups if samples]
+    # parts[0] is the preamble before the first program; parts[1:] are one per scenario.
+    groups = [(index, parse_trace(chunk)) for index, chunk in enumerate(parts[1:])]
     if len(groups) != expected:
         raise AssertionError(
             f"suite produced {len(groups)} sample groups, expected {expected} scenarios "
-            f"(raw split: {len(chunks)} chunks from {len(parts) - 1} image load(s)) - the "
-            "transcript split is wrong, so no scenario can be trusted (do NOT relax this "
-            "count; fix the split)")
+            f"({len(parts) - 1} 'Program succeeded.' markers) - the transcript split is wrong, "
+            "so no scenario can be trusted (do NOT relax this count; fix the split)")
     return groups
 
 
@@ -1182,13 +1167,16 @@ def main():
                           "FREQ_CTR_FAIL"]
         if "--quick-bands" in sys.argv[1:]:
             scenario_names = [None, "FREQ_CTR", "FREQ_CTR_FAIL"]
-        first_script = build_script()
-        suite_lines = first_script.splitlines()[:-1]
-        for index, scenario in enumerate(scenario_names[1:], 1):
+        suite_lines = []
+        for scenario in scenario_names:
             scenario_lines = build_script(trip_name=scenario).splitlines()
-            suite_lines.append("reset")
-            suite_lines.extend(scenario_lines[3:-1])
-        raw_output = run_mdb(mdb_path=find_mdb(), script="\n".join(suite_lines + ["quit"]))
+            # Re-emit device/hwtool/program for EVERY scenario. MDB `reset` does NOT clear RAM,
+            # so the previous scenario's frequency-counter state leaked across and FREQ_CTR_FAIL
+            # "saw" the prior 40m injection (frequency_khz=6963) and keyed the amplifier.
+            # Re-programming re-runs crt0, which zeroes .bss/.data and starts the scenario clean.
+            suite_lines.extend(scenario_lines[:-1])  # drop the trailing "quit"
+        suite_lines.append("quit")
+        raw_output = run_mdb(mdb_path=find_mdb(), script="\n".join(suite_lines))
         # Keep the raw transcript beside the CSVs. Without it, a failed scenario split is
         # undiagnosable after the fact: the CSV is only written once validation has already
         # passed, so a failure leaves NO trace of what the harness actually saw (this cost a
