@@ -41,10 +41,13 @@ with its names, so it was rejected rather than used to "confirm" anything.
 Also corrected in the same pass: the free-GPIO count (9 -> 3; the old figure counted RD2-RD7),
 the stale "RE0/RE2/RE3 remain spare" line in the future-uses list, and the document version.
 
-Not changed, and flagged instead: the Power & Ground table labels the rail "VDD (3.3V)", while
-`firmware/src/main.c`'s ADC comments assume a 5 V reference (~4.88 mV per count) and the part is
-rated 1.8-5.5 V. Only a pin numbering question was in scope here, so the rail voltage is left
-alone - but the two statements cannot both be right and one of them should be settled.
+Also fixed in the same pass, once the owner confirmed it: the Power & Ground table labelled the rail
+"VDD (3.3V)", while `firmware/src/main.c`'s ADC comments assume a 5 V reference (~4.88 mV per
+count), the NTC divider docs specify "the regulated 5 V rail", and the ADC protection note clamps
+to "VDD/+5 V". The supply is 5 V, so the 3.3 V label was the error and it has been removed. It was
+the only place in the repository that stated 3.3 V: a search for `3.3 V`/`3V3` now finds nothing
+outside the historical entries in this log. The rail voltage is now stated explicitly in the pin
+map's Power & Ground section so it cannot drift back.
 
 ## 2026-09-22 — The simulator harnesses were POSIX-only, and the launcher never reached the simulator on Windows
 

@@ -97,13 +97,16 @@ This document captures the current hardware understanding for the PIC16F18875-I/
 
 | Signal | Pin Numbers | Qty |
 |--------|-------------|-----|
-| VDD | 11, 32 | 2 |
+| VDD (+5 V regulated) | 11, 32 | 2 |
 | VSS (GND) | 12, 31 | 2 |
+
+The supply is a regulated **5 V** rail, and the ADC is VDD-referenced (`firmware/src/main.c`, FVR
+off) - so one ADC count is about 4.88 mV. Both VDD pins must be connected, as must both VSS pins.
 
 Pin numbers are the PDIP-40 numbers from the PIC16(L)F18855/75 datasheet (DS40001802H), taken
 from the 40-pin PDIP pin diagram and cross-checked against Table 3 (40/44-pin allocation table).
-There is **no dedicated VREF+ pin**: VREF+ is an alternate function of RA3, and the ADC is
-VDD-referenced (`firmware/src/main.c`, FVR off), so the design does not consume it.
+There is **no dedicated VREF+ pin**: VREF+ is an alternate function of RA3, and since the ADC is
+VDD-referenced the design does not consume it.
 
 ## ADC Channel Assignments
 
