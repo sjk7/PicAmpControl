@@ -4,7 +4,41 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
-## 2026-09-22 — PIC18F47Q10 spike rejected at the gate: MPLAB's simulator runs no time base on that device
+## 2026-09-22 — PIC18F47Q10 spike: a wrongly assumed register code produced a wrong rejection
+
+**CORRECTION, same day.** The verdict originally recorded under this heading - "MPLAB's simulator
+runs no time base on the Q10" - is **WRONG and retracted**. It was caused by my own error, and it is
+the most expensive kind: an assumed value, not a measured one. The minimal bring-up wrote
+`T2CLKCON = 0x00` annotated "Fosc/4 (the reset default)", while `firmware/src/main.c`'s own
+`timer0_init()` has carried `T2CLKCON = 0x01; /* Fosc/4 */` for this project's Timer2 all along.
+Rebuilt with `0x01`, `T2TMR` moves immediately (`106` then `92`): with `0x00` the timer had simply
+been clocked from nothing.
+
+Corrected findings, from three controlled builds on branch `spike/pic18f47q10-retest`:
+
+| Question | Result |
+|---|---|
+| Does PTT reach the firmware? | yes - `g_ptt_active` tracks a driven RC0 |
+| Do outputs toggle? | yes - `RC5` tracks PTT |
+| Does the time base run? | **yes** - with `T2CLKCON=0x01`, `T2TMR` counts and a main-loop poll of `TMR2IF` counts ticks: `g_poll_ticks` `30 -> 161 -> 292` over three 800,000-instruction steps |
+| Measured tick period | ~6,100 instructions/tick, against the 8,000 the harness assumes for 1 ms at 32 MHz - a port would need that recalibrated |
+| Is the interrupt delivered to the ISR? | **no** - `g_isr_any` stayed `0` with `INTCON=135` (GIE=1), `PIE4=2` (TMR2IE), `PIR4=2` (TMR2IF) |
+| Is that specific to the timer? | no - an RC0 interrupt-on-change (`IOCCP=1`, `PIE0=16`, edges driven from mdb) raised and cleared its flag under polling (`g_ioc_poll` `0 -> 1 -> 2`) while `g_isr_any` and `g_ioc_irq` stayed `0` |
+
+So the device and the model both do the basics. What is actually missing is **interrupt dispatch**:
+two independent sources request service with the global enable set, and the ISR is never entered.
+`OSCCON3.ORDY` additionally reads `0` throughout *while the timer and the IOC demonstrably run*, so
+that flag was a red herring and must not be cited as evidence about the clock.
+
+The narrow consequence: the scheduler in this firmware is ISR-driven (`timer0_isr`), so its timed
+behaviour still cannot be exercised as written on this model - but the reason is a missing
+*vectoring* path, not a missing clock, and a test-only polling variant is a plausible route to
+coverage. That is a decision for the owner, not a silent workaround, because polling would bend the
+firmware's architecture to suit a simulator rather than the hardware.
+
+The original entry follows, unaltered, so the mistake stays on the record.
+
+---
 
 Second device-upgrade attempt, run on branch `spike/pic18f47q10` (never on `main`) under the gated
 brief in `Ai-Notes.txt`. It fails the step-3 gate and the device is rejected. Recorded because the

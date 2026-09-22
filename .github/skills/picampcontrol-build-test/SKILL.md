@@ -419,6 +419,30 @@ Prerequisites that decide whether debugging works at all:
 
 ## Known snags (each one cost real time - do not rediscover them)
 
+- **An assumed register value can reject a whole device - and it did (2026-09-22, this cost most of
+  a session and produced a wrong verdict that had to be retracted).** While writing minimal bring-up
+  for the PIC18F47Q10 the Timer2 clock select was written as `T2CLKCON = 0x00` with the comment
+  "Fosc/4 (the reset default)". The value was *assumed*. `firmware/src/main.c`'s own
+  `timer0_init()` has carried `T2CLKCON = 0x01; /* Fosc/4 */` for this project's Timer2 the whole
+  time. With `0x00`, `T2TMR` never moved, and the conclusion "MPLAB's simulator runs no time base on
+  the Q10" was written into `bugfixes.md` and `Ai-Notes.txt` and the branch abandoned. Re-tested
+  with `0x01`: `T2TMR` reads `106` then `92` - Timer2 counts immediately. The device was never the
+  problem; the assumed value was. Four rules, all cheap:
+  1. **Never write a peripheral code you have not seen** in the datasheet, the DFP
+     (`xc8/pic/dat/cfgmap/<device>.cfgmap`, `xc8/pic/include/proc/<device>.h`), or this repository.
+     "The reset default" is a guess unless you have read it.
+  2. **Read the equivalent setup for the device the project already uses** before writing it for a
+     new one. The correct value was in the repo the entire time, one file away.
+  3. **Before blaming the simulator, A/B the suspect value.** Two builds differing in that one
+     constant and one mdb session settle it in minutes. The re-test above did exactly that.
+  4. **A negative simulator finding needs a positive control.** "No timer counts" is only evidence
+     if the same firmware counts with a different code - otherwise it measures your configuration.
+  This is `deepseek-pic.md`'s "never guess configuration" rule applied to SFRs, not just config words.
+- **`write <SFR> <value>` is not universally supported by this mdb build.** `write T1CON 0x01` and
+  `write TMR1L 0xAB` work, but `write T2CLKCON 0x00` fails with `For input string: "fbe "` and
+  **aborts the rest of the script** (`MDB_EXIT=-1`). Inject peripheral registers through a rebuilt
+  image, or put speculative register writes last in the script. (Same class as `write g_x 1` /
+  `print /a g_x` failing - see the fault-injection notes above.)
 - **Do NOT swap the target device without first checking that MPLAB models it equivalently.** On
   2026-09-22 the PIC16F18877 (same family, 40-pin PDIP, 4x flash and RAM, ~£2, in stock) was trialled
   as a drop-in upgrade for the PIC16F18875. It **builds perfectly** - the whole change is
