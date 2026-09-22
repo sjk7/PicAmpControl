@@ -4,21 +4,44 @@
 The launcher is deliberately separate from the caller's terminal process group:
 the PID file and group cleanup keep an interrupted VS Code terminal from leaving
 MPLAB MDB running into the next test.
+
+The platform differences (process groups, `ps` vs `taskkill`, `/tmp` vs `%TEMP%`)
+are all in `platform_process.py`, so this file stays one code path for both OSes.
 """
 import argparse
 import datetime
 import os
-import signal
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import platform_process as procutil  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PID_FILE = Path("/tmp/picampcontrol_suite.pid")
-DEFAULT_LOG = Path("/tmp/picampcontrol_suite_progress.log")
+PID_FILE = procutil.temp_dir() / "picampcontrol_suite.pid"
+DEFAULT_LOG = procutil.temp_dir() / "picampcontrol_suite_progress.log"
 SUITE = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/trace_ptt_sequence.py"), "--suite"]
+
+# Orphan signatures. The mdb entries have to match a leftover simulator without also
+# matching an unrelated `java.exe`, of which this machine has several (the MPLAB X IDE's
+# own JVM and a Java updater) and which must survive. Each run leaves two processes:
+# a POSIX launcher (`.../mplab_platform/bin/mdb[.sh]`), or on Windows `cmd.exe` holding
+# `mdb.bat` plus the JVM it starts:
+#   java.exe -Dfile.encoding=UTF-8 -classpath "...;...\lib\mdb.jar"
+#            com.microchip.mplab.mdb.debugcommands.Main <script>
+# The JVM is matched on its main class rather than on `mdb.jar` in the classpath, because
+# a bare `mdb.jar` is a path the IDE's own JVM could also carry - do not loosen this to
+# `mplab_platform` either, which matches the IDE as well.
+ORPHAN_PATTERNS = (
+    "mplab_platform/bin/mdb",
+    r"mplab_platform\bin\mdb.bat",
+    "com.microchip.mplab.mdb",
+    "run_suite_with_watchdog.py",
+    "trace_ptt_sequence.py --suite",
+)
 
 
 def stamp():
@@ -30,45 +53,33 @@ def kill_previous(log):
         return
     try:
         pid = int(PID_FILE.read_text().strip())
-        os.kill(pid, 0)
-    except (FileNotFoundError, ValueError, ProcessLookupError, PermissionError):
+    except (FileNotFoundError, ValueError):
+        PID_FILE.unlink(missing_ok=True)
+        return
+    if not procutil.pid_is_alive(pid):
         PID_FILE.unlink(missing_ok=True)
         return
     log.write(f"[{stamp()}] CLEANUP previous_pid={pid}\n")
-    try:
-        os.killpg(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
+    procutil.terminate_tree(pid)
     PID_FILE.unlink(missing_ok=True)
 
 
 def kill_orphaned_processes(log):
-    patterns = ("/mplab_platform/bin/mdb", "run_suite_with_watchdog.py", "trace_ptt_sequence.py --suite")
-    try:
-        process_lines = subprocess.check_output(
-            ["ps", "-axo", "pid=,command="], text=True, stderr=subprocess.DEVNULL
-        ).splitlines()
-    except subprocess.CalledProcessError:
-        return
-    for line in process_lines:
-        fields = line.strip().split(None, 1)
-        if len(fields) != 2:
+    for pid, command in procutil.running_processes():
+        if pid == os.getpid() or not any(pattern in command for pattern in ORPHAN_PATTERNS):
             continue
-        pid = int(fields[0])
-        command = fields[1]
-        if pid == os.getpid() or not any(pattern in command for pattern in patterns):
-            continue
-        try:
-            process_group = os.getpgid(pid)
-            os.killpg(process_group, signal.SIGKILL)
-            log.write(f"[{stamp()}] CLEANUP orphan_pid={pid} group={process_group} command={command}\n")
-        except (ProcessLookupError, PermissionError):
-            pass
+        if procutil.kill_tree(pid):
+            log.write(f"[{stamp()}] CLEANUP orphan_pid={pid} command={command}\n")
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--timeout", type=float, default=180.0)
+    # The default is sized for the slowest supported host: MDB is ~2.8x slower on
+    # Windows than macOS (measured 2026-09-22 - first-dit 55 s vs 20 s), and the merged
+    # suite ran past 280 s on Windows while still progressing normally. Keep this above
+    # the suite's real duration with margin rather than assuming macOS timings; the
+    # CTest registration in user.cmake passes the same figure explicitly.
+    parser.add_argument("--timeout", type=float, default=1200.0)
     parser.add_argument("--log", type=Path, default=DEFAULT_LOG)
     parser.add_argument("--quick-bands", action="store_true",
                         help="Run one valid 40m band plus the frequency-failure scenario")
@@ -90,19 +101,23 @@ def main():
             env=env,
             stdout=log,
             stderr=subprocess.STDOUT,
-            start_new_session=True,
+            **procutil.isolated_spawn_kwargs(),
         )
         PID_FILE.write_text(str(proc.pid))
         log.write(f"[{stamp()}] CHILD pid={proc.pid}\n")
         stop_heartbeat = threading.Event()
 
         def heartbeat():
+            # `time.monotonic()` is uptime, not elapsed time, so it has to be taken
+            # relative to the spawn. Printing it raw made a stalled run look like a
+            # progressing one (and vice versa) at exactly the moment the number matters.
+            started = time.monotonic()
             previous_mdb_size = 0
             while not stop_heartbeat.wait(10):
                 mdb_size = mdb_log.stat().st_size if mdb_log.exists() else 0
                 log.write(
-                    f"[{stamp()}] HEARTBEAT elapsed={time.monotonic():.1f} "
-                    f"child_poll={proc.poll()} mdb_bytes={mdb_size} "
+                    f"[{stamp()}] HEARTBEAT elapsed={time.monotonic() - started:.1f} "
+                    f"timeout={args.timeout:.0f} child_poll={proc.poll()} mdb_bytes={mdb_size} "
                     f"delta={mdb_size - previous_mdb_size}\n"
                 )
                 previous_mdb_size = mdb_size
@@ -112,12 +127,12 @@ def main():
         try:
             code = proc.wait(timeout=args.timeout)
         except KeyboardInterrupt:
-            log.write(f"[{stamp()}] INTERRUPTED cleanup_group={os.getpgid(proc.pid)}\n")
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            log.write(f"[{stamp()}] INTERRUPTED cleanup_pid={proc.pid}\n")
+            procutil.terminate_tree(proc.pid)
             code = proc.wait()
         except subprocess.TimeoutExpired:
-            log.write(f"[{stamp()}] TIMEOUT cleanup_group={os.getpgid(proc.pid)}\n")
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            log.write(f"[{stamp()}] TIMEOUT cleanup_pid={proc.pid}\n")
+            procutil.kill_tree(proc.pid)
             code = proc.wait()
         finally:
             stop_heartbeat.set()

@@ -637,7 +637,7 @@ def main():
     script, spans = build_script(addrs)
     print(f"first-dit proof: {len(script.splitlines())} mdb commands, "
           f"symbols {addrs}")
-    output = harness.run_mdb(mdb_path=harness.find_mdb(), script=script, timeout=300)
+    output = harness.run_mdb(mdb_path=harness.find_mdb(), script=script, timeout=900)
     samples = parse(output)
     if not samples:
         sys.exit("error: no samples parsed from mdb output")

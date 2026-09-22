@@ -375,7 +375,11 @@ The firmware uses a Timer2 interrupt tick of approximately 1 ms. ADC conversion-
 Firmware behaviour is verified in the MPLAB X `mdb` simulator through CTest. A single merged test, `PTT_SequencerAndTripSuite`, runs 11 scenarios in one MDB session: the baseline PTT/sequencer order, the temperature, SWR1, SWR2, hardware-fault, current, overdrive, and drain trips, the SWR1 1.5:1 no-trip case, frequency-counter band locking across all six bands, and the `FREQ_CTR_FAIL` negative test. Full workflow: [TESTING.md](TESTING.md).
 
 ```bash
-./run_tests.sh
+./run_tests.sh          # macOS
+```
+
+```powershell
+.\run_tests.ps1         # Windows
 ```
 
 The suite is Python 3 only and takes roughly 2-3 minutes. Write test output to a log file rather than the terminal — the simulator emits megabytes of pin/state trace, which overflows the terminal scrollback and loses the pass/fail line:
@@ -383,6 +387,13 @@ The suite is Python 3 only and takes roughly 2-3 minutes. Write test output to a
 ```bash
 cmake --build _build/My_Pic_Project/sim
 ctest --test-dir _build/My_Pic_Project/sim --output-on-failure > /tmp/pac_ctest.log 2>&1
+```
+
+```powershell
+cmake --build _build/My_Pic_Project/sim
+$log = "$env:TEMP\pac_ctest.log"
+ctest --test-dir _build/My_Pic_Project/sim --output-on-failure *> $log
+Add-Content $log "CTEST_EXIT=$LASTEXITCODE"
 ```
 
 GitHub Actions builds on `ubuntu-latest`. The workflow downloads and caches XC8 v4.00 plus the `PIC16F1xxxx_DFP` 1.32.471 pack into `/opt/microchip`, then configures and builds the Release firmware; no repository variables need to be set for that runner.

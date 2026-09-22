@@ -34,11 +34,20 @@ endif()
 # Run the merged suite through the cleanup-aware launcher. It owns the MDB process
 # group, kills stale runs, records progress logs, and enforces its own timeout, so the
 # test does not depend on the non-standard macOS `timeout` binary.
+# The budget is sized for the slowest supported host: MDB is ~2.4x slower on Windows
+# than macOS (measured 2026-09-22 - suite 356 s vs ~150 s), and the earlier 280 s bound
+# killed a healthy Windows run mid-flight. Do not shrink it back to a macOS-sized
+# number - a too-small value fails the test on a healthy run, which reads as a firmware
+# regression.
 set(PICAMP_SUITE_LAUNCHER "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/run_suite_with_watchdog.py")
+set(PICAMP_SUITE_TIMEOUT 1200)
 add_test(
     NAME PTT_SequencerAndTripSuite
-    COMMAND "${PYTHON_EXECUTABLE}" "${PICAMP_SUITE_LAUNCHER}" --timeout 300)
+    COMMAND "${PYTHON_EXECUTABLE}" "${PICAMP_SUITE_LAUNCHER}" --timeout ${PICAMP_SUITE_TIMEOUT})
 set_tests_properties(PTT_SequencerAndTripSuite PROPERTIES LABELS "sim;suite")
+# CTest's own default timeout is 1500 s, which would mask the launcher's diagnosis if the
+# launcher ever wedged, so both bounds are stated and the outer one is the launcher's.
+set_tests_properties(PTT_SequencerAndTripSuite PROPERTIES TIMEOUT 1500)
 
 # The first-dit band-detection proof runs as its own MDB session. Its stimulus (band snoop,
 # warm re-key from the remembered band, cache expiry, and a hot-switch fault injection) is

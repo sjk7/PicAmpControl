@@ -4,6 +4,76 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-22 — The simulator harnesses were POSIX-only, and the launcher never reached the simulator on Windows
+
+Found by running the previously macOS-only test workflow on Windows 10 for the first time. The
+firmware itself needed no changes: configure and build were already clean, and the Debug image
+linked to the same `8117/8192 words (99.1%)` as on macOS. Everything that broke was in
+`tools/simulate/*.py`, and every failure was invisible on macOS.
+
+The four defects, each of which failed on a different path:
+
+1. **`kill_orphaned_processes()` called `ps`, which does not exist on Windows, and its
+   `except subprocess.CalledProcessError` did not catch the `FileNotFoundError` that
+   `subprocess.check_output` actually raises.** The launcher therefore exited before it spawned the
+   suite, so a Windows run produced no CTest result at all - which reads as "the firmware failed" if
+   you do not check whether the child was ever started.
+2. **`kill_previous()` probed the PID file with `os.kill(pid, 0)`.** On Windows, Python's `os.kill`
+   maps every signal other than `CTRL_C_EVENT`/`CTRL_BREAK_EVENT` onto `TerminateProcess`, so this
+   idiomatic POSIX liveness check **kills the process it is asked about** - and here it would kill
+   the previous run's process, or an unrelated process that had inherited the PID.
+3. **`signal.SIGKILL`, `os.killpg` and `os.getpgid` do not exist on Windows** and raise
+   `AttributeError` - but only on the timeout and interrupt paths, i.e. precisely when a run has
+   hung and the cleanup matters. `import signal` succeeds on Windows, so nothing caught this early.
+4. **`start_new_session=True` is accepted and silently ignored on Windows**, so `mdb` stayed
+   attached to the console and a Ctrl-C aimed at the harness would reach the JVM.
+
+Fixed by adding `tools/simulate/platform_process.py` as the single place that knows the platform,
+and routing all four harnesses through it: `temp_dir()` (`%TEMP%` vs `/tmp`),
+`isolated_spawn_kwargs()` (`CREATE_NEW_PROCESS_GROUP` vs `start_new_session`),
+`pid_is_alive()` (`OpenProcess`/`GetExitCodeProcess` vs `os.kill(pid, 0)`),
+`terminate_tree()`/`kill_tree()` (`taskkill /PID <pid> /T /F` vs `os.killpg` + `SIGTERM`/`SIGKILL`),
+`running_processes()` (`Get-CimInstance Win32_Process` vs `ps -axo`), and `find_mdb()`.
+
+Verified end to end on Windows 10 + Python 3.14.7 + MPLAB X 6.35 + XC8 4.00: both CTest tests pass,
+including the full first-dit proof (`clauses (a)-(j), the hot-switch fault injections, and
+invariants I1-I6 hold`).
+
+Three further traps found while doing it, none of which were pre-existing bugs but each of which
+cost a cycle:
+
+- **`Path().glob("C:/absolute/pattern")` raises `NotImplementedError: Non-relative patterns are
+  unsupported` on Python 3.13+.** The existing harnesses only escaped this by globbing a *relative*
+  pattern under an absolute base; factoring the MPLAB install globs into a shared constant made the
+  pattern absolute and broke `find_mdb()` immediately. Use `glob.glob()`.
+- **MPLAB version directories were sorted as strings.** `sorted(...)[-1]` picks `v6.35` over `v6.20`
+  by luck, not by design - it would pick `v6.9` over `v6.35`. `find_mdb()` now compares the version
+  tuple, matching what `run_sim.sh` gets from `sort -V`.
+- **The orphan pattern must not be a transliteration of the POSIX one.** A Windows run is
+  `cmd.exe /c "…\mplab_platform\bin\mdb.bat"` plus `java.exe … "…\lib\mdb.jar"
+  com.microchip.mplab.mdb.debugcommands.Main`. Matching `mplab_platform` (the obvious port of
+  `/mplab_platform/bin/mdb`) also matches MPLAB X IDE's own JVM and a Java updater daemon, both of
+  which must survive; matching a bare `mdb.jar` is a path the IDE's classpath could carry too. The
+  JVM is therefore matched on its **main class** (`com.microchip.mplab.mdb`) and the wrapper on
+  `mdb.bat`, both chosen from a full `Win32_Process` dump of 262 processes.
+
+And a fifth defect, found only once the port worked well enough to run the suite end to end:
+
+5. **The MDB timeouts were sized for macOS, so a healthy suite run failed on Windows.** MDB is
+   about **2.4x slower on Windows** - measured on the same firmware, the merged suite takes 356 s
+   against ~150 s and the first-dit proof ~55 s against ~20 s - so the suite ran past
+   `run_mdb`'s 280 s default while still printing progress on every 10-second heartbeat. The
+   verdict was `error: mdb timed out after 280s and was killed` on a run that was 100% healthy, and
+   CTest reported `PTT_SequencerAndTripSuite ***Failed 281.75 sec` / `50% tests passed`, which reads
+   exactly like a firmware regression. Nothing in the firmware or the toolchain caused it.
+
+Fixed by sizing the bounds for the slowest supported host and documenting the relationship between
+them: `run_mdb(timeout=1500)` is a last-resort net that must sit *above* the launcher's outer
+budget (otherwise the child dies first and its message masks the launcher's clean
+`TIMEOUT … END code=` line), `run_suite_with_watchdog.py --timeout 1200` is the real budget, and
+`user.cmake` passes that same figure with a matching CTest `TIMEOUT 1500`. The `first-dit` and
+standalone frequency-counter sessions were raised with it.
+
 ## 2026-09-21 — The T/R relay could close onto LPF relays that were still moving (first-dit warm re-key)
 
 Found by code review of the first-dit band-selection ordering, prompted by the question "will the

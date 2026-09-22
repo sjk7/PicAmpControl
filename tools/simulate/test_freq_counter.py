@@ -8,11 +8,13 @@ Usage:
 """
 import os
 import re
-import signal
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import platform_process as procutil  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 ELF_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.elf"
@@ -55,15 +57,9 @@ VAR_NAME_RE = re.compile(r"^(g_[\w\.]+)=$")
 
 def find_mdb() -> Path:
     print("[DEBUG] Searching for mdb...", flush=True)
-    candidates = sorted(Path("C:/Program Files/Microchip/MPLABX").glob("*/mplab_platform/bin/mdb.bat"))
-    if not candidates:
-        print("[DEBUG] No Windows mdb found, checking macOS", flush=True)
-        candidates = sorted(Path("/Applications/microchip/mplabx").glob("*/mplab_platform/bin/mdb.sh"))
-    if not candidates:
-        print("[DEBUG] No mdb found in standard locations", flush=True)
-        sys.exit("error: mdb not found. Install MPLAB X IDE.")
-    print(f"[DEBUG] Found {len(candidates)} mdb candidate(s), using latest", flush=True)
-    return candidates[-1]
+    mdb = procutil.find_mdb()
+    print(f"[DEBUG] Using mdb at {mdb}", flush=True)
+    return mdb
 
 
 def build_script() -> str:
@@ -179,20 +175,21 @@ def run_mdb(mdb_path: Path, script: str) -> str:
         script_path = f.name
     try:
         print(f"[DEBUG] Running mdb with script file {script_path} ({len(script)} bytes)", flush=True)
-        # stdin=DEVNULL + start_new_session detach mdb from our controlling tty so a
-        # killed/hung mdb/JVM can never leave the terminal in raw mode (see bugfixes.md).
+        # stdin=DEVNULL + platform_process.isolated_spawn_kwargs() detach mdb from our
+        # controlling tty so a killed/hung mdb/JVM can never leave the terminal in raw
+        # mode (see bugfixes.md).
         proc = subprocess.Popen(
             [str(mdb_path), script_path], stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-            start_new_session=True,
+            **procutil.isolated_spawn_kwargs(),
         )
         try:
-            stdout, stderr = proc.communicate(timeout=120)
+            stdout, stderr = proc.communicate(timeout=900)
         except subprocess.TimeoutExpired:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            procutil.kill_tree(proc.pid)
             stdout, stderr = proc.communicate()
-            print("[DEBUG] mdb timed out after 120 seconds", flush=True)
-            sys.exit("error: mdb timed out after 120 seconds")
+            print("[DEBUG] mdb timed out after 900 seconds", flush=True)
+            sys.exit("error: mdb timed out after 900 seconds")
         print(f"[DEBUG] mdb completed, got {len(stdout)} bytes stdout, {len(stderr)} bytes stderr", flush=True)
         return stdout + stderr
     finally:

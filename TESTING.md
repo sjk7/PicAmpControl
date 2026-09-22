@@ -10,7 +10,10 @@ behaviour:
 - [`tools/simulate/test_first_dit.py`](tools/simulate/test_first_dit.py) — the first-dit
   band-detection proof, in its own MDB session
 
-A full run takes roughly 3 minutes.
+A full run takes roughly 3 minutes on macOS and roughly 7 minutes on Windows: MDB is about
+2.4x slower there (measured 2026-09-22: suite 356 s vs ~150 s, first-dit 55 s vs ~20 s), so expect
+the same tests to take proportionally longer rather than assume a slow run is a broken one.
+Timeouts are sized for the slower platform.
 
 ## Prerequisites
 
@@ -20,18 +23,35 @@ A full run takes roughly 3 minutes.
 - CMake 3.24+ and Ninja
 
 ```bash
+# macOS
 brew install cmake ninja
 brew install --cask mplabx-ide mplab-xc8
 ```
 
+```powershell
+# Windows
+winget install Kitware.CMake
+winget install Ninja-build.Ninja
+# MPLAB X IDE (which bundles the XC8 compiler) from microchip.com - it is not a winget package
+```
+
+On Windows the interpreter is `python`; there is no `python3` on the PATH. CMake's
+`find_program(PYTHON_EXECUTABLE NAMES python3 python)` and `run_tests.ps1` both handle this, so
+the scripts work unchanged - it only matters when typing commands by hand.
+
 ## Quick start
 
 ```bash
-./run_tests.sh
+./run_tests.sh          # macOS
 ```
 
-[`run_tests.sh`](run_tests.sh) configures `_build/My_Pic_Project/sim`, builds the firmware,
-then runs CTest.
+```powershell
+.\run_tests.ps1         # Windows
+```
+
+Both configure `_build/My_Pic_Project/sim`, build the firmware, then run CTest. They are the same
+workflow with the same behaviour; `run_tests.sh` is the bash original and `run_tests.ps1` its
+PowerShell twin.
 
 ## Manual run
 
@@ -54,9 +74,24 @@ cmake --build _build/My_Pic_Project/sim
 ctest --test-dir _build/My_Pic_Project/sim --output-on-failure > /tmp/pac_ctest.log 2>&1
 ```
 
-On Windows the toolchain lives under `C:/Program Files/Microchip/xc8/v4.00/bin` and the
-machine-wide CMake cache normally finds it; `tools/simulate/*.ps1` and `run_tests.ps1` handle the
-platform differences for you.
+On Windows the same configure runs **without** the XC8 overrides - the checked-in
+`.generated/toolchain.cmake` detects the compiler at `C:/Program Files/Microchip/xc8/v4.00/bin`
+and the packs at `%USERPROFILE%\.mchp_packs` itself:
+
+```powershell
+$root = (Get-Location).Path
+cmake -S cmake/My_Pic_Project/default `
+  -B _build/My_Pic_Project/sim `
+  -G Ninja `
+  -DCMAKE_BUILD_TYPE=Debug `
+  "-DCMAKE_TOOLCHAIN_FILE=$root/cmake/My_Pic_Project/default/.generated/toolchain.cmake" `
+  "-DCMAKE_USER_MAKE_RULES_OVERRIDE=$root/cmake/My_Pic_Project/default/.generated/overrides.cmake" `
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+cmake --build _build/My_Pic_Project/sim
+$log = "$env:TEMP\pac_ctest.log"
+ctest --test-dir _build/My_Pic_Project/sim --output-on-failure *> $log
+Add-Content $log "CTEST_EXIT=$LASTEXITCODE"
+```
 
 ## Test output goes to files, not the terminal
 
@@ -66,9 +101,9 @@ line, so always send CTest output to a log file and read the verdict from there.
 
 | File | Contents |
 |---|---|
-| `/tmp/pac_ctest.log` | CTest verdict (one line per test, discovery, total time) |
-| `/tmp/picampcontrol_suite_progress.log` | Suite progress: START/CHILD, 10-second heartbeats, `END code=<n>` |
-| `/tmp/picampcontrol_mdb_progress.log` | Raw live MDB output |
+| `/tmp/pac_ctest.log` (`%TEMP%\pac_ctest.log` on Windows) | CTest verdict (one line per test, discovery, total time) |
+| `/tmp/picampcontrol_suite_progress.log` (`%TEMP%\...`) | Suite progress: START/CHILD, 10-second heartbeats, `END code=<n>` |
+| `/tmp/picampcontrol_mdb_progress.log` (`%TEMP%\...`) | Raw live MDB output |
 | `_build/My_Pic_Project/sim/csv/` | Per-scenario CSV sample dumps |
 | `_build/My_Pic_Project/sim/graphs/` | Per-scenario logic-analyzer PNG traces |
 
@@ -82,8 +117,13 @@ CTest registers two tests in [`cmake/My_Pic_Project/default/user.cmake`](cmake/M
 
 | Test | Command | Labels | Time |
 |---|---|---|---|
-| `PTT_SequencerAndTripSuite` | `run_suite_with_watchdog.py --timeout 300` | `sim`, `suite` | ~2-2.5 min |
-| `FirstDit_BandDetectionAndHotSwitchGuards` | `test_first_dit.py` | `sim`, `first-dit` | ~20 s |
+| `PTT_SequencerAndTripSuite` | `run_suite_with_watchdog.py --timeout 1200` | `sim`, `suite` | ~150 s macOS / ~356 s Windows |
+| `FirstDit_BandDetectionAndHotSwitchGuards` | `test_first_dit.py` | `sim`, `first-dit` | ~20 s macOS / ~55 s Windows |
+
+The 1200 s figure is the *budget*, not the expected time - it is sized so that a healthy run on
+the slower platform cannot be mistaken for a failure. A timeout is a budget problem: before
+treating one as a firmware regression, check the heartbeat log, where a slow-but-healthy run keeps
+producing MDB output while a genuinely hung one sits at `delta=0`.
 
 Run everything, or select one test at a time, from the build directory:
 
@@ -102,11 +142,17 @@ Redirect to a log file as in the examples above when you need the pass/fail line
 The suite's command is:
 
 ```text
-python3 tools/simulate/run_suite_with_watchdog.py --timeout 300
+python3 tools/simulate/run_suite_with_watchdog.py --timeout 1200
 ```
 
+`python3` is the macOS spelling; on Windows it is `python`. `run_tests.ps1` and the CTest
+registration both resolve the right interpreter themselves.
+
 The launcher runs `trace_ptt_sequence.py --suite` in its own process group, kills stale
-runs, records progress logs, and enforces the timeout itself. All eleven scenarios run
+runs, records progress logs, and enforces the timeout itself. The process plumbing it needs is
+platform-specific and lives in `tools/simulate/platform_process.py` - POSIX uses process groups
+plus `os.killpg`, Windows uses `CREATE_NEW_PROCESS_GROUP` plus `taskkill /T /F`, and the PID-progress
+and orphan scans sit behind one interface. All eleven scenarios run
 inside **one** MDB session, so the run time is dominated by simulator startup and
 single-stepping rather than per-scenario overhead.
 
@@ -243,6 +289,13 @@ part of the merged suite only.
 3. Single-steps firmware execution
 4. Samples pin states and firmware variables at fixed instruction intervals
 5. Parses the trace into per-scenario sample groups
+
+[`tools/simulate/platform_process.py`](tools/simulate/platform_process.py) holds the only
+platform-specific code in the harnesses: temp-path resolution, MDB discovery, how a child is
+detached from the console, how a process is probed for liveness, and how a hung process tree is
+torn down (`os.killpg`/`SIGKILL` on POSIX, `taskkill /T /F` on Windows) plus the orphan scan
+(`ps` vs `Get-CimInstance`). If a platform difference needs handling, it belongs there, not in an
+individual harness.
 6. Validates sequencing, band locking, and each trip path
 7. Writes CSV samples and logic-analyzer PNG traces
 8. Exits non-zero on any failed assertion (the message names the scenario and the state)
@@ -305,36 +358,58 @@ Python 3, rather than failing the test at run time.
 
 ### "mdb not found"
 
-MPLAB X IDE supplies the simulator:
+MPLAB X IDE supplies the simulator. `tools/simulate/platform_process.py::find_mdb()` searches the
+standard install roots on both OSes and picks the newest MPLAB version; set `MPLABX_MDB` to the
+`mdb.bat`/`mdb.sh` path to override it for a non-standard install.
 
 ```bash
-brew install --cask mplabx-ide
+brew install --cask mplabx-ide                                   # macOS
+```
+
+```powershell
+# Windows: install MPLAB X IDE from microchip.com; verify it is where the search expects
+Test-Path 'C:\Program Files\Microchip\MPLABX\*\mplab_platform\bin\mdb.bat'
 ```
 
 ### Build failures / XC8 not found
 
 ```bash
+# macOS
 brew install --cask mplab-xc8
 ls -la "$HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin"
 ```
 
+```powershell
+# Windows
+Test-Path 'C:\Program Files\Microchip\xc8\v4.00\bin\xc8-cc.exe'
+```
+
 Pass `-DXC8_BIN_DIR`, `-DCMAKE_C_COMPILER`, `-DCMAKE_ASM_COMPILER`, and `-DCMAKE_AR` as
-shown in the manual run above.
+shown in the macOS manual run above — only needed for a non-standard unpack, since the checked-in
+toolchain file detects both the default macOS and Windows locations.
 
 ### The run looks hung
 
-Check the heartbeat in `/tmp/picampcontrol_suite_progress.log`. If the `mdb_bytes` value is
-still increasing, the simulator is working, just slowly — the trace volume is large. If MDB
-output has stopped, kill the process group recorded in `/tmp/picampcontrol_suite.pid` and
-start a fresh run.
+Check the heartbeat in the suite progress log (`/tmp` on macOS, `%TEMP%` on Windows). If the
+`mdb_bytes` value is still increasing, the simulator is working, just slowly — the trace volume is
+large. If MDB output has stopped, kill the tree of the PID recorded in `picampcontrol_suite.pid`
+and start a fresh run.
 
 Never reuse a terminal that still has a previous suite command queued.
 
+### Nothing happens at all on Windows
+
+If CTest reports no result and the suite progress log has no `CHILD pid=...` line, the launcher
+died before spawning the simulator — that is a harness problem, not a firmware one. The launcher
+needs `taskkill` and PowerShell's `Get-CimInstance` for its process scan; both are present on any
+supported Windows build, so check the log's last line for the actual error.
+
 ### Runtime
 
-The merged suite takes roughly 2-3 minutes on this machine and the full watchdog timeout is
-300 s. Slow runs are normal: each scenario single-steps the simulator to capture detailed
-state transitions.
+The merged suite takes roughly 150 s on macOS and ~356 s on Windows, where MDB is about 2.4x
+slower. The watchdog budget is 1200 s - generous on purpose, because a budget-induced timeout on a
+healthy run is far more confusing than a slow green run. Slow runs are normal: each scenario
+single-steps the simulator to capture detailed state transitions.
 
 ## CI
 

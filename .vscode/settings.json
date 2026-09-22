@@ -34,7 +34,7 @@
         "mplab-core-da"
     ],
     "chat.tools.terminal.autoApprove": {
-        "/^python3 tools/simulate/trace_ptt_sequence\\.py --suite$/": {
+        "/^(python3?|py) tools/simulate/trace_ptt_sequence\\.py --suite$/": {
             "approve": true,
             "matchCommandLine": true
         }

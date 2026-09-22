@@ -1,6 +1,6 @@
 ---
 name: picampcontrol-build-test
-description: "Use when building, testing or debugging PicAmpControl firmware: Debug or Release builds, CMake configuration, ctest, run_tests.sh, simulator/mdb runs, the VS Code Simulate debug session, breakpoints and symbol reads, PTT/frequency-counter tests, band-lock tests, first-dit band detection, remembered-band fold-back, band-change/hot-switch guards, or build/test failures."
+description: "Use when building, testing or debugging PicAmpControl firmware on macOS or Windows: Debug or Release builds, CMake configuration, ctest, run_tests.sh / run_tests.ps1, simulator/mdb runs, the VS Code Simulate debug session, breakpoints and symbol reads, PTT/frequency-counter tests, band-lock tests, first-dit band detection, remembered-band fold-back, band-change/hot-switch guards, or build/test failures."
 ---
 
 # PicAmpControl Build, Test and Debug
@@ -30,7 +30,36 @@ Always clean up an earlier run before starting another. The MDB suite can outliv
 - Evidence log for defects found while testing: `bugfixes.md` (read it before "fixing" a suspicious harness assertion).
 - VS Code debug config: `.vscode/launch.json` → `Simulate PicAmpControl (Debug)` (`mplab-core-da`, tool `Simulator`, device `PIC16F18875`, program `out/My_Pic_Project/default.elf`).
 - Symbol table for breakpoints and harness state reads: `out/My_Pic_Project/default.sym`.
-- **The workspace build tasks in `.vscode/tasks.json` are Windows-only** — they hard-code `E:/hamcode/PicAmpControl/...`, so on this macOS checkout they fail immediately. Do not reach for `Build PicAmpControl (Debug/Release)` here; use the commands in this skill.
+- **The workspace build tasks in `.vscode/tasks.json` are portable** - they use
+  `${workspaceFolder}`, so `Build PicAmpControl (Debug/Release)` work on both OSes. (This file
+  used to claim they hard-coded `E:/hamcode/...`; that was true of an older revision and is not
+  any more - do not repeat it.)
+- **`tools/simulate/platform_process.py` is the only place platform differences live.** Every
+  harness imports it for temp paths, MDB discovery, spawning and process-tree teardown. If you
+  need a platform branch, add it there rather than to a harness.
+- **Temp paths are per-OS.** The progress logs and PID file sit in the OS temp directory:
+  `/tmp/...` on macOS, `%TEMP%\...` on Windows. `platform_process.temp_dir()` resolves it; the
+  concrete Windows path is typically `C:\Users\<user>\AppData\Local\Temp`.
+
+## Platforms
+
+Both macOS and Windows are supported, and everything below is written per-OS where it differs.
+Read the matching half before running anything:
+
+| | macOS | Windows |
+|---|---|---|
+| Shell | bash / zsh | PowerShell 7 (`pwsh`) |
+| XC8 | `$HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin` | `C:/Program Files/Microchip/xc8/v4.00/bin` |
+| DFP packs | `$HOME/.mchp_packs` | `%USERPROFILE%\.mchp_packs` |
+| MDB launcher | `/Applications/microchip/mplabx/*/mplab_platform/bin/mdb.sh` | `C:\Program Files\Microchip\MPLABX\*\mplab_platform\bin\mdb.bat` |
+| Python | `python3` | `python` (there is no `python3` on the PATH) |
+| Helper scripts | `tools/simulate/*.sh`, `run_tests.sh` | `tools/simulate/*.ps1`, `run_tests.ps1` |
+
+The XC8/DFP locations need no manual cache overrides on either OS:
+`cmake/My_Pic_Project/default/.generated/toolchain.cmake` branches on `WIN32` and
+`.generated/rule.cmake` falls back from `$ENV{HOME}` to `$ENV{USERPROFILE}` (CMake's spelling
+for `%USERPROFILE%`) because `HOME` is not set by default on Windows. `XC8_BIN_DIR`
+overrides are only needed for a non-standard unpack.
 
 ## Toolchain setup
 
@@ -41,10 +70,23 @@ at `/Applications/microchip/...`; either works):
 $HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin
 ```
 
-On Windows it is `C:/Program Files/Microchip/xc8/v4.00/bin`, and `%USERPROFILE%/.mchp_packs` holds
+On Windows it is `C:/Program Files/Microchip/xc8/v4.00/bin`, and `%USERPROFILE%\.mchp_packs` holds
 the DFP packs (`$HOME/.mchp_packs` on macOS). Use `$HOME`/`%USERPROFILE%` rather than a literal
 home directory: the committed docs and config must not carry a developer's account name, and the
 paths differ per machine.
+
+Verify the compiler exists before blaming a build; both halves of the checks below are copy-paste
+ready.
+
+```sh
+# macOS
+ls "$HOME/tools/microchip/xc8/v4.00/xc8-v4.00/bin/xc8-cc"
+```
+
+```powershell
+# Windows
+Test-Path 'C:\Program Files\Microchip\xc8\v4.00\bin\xc8-cc.exe'
+```
 
 `.clangd` **is** tracked and is deliberately machine-agnostic - do not add absolute include paths
 back to it, and do not untrack it. It needs none: `CompilationDatabase` is relative to the config
@@ -56,7 +98,10 @@ either. Verified on clangd 19.1.7: with no `-I`/`-mdfp` lines, `--check firmware
 0 errors. (An earlier revision of this file hard-coded one machine's home directory, which both
 published a developer's account name and broke the other platform - see `bugfixes.md` 2026-09-21.)
 
-Before building, check that `xc8-cc` exists. Existing build caches may contain the invalid compiler value `c`; explicitly override the compiler paths when reconfiguring. The repository root has no `CMakeLists.txt`, so do not configure with `cmake --preset` from the root unless the preset is first corrected to specify the nested source directory.
+Before building, confirm `xc8-cc` exists (the checks above do it). Existing build caches may contain
+the invalid compiler value `c`; explicitly override the compiler paths when reconfiguring. The
+repository root has no `CMakeLists.txt`, so do not configure with `cmake --preset` from the root
+unless the preset is first corrected to specify the nested source directory.
 
 ## Debug build
 
@@ -75,7 +120,37 @@ cmake -S cmake/My_Pic_Project/default \
 cmake --build _build/My_Pic_Project/debug -j4
 ```
 
-## Release build
+On Windows the same configure runs unchanged - the auto-detection resolves XC8 and the DFP packs,
+so no `XC8_BIN_DIR`/compiler overrides are needed. The only differences are PowerShell syntax and
+`$PWD` becoming `(Get-Location).Path`:
+
+```powershell
+$root = (Get-Location).Path
+cmake -S cmake/My_Pic_Project/default `
+  -B _build/My_Pic_Project/debug `
+  -G Ninja `
+  -DCMAKE_BUILD_TYPE=Debug `
+  "-DCMAKE_TOOLCHAIN_FILE=$root/cmake/My_Pic_Project/default/.generated/toolchain.cmake" `
+  "-DCMAKE_USER_MAKE_RULES_OVERRIDE=$root/cmake/My_Pic_Project/default/.generated/overrides.cmake" `
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+cmake --build _build/My_Pic_Project/debug -j4
+```
+
+Verified 2026-09-22 on Windows 10 + Python 3.14.7 + MPLAB X 6.35: configure and build are both
+clean, and the Debug image links to the same `8117/8192 words (99.1%)` / `365/4096 bytes (35.6%)`
+as the macOS build, so the Windows and macOS toolchains agree on code size.
+
+Two Windows-only messages that appear during configure and mean nothing is wrong:
+
+- `Windows is not configured with LongPathsEnabled` (printed twice) - only relevant to very deep
+  build trees; this repo's paths are short enough.
+- `Warning: Did not find file Compiler/-ASM` - emitted by the MPLAB-generated `overrides.cmake`,
+  which never had one. The build links fine.
+- `The C compiler identification is unknown` is expected, not a failure: the toolchain file
+  pre-asserts `CMAKE_C_COMPILER_WORKS` because a cross-compiler cannot be executed at configure
+  time on either OS.
+
+
 
 Use the same configure command with:
 
@@ -152,10 +227,11 @@ Run the full merged suite with the cleanup-aware launcher. This is the default t
 python3 tools/simulate/run_suite_with_watchdog.py --timeout 180
 ```
 
-Use the full five-minute default verification before calling the suite green:
+Use the full default verification before calling the suite green - the 1200 s budget the CTest
+registration uses, which is what "green" means for this suite:
 
 ```sh
-python3 tools/simulate/run_suite_with_watchdog.py --timeout 300
+python3 tools/simulate/run_suite_with_watchdog.py --timeout 1200
 ```
 
 For a fast diagnostic run only, use one happy band plus the deliberate missing-frequency failure case:
@@ -166,17 +242,34 @@ python3 tools/simulate/run_suite_with_watchdog.py --quick-bands --timeout 180
 
 This is diagnostic only. The default command remains the full six-band suite.
 
+`python3` in these commands is macOS; on Windows it is `python` (there is no `python3` on the
+PATH). The launcher takes the same arguments either way - `run_tests.ps1` discovers the Windows
+interpreter for you.
+
 Start this command in a fresh VS Code terminal/execution context. The launcher creates a new process group for the suite, so the caller can be interrupted without attaching the next run to an old MDB process. Do not reuse a terminal that still has a prior suite command queued.
 
-Progress is written to `/tmp/picampcontrol_suite_progress.log`; live MDB output is written to `/tmp/picampcontrol_mdb_progress.log`.
+Progress is written to `picampcontrol_suite_progress.log` in the OS temp directory
+(`/tmp` on macOS, `%TEMP%` on Windows); live MDB output is written to
+`picampcontrol_mdb_progress.log` beside it.
 
-The launcher owns `/tmp/picampcontrol_suite.pid` and also scans for orphaned `mdb`, `run_suite_with_watchdog.py`, and `trace_ptt_sequence.py --suite` processes at startup. Before manually killing a run, read that PID and terminate the process group, then remove the PID file. Verify no `trace_ptt_sequence.py --suite` or `mdb.sh` process remains before starting another run. Do not kill unrelated compiler language servers or system Java processes.
+The launcher owns `picampcontrol_suite.pid` (same temp directory) and also scans for orphaned
+`mdb`, `run_suite_with_watchdog.py`, and `trace_ptt_sequence.py --suite` processes at startup.
+Before manually killing a run, read that PID and terminate its whole tree, then remove the PID
+file. Verify no `trace_ptt_sequence.py --suite` or `mdb` process remains before starting another
+run. Do not kill unrelated compiler language servers or system Java processes - on Windows that
+means MPLAB X IDE's own `java.exe` and the Java updater, which is why the orphan pattern matches
+`mdb.bat`/`mdb.jar` rather than `mplab_platform` (see the Windows gotchas below).
 
 The live MDB log is intentionally separate from the suite result log. MDB produces a large amount of trace output because every simulator sample prints pins and state variables. During a long run, inspect both logs:
 
 ```sh
 tail -n 20 /tmp/picampcontrol_suite_progress.log
 tail -n 20 /tmp/picampcontrol_mdb_progress.log
+```
+
+```powershell
+Get-Content "$env:TEMP\picampcontrol_suite_progress.log" -Tail 20
+Get-Content "$env:TEMP\picampcontrol_mdb_progress.log" -Tail 20
 ```
 
 The diagnostic runner should record periodic heartbeats containing:
@@ -219,7 +312,10 @@ For a bounded run:
 timeout 150 python3 -u tools/simulate/trace_ptt_sequence.py --suite
 ```
 
-Do not launch another suite while this launcher is running. If an old run exists, starting the launcher cleans it up through `/tmp/picampcontrol_suite.pid`. A terminal response with exit `130`, `142`, no output, or an empty log is not a pass; inspect the saved logs and process state.
+(`timeout` is macOS/Linux only and is not needed on Windows - the watchdog launcher enforces its
+own `--timeout`, which is the portable form and the one to prefer.)
+
+Do not launch another suite while this launcher is running. If an old run exists, starting the launcher cleans it up through the PID file in the temp directory. A terminal response with exit `130`, `142`, no output, or an empty log is not a pass; inspect the saved logs and process state.
 
 ### Injecting stimuli and faults into the harness
 
@@ -243,10 +339,12 @@ Two techniques matter when writing or repairing a scenario, both already impleme
 
 The registered `PTT_SequencerAndTripSuite` test runs the merged suite through
 `run_suite_with_watchdog.py`, so it owns the MDB process group, cleans up stale runs, and
-enforces its own timeout without depending on the non-standard macOS `timeout` binary.
+enforces its own timeout without depending on the non-standard macOS `timeout` binary or on any
+Windows equivalent.
 The suite is Python 3 only: configuration fails fast if the discovered interpreter is not
 Python 3, and `PYTHON_EXECUTABLE` may be stale in an existing cache, so clear it with
-`-U PYTHON_EXECUTABLE` when reconfiguring.
+`-U PYTHON_EXECUTABLE` when reconfiguring. `NAMES python3 python` resolves to `python` on
+Windows, which is correct there - `python3` simply does not exist on the PATH.
 
 Run CTest with **all output redirected to a log file**. The MDB trace is megabytes of pin
 and state dump; printing it to the terminal overflows the scrollback and loses the result.
@@ -256,8 +354,20 @@ ctest --test-dir _build/My_Pic_Project/debug --output-on-failure > /tmp/pac_ctes
 echo "CTEST_EXIT=$?" >> /tmp/pac_ctest.log
 ```
 
-Both tests run by default (~3 min together). Run one at a time when iterating - the first-dit
-proof is ~20 s against the suite's ~2.5 min:
+```powershell
+$log = "$env:TEMP\pac_ctest.log"
+ctest --test-dir _build/My_Pic_Project/debug --output-on-failure *> $log
+Add-Content $log "CTEST_EXIT=$LASTEXITCODE"
+```
+
+In PowerShell use `*>` (all streams), not `2>&1`: the native-command merge turns stderr lines
+into terminating `ErrorRecord`s when `$ErrorActionPreference = 'Stop'`, which aborts the run.
+`run_tests.ps1` does this for you.
+
+Both tests run by default. Windows is about 2.4x slower than macOS - the first-dit proof is ~20 s
+on macOS / ~55 s on Windows, and the merged suite ~150 s / ~356 s (measured 2026-09-22) - so read
+the elapsed time against the platform before calling a slow run anomalous. Run one at a time when
+iterating; the first-dit proof is much the cheaper of the two:
 
 ```sh
 ctest --test-dir _build/My_Pic_Project/debug -R FirstDit
@@ -268,9 +378,9 @@ ctest --test-dir _build/My_Pic_Project/debug -L sim
 Neither test may run concurrently with the other: each owns MDB, and the suite launcher kills
 stray MDB processes at startup.
 
-Run that detached (or let it finish) and read the verdict from `/tmp/pac_ctest.log`. Do not
-re-run another suite while one is active, and do not reuse a terminal that still has a prior
-ctest/suite command queued.
+Run that detached (or let it finish) and read the verdict from the CTest log in the temp
+directory. Do not re-run another suite while one is active, and do not reuse a terminal that
+still has a prior ctest/suite command queued.
 
 Confirm that CTest discovers the merged `PTT_SequencerAndTripSuite` test
 (`ctest --test-dir _build/My_Pic_Project/debug -N`). Report zero discovered tests as a
@@ -349,10 +459,12 @@ Prerequisites that decide whether debugging works at all:
   mid-trace. Recover with `workbench.action.terminal.killAll` and a fresh command; prevent it by
   launching long runs in the background with everything redirected to a file, so the run does not
   depend on the terminal staying healthy.
-- **A stale PID file stops the next launch before it starts.** `run_suite_with_watchdog.py` kills the
-  previous run's process group at startup and dies with `PermissionError: [Errno 1] Operation not
-  permitted` from `os.killpg` when `/tmp/picampcontrol_suite.pid` belongs to a run that is already
-  gone. `rm -f /tmp/picampcontrol_suite.pid` and relaunch.
+- **A stale PID file used to stop the next launch before it started** - fixed 2026-09-22, but the
+  symptom is worth recognising if it regresses. `run_suite_with_watchdog.py` used to signal the
+  previous run's process group unconditionally and died with `PermissionError: [Errno 1] Operation
+  not permitted` from `os.killpg` when the PID file belonged to a run that was already gone. The
+  launcher now checks `platform_process.pid_is_alive()` first and clears the file if the process is
+  gone. If it regresses, delete the PID file in the temp directory and relaunch.
 - **A missing program-memory line means "nothing was relinked", not "no space used".** Both
   configurations link to the same `out/My_Pic_Project/default.elf`, so after a Release build the
   Debug `cmake --build` can print no summary at all because Ninja has no work to do. Force the relink
@@ -362,6 +474,83 @@ Prerequisites that decide whether debugging works at all:
   even starts. Either add the name to `SYSTEM_SYMBOLS`, or drive the state through the firmware's own
   mechanism - it puts the cache back into bypass-snoop by injecting an idle count past
   `IDLE_TIMEOUT_MS` rather than clearing `g_band_cache_valid`, which is not injectable.
+
+### Windows gotchas (found 2026-09-22 porting the harnesses)
+
+All of these are now handled in `tools/simulate/platform_process.py`. They are listed because each
+one fails in a way that looks like something else, and because the *reason* they were present is
+the actual lesson: every one of them was invisible on macOS and only appears when the same code
+first runs on Windows. Assume any new POSIX-flavoured helper needs the same scrutiny.
+
+- **`os.killpg`, `os.getpgid` and `signal.SIGKILL` do not exist on Windows.** They raise
+  `AttributeError` - and only on the timeout/interrupt path, i.e. exactly when a run has hung and
+  cleanup matters. Use `platform_process.kill_tree()` / `terminate_tree()`. Note `import signal`
+  succeeds on Windows; only the individual constants are missing, so a static import check proves
+  nothing.
+- **`os.kill(pid, 0)` KILLS the process on Windows instead of probing it.** Python's Windows
+  `os.kill` maps every signal except `CTRL_C_EVENT`/`CTRL_BREAK_EVENT` onto `TerminateProcess`, so
+  the idiomatic POSIX liveness check is destructive here. Use
+  `platform_process.pid_is_alive()`, which uses `OpenProcess`/`GetExitCodeProcess`.
+- **`start_new_session=True` is silently ignored on Windows** - it is accepted, not rejected, so
+  the child stays attached to the console and a Ctrl-C reaches `mdb`. Windows needs
+  `creationflags=subprocess.CREATE_NEW_PROCESS_GROUP`; use
+  `platform_process.isolated_spawn_kwargs()`.
+- **There are no signalable process groups on Windows.** Teardown is
+  `taskkill /PID <pid> /T /F`, which walks the child tree. Exit code `128` from `taskkill` means
+  "no such process", which is a fine outcome, not an error.
+- **`ps` does not exist on Windows, and its absence is not a `CalledProcessError`.** The old
+  `kill_orphaned_processes()` guarded `subprocess.check_output(["ps", ...])` with
+  `except subprocess.CalledProcessError`, so on Windows it raised an uncaught `FileNotFoundError`
+  and the launcher died *before starting any run*. Use `platform_process.running_processes()`, which
+  uses `Get-CimInstance Win32_Process` there. `wmic` is deprecated and absent from current Windows
+  builds, so do not reach for it.
+- **Match the mdb launcher narrowly, or you will kill MPLAB X IDE's JVM.** A Windows run is
+  `cmd.exe /c "…\mplab_platform\bin\mdb.bat" <script>` plus
+  `java.exe … -classpath "…lib\mdb.jar" com.microchip.mplab.mdb.debugcommands.Main <script>`.
+  Matching `mplab_platform` (the natural transliteration of the POSIX pattern
+  `/mplab_platform/bin/mdb`) also matches the IDE's own JVM and a Java updater daemon, and
+  matching a bare `mdb.jar` is a path the IDE's classpath could carry too. The JVM is therefore
+  matched on its **main class** (`com.microchip.mplab.mdb`) and the wrapper on `mdb.bat` -
+  both chosen from a full `Win32_Process` dump of 262 processes, not guessed. Do not "simplify"
+  these back to the install directory or the jar name. A healthy run is exactly four processes:
+  launcher → suite → `cmd.exe`/`mdb.bat` → `java.exe`; if the `java.exe` has no `cmd.exe` parent
+  the tree was torn down with `taskkill /T`.
+- **`Path().glob()` rejects absolute patterns from Python 3.13 on**
+  (`NotImplementedError: Non-relative patterns are unsupported`), so
+  `Path().glob("C:/Program Files/.../mdb.bat")` fails. Use `glob.glob()`. The existing harnesses
+  avoided this only by globbing a *relative* pattern under an absolute base
+  (`Path("C:/…/MPLABX").glob("*/…")`) and rewriting it broke the instant the pattern itself became
+  absolute. This machine runs Python 3.14.7, so it is live here.
+- **MPLAB version directories must be sorted as versions, not strings.** `sorted(...)[-1]` on
+  `v6.20`/`v6.35` happens to work, but it would pick `v6.9` over `v6.35`. `find_mdb()` now compares
+  the version tuple.
+- **`python3` is not on the Windows PATH** - the interpreter is `python`. Use `python` in Windows
+  commands; `run_tests.ps1` and the CMake `find_program(PYTHON_EXECUTABLE NAMES python3 python)`
+  both resolve it correctly.
+- **Windows MDB is ~2.4x slower than macOS, so macOS-sized timeouts fail healthy runs.**
+  Measured 2026-09-22 on the same firmware: the first-dit proof takes ~55 s on Windows against
+  ~20 s on macOS, and the merged suite **356 s against ~150 s**. The old 280 s inner timeout
+  therefore killed the suite mid-run on Windows while it was still printing progress on every
+  heartbeat - the verdict was `error: mdb timed out after 280s and was killed` and CTest reported
+  `PTT_SequencerAndTripSuite ***Failed 281.75 sec`, `50% tests passed`, which reads exactly like a
+  firmware regression. Nothing in the firmware or the toolchain caused it. This is a property of
+  MDB's JVM plus the simulator, not of this repo. The timeouts are therefore sized for the slowest
+  host: `run_mdb(timeout=1500)` as a last-resort net, `run_suite_with_watchdog.py --timeout 1200`
+  and the matching CTest registration as the real budget. Do not shrink any of them back to a
+  macOS-sized number, and do not read a timeout-killed suite as a firmware regression - a timeout
+  is a *budget* failure, and the heartbeat log tells the two apart in seconds (a genuinely hung run
+  shows `delta=0` and a frozen `mdb_bytes`; a slow-but-healthy one keeps producing output).
+- **Sizing rule learned here:** the inner per-session timeout must sit *above* the launcher's
+  outer `--timeout`, otherwise the child dies first and the harness reports its own message
+  instead of the launcher's clean `TIMEOUT ... END code=` line. When you change one, check the
+  other.
+- **Python can launch `mdb.bat` directly**; no `shell=True` and no `cmd /c` wrapper is needed for
+  `subprocess.Popen([r"…\mdb.bat", script])`. Do not "fix" a nonexistent problem by adding
+  `shell=True`, which loses the argument quoting.
+- **A short throwaway probe script is the right tool for this class of problem** - a 20-line script
+  that launches `mdb` and dumps matching command lines found the whole Windows process picture in
+  one run, where reading code would have only produced guesses. Delete the probe when you are done;
+  the build tree is not a scratch directory.
 
 ## Failure triage
 
@@ -393,7 +582,15 @@ Prerequisites that decide whether debugging works at all:
   pin/SFR assignment uses `<=` (`:=` is for user variables); `RD1 = '1';` breaks the simulator.
 - MDB output ending without a final validator line is inconclusive; inspect the saved log and process table.
 - Keep source fixes separate from test-harness timing fixes. Re-run the narrow failing scenario first, then the full suite.
-- If the terminal wrapper reports a command as finished while the PID file remains, the run is still active or the wrapper lost control of it. Kill the recorded process group before doing anything else.
+- If the terminal wrapper reports a command as finished while the PID file remains, the run is still active or the wrapper lost control of it. Kill the recorded tree before doing anything else. To see what survived, use `ps -axo pid=,command=` on macOS or
+  `Get-CimInstance Win32_Process | Where-Object CommandLine -match 'mdb\.(bat|jar)'` on Windows -
+  never `mplab_platform`, which also matches MPLAB X IDE's own JVM.
+- **A Windows run that produces no CTest result has usually died before the simulator starts.** The
+  first Windows failure here was not the firmware, the toolchain, or `mdb`: `kill_orphaned_processes()`
+  called `ps`, which does not exist, and the launcher exited on an uncaught `FileNotFoundError`
+  before it ever spawned the suite. When a Windows run reports nothing at all, check the launcher's
+  own progress log for whether it even reached `START`/`CHILD`; an absent `CHILD` line means the
+  failure is in the launcher, not in the simulation.
 
 ## Reporting
 
@@ -406,7 +603,7 @@ Report:
    committed the moment that verdict reads green. This is a standing user instruction - it has been
    forgotten before.
 
-1. Debug and Release build exit status and important compiler/linker warnings, plus the program-memory figure when a build is near the limit.
+1. Debug and Release build exit status and important compiler/linker warnings, plus the program-memory figure when a build is near the limit. State which OS the run was on - the two toolchains are known to agree on code size as of 2026-09-22, so a divergence is a finding, not noise.
 2. CTest test discovery and result.
 3. Merged suite exit status, elapsed time, and final pass/fail line.
 4. The first failing scenario and its diagnostic state, if any.
