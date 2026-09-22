@@ -26,6 +26,29 @@ Therefore, permanently:
   whole-file dump costs CPU as well as tokens;
 - no code blocks unless the user asked for one. Durable knowledge goes in this skill, not the chat.
 
+**Hard rule: EVERY durable finding goes into this skill in the same session it is found, and "it can
+never happen again" is only true once it is written here.** Standing user instruction, 2026-09-22:
+*"'so it can't happen again' needs to be: wrote to skill so it never happens again.' Don't forget to
+feedback things like this to the skill, always. Sticky."*
+
+A fix in code, a comment in a file, or a commit message is **not** a finding recorded. Only this
+skill, `Ai-Notes.txt`, or a repo doc counts, because those are what a future session reads before it
+starts work. Concretely, whenever any of these happens, write it to the skill before moving on:
+
+- a trap that cost time (a wrong flag, a silent failure, an assumed value, a tool that lied);
+- a *method* that worked (positive controls, staged probes, per-device build configuration);
+- a measurement that replaces a guess (timings, memory figures, instruction rates);
+- a mistake of mine that a reader should not repeat, including wrong verdicts I had to retract.
+
+The test of whether it is recorded: could a fresh session hit the same problem and be stopped by
+what is written here? If not, it is not written yet. Do not batch this "for later" - the session that
+found it is the only one that still has the context.
+
+**Hard rule: commit often, and never leave a finding uncommitted** (user instruction, 2026-09-22:
+"update git often!"). Working-tree state is not a record. Commit each coherent change as it lands -
+a fix, a test, a doc, a skill update - rather than accumulating a large diff, so that a finding
+cannot be lost by a later rebuild or revert.
+
 **Hard rule: follow logs in a VS Code tab, and treat FileTail as conditional.** Long jobs - suites,
 builds, spike runs - write their output to a log file, and the user watches that file in a VS Code
 **tab**. **Opening that tab is part of doing the job, not a courtesy done afterwards.** The user had
@@ -834,6 +857,39 @@ Prerequisites that decide whether debugging works at all:
   4. **A negative simulator finding needs a positive control.** "No timer counts" is only evidence
      if the same firmware counts with a different code - otherwise it measures your configuration.
   This is `deepseek-pic.md`'s "never guess configuration" rule applied to SFRs, not just config words.
+- **BUILD THE POSITIVE CONTROL BEFORE BELIEVING THE NEGATIVE RESULT - and check your own arithmetic
+  with it (2026-09-22, twice in one session).** The Q10 suite reported **0 keyed runs in 552
+  samples**. That is the exact signature the abandoned 18877 attempt produced ("the pattern says the
+  firmware never sees PTT asserted"), so it was very plausible as a chip problem. It was not
+  believed until a positive control existed, and building that control took minutes:
+
+  `_build/My_Pic_Project/sim/stimulus_control_report.txt` / `tools/simulate/test_stimulus_positive_control.py`:
+  read `PORTC`, `write pin RC0 low`, read again, release, read again. Result `229 -> 228 -> 229`.
+  The stimulus reaches the firmware, so "0 keyed runs" is a **real firmware finding**.
+
+  Two failures inside that one small exercise, both worth not repeating:
+
+  1. **The control's first run reported the opposite of the truth - because I checked the wrong
+     bit.** RC0 is bit **0** of `PORTC`; the check used bit 1. `229 -> 228` is exactly the change
+     the control was looking for, and reading bit 1 made a perfect result look like "no change",
+     so it declared the stimulus inert. **A positive control that you have not sanity-checked is
+     worse than no control**: it manufactures confidence in the wrong direction. Before trusting a
+     control's verdict, confirm the mask/bit/index it uses against the pin you actually drove, and
+     confirm the direction of the effect (idle -> asserted -> released should return to idle).
+  2. **A stimulus command that mdb accepts is not a stimulus that applied.** `write pin RA6 high`
+     was echoed in the transcript and did nothing. Placing it *before* `program` was one cause (the
+     target is not programmed yet); a special-function pin (`RA6` is also `CLKOUT/OSC2`) is a
+     suspected second cause, still not proven. So any test whose whole point is a sad path must
+     **assert that its stimulus took effect** and fail loudly if it did not. The first version of
+     the boot sad-path test did not, and reported a PASS while exercising nothing - see
+     `test_boot_safety_order.py`'s `hold_applied()`.
+- **When several symptoms share one cause, find the cause before chasing the symptoms (2026-09-22).**
+  "0 keyed runs" looked like a PTT problem. A staged probe (`probe_q10_ptt_path.py`) walked the path
+  one stage at a time - startup inhibit expired? PTT latched? snoop entered? - and showed
+  `g_startup_inhibit` was still `true` after 800,000 steps with `g_state` stuck at `STATE_RESET_WAIT`.
+  So PTT was never *able* to latch: the failure was upstream of PTT entirely, in the startup-inhibit
+  timer not advancing. Walking the path in order costs one probe and replaces a symptom with an
+  address. Prefer it to reasoning about the most visible symptom.
 - **A family can need a different *enabling mechanism*, not just a different value - and the model
   will look broken until you use it (2026-09-22, same session as the bullet above).** With
   `IPEN = 0` - the PIC16F-style plain path - the PIC18F47Q10 model dispatches **no** interrupts at
