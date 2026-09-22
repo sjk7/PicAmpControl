@@ -579,7 +579,7 @@ Prerequisites that decide whether debugging works at all:
 
 ## Known snags (each one cost real time - do not rediscover them)
 
-- **PIC18F-Q10 port findings (2026-09-22, sticky - add to this list as they are found; the port is in
+- **PIC18F47Q10 port findings (2026-09-22, sticky - add to this list as they are found; the port is in
   flight on branch `upgrade/pic18f47q10`).** Current state, re-measured 2026-09-22: all four
   translation units compile clean for `-mcpu=18F47Q10` against `PIC18F-Q_DFP/1.30.487` and the
   image **links** at 317Ah / 12666 bytes of 20000h program space (9.7%), 368 of 0xD1F bytes RAM,
@@ -590,6 +590,30 @@ Prerequisites that decide whether debugging works at all:
   Two `(1311) missing configuration setting for config word 0x300001/0x300005; using default`
   warnings on any scratch link are an artefact of that link passing no `#pragma config`; the real
   CMake build compiles `main.c` (which owns the config words) and does not show them.
+  **The Q10 image has now actually run (2026-09-22), on a minimal bring-up probe rather than the
+  firmware itself, and the six assumptions below all measured good on the MPLAB model:**
+  | Assumption in the firmware | Measured on the Q10 model |
+  |---|---|
+  | `T2CLK = 0x01` (Fosc/4) makes Timer2 count | `T2TMR` moved 33 -> 409 -> ... across `Stepi` steps |
+  | `IPEN = 1` + `IPR4bits.TMR2IP = 1` dispatches interrupts | `g_isr_any` went 0 -> 2 -> 5 as the tick ran |
+  | `PR2 = 124`, `CKPS = 6` give a 1.000 ms tick | 3 ticks per 40000 `Stepi` steps, i.e. ~13.3 k steps/tick |
+  | `T1CKIPPS = 0x19` is accepted | read back `25` |
+  | PTT on RC0 with `ANSELCbits.ANSELC0 = 0`, pull-up on | `ANSELC = 254` (bit 0 cleared), `WPUC = 1` |
+  | the NVM unlock + `WR` sequence completes | `g_nvm_done = 1`, `NVMDATL` read back `165` (0xA5) |
+  **`NVMCON1` on this device has NO `WREN` bit** - its members are `RD`, `SECRD`, `WR`, `SECWR`,
+  `SECER`, straight from the DFP header. `Eeprom-changes.md` names `WREN`, `NVMCMD`,
+  `NVMCON0bits.GO` and `INTCON0`; none of those exist here, so take the *procedure* from that file
+  and the *bit names* from the header. Writing `NVMCON1bits.WREN` fails to compile, which is how
+  this was caught a second time.
+  **MDB script syntax, learned the hard way this session:** MDB rejects `//` and `;` comment lines
+  as `Undefined command` and exits `-1` before running anything, so a probe script must carry **no
+  comment lines at all** (put the explanation in the .c file). The step command is `Stepi`
+  (capital S), `hwtool sim` is lower-case, and the working template is
+  `_build/spike_q10_retest/ab.mdb` - copy its shape rather than writing a script from scratch.
+  The instruction rate also needs recalibrating for Q10: `tools/simulate/test_first_dit.py` assumes
+  8000 instructions/ms (16F-era), while the Q10 probe measured roughly 6000-6900 instructions per
+  simulated tick against a 1.000 ms `PR2` tick - do that calibration before trusting any Q10 timing
+  assertion.
   1. **Analog-select bitfield names differ by family.** `firmware/src/freq_counter.c` used
      `ANSELDbits.ANSD1..ANSD7`, which do not exist on the Q10 - the same register (0xF21) has
      members named `ANSELD1..7` there. Fixed by clearing the whole register (`ANSELD = 0x00`), which
