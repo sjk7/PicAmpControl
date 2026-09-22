@@ -38,6 +38,7 @@ CI/release workflows change - don't let it go stale.
   space, so delete both).
 - Keep README.md and docs/ purely current-facing: no "old prototype was replaced by..." style historical narrative. Historical context belongs only in prototype_reference/.
 - Never run bare `git status`/`git status --short`; use `git --no-pager status --short` (avoids hitting an interactive pager or the `gcm-core` credential helper prompt).
+- NEVER WRITE "Hmmm" (user instruction, 2026-09-22). The user finds it irritating and unclear. Do not use it as a filler word, a thinking-out-loud opener, or a hedge anywhere in a reply. State the finding, or the uncertainty, plainly instead.
 - docs/hardware/PIC16F18875_pin_map.md is the SINGLE source of truth for MCU pin assignments. Never restate pin numbers or pin tables in README, architecture, schematic-package, or checklist docs - link to it instead. Keep it in sync with firmware/include/pin_map.h. The same rule applies to nets (project_schematic_package/connection_table.csv) and the BOM (component_list.csv).
 - Any new "remember this" instruction from the user must be added to this section, not just kept in assistant memory.
 - DEVICE UPGRADE EVALUATED AND REJECTED (2026-09-22). PIC16F18877-I/P (same family, 40-pin PDIP,
