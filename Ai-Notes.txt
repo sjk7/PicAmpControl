@@ -258,6 +258,51 @@ re-derive it.
    routing, the 1:4 prescaler and the overflow path are untested - the first burst is injected by
    writing `TMR1H`/`TMR1L`. That gap closes on the bench only.
 
+### DEVICE UPGRADE SPIKE (GATED) - brief for the session that runs it
+
+Read the standing instruction "DO NOT START A DEVICE UPGRADE WITHOUT ASKING FIRST..." before
+anything else. This work only happens when the user has explicitly said go.
+
+**Purpose.** Decide whether MPLAB's simulator models the PIC18F47Q10 equivalently enough that this
+project's only verification mechanism - the mdb harnesses - still means anything. It is NOT to port
+the firmware. Do not begin a full port before the gate in step 3 passes.
+
+**Why it is worth a day.** Flash is the binding constraint on the safety argument: the
+Debug/simulator image sits at 8117/8192 words (75 free) and that is what limits how much test
+evidence can be added. A PIC18F47Q10 has ~8x the flash, ~3.5x the RAM and 2x the clock for ~£1.85,
+and it is the same 40-pin PDIP footprint. It is a different family, so it is a port, not a swap.
+
+**Branch.** Create `spike/pic18f47q10` from `main`. Never work on `main`. The spike ends either
+merged (if the gate passes) or abandoned with nothing left behind.
+
+**Order of work - each step is a stop/go gate.**
+1. Install the **PIC18F-Q10 DFP**. It is not installed (only `PIC16F1xxxx_DFP`, `PIC16Fxxx_DFP`
+   and `Simulator_TP` are present).
+2. Minimal bring-up only: `-mcpu=18F47Q10`, the DFP path in `.generated/rule.cmake`, `.clangd`,
+   config words, oscillator/PLL, the ~1 ms Timer tick, PTT input, one output, one Timer read.
+   Deliberately do NOT port ADC, comparators, EEPROM/NVM or PPS yet.
+3. **THE GATE.** Run the existing harnesses: `tools/simulate/scenarios/boot_smoke.mdb`, then the
+   first-dit clause (a) check. Does the firmware see PTT asserted? Does the tick advance? Does the
+   output toggle?
+4. If PTT is invisible or the tick does not run: **STOP.** Record it in `bugfixes.md` with the
+   observed evidence, note it here, abandon the branch, report. That is exactly how the
+   PIC16F18877 was rejected - do not treat it as a puzzle to work around.
+
+**Known device-specific hazards to check during step 3.** Each is a magic number or module that
+must be re-derived from the Q10 datasheet, never copied:
+- `firmware/src/freq_counter.c`: `T1CKIPPS = 0x19` (T1CKI -> RD1). PPS input codes differ per device.
+- Comparators are in the **overcurrent safety path**, and the Q10 uses a 5-bit DAC reference. MPLAB
+  6.35 already warns `W9602-COMP:DAC Voltage Source Peripheral not yet implemented to act as input
+  to Comparator` - verify what that leaves unmodelled before trusting any protection test.
+- The ADC is ADCC/ADC2 on the Q10, with different registers and conversion model.
+- `#pragma config MCLRE = ON` and the config-word layout differ by family.
+- The pin map must be re-derived from the Q10 datasheet (the single-source-of-truth rule applies).
+
+**Do not:** change firmware source for a new device on `main`; accept "it builds" as evidence (a
+clean build said nothing about the 18877); shrink the harness timeouts to make a slow spike run
+pass. Note the pin map was corrected on 2026-09-22 (see `bugfixes.md`) - firmware addresses ports
+by name, so that correction touches only the schematic/PCB side, not code.
+
 ### General
 
 The open work is hardware validation: final sensor calibration, comparator thresholds and polarity, ADC transient protection, TX timing, fan implementation, LCD/menu/internal EEPROM persistence testing, final PCB review, and CI validation. First-dit specifics to confirm on the bench: BAND_CACHE_IDLE_TIMEOUT_MS (60 s) against real band-change habits, BAND_SETTLE_MS (20 ms) against the fitted LPF relay's operate time, and BAND_VERIFY_MS (20 ms) - i.e. how long a wrong remembered band may stay engaged before fold-back, which is the one figure that trades amplifier protection against nuisance drop-outs on a noisy first dit.
