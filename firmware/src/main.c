@@ -310,9 +310,10 @@ void apply_bypass(void) {
 /* The band may only go back to following live RF once the amplifier is cold, otherwise
    the relays would move underneath a keyed amplifier. */
 void release_band_if_cold(void) {
-    if (OUTPUT_TX == output_level(false, g_thresholds.tx_active_high) &&
-        OUTPUT_TX_VCC == output_level(false, g_thresholds.tx_vcc_active_high) &&
-        OUTPUT_TX_BIAS == output_level(false, g_thresholds.tx_bias_active_high)) {
+    /* SENSE_* reads the pin, not the latch: this confirmation must be about the hardware. */
+    if (SENSE_TX == output_level(false, g_thresholds.tx_active_high) &&
+        SENSE_TX_VCC == output_level(false, g_thresholds.tx_vcc_active_high) &&
+        SENSE_TX_BIAS == output_level(false, g_thresholds.tx_bias_active_high)) {
         freq_counter_unlock_band();
     }
 }
@@ -1284,9 +1285,11 @@ void update_tx_sequence(void) {
             g_sequence_elapsed_ms++;
             if (g_sequence_elapsed_ms >= g_thresholds.tx_bias_delay_ms) {
                 set_tx_bias_output(true);
-                if (OUTPUT_TX == output_level(true, g_thresholds.tx_active_high) &&
-                    OUTPUT_TX_VCC == output_level(true, g_thresholds.tx_vcc_active_high) &&
-                    OUTPUT_TX_BIAS == output_level(true, g_thresholds.tx_bias_active_high)) {
+                /* SENSE_* reads the pin, not the latch - PTT COMPLETE must mean the outputs
+                   have actually reached their active levels, not that they were commanded to. */
+                if (SENSE_TX == output_level(true, g_thresholds.tx_active_high) &&
+                    SENSE_TX_VCC == output_level(true, g_thresholds.tx_vcc_active_high) &&
+                    SENSE_TX_BIAS == output_level(true, g_thresholds.tx_bias_active_high)) {
                     g_sequence_stage = 3;
                     g_ptt_complete_display_active = true;
                     g_ptt_complete_display_elapsed_ms = 0;
