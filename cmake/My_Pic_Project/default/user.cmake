@@ -42,6 +42,10 @@ endif()
 # regression.
 set(PICAMP_SUITE_LAUNCHER "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/run_suite_with_watchdog.py")
 set(PICAMP_SUITE_TIMEOUT 1200)
+# Both simulator tests go through the same watchdog launcher so that they append to a single
+# progress log: the reader watching that log sees the suite finish and the first-dit proof
+# begin, with the running test named on every line (user request, 2026-09-22).
+set(PICAMP_FIRST_DIT_TIMEOUT 600)
 add_test(
     NAME PTT_SequencerAndTripSuite
     COMMAND "${PYTHON_EXECUTABLE}" "${PICAMP_SUITE_LAUNCHER}" --timeout ${PICAMP_SUITE_TIMEOUT})
@@ -56,10 +60,11 @@ set_tests_properties(PTT_SequencerAndTripSuite PROPERTIES TIMEOUT 1500)
 # runtime, so it stays a separate test. See tools/simulate/test_first_dit.py.
 add_test(
     NAME FirstDit_BandDetectionAndHotSwitchGuards
-    COMMAND "${PYTHON_EXECUTABLE}"
-            "${CMAKE_CURRENT_LIST_DIR}/../../../tools/simulate/test_first_dit.py")
+    COMMAND "${PYTHON_EXECUTABLE}" "${PICAMP_SUITE_LAUNCHER}"
+            --test first-dit --timeout ${PICAMP_FIRST_DIT_TIMEOUT})
 set_tests_properties(FirstDit_BandDetectionAndHotSwitchGuards
     PROPERTIES LABELS "sim;first-dit")
+set_tests_properties(FirstDit_BandDetectionAndHotSwitchGuards PROPERTIES TIMEOUT 900)
 option(PICAMP_ENABLE_INDIVIDUAL_SIM_TESTS "Register each simulator scenario separately" OFF)
 if (PICAMP_ENABLE_INDIVIDUAL_SIM_TESTS)
     add_test(

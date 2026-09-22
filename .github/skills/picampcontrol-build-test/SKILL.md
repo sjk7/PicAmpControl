@@ -20,6 +20,29 @@ missing, install it (`spacetown.filetail`) before starting anything long. This r
 the log is the user's window into a multi-minute run; console tails were both unwanted and, worse,
 silently broken (see the log-viewing note under Simulator verification).
 
+**Hard rule: never delete or recreate a file a FileTail tab is already watching.** Deleting the log
+between runs drops the watcher: the tab keeps rendering its old buffer and the file looks frozen even
+though heartbeats are landing in it (user report: "the heartbeat is not ticking again",
+2026-09-22 - the run was perfectly healthy). Truncate the file (`Clear-Content`) or reopen the tab and
+re-toggle FileTail after any recreation. The delete/create step is only safe *before* the tab exists.
+
+**Hard rule: resolve the VS Code CLI, never assume it.** The user runs Insiders in this workspace but
+may be on stable - check for `code-insiders` first and fall back to `code`, in every command and
+script, so the workflow works either way (sticky user instruction, 2026-09-22).
+
+**Hard rule: Windows Defender real-time exclusions must be in place, and you must prompt for them.**
+Without them Defender scans every MDB/JVM object and every build output, and the machine spends its
+CPU on the scanner (user report: "Defender is killing my pc"). The installer is
+`tools/setup/windows-defender-exclusions.ps1` and it needs an **elevated** PowerShell; a non-elevated
+shell cannot even read the exclusion list back, so the script leaves a marker file and
+`tools/simulate/cleanup_sim_processes.py` prints a prompt when the marker is missing. Run that check
+as part of the pre-flight, and if it reports the exclusions are absent, ask the user to run the
+installer rather than silently proceeding.
+
+**Hard rule: clean up leftover processes before starting anything.** Run
+`python tools/simulate/cleanup_sim_processes.py` before a build or a simulator job. It shares its
+patterns with the launcher and also does the Defender pre-flight above.
+
 Use this skill for firmware builds, simulator verification and simulator debugging. Do not claim success from a missing or truncated terminal response; require a fresh exit code and final output.
 
 Always use the **file-based pattern**: redirect every test command's output to a log file, append the exit code, and read the verdict from that file. MDB emits megabytes of trace, and the terminal scrollback and output capture regularly lose the pass/fail line (a command can even come back with no captured output while the run is still going). Never conclude anything from an empty terminal response - check the log and the exit-code line.
@@ -424,7 +447,8 @@ test is running - and neither one alone shows the whole run.
 **Delete the log before you launch the job, not after.** The sequence is: delete -> create fresh ->
 *start the job* -> open the file in a tab -> FileTail on. Opening a tab that a previous run already
 created, or reusing one mid-run, leaves the user looking at a stale buffer and was called out on
-2026-09-22.
+2026-09-22. Note the launcher now *appends* (one file across both tests, never recreated per run), so
+once the tab exists use `Clear-Content` - deleting the file would drop the watcher.
 
 **Open the log in TAIL mode in the VS Code UI for any long-running job - on Windows too** (standing
 user instruction, 2026-09-22, generalised and then restated for tail mode the same day). The user
@@ -434,7 +458,9 @@ does not track the end of a growing one.
 
 ```powershell
 # Windows: open in a TAB and let FileTail follow it (never a console tail - see the hard rule above)
-code-insiders -r "$env:TEMP\picampcontrol_suite_progress.log"
+# Resolve the CLI rather than assuming Insiders (hard rule at the top):
+$code = if (Get-Command code-insiders -ErrorAction SilentlyContinue) { 'code-insiders' } else { 'code' }
+& $code -r "$env:TEMP\picampcontrol_suite_progress.log"
 # then run the command `filetail.toggle` with that tab active
 ```
 
@@ -451,6 +477,21 @@ the file it opened. The suite launcher *unlinks and recreates* its log at startu
 started before the run keeps reading the deleted file and goes permanently silent - the user sees an
 empty pane and reasonably concludes nothing is happening. That is the second reason this is a tab
 with FileTail rather than a terminal follow. (The first is that the user asked for it.)
+
+**The progress log names the running test and always keeps moving (2026-09-22).** The launcher
+appends, one file for the whole ctest run, and brackets each test with
+`TEST_BEGIN name=<test> ...` / `TEST_END name=<test> code=<n>`, so a reader can tell which test is
+running and that it moved on ("as it moves on to another test, this should also be in the file").
+Both tests therefore go through `run_suite_with_watchdog.py` (`--test suite|first-dit`), including the
+first-dit proof that used to be invoked directly.
+
+**The heartbeat is its own process, on purpose.** It is a second copy of the launcher run with
+`--heartbeat`, writing a line every 5 s for the whole test. A thread shares the launcher's fate, so
+anything that blocks the launcher silences the file, and a shared non-append handle let the child's
+buffered report clobber the heartbeat lines - which is exactly what "the heartbeat stops" looked like.
+Two consequences worth remembering: a heartbeat writer that dies is invisible unless its stderr goes
+to a file (it does now, `picampcontrol_heartbeat_err.log`, after a wrong argument silently killed it),
+and the writer is spawned with `--label`, not `--test`, because `--test` is a validated choice.
 
 Watching a log for visibility is sanctioned; judging a run from terminal output is not, so the
 pass/fail line and the appended exit code still come from the run's own log file.
