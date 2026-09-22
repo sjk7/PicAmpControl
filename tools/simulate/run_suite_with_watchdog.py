@@ -57,7 +57,7 @@ def stamp():
     return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
-def last_mdb_line(mdb_log: Path, offset: dict, limit: int = 70) -> str:
+def last_mdb_line(mdb_log: Path, offset: dict, limit: int = 70, tail_bytes: int = 65536) -> str:
     """The most recent non-empty MDB line, from where the caller last looked.
 
     Byte counts alone say whether the run is moving, not what it is doing, and the MDB text
@@ -65,6 +65,11 @@ def last_mdb_line(mdb_log: Path, offset: dict, limit: int = 70) -> str:
     dump of raw bytes did not: it showed MDB's hex-dump column, so a reader could not tell a
     fresh write from bytes already counted (user report, 2026-09-22). The offset advances by
     what was actually read, so the next heartbeat cannot re-report the same bytes.
+
+    Two bounds, both deliberate: only the last `tail_bytes` of new output are read (the newest
+    line is at the end, and the MDB log grows without limit inside a test), and the newest line
+    is preferred over the *last complete* line, because mid-write MDB output means an empty
+    newest line and "did not print anything" beats "printed a line from 40 s ago".
     """
     try:
         size = mdb_log.stat().st_size if mdb_log.exists() else 0
@@ -75,18 +80,20 @@ def last_mdb_line(mdb_log: Path, offset: dict, limit: int = 70) -> str:
         start = 0
     if size <= start:
         return ""
+    read_from = max(start, size - tail_bytes)
     try:
         with mdb_log.open("rb") as handle:
-            handle.seek(start)
-            chunk = handle.read()
+            handle.seek(read_from)
+            chunk = handle.read(size - read_from)
     except OSError:
         return ""
-    offset["value"] = start + len(chunk)
+    offset["value"] = size
     text = chunk.decode("utf-8", "replace")
-    for line in reversed(text.splitlines()):
-        line = " ".join(line.split())
-        if line:
-            return line[-limit:]
+    lines = text.splitlines()
+    for line in lines[1:] if read_from != start else lines:
+        collapsed = " ".join(line.split())
+        if collapsed:
+            return collapsed[-limit:]
     return ""
 
 
@@ -98,26 +105,31 @@ def heartbeat_loop(log, mdb_log: Path, test_name: str, timeout: float, started_w
     processes, or wedged on a Windows handle - the file stops moving exactly when the reader
     needs it most (user report, 2026-09-22).
 
-    It also runs as its own process because three writers share this one file: the launcher,
-    the test's own stdout, and this heartbeat. Windows `O_APPEND` does not make a write atomic,
-    so a plain append here produced records with their head or tail missing - a heartbeat line
-    with no timestamp was the visible symptom. All three writers therefore go through
-    `procutil.AppendLog`, which serialises on a lock file; measured torn records across
-    repeated runs went from 2-12% to zero.
+    Three writers share this one file - the launcher, the test's own stdout, and this heartbeat -
+    and on Windows the append mode alone does not keep their records whole, so all three go
+    through `procutil.AppendLog`, which serialises on a lock file.
+
+    The ordering in the loop is the part that matters: the beat is **stamped and written first**,
+    and the MDB log is only read afterwards. A beat must not be delayed by the work of describing
+    the run - if reading the MDB tail is slow, the next line still lands one interval later.
     """
     offset = {"value": 0}
     previous_size = 0
     while True:
         now = time.time()
-        mdb_size = mdb_log.stat().st_size if mdb_log.exists() else 0
-        line = (
+        mdb_size = 0
+        try:
+            if mdb_log.exists():
+                mdb_size = mdb_log.stat().st_size
+        except OSError:
+            pass
+        log.write(
             f"[{stamp()}] HEARTBEAT test={test_name} elapsed={now - started_wall:.1f} "
             f"timeout={timeout:.0f} mdb_bytes={mdb_size} delta={mdb_size - previous_size}"
         )
         latest = last_mdb_line(mdb_log, offset)
         if latest:
-            line += f' mdb="{latest}"'
-        log.write(line)
+            log.write(f"[{stamp()}] MDB {latest}")
         previous_size = mdb_size
         # Self-limiting: if the launcher is killed outright this must not outlive the test
         # by much. A later launcher's orphan sweep also matches it (see ORPHAN_PATTERNS).

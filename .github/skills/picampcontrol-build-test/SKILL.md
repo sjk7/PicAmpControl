@@ -580,9 +580,16 @@ Prerequisites that decide whether debugging works at all:
 ## Known snags (each one cost real time - do not rediscover them)
 
 - **PIC18F-Q10 port findings (2026-09-22, sticky - add to this list as they are found; the port is in
-  flight on branch `upgrade/pic18f47q10`).** Compiling the *unmodified* firmware for
-  `-mcpu=18F47Q10` against the shipping Q DFP is far closer than expected: all three translation
-  units compile with only seven errors, all of a single kind.
+  flight on branch `upgrade/pic18f47q10`).** Current state, re-measured 2026-09-22: all four
+  translation units compile clean for `-mcpu=18F47Q10` against `PIC18F-Q_DFP/1.30.487` and the
+  image **links** at 317Ah / 12666 bytes of 20000h program space (9.7%), 368 of 0xD1F bytes RAM,
+  EEPROM 0 of 400h. Commands that reproduce it (no CMake): compile each `firmware/src/*.c` with
+  `xc8-cc -mcpu=18F47Q10 "-mdfp=<Q_DFP>\xc8" -O1 -gdwarf-3 -std=c99 -I firmware/include -c`, then
+  link the resulting `.p1` intermediates - **`-o foo.o` is ignored by XC8, which always emits
+  `<stem>.p1` next to the output**, so a later link step must name the `.p1` files, not `.o`.
+  Two `(1311) missing configuration setting for config word 0x300001/0x300005; using default`
+  warnings on any scratch link are an artefact of that link passing no `#pragma config`; the real
+  CMake build compiles `main.c` (which owns the config words) and does not show them.
   1. **Analog-select bitfield names differ by family.** `firmware/src/freq_counter.c` used
      `ANSELDbits.ANSD1..ANSD7`, which do not exist on the Q10 - the same register (0xF21) has
      members named `ANSELD1..7` there. Fixed by clearing the whole register (`ANSELD = 0x00`), which
