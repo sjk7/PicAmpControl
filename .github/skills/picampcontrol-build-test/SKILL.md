@@ -150,9 +150,25 @@ that looks dead (this cost a whole session on 2026-09-22 - the log was written, 
    - Guard the visibility listener with the same self-move grace window as the selection listener,
      or the extension's own `revealRange()` is read back as "the user scrolled away" and the follow
      pauses itself.
+   - **`TextEditorRevealType.Default` did NOT pin the view to the bottom and looked like lag.**
+     `Default` only guarantees the revealed position is *visible*; on a long file the view settled
+     part-way up with the newest line below the fold. Measured: the tab showed **line 136 of 201**
+     with a current buffer. Use **`TextEditorRevealType.AtTop`** on the last line - because it *is*
+     the last line, "at top" scrolls the document as far down as it will go, pinning the newest
+     line to the bottom edge, which is what a tail looks like. This was the last of the bugs and
+     the one that survived two earlier rounds of fixes, so change `Default` -> `AtTop` first if the
+     symptom returns.
+   - **Drive the refresh from a `FileSystemWatcher` per followed file, and keep the poll as a
+     fallback.** Poll-only is up to one interval stale and a fast writer outruns it; a watcher alone
+     was the original failing design (a producer that truncates/recreates invalidates it, and a
+     file created after arming is invisible to it). Both together is the working combination.
+   - A tab opened *after* output already exists must scroll to the end on first sight (adopt the
+     current size and reveal), or it sits at the top until the next append.
 
-   Current version: **0.3.0**, poll interval `logFollower.coalesceMs = 250` ms. **After changing
-   the extension, repackage and reinstall, then restart VS Code:**
+   Current version: **0.4.0**; `logFollower.coalesceMs = 250` ms, watcher-driven with the poll as
+   the safety net. **Verified working 2026-09-22**: a 200-line burst on an open log left the tab on
+   `growing line 200`. Before that fix the same test stopped at 136, and before that at 15.
+   **After changing the extension, repackage and reinstall, then restart VS Code:**
 
 ```powershell
 cd tools/logfollower

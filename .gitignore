@@ -15,5 +15,9 @@ out/
 __pycache__/
 *.pyc
 
+# Packaged extension build output (rebuild from tools/logfollower sources)
+*.vsix
+node_modules/
+
 # Windows PowerShell transcript / stray logs
 *.log
