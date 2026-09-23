@@ -43,17 +43,26 @@ CompileFlags:
     - "-D__at(x)="
     - "-Wno-unknown-pragmas"
     - "-Wno-unused-variable"
+    # XC8's `__interrupt` attribute, and the offsetof cast clang warns about because XC8's offsetof
+    # is not clang's on a 64-bit host. Both clangd-only; neither belongs in the CMake options.
+    # `__interrupt` is a FUNCTION-LIKE keyword (`void __interrupt() isr(void)`), so it has to be
+    # matched variadically - an object-like `-D__interrupt=` leaves `void () isr(void)` behind and
+    # clang reports "expected identifier or '('".
+    - "-D__interrupt(...)="
+    - "-Wno-pointer-to-int-cast"
   Remove:
     # XC8 driver flags that clang has no equivalent for, and which clangd therefore reports:
     #   Unsupported argument '18F47Q10' to option '-mcpu='
+    #   Unknown argument: '-mdfp=/Applications/microchip/.../xc8'
     #
-    # `-mcpu=` is removed because it is REDUNDANT: the target part reaches clangd through the
-    # `__18F47Q10__` define in the same database. Removing `-mdfp=` as well was tried on
-    # 2026-09-23 and made things far worse - clangd resolves <xc.h> and the device header THROUGH
-    # the pack path given by -mdfp, so without it every translation unit failed with
-    # "'xc.h' file not found" plus ~20 cascading errors. Keep -mdfp: leaving it in place costs one
-    # "Unknown argument: '-mdfp=...'" diagnostic per file, which is the cheap side of that trade.
+    # `-mcpu=` is redundant: the target part reaches clangd through the __18F47Q10__ define. And
+    # `-mdfp=` can be removed NOW, although removing it before 2026-09-23 made everything worse -
+    # that was when clangd had no other way to find <xc.h>. With the pack and compiler include
+    # directories in the compile database (see user.cmake) the flag is no longer load-bearing for
+    # clangd, and removing it drops the last "Unknown argument" diagnostic. The BUILD still needs
+    # -mdfp; it comes from the database and never passes through this file.
     - "-mcpu=*"
+    - "-mdfp=*"
     - "-msummary=*"
     - "-maddrqual=*"
     - "-mwarn=*"

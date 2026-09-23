@@ -127,6 +127,21 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "test"
+		},
+		{
+			"label": "Verify suite (watchdog)",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"tools/simulate/run_suite_with_watchdog.py",
+				"--test",
+				"suite",
+				"--log",
+				"/tmp/pac_verify_suite.log"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "test"
 		}
 	]
 }
