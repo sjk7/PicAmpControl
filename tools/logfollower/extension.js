@@ -6,11 +6,14 @@
 // is badly written and must not be used"). This one is built to cost nothing while idle and very
 // little while following:
 //
-//   * One coalesced poll per COALESCE_MS, not a per-frame timer. 400 ms by default is 2.5 wakes a
-//     second; each wake is a stat() plus, only when the size changed, one revealRange().
+//   * One coalesced poll per coalesceMs, not a per-frame timer. 400 ms by default is 2.5 wakes a
+//     second; each wake is a stat() plus, only when the size changed, one revert()/revealRange().
 //   * Nothing at all while paused by the user, or while the followed file is not the visible tab.
-//   * No filesystem watcher: a watcher object per open log plus its event plumbing costs more
-//     than a 400 ms stat and adds failure modes when the producer truncates the file.
+//   * Optionally one FileSystemWatcher per followed file (armWatcher), purely as an optimisation so
+//     an append scrolls without waiting for the poll. It is NEVER the only trigger - a producer
+//     that truncates and recreates the file invalidates the watcher - so the poll stays the safety
+//     net. (An earlier version of this comment claimed there was no watcher at all; v0.7 added one
+//     and the comment was left behind, which is how the README ended up claiming the opposite.)
 //
 // WHY IT POLLS RATHER THAN REACTING TO DOCUMENT EVENTS: a log written by an *external* process is
 // not reliably delivered as `onDidChangeTextDocument`. In practice VS Code reports auto-reverted
@@ -173,6 +176,17 @@ function pollOnce() {
       continue;
     }
     if (size === previous) continue;
+    if (size < previous) {
+      // The file SHRANK, which for these logs means the producer truncated it: a new session/run has
+      // started in the same tab. The pause is per-session by design (user instruction 2026-09-23:
+      // "on the next session, it should autoscroll again by default"), so this is where it ends -
+      // following re-arms on its own, with no command to remember.
+      userTookOver.delete(uriString);
+      hasScrolled.delete(uriString);   // re-stamped by the scroll below, for the new document view
+      vscode.window.setStatusBarMessage(
+        'Log Follower: new session detected - following resumed', 3000,
+      );
+    }
     refreshAndScroll(uriString, editor, uri);
   }
 }
@@ -262,33 +276,51 @@ function activate(context) {
   // visible-range change is genuine interaction. Our own reveal keeps stamping the self-move so it
   // is never mistaken for the user.
   //
-  // Resume is DELIBERATE (the toggle command), never automatic. An earlier version resumed whenever
-  // the last line merely became visible, so a short log - or one wheel notch near the bottom -
-  // silently re-armed the follow and the view jumped out from under someone reading further up.
-  const pauseInteractive = (uriString, why) => {
+  // Resume is DELIBERATE WITHIN A RUN (the toggle command): an earlier version resumed whenever the
+  // last line merely became visible, so a short log - or one wheel notch near the bottom - silently
+  // re-armed the follow and the view jumped out from under someone reading further up. But a pause
+  // must never outlive the run it was made in: when the producer truncates the file for the next
+  // session, pollOnce clears the pause and following re-arms by default (user instruction
+  // 2026-09-23: "on the next session, it should autoscroll again by default").
+  const pauseInteractive = (uriString, why, force = false) => {
     if (!following.has(uriString)) return;
     if (userTookOver.has(uriString)) return;
     // Before our first scroll there is nothing for the user to have taken control of: the only
     // event that can fire with the tail off-screen is the document OPENING, not a person reading.
     if (!hasScrolled.has(uriString)) return;
-    // After that, the ONLY question is: is the tail still on screen? Our own scroll always leaves
-    // the tail visible, so a tail-visible event is ours (or a click at the bottom - harmless to
-    // keep following). A tail-off-screen event can only be the user scrolling away to read, so
-    // pause. No timing, no counting - position cannot drift.
+    // After that, position decides: our own scroll always leaves the tail visible, so a
+    // tail-visible event is ours (or a click at the bottom - harmless to keep following), and a
+    // tail-off-screen event can only be the user scrolling away to read. `force` overrides that for
+    // a genuine text selection, where the user is inside the text even if the tail is still
+    // visible. No timing, no counting - position cannot drift.
     const editor = editorFor(uriString);
-    if (editor && isShowingTail(editor)) return;
+    if (!force && editor && isShowingTail(editor)) return;
     userTookOver.add(uriString);
+    // The pause is per RUN, not permanent (user instruction 2026-09-23): the producer truncating
+    // the file for the next run clears it, so nobody has to remember to re-enable the follow.
     vscode.window.setStatusBarMessage(
-      `Log Follower: paused (${why}); run "Log Follower: Toggle" to resume`, 4000,
+      `Log Follower: paused for this run (${why}); resumes on the next run, or run "Log Follower: Toggle"`,
+      5000,
     );
   };
 
   context.subscriptions.push(
     { dispose: () => { for (const w of watchers.values()) w.dispose(); watchers.clear(); } },
+    // A SELECTION is the clearest "I am reading this" signal there is: highlighting text with the
+    // mouse (or shift-arrowing) pauses even when the tail is still on screen, because the user is
+    // now working inside the text and any scroll moves it out from under them. Our own scroll
+    // leaves a zero-length cursor at the end, so an EMPTY selection is never a pause - only a real
+    // range is. `event.kind === undefined` means this extension set the selection itself.
     vscode.window.onDidChangeTextEditorSelection((event) => {
       if (event.kind === undefined) return;
-      pauseInteractive(key(event.textEditor.document.uri), 'you took control');
+      const highlighting = event.selections.some((s) => !s.isEmpty);
+      pauseInteractive(
+        key(event.textEditor.document.uri),
+        highlighting ? 'you highlighted text' : 'you took control',
+        highlighting,
+      );
     }),
+    // Wheel, scrollbar drag, page keys, minimap and goto-line all land here.
     vscode.window.onDidChangeTextEditorVisibleRanges((event) => {
       pauseInteractive(key(event.textEditor.document.uri), 'you scrolled');
     }),

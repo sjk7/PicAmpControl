@@ -4,6 +4,52 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-23 — The pre-flight cleanup was killing live runs, and the editor named the wrong device
+
+**Bug: `cleanup_sim_processes.py` kills a run that is in progress.** Its sweep is driven by
+`run_suite_with_watchdog.ORPHAN_PATTERNS`, which contains `run_suite_with_watchdog.py`,
+`trace_ptt_sequence.py --suite` and `test_first_dit.py` - that is, the launcher and the tests
+themselves, not only the MDB/JVM leftovers it is meant to clear. Running the pre-flight while a run
+was live therefore terminated it, and the damage is disguised: the wrapper records
+`SUITE_EXIT=143` / `CTEST_EXIT=143` (SIGTERM) and the log simply stops, which reads as a test
+failure. It cost one complete merged-suite pass (the harness had already written `PTT suite passed:
+11 scenarios in one MDB session`) and a second run before its first test had started. Fix: cleanup
+now refuses to act while any process matching those patterns is alive, lists what it found, and says
+why. Leftovers are still cleared when nothing is running, which is the only time it should be called.
+
+**Bug: the editor's Problems panel reported three different wrong things about the device.**
+`compile_commands.json` in `_build/My_Pic_Project/release` - the directory that both `.clangd` and
+`.vscode/settings.json` point at - was a stale 16F configure, so the panel said
+`Unknown argument: '-mdfp=.../PIC16F1xxxx_DFP/1.32.471/xc8'`. On top of that, `.clangd` hand-added
+`-mcpu=18F47Q10`, which clang does not support, producing a second error of its own:
+`Unsupported argument '18F47Q10' to option '-mcpu='`. Fix: the hand-added `-mcpu` is gone (the
+compile database already carries the device from `device.cmake`, so a fresh configure is the fix for
+a stale pack path, not a flag edit), and the canonical build directory is configured for the Q10.
+
+## 2026-09-23 — Log Follower: three different defaults, and a cost claim that was the opposite of the code
+
+The in-repo log-following extension (`tools/logfollower`) is the answer to "we need a decent tail
+plugin" - the CPU-eater that was rejected is `spacetown.filetail` - but it was telling three
+different stories about its own cost:
+
+- `package.json` defaulted `logFollower.coalesceMs` to **250 ms**.
+- `extension.js` fell back to **400 ms** (`cfg.get('coalesceMs', 400)`) and its header comment
+  described 400 ms as the default.
+- the README documented **60 ms** in the settings table, and its cost section asserted "There is no
+  interval timer anywhere in the extension" - while `activate()` runs
+  `setInterval(pollOnce, settings.coalesceMs)`.
+- the README also documented `logFollower.autoFollowGlobs` as defaulting to `[]` when the manifest
+  ships three globs (`*.log`, `*progress.log`, `*.out`).
+- `extension.js`'s header comment claimed "No filesystem watcher" while v0.7 added
+  `armWatcher()`, one watcher per followed file.
+
+A cost claim that contradicts the code is worse than no claim at all: the whole point of this
+extension is that it is the cheap alternative to a rejected follower. Fix: **400 ms is now the one
+default** in all three places, the globs default is documented as shipped, and both the README cost
+section and the header comment now describe what the code actually does - a `stat()` per poll
+interval, a revert plus one scroll only on real growth, and an optional per-file watcher that is an
+optimisation on top of the poll and never the sole trigger.
+
 ## 2026-09-23 — Q10-only conversion: two latent bugs found while stripping the 16F
 
 **Bug: the device launchers defaulted to the removed part.** `tools/simulate/run_sim.sh` and

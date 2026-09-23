@@ -1,120 +1,132 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Build PicAmpControl (Debug)",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "-S",
-        "${workspaceFolder}/cmake/My_Pic_Project/default",
-        "-B",
-        "${workspaceFolder}/_build/My_Pic_Project/debug",
-        "-G",
-        "Ninja",
-        "-DCMAKE_BUILD_TYPE=Debug",
-        "-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/toolchain.cmake",
-        "-DCMAKE_USER_MAKE_RULES_OVERRIDE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/overrides.cmake",
-        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-        "&&",
-        "cmake",
-        "--build",
-        "${workspaceFolder}/_build/My_Pic_Project/debug",
-        "--verbose",
-        "-j4"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Build PicAmpControl (Release)",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "-S",
-        "${workspaceFolder}/cmake/My_Pic_Project/default",
-        "-B",
-        "${workspaceFolder}/_build/My_Pic_Project/release",
-        "-G",
-        "Ninja",
-        "-DCMAKE_BUILD_TYPE=Release",
-        "-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/toolchain.cmake",
-        "-DCMAKE_USER_MAKE_RULES_OVERRIDE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/overrides.cmake",
-        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-        "&&",
-        "cmake",
-        "--build",
-        "${workspaceFolder}/_build/My_Pic_Project/release",
-        "--verbose",
-        "-j4"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "group": "build",
-      "problemMatcher": []
-    },
-    {
-      "label": "Build PicAmpControl Q10 (Debug)",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "-S",
-        "${workspaceFolder}/cmake/My_Pic_Project/default",
-        "-B",
-        "${workspaceFolder}/_build/My_Pic_Project/q10",
-        "-G",
-        "Ninja",
-        "-DPICAMP_DEVICE=PIC18F47Q10",
-        "-DCMAKE_BUILD_TYPE=Debug",
-        "-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/toolchain.cmake",
-        "-DCMAKE_USER_MAKE_RULES_OVERRIDE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/overrides.cmake",
-        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-        "&&",
-        "cmake",
-        "--build",
-        "${workspaceFolder}/_build/My_Pic_Project/q10",
-        "--verbose",
-        "-j4"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Build PicAmpControl Q10 (Release)",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "-S",
-        "${workspaceFolder}/cmake/My_Pic_Project/default",
-        "-B",
-        "${workspaceFolder}/_build/My_Pic_Project/q10_release",
-        "-G",
-        "Ninja",
-        "-DPICAMP_DEVICE=PIC18F47Q10",
-        "-DCMAKE_BUILD_TYPE=Release",
-        "-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/toolchain.cmake",
-        "-DCMAKE_USER_MAKE_RULES_OVERRIDE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/overrides.cmake",
-        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-        "&&",
-        "cmake",
-        "--build",
-        "${workspaceFolder}/_build/My_Pic_Project/q10_release",
-        "--verbose",
-        "-j4"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    }
-  ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build PicAmpControl (Debug)",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"-S",
+				"${workspaceFolder}/cmake/My_Pic_Project/default",
+				"-B",
+				"${workspaceFolder}/_build/My_Pic_Project/debug",
+				"-G",
+				"Ninja",
+				"-DCMAKE_BUILD_TYPE=Debug",
+				"-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/toolchain.cmake",
+				"-DCMAKE_USER_MAKE_RULES_OVERRIDE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/overrides.cmake",
+				"-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+				"&&",
+				"cmake",
+				"--build",
+				"${workspaceFolder}/_build/My_Pic_Project/debug",
+				"--verbose",
+				"-j4"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Build PicAmpControl (Release)",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"-S",
+				"${workspaceFolder}/cmake/My_Pic_Project/default",
+				"-B",
+				"${workspaceFolder}/_build/My_Pic_Project/release",
+				"-G",
+				"Ninja",
+				"-DCMAKE_BUILD_TYPE=Release",
+				"-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/toolchain.cmake",
+				"-DCMAKE_USER_MAKE_RULES_OVERRIDE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/overrides.cmake",
+				"-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+				"&&",
+				"cmake",
+				"--build",
+				"${workspaceFolder}/_build/My_Pic_Project/release",
+				"--verbose",
+				"-j4"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "Build PicAmpControl Q10 (Debug)",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"-S",
+				"${workspaceFolder}/cmake/My_Pic_Project/default",
+				"-B",
+				"${workspaceFolder}/_build/My_Pic_Project/q10",
+				"-G",
+				"Ninja",
+				"-DPICAMP_DEVICE=PIC18F47Q10",
+				"-DCMAKE_BUILD_TYPE=Debug",
+				"-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/toolchain.cmake",
+				"-DCMAKE_USER_MAKE_RULES_OVERRIDE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/overrides.cmake",
+				"-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+				"&&",
+				"cmake",
+				"--build",
+				"${workspaceFolder}/_build/My_Pic_Project/q10",
+				"--verbose",
+				"-j4"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Build PicAmpControl Q10 (Release)",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"-S",
+				"${workspaceFolder}/cmake/My_Pic_Project/default",
+				"-B",
+				"${workspaceFolder}/_build/My_Pic_Project/q10_release",
+				"-G",
+				"Ninja",
+				"-DPICAMP_DEVICE=PIC18F47Q10",
+				"-DCMAKE_BUILD_TYPE=Release",
+				"-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/toolchain.cmake",
+				"-DCMAKE_USER_MAKE_RULES_OVERRIDE=${workspaceFolder}/cmake/My_Pic_Project/default/.generated/overrides.cmake",
+				"-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+				"&&",
+				"cmake",
+				"--build",
+				"${workspaceFolder}/_build/My_Pic_Project/q10_release",
+				"--verbose",
+				"-j4"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Run simulator suite (macOS)",
+			"type": "shell",
+			"command": "sh",
+			"args": [
+				"-c",
+				"python3 tools/simulate/run_suite_with_watchdog.py --timeout 1200 --log /tmp/pac_mac_suite3.log > /tmp/pac_mac_suite3_stdout.log 2>&1; echo \"SUITE_EXIT=$?\" >> /tmp/pac_mac_suite3_stdout.log"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		}
+	]
 }

@@ -81,14 +81,20 @@ were all deleted. Concretely, that means:
   `-First`, `Select-String`) instead of dumping whole files into the terminal panel, which is rendered
   too; do not print a code block unless the user asked for it. The skill is where durable knowledge
   goes - not the chat.
-- TODO (sticky, user instruction, 2026-09-22): WRITE OUR OWN REUSABLE "FOLLOW A GROWING FILE" SKILL.
-  FileTail (`spacetown.filetail`) measured ~110% of one core in the extension host just to follow a log,
-  so that capability should come from a skill instead of from that extension. The skill owns the whole
-  flow: truncate the log, start the job, show the user the file in a VS Code tab, and let them (or the
-  agent, on request) re-read it cheaply - a one-shot `Get-Content -Tail N`, or a compact summary file
-  the job itself rewrites every few seconds - without burning a core. It is generic, not
-  PicAmpControl-specific, so it belongs in its own skill rather than inside picampcontrol-build-test.
-  Not built yet; do it when there is slack, never mid-task.
+- FOLLOWING A GROWING FILE IS OURS NOW (user instruction, 2026-09-23: "we need a decent tail plugin" -
+  the CPU-eater that was rejected is `spacetown.filetail`, ~110% of one core in the extension host).
+  The capability is the in-repo extension `tools/logfollower` (Log Follower): one `stat()` per poll
+  (400 ms default - package.json, the code fallback and the README now all agree; they previously
+  said 250/400/60), a revert plus one scroll only on real growth, and nothing at all while paused or
+  while the followed tab is not the visible one. The user watches a run by having its log open in a
+  VS Code tab: `tools/simulate/open_progress_log.py <log>` opens it, and
+  `tools/simulate/run_detached.py` starts a run in its OWN session so the agent's terminal harness
+  cannot SIGTERM it mid-run - it did exactly that twice on 2026-09-23, and the damage reads as
+  `SUITE_EXIT=143` with the log stopping mid-file, i.e. like a test failure when it is not one.
+  Pause is PER RUN: interaction with the text or the scrollbars (click, wheel, scrollbar drag,
+  highlighting text) stops the follow for that run only, and the next run's truncation re-arms it
+  automatically. Still to do when there is slack: fold the generic method into its own skill, since
+  it is not PicAmpControl-specific.
 - DO NOT ASK FOR PERMISSION TO OVERWRITE FILES - JUST DO IT (user instruction, 2026-09-22). The user
   does not want to be prompted about overwriting, nor asked "say the word" before an edit that was
   already agreed; when the intent is to change a file, change it. Related and worth avoiding: writing

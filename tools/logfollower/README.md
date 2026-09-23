@@ -23,9 +23,11 @@ code-insiders --install-extension pac-log-follower.vsix --force   # or: code
   newest output instead of the run's first three lines. A `FileSystemWatcher` drives the refresh,
   with a poll as the safety net, so an append scrolls straight away rather than up to one interval
   late.
-- **Yields to you, instantly.** Clicking in the text, moving the cursor, selecting, wheeling, or
-  dragging the scrollbar all pause the follow. Resume is *deliberate* (the toggle command) - it
-  never re-arms itself behind your back.
+- **Yields to you, instantly - for that session.** Clicking in the text, moving the cursor,
+  highlighting/selecting text, wheeling, or dragging the scrollbar all pause the follow. The pause
+  lasts only for the current run: when the producer truncates the file for a new run, following
+  re-arms automatically (and so does reopening the tab). Within a single run the resume is
+  *deliberate* - the toggle command - so the view is never yanked out from under you while you read.
 - **Stays cheap.** Following costs one file stat per interval plus one reveal per actual growth
   (plus watcher events). Paused, it costs nothing.
 
@@ -41,15 +43,17 @@ code-insiders --install-extension pac-log-follower.vsix --force   # or: code
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `logFollower.autoFollowGlobs` | `[]` | File-name patterns (simple `*` wildcards) followed automatically when opened, e.g. `*.log`. Matching is on the file name only, so no machine-specific path is ever needed. |
-| `logFollower.coalesceMs` | `60` | Scroll coalescing window in milliseconds. Writes inside one window produce one scroll, which caps cost regardless of write rate. Raise it to reduce cost further. |
+| `logFollower.autoFollowGlobs` | `["*.log", "*progress.log", "*.out"]` | File-name patterns (simple `*` wildcards) followed automatically when opened, e.g. `*.log`. Matching is on the file name only, so no machine-specific path is ever needed. |
+| `logFollower.coalesceMs` | `400` | Poll interval in milliseconds (400 = 2.5 checks/second). Each check is one file stat; only an actual size change costs a revert plus a scroll, so this interval is the floor of the follow's cost. Raise it to reduce cost further. Changing it needs a window reload - the interval is created once at activation. |
 
 ## Notes on the cost
 
-A follow is one cursor placement plus one `revealRange()` per coalesced burst. With the default
-60 ms window, a producer writing thousands of lines a second still costs at most ~17 scrolls a
-second, and typically far fewer. There is no interval timer anywhere in the extension, so an idle
-follow costs nothing.
+A follow costs one `stat()` per poll interval (2.5 per second at the 400 ms default) plus, only when
+the file actually grew, one revert and one cursor placement plus `revealRange()`. The optional
+per-file watcher adds an append-triggered refresh on top, so a burst is not limited to the poll rate -
+but it is still one scroll per distinct growth event, and it is disposed the moment you stop
+following. While paused, or while the followed tab is not the visible one, there is nothing to pay:
+the poll stats a file nobody is looking at and stops there.
 
 ## Licence
 

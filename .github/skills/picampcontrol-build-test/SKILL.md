@@ -50,6 +50,23 @@ probe, build) run with no visible output in VS Code. The method:
    verdict still comes from the run's own log plus its appended exit-code line.
 6. The log is there to be watched, so keep it a plain growing text file, and delete it once its
    verdict has been read (standing rule: never accumulate run logs).
+**Hard rule: never run the pre-flight cleanup while a run is live - it kills it.** User-visible
+symptom: the wrapper records `SUITE_EXIT=143` / `CTEST_EXIT=143` (SIGTERM) and the log stops
+mid-file, which reads exactly like a test failure and is not one (2026-09-23: one complete
+merged-suite pass and one barely-started run were destroyed this way). The cause is that
+`ORPHAN_PATTERNS` contains `run_suite_with_watchdog.py`, `trace_ptt_sequence.py --suite` and
+`test_first_dit.py`, so the sweep matches a run in progress, not only MDB/JVM leftovers.
+`cleanup_sim_processes.py` now refuses and prints what it found; treat that refusal as correct and
+wait for the run. Run it *before* launching, never during.
+
+**Hard rule: keep the editor's compile database pointing at a fresh Q10 configure.** `.clangd` and
+`.vscode/settings.json` both use `_build/My_Pic_Project/release/compile_commands.json`. If that
+directory holds an old configure, the Problems panel reports the *old* device - on 2026-09-23 it
+said `Unknown argument: '-mdfp=.../PIC16F1xxxx_DFP/1.32.471/xc8'` because the database predated the
+Q10 switch. Do not "fix" that by editing flags: re-configure that directory (the device now defaults
+to the Q10 in `device.cmake`). And do not hand-add `-mcpu=` in `.clangd` - clang has no such CPU and
+reports `Unsupported argument '18F47Q10' to option '-mcpu='`; the database already carries it.
+
 **Hard rule: keep token and CPU output down.** The chat transcript is re-rendered on every streamed
 token, and this is not theoretical: a 2,041-line / 2.2 MB session drove the VS Code renderer to ~225%
 of one core and the extension host to ~112% for the whole of each assistant turn (measured

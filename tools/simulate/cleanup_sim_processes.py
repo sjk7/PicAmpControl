@@ -119,7 +119,37 @@ def check_defender() -> None:
     install_defender_exclusions("no record of the exclusions")
 
 
+def live_run_processes():
+    """Processes that are alive NOW and match ORPHAN_PATTERNS.
+
+    Cleanup exists to clear *leftovers* before a run. A blind sweep cannot tell a leftover from a
+    run in progress, and killing a live one is worse than doing nothing: the verdict is lost and the
+    wrapper records `SUITE_EXIT=143` / `CTEST_EXIT=143` (SIGTERM), which reads like a test failure
+    and is not one. Measured 2026-09-23: the merged suite was clean-killed this way twice, once at
+    ~105 s with the suite's own PASS line already written and once before the first test started.
+    """
+    live = []
+    for pid, command in procutil.running_processes():
+        if pid == os.getpid():
+            continue
+        if any(pattern in command for pattern in launcher.ORPHAN_PATTERNS):
+            live.append((pid, command))
+    return live
+
+
 def main():
+    live = live_run_processes()
+    if live:
+        print("REFUSING TO CLEAN UP: a run appears to be in progress.")
+        for pid, command in live:
+            print(f"  live pid={pid} :: {command[:160]}")
+        print("Those match the orphan patterns, so a blind sweep would kill the running test and")
+        print("destroy its verdict (it would read as SUITE_EXIT=143). Let the run finish, or stop")
+        print("it deliberately, then run this again.")
+        print("CLEANUP_KILLED=0")
+        check_defender()
+        return 0
+
     killed = 0
     for pid, command in procutil.running_processes():
         if pid == os.getpid():

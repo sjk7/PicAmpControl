@@ -2,7 +2,7 @@
   "name": "log-follower",
   "displayName": "Log Follower",
   "description": "Keeps a growing log file scrolled to its tail in the editor, and yields the moment you take control of the tab.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "license": "MIT",
   "publisher": "log-follower",
   "engines": { "vscode": "^1.85.0" },
@@ -28,10 +28,10 @@
         },
         "logFollower.coalesceMs": {
           "type": "number",
-          "default": 250,
+          "default": 400,
           "minimum": 100,
           "maximum": 5000,
-          "description": "How often the followed file is checked for growth, in milliseconds. Each check is a file stat and only a growing file causes a scroll, so this is the whole CPU cost of following. Raise it to reduce cost further."
+          "description": "How often the followed file is polled for growth, in milliseconds (400 = 2.5 checks/second). Each check is one file stat, and only an actual size change costs a revert/scroll, so this interval is the floor of the follow's cost. Raise it to reduce cost further. Changing it needs a window reload: the interval is created once at activation."
         }
       }
     }
