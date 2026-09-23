@@ -50,6 +50,12 @@ probe, build) run with no visible output in VS Code. The method:
    verdict still comes from the run's own log plus its appended exit-code line.
 6. The log is there to be watched, so keep it a plain growing text file, and delete it once its
    verdict has been read (standing rule: never accumulate run logs).
+7. **Launch a single-harness debugging run through the watchdog too**, e.g.
+   `run_suite_with_watchdog.py --test first-dit`. Running `test_first_dit.py` directly gives a tab
+   that NEVER moves: the harness's stdout is block-buffered through the redirect, so the file stays
+   at zero bytes until the process exits, and the user is left looking at an empty tab (reported
+   2026-09-23). The watchdog is what writes the `HEARTBEAT`/`MDB` lines that make the log live - its
+   value is not just the timeout, it is the visibility.
 **Hard rule: never run the pre-flight cleanup while a run is live - it kills it.** User-visible
 symptom: the wrapper records `SUITE_EXIT=143` / `CTEST_EXIT=143` (SIGTERM) and the log stops
 mid-file, which reads exactly like a test failure and is not one (2026-09-23: one complete
@@ -161,6 +167,15 @@ them as `settle`/`settle_ms`/`verify`/`verify_ms`. Without these the settle/veri
 invisible and only the symptom (the hot-switch sample) is seen. `tools/simulate/repro_i5_15m_10m.py`
 is the minimal single-band repro (set `BAND_TESTS` to isolate a band); it runs
 `validate_band_changes_are_cold` + `validate_freq_ctr` so the isolated verdict matches the suite.
+**`test_first_dit.py` keeps its OWN `STATE_VARS` list** (it reassigns `harness.STATE_VARS`) and was
+left out of that change: it printed `settle=? verify=?` on every sample while the merged suite
+printed real numbers from the same ELF, and `describe()`'s `?` means "key absent from the sample",
+NOT "symbol unreadable" - so the state that decides whether a remembered-band engage is abandoned
+was invisible in exactly the harness whose clause (c) needs it. Both lists must be kept in step;
+fixed 2026-09-23.
+**A clause that prints its samples only on success is undiagnosable when it fails.** Clause (c)
+raised `the warm-start PTT never keyed the amplifier` with no trace of the window at all, because
+`show()` is called on the success path. Failures now print the phase's samples before raising.
 
 **Finding (2026-09-23): the device strip, and the traps in it.** The project is PIC18F47Q10 ONLY;
 the 16F port, its build option, its CI matrix leg and its docs are gone (`Ai-Notes.txt` carries the

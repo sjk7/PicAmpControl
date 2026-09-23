@@ -95,6 +95,13 @@ STATE_VARS = [
     "g_ptt_active", "g_sequence_stage", "g_state",
     "g_snoop_active", "g_band_cache_valid", "g_band_cache_band", "g_band_cache_idle_ms",
     "g_fc_status.current_band", "g_fc_status.band_locked", "g_fc_status.frequency_khz",
+    # Keep this list in step with trace_ptt_sequence.STATE_VARS. It is a SEPARATE list (this
+    # harness reassigns harness.STATE_VARS below), and it went without the settle/verify pair:
+    # describe() then printed `settle=? verify=?` on every sample, so the state that decides
+    # whether a remembered-band engage is abandoned was invisible - which is where a clause (c)
+    # failure has to be diagnosed. Added 2026-09-23.
+    "g_band_settle_active", "g_band_settle_elapsed_ms",
+    "g_band_verify_active", "g_band_verify_mismatch_ms",
 ]
 SYSTEM_SYMBOLS = ["g_band_cache_idle_ms", "g_band_cache_band"]
 
@@ -372,6 +379,13 @@ def validate_clause_c(samples):
     asserted = samples[assert_index]
     keyed_sample = next((sample for sample in samples[assert_index:] if keyed(sample)), None)
     if keyed_sample is None:
+        # Print the WHOLE window, not show()'s usual six samples: the question a clause (c) failure
+        # asks is whether the firmware latched PTT at all and how far the engage got, and that is
+        # decided by how the flags evolve across the window. Truncating to six samples hides it.
+        print("    (c) warm-start window, PTT re-asserted with no RF: NO keyed sample in it, "
+              "full window follows")
+        for sample in samples[assert_index:]:
+            print(f"      {fmt(sample)}")
         raise AssertionError("clause (c): the warm-start PTT never keyed the amplifier")
     delay_ms = millis(keyed_sample) - millis(asserted)
     if delay_ms > 30:

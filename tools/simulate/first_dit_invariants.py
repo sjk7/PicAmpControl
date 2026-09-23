@@ -78,6 +78,12 @@ def describe(sample, extra=()):
     _, pins, state, *_ = sample
     fields = (("ptt_active", "g_ptt_active"), ("stage", "g_sequence_stage"),
               ("state", "g_state"), ("snoop", "g_snoop_active"),
+              # The flags that GATE keying. Without them a "PTT is asserted but nothing keyed"
+              # trace cannot say why: `ptt_active=false` with the pin low means the firmware
+              # refused to latch, and the reason is one of these three (2026-09-23).
+              ("inhibit", "g_startup_inhibit"),
+              ("crst", "g_comparator_reset_active"),
+              ("fault", "g_fault_latched"),
               ("cache", "g_band_cache_valid"), ("cache_band", "g_band_cache_band"),
               ("idle_ms", "g_band_cache_idle_ms"),
               ("cur_band", "g_fc_status.current_band"),

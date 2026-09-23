@@ -39,6 +39,43 @@ That is where this stands: not diagnosed, and NOT caused by the 16F removal - th
 deleted were `#if defined(__18F47Q10__)` wrappers whose Q10 branch is byte-identical, and the
 merged suite passes on the same ELF.
 
+**Follow-up evidence (same day), after making the harness print the failing window.** Two harness
+gaps had to be closed first, and both are worth keeping:
+
+- `test_first_dit.py` keeps its OWN `STATE_VARS` list and had never been given the settle/verify
+  globals, so it printed `settle=? verify=?` for every sample while the merged suite printed real
+  numbers from the same ELF. `describe()`'s `?` means "key missing from the sample", not "symbol
+  unreadable".
+- `describe()` did not print the flags that GATE keying, and clause (c) printed its samples only on
+  the success path - so the failing run, the one needing evidence, showed nothing.
+
+With those fixed, clause (c) reads:
+
+```
+t= 1557.2ms PTT=0 ... ptt_active=false ... inhibit=false crst=false fault=false cache=true cache_band=4
+t= 1574.6ms PTT=0 ... ptt_active=true  ... (latched 17.4ms after the pin went low)
+t= 1575.8ms PTT=0 ... crst=true settle=true  settle_ms=0
+t= 1586.2ms PTT=0 ... settle=true settle_ms=10
+t= 1602.5ms PTT=0 ... settle=true settle_ms=19      <- still settling, window ends, no keying
+t= 1614.1ms PTT=1 ...                                <- PTT released, engage abandoned
+```
+
+So the firmware DOES latch the warm re-key and start the engage; it then holds the band-settle
+window and never completes it, and because clause (c) deliberately injects no RF, nothing can move
+it on. The window is 40 x 1 ms samples and the latch alone consumed ~17 ms of it.
+
+Two candidate causes, not yet distinguished:
+
+1. The harness's `INSTRUCTIONS_PER_MS = 1887` may not be the rate this image actually steps at, so
+   its "1 ms" steps advance less firmware time than the test assumes. Evidence pointing that way:
+   inside the same window `g_band_cache_idle_ms` climbs ~4.6 counts per harness-millisecond while
+   `g_band_settle_elapsed_ms` climbs ~0.7. Two firmware 1 ms counters cannot both be right, and the
+   NOTE in `test_first_dit.py` records 1887 as a measurement while `trace_ptt_sequence.py` uses 1625
+   for the same part.
+2. The warm engage genuinely requires the settle window to complete (and possibly a verification
+   sample) before keying, i.e. the "instant engage from the remembered band" the clause asserts is
+   not what the firmware does when nothing moves.
+
 ## 2026-09-23 — The pre-flight cleanup was killing live runs, and the editor named the wrong device
 
 **Bug: `cleanup_sim_processes.py` kills a run that is in progress.** Its sweep is driven by
