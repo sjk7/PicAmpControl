@@ -59,6 +59,24 @@ endif()
 # for the simulator's pack discovery. Both roots are searched, in order, and the first one holding
 # the requested pack wins. A wrong `-mdfp=` is a build error with no fallback, so the path must be
 # resolved rather than assumed.
+#
+# PACK_REPO_PATH is normally set by `.generated/rule.cmake`, but rule.cmake includes THIS file at
+# its top BEFORE it defines PACK_REPO_PATH, so on a fresh configure the variable is still empty
+# here and the user pack repository is never searched. That works only where MPLAB X ships the
+# exact DFP; on macOS it does not - MPLAB X 6.35 bundles PIC16F1xxxx_DFP 1.31.465 while the
+# requested 1.32.471 lives only in the user repository under $HOME/.mchp_packs. Set a sensible
+# per-OS default first, so the documented configure commands (run_tests.sh, the CMake presets)
+# work on a clean checkout with no -DPACK_REPO_PATH. rule.cmake's later `set(... CACHE ...)` does
+# not overwrite this value.
+if(NOT PACK_REPO_PATH)
+    if(DEFINED ENV{HOME})
+        set(_PICAMP_PACK_REPO_DEFAULT "$ENV{HOME}/.mchp_packs")
+    else()
+        set(_PICAMP_PACK_REPO_DEFAULT "$ENV{USERPROFILE}/.mchp_packs")
+    endif()
+    set(PACK_REPO_PATH "${_PICAMP_PACK_REPO_DEFAULT}" CACHE PATH "Path to the root of a pack repository.")
+endif()
+
 set(PICAMP_PACK_ROOTS "${PACK_REPO_PATH}")
 
 # `GLOB` is deliberately NOT used for the MPLAB X installs: the paths contain a space ("Program
