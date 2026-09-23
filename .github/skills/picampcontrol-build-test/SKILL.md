@@ -56,6 +56,34 @@ probe, build) run with no visible output in VS Code. The method:
    at zero bytes until the process exits, and the user is left looking at an empty tab (reported
    2026-09-23). The watchdog is what writes the `HEARTBEAT`/`MDB` lines that make the log live - its
    value is not just the timeout, it is the visibility.
+**Hard rule: EVERY simulator run goes through the watchdog wrapper - NO CHEATING.** (user
+instruction, 2026-09-23: *"ALL these tests should run through the watchdog -- always"*, then
+*"everything runs via the watchdog. No cheating!"* - the second time because a raw `mdb.sh` probe had
+already slipped through under "it is only a probe and I want the values now".) **Everything means
+every test AND every probe. No cheating means no exception** for a quick check, a one-off
+measurement, a harness you are only debugging, or a run whose values you want sooner. If you are
+about to type `mdb.sh`, `test_first_dit.py` or `trace_ptt_sequence.py` directly, that IS the cheat -
+stop and wrap it.
+
+Wrapped entry points, and nothing else:
+
+| What | Wrapped launch |
+|---|---|
+| The two registered tests | `ctest --test-dir _build/My_Pic_Project/release --output-on-failure` (both route through the watchdog - see `user.cmake`) |
+| One test on its own | `run_suite_with_watchdog.py --test suite`, `... --test first-dit` |
+| A probe / one-off MDB script | `python tools/simulate/run_mdb_probe.py <script.mdb> --log <log>` |
+
+Why it is not optional: a bare run has **no timeout**, **no heartbeat** (so the log tab the user is
+watching never moves - the harness's stdout is block-buffered and stays at zero bytes until exit),
+**no orphan clean-up**, and its verdict lines land **outside the run's log**, which is the one place
+the standing rules say a verdict may be read from.
+
+Known gap, and the right way to close it: `run_mdb_probe.py`'s log has been seen to omit MDB's
+`print` values on macOS (2026-09-23 - a ~180-byte log for a probe that ran fine). Fix that log, do
+not work around it with raw `mdb.sh`; the workaround is exactly the cheat this rule forbids. A new
+test must be registered in `cmake/My_Pic_Project/default/user.cmake` **and** given a `--test` choice
+in the launcher, or the watchdog cannot wrap it and this rule is broken by construction.
+
 **Hard rule: never run the pre-flight cleanup while a run is live - it kills it.** User-visible
 symptom: the wrapper records `SUITE_EXIT=143` / `CTEST_EXIT=143` (SIGTERM) and the log stops
 mid-file, which reads exactly like a test failure and is not one (2026-09-23: one complete
@@ -64,6 +92,11 @@ merged-suite pass and one barely-started run were destroyed this way). The cause
 `test_first_dit.py`, so the sweep matches a run in progress, not only MDB/JVM leftovers.
 `cleanup_sim_processes.py` now refuses and prints what it found; treat that refusal as correct and
 wait for the run. Run it *before* launching, never during.
+
+**`<script>.mdb` files have NO comment syntax - a `;` line is a command.** MDB answers
+`Undefined command: "; ..."` and the probe exits 255 with nothing measured (cost a run on
+2026-09-23). Keep `.mdb` scripts comment-free and document them in the neighbouring `README.md`
+(`docs/hardware/q10-bringup/README.md` now carries the rate-probe method for exactly this reason).
 
 **Hard rule: keep the editor's compile database pointing at a fresh Q10 configure.** `.clangd` and
 `.vscode/settings.json` both use `_build/My_Pic_Project/release/compile_commands.json`. If that
@@ -100,6 +133,36 @@ starts work. Concretely, whenever any of these happens, write it to the skill be
 The test of whether it is recorded: could a fresh session hit the same problem and be stopped by
 what is written here? If not, it is not written yet. Do not batch this "for later" - the session that
 found it is the only one that still has the context.
+**Traps found 2026-09-23 (second batch) - each one cost a run or a wrong conclusion.**
+
+- **`-mdfp=` must stay in the compile flags; only `-mcpu=` is safe to remove from `.clangd`.**
+  Removing both looked tidier - it silenced `Unknown argument: '-mdfp=...'` - and broke everything:
+  clangd resolves `<xc.h>` and the device header *through* the pack path given by `-mdfp`, so every
+  translation unit then failed with `'xc.h' file not found` plus ~20 cascading errors (`LATCbits`,
+  `ADCON1`, `__delay_ms` all undeclared). That is strictly worse than the one diagnostic it fixes.
+  `-mcpu=` is the redundant one: the part reaches clangd as the `__18F47Q10__` define.
+- **There are TWO build directories and only one holds the editor's compile database.** `.clangd` and
+  `.vscode/settings.json` both point at `_build/My_Pic_Project/release`, while the Q10 build tasks
+  also write `_build/My_Pic_Project/q10_release`. Building in one leaves the other's
+  `compile_commands.json` stale - that is what put a 16F pack path in the Problems panel. After a
+  device change, re-configure the directory the editor actually reads.
+- **A probe that reads a peripheral register BEFORE stepping gets reset defaults.** `print T2CLK` and
+  `print PR2` straight after `program` answered `0` and `255` - the reset values - which reads
+  exactly like "the firmware's timer configuration never took effect". Step past init first
+  (`Stepi 300000`), then read SFRs.
+- **Pick a counter that actually runs.** `g_band_cache_idle_ms` stays at 0 at startup (it only counts
+  once the band cache exists), so bracketing it measured nothing and looked like a dead tick. The
+  startup inhibit (`g_startup_inhibit` clearing 1000 ms after the tick starts) is the counter to
+  bracket for a rate measurement - that is what the original Windows probe did.
+- **`run_mdb_probe.py`'s log did not contain the probe's printed values on macOS** - only its
+  `RUN_BEGIN`/heartbeat lines (a ~180-byte file), so a probe that had run fine looked like it had
+  produced nothing. For a probe whose *values* you need, run `mdb.sh <script> > /tmp/x.log 2>&1` and
+  read that file. The watchdog-launched runs (`--test first-dit`, the suite) do capture the
+  harness's own prints in their log.
+- **`.mdb` scripts carry absolute `program` paths**, so a probe copied from the Windows side points
+  silently at `E:/...`. Check the path whenever one is reused, and prefer generating the script from
+  Python (as the harnesses do) when it has to work on both platforms.
+
 **Hard rule: tighten the test to test only the failing part. Do that every time. Sticky**
 (user instruction, 2026-09-22, repeated). When the full suite fails, do NOT re-run the whole suite
 to diagnose. Build the smallest run that reproduces ONLY the failing check - the one scenario, band

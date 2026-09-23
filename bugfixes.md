@@ -4,6 +4,46 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-23 — OPEN: `run_mdb_probe.py`'s log can omit the probe's printed values (the reason a run went unwrapped)
+
+A rate probe launched through the sanctioned wrapper
+(`python tools/simulate/run_mdb_probe.py docs/hardware/q10-bringup/rate_probe_macos.mdb --log ...`)
+exited 0 but left a ~180-byte log containing only its `RUN_BEGIN`/heartbeat lines: none of the MDB
+`print` values, i.e. none of the data the probe exists to produce. The next attempt went straight to
+`mdb.sh <script> > /tmp/x.log`, which did capture everything - and that is exactly the kind of
+workaround the user has now forbidden ("everything runs via the watchdog. No cheating!").
+
+So this is not cosmetic: it is the reason the rule got broken, and it should be fixed rather than
+worked around. Fix direction: make `run_logged`/`run_mdb_probe` capture the MDB child's stdout into
+the log the same way the watchdog captures it for the tests (the watchdog's runs DO contain MDB
+output and the harness's prints), then re-measure with the wrapper and delete the raw-mdb habit.
+Until it is fixed the probe values can be recovered by having the *test-side* Python print them
+(the harnesses do this), rather than by bypassing the wrapper.
+
+## 2026-09-23 — The two harnesses disagree about the simulator's instruction rate (~16%)
+
+`test_first_dit.py` uses `INSTRUCTIONS_PER_MS = 1887`; `trace_ptt_sequence.py` and
+`first_dit_invariants.py` use 1625. Both were "measured", by different methods, and at least one has
+to be wrong - and a 16% error in that conversion moves a 40 x 1 ms assertion window's end past or
+short of the event it is waiting for, which is exactly the kind of difference that makes one clause
+pass on one host and fail on another.
+
+Re-measured on macOS with `docs/hardware/q10-bringup/rate_probe_macos.mdb` (the method the original
+Windows probe used: bracket the 1000 ms startup inhibit, whose clearing point is a firmware
+millisecond boundary the firmware itself maintains). Post-init the clock chain is exactly what
+`timer0_init()` writes - `T2CLK=2` (Fosc/8), `PR2=124` - and the 1000 ms boundary falls between
+1.50M and 1.75M instructions after the init step: **~1500-1750 instructions per firmware-ms**. That
+supports 1625 and not 1887.
+
+Two traps were hit while building this probe, both recorded in the skill: reading SFRs before
+stepping answers with *reset defaults* (`T2CLK=0`, `PR2=255`) and reads like a configuration that
+never took effect, and `g_band_cache_idle_ms` is not a 1 ms counter (it climbs ~4 counts per
+firmware-ms, and stays 0 until the band cache exists), so bracketing it measures nothing.
+
+Open: whether 1887 should simply become 1625 in `test_first_dit.py`, or whether that harness needs
+its own re-measurement on the Windows host before being changed - the two hosts should not need
+different constants, but that has only been checked on macOS since 2026-09-23.
+
 ## 2026-09-23 — First macOS run: the merged suite passes, first-dit fails clause (c) (OPEN)
 
 The Q10-only tree was built and run on macOS for the first time (it had only ever been run on

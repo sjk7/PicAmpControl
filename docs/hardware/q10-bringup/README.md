@@ -1,6 +1,59 @@
 # PIC18F47Q10 bring-up: first real simulator run
 
-Date: 2026-09-22 · Branch: `upgrade/pic18f47q10`
+Date: 2026-09-22 · updated 2026-09-23 (the Q10 is now the only device; the branch named below is gone)
+
+## rate_probe_macos.mdb - measure the simulator's instructions per firmware millisecond
+
+Run it with:
+
+```
+python tools/simulate/run_mdb_probe.py docs/hardware/q10-bringup/rate_probe_macos.mdb
+```
+
+**Why it exists.** The harnesses convert "advance N simulated milliseconds" into a `Stepi` count
+using a constant (`INSTRUCTIONS_PER_MS`), and the constants in the repo do not agree:
+`trace_ptt_sequence.py` / `first_dit_invariants.py` use 1625, `test_first_dit.py` uses 1887, and the
+Windows-era probe recorded ~8000 for the 16F at 32 MHz. A wrong constant does not mis-time an
+assertion slightly - it changes how much firmware time each sample advances, which is exactly what
+makes a 40 x 1 ms assertion window pass on one host and fail on another.
+
+**The clock is part of the question** (user instruction, 2026-09-23): this part runs a 64 MHz core
+(`RSTOSC = HFINTOSC_64MHZ`) with Timer2 fed from Fosc/8, 1:64 prescale, `PR2 = 124`, and that is what
+makes the firmware's tick 1.000 ms. The simulator's steps-per-simulated-ms is a property of the MDB
+model, not of the datasheet clock, so it must be *measured* - but the script prints the clock chain
+(`OSCCON1`, `OSCFRQ`, `T2CLK`, `PR2`) into the same log, so a mismatch between what the firmware
+configured and what the model assumes is visible rather than inferred.
+
+**Method.** Read the firmware's own 1 ms counter, step a known number of instructions, read it again.
+Two independent counters are used - `g_band_cache_idle_ms` across four bracketed `Stepi` blocks, and
+the 1000 ms startup inhibit - so one wrong reading cannot carry the answer on its own.
+
+**`.mdb` scripts have NO comment syntax.** A `;` line is executed as a command and MDB fails with
+`Undefined command` (exit 255). Keep these scripts comment-free and document them here.
+
+### Result, macOS 2026-09-23
+
+Read after stepping past init (`Stepi 300000`), so these are the firmware's values and not the reset
+defaults (reading them immediately after `program` answers `T2CLK=0`, `PR2=255`, which reads like a
+configuration that never took effect):
+
+| Register | Value | Meaning |
+|---|---|---|
+| `T2CLK` | 2 | Fosc/8, as `timer0_init()` writes |
+| `PR2` | 124 | as written, `(124+1) * 64 / 8 MHz` = 1.000 ms |
+| `OSCCON1` | 0 | not conclusive: the model does not report the oscillator selection |
+| `OSCFRQ` | 0 | same |
+
+Rate, from `g_startup_inhibit` (clears 1000 firmware-ms after the tick starts) bracketed by eight
+`Stepi 250000` blocks: it was still `true` at 1.80M instructions and `false` at 2.05M, i.e. the
+1000 ms boundary lies between 1.50M and 1.75M instructions after the init step.
+
+**~1500-1750 instructions per firmware millisecond**, which corroborates the 1625 in
+`trace_ptt_sequence.py` and does NOT support the 1887 in `test_first_dit.py` - those two constants
+disagree by ~16%, and a 16% error in the conversion is enough to move a 40 x 1 ms assertion window's
+end past or short of the event it is waiting for. Note also that `g_band_cache_idle_ms` is NOT a
+1 ms counter (it climbs ~4 counts per firmware-ms once it is running) and stays at 0 until the band
+cache exists, so it is the wrong counter to bracket.
 
 ## Why this exists
 

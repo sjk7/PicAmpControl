@@ -23,6 +23,16 @@ were all deleted. Concretely, that means:
   match would let a regenerated rule.cmake silently build the wrong part.
 
 ## Standing AI instructions (things the user asked to always remember)
+- EVERY SIMULATOR TEST RUNS THROUGH THE WATCHDOG - ALWAYS (user instruction, 2026-09-23: "ALL these
+  tests should run through the watchdog -- always"). The watchdog is
+  `tools/simulate/run_suite_with_watchdog.py`; `ctest --test-dir _build/My_Pic_Project/release
+  --output-on-failure` is the canonical local entry point (both registered tests route through the
+  watchdog), and `run_suite_with_watchdog.py --test suite|first-dit` is the direct one. Never run
+  `test_first_dit.py` / `trace_ptt_sequence.py` bare and never drive a test with raw `mdb.sh`: a bare
+  run has no timeout, no heartbeat (the log tab the user watches never moves), no orphan clean-up,
+  and its verdict lands outside the run's log. A new test must be registered in
+  `cmake/My_Pic_Project/default/user.cmake` AND given a `--test` choice, or the watchdog cannot wrap
+  it.
 - TEST RUNS ARE NEVER OBSERVED THROUGH THE TERMINAL, AND NEVER ASK A RUN FOR ITS TERMINAL OUTPUT -
   VERDICTS COME FROM FILES (user instruction, restated 2026-09-21 and again 2026-09-23: "we should
   not ask for terminal output when running tests -- this breaks the terminal. We are using a
