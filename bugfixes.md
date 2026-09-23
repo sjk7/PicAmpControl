@@ -138,6 +138,35 @@ why. Leftovers are still cleared when nothing is running, which is the only time
 compile database already carries the device from `device.cmake`, so a fresh configure is the fix for
 a stale pack path, not a flag edit), and the canonical build directory is configured for the Q10.
 
+**RESOLVED: the deeper causes, after the panel stayed bad through two restarts.** Five separate
+causes, in the order the diagnostics mislead you:
+
+1. `.clangd` hand-added `-mcpu=18F47Q10` - clang has no such CPU (`Unsupported argument ...`) -
+   removed; the database carries the part as `__18F47Q10__`.
+2. Removing `-mdfp=` from the parsed flags to silence `Unknown argument: '-mdfp=...'` made it far
+   worse: clangd resolves `<xc.h>` through that pack path. Only `-mcpu=` is removed.
+3. `clangd --query-driver` can never work with XC8: it queries the driver as `xc8-cc -E -v -x c -`,
+   which answers `(2042) no target device specified`. So `user.cmake` derives and adds the three
+   include directories as plain `-I` flags - compiler include from `${CMAKE_C_COMPILER}`, pack include
+   and its `proc` subdirectory from `${PICAMP_DFP_PATH}` - so they stay machine-resolved and nothing
+   OS-specific is committed. `proc` is the easy one to miss: `pic18_chip_select.h` does
+   `#include <pic18f47q10.h>` with no prefix, because `-mdfp` normally puts it on the path.
+4. **The actual root cause: three macros that XC8 defines itself and nothing else does.** `xc.h`'s
+   entire body is `#ifdef __XC8`; it reaches `pic18.h` only under `#if defined(__PICC18__)`; and
+   `pic18_chip_select.h` tests `_18F47Q10` (single underscores - not `__18F47Q10__`) before including
+   the device header. With every header found and none of these defined, `xc.h` expands to *nothing*
+   and every register is undeclared. All three are now in the CMake compile options, so any consumer
+   of the database gets them.
+5. XC8's own C99 header uses types clang has never heard of - `__int24`, `__uint24`, `__bit`, and the
+   `__far`/`__at(...)` qualifiers - mapped in `.clangd` only, because redefining a compiler type for
+   the real XC8 build would be a risk to the firmware.
+
+`C_Cpp.default.compileCommands` was also removed from `.vscode/settings.json`: when it is set the
+C/C++ extension ignores `includePath`/`defines` and parses the XC8 command line instead, which it
+cannot do. Verified with `clangd --check` on `firmware/src/main.c`: **0** include/type/undeclared
+errors (was 23), leaving only clangd's internal tweak noise. The panel keeps its own cached copy
+until the extension is restarted.
+
 ## 2026-09-23 — Log Follower: three different defaults, and a cost claim that was the opposite of the code
 
 The in-repo log-following extension (`tools/logfollower`) is the answer to "we need a decent tail

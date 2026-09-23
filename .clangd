@@ -21,12 +21,26 @@ CompileFlags:
   # pack to resolve <xc.h>; the fix for a stale pack path is a fresh configure of
   # `_build/My_Pic_Project/release`, not a flag edit here.
   Add:
-    - "-D__18F47Q10__"
-    - "-D_18F47Q10"
     - "-D__XC8"
+    - "-D__PICC18__"
+    - "-D_18F47Q10"
+    - "-D__18F47Q10__"
     - "-D__XC8_VERSION=4000"
     - "-D__DEBUG=1"
     - "-DXPRJ_default=default"
+    # XC8's C99 library header (c99/bits/alltypes.h) uses its 24-bit types `__int24`/`__uint24`,
+    # which clang has never heard of, so including it aborts the parse with "unknown type name
+    # '__int24'" and swamps everything after it. `__bit` is XC8's bit type, and `__far`/`__at(...)`
+    # are storage qualifiers clang does not have. Mapping them to host equivalents is cosmetically
+    # wrong (24 vs 64 bits) and entirely harmless for indexing. clangd-ONLY on purpose: they are NOT
+    # in the CMake options, because redefining a compiler type for the real XC8 build would be a
+    # genuine risk to the firmware. Enumerated with a grep over both include trees; verified
+    # 2026-09-23 that these are the only ones the headers use.
+    - "-D__int24=long"
+    - "-D__uint24=unsigned long"
+    - "-D__bit=unsigned char"
+    - "-D__far="
+    - "-D__at(x)="
     - "-Wno-unknown-pragmas"
     - "-Wno-unused-variable"
   Remove:

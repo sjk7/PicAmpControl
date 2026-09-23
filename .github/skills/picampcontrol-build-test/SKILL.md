@@ -133,14 +133,67 @@ starts work. Concretely, whenever any of these happens, write it to the skill be
 The test of whether it is recorded: could a fresh session hit the same problem and be stopped by
 what is written here? If not, it is not written yet. Do not batch this "for later" - the session that
 found it is the only one that still has the context.
+**The language servers: what actually makes XC8's headers parse (2026-09-23).** The Problems panel
+claimed `'xc.h' file not found` and then ~20 undeclared registers (`LATCbits`, `ADCON1`, `ADPCH`,
+`ADRES`, `PIR1bits`). There were FIVE separate causes, and each one on its own is enough to keep the
+cascade alive - they are listed in the order the diagnostics mislead you:
+
+1. **`clangd --query-driver` cannot work with XC8 at all.** clangd extracts a toolchain's system
+   includes by running the driver as `xc8-cc -E -v -x c -`; XC8 answers
+   `(2042) no target device specified` because clangd does not forward the `-mcpu=`/`-mdfp=` flags it
+   does not understand. Its own log says `System include extraction: driver execution failed with
+   return code: 1`. So the include paths must be stated explicitly.
+2. **The include paths belong in CMake, not in `.clangd`.** They are machine- and OS-specific, and
+   `user.cmake` can *derive* them at configure time - the compiler's include from
+   `${CMAKE_C_COMPILER}`, the pack's from `${PICAMP_DFP_PATH}`, which `device.cmake` already resolves
+   per OS - and write them into `compile_commands.json` as plain `-I` flags that every consumer
+   understands. Do not commit absolute pack paths.
+3. **Three include directories are needed, and one is easy to miss:**
+   `<pack>/xc8/pic/include` (pic18.h), **`<pack>/xc8/pic/include/proc`** (the device header itself -
+   `pic18_chip_select.h` does `#include <pic18f47q10.h>` with NO `proc/` prefix, because `-mdfp`
+   normally puts that directory on the path), and `<xc8>/pic/include` (xc.h + the C library).
+4. **The three macros are the real root cause, and they are the ones nobody guesses.** With every
+   header found, `xc.h` still expanded to *nothing*: its whole body is `#ifdef __XC8`, it reaches
+   `pic18.h` only under `#if defined(__PICC18__)`, and `pic18_chip_select.h` tests `_18F47Q10`
+   (single underscores - `__18F47Q10__` is NOT what it looks for) before including the device
+   header. XC8 defines all three itself, so a build never needs them - but a language server does,
+   and without them you get "every header found, every register undeclared", which reads like a
+   config problem and is a preprocessor problem. Verify by preprocessing directly:
+   `clang -E -D__XC8 -D__PICC18__ -D_18F47Q10 ... ` and grep the output for `LATCbits`.
+5. **XC8's own C99 header uses types clang has never heard of**: `__int24`, `__uint24`, `__bit`,
+   plus the `__far`/`__at(...)` qualifiers. Map them in `.clangd`'s Add list
+   (`-D__int24=long`, `-D__uint24=unsigned long`, `-D__bit=unsigned char`, `-D__far=`, `-D__at(x)=`)
+   - and keep that mapping OUT of the CMake options, because redefining a compiler type for the real
+     XC8 build is a genuine risk to the firmware, whereas for indexing it is free.
+
+Also, on the C/C++ extension: setting `C_Cpp.default.compileCommands` makes it **ignore**
+`includePath`/`defines` and parse the XC8 command line instead, which it cannot do - so that property
+is deliberately absent from `.vscode/settings.json`, with the reasoning written next to it.
+
+Diagnose this class of problem with `clangd --check=<file> --compile-commands-dir=<dir>` and read its
+`E[...]` lines, not the panel: the panel caches, and it kept showing `-mdfp`/`xc.h` errors that
+clangd's own check no longer produced. The extension needs a restart to drop them.
+
 **Traps found 2026-09-23 (second batch) - each one cost a run or a wrong conclusion.**
 
-- **`-mdfp=` must stay in the compile flags; only `-mcpu=` is safe to remove from `.clangd`.**
-  Removing both looked tidier - it silenced `Unknown argument: '-mdfp=...'` - and broke everything:
-  clangd resolves `<xc.h>` and the device header *through* the pack path given by `-mdfp`, so every
-  translation unit then failed with `'xc.h' file not found` plus ~20 cascading errors (`LATCbits`,
-  `ADCON1`, `__delay_ms` all undeclared). That is strictly worse than the one diagnostic it fixes.
-  `-mcpu=` is the redundant one: the part reaches clangd as the `__18F47Q10__` define.
+- **The editor needs help with XC8's driver flags, and there are TWO engines to fix.** XC8 passes
+  `-mdfp=<pack>` and `-mcpu=<part>`, neither of which clangd or the C/C++ extension understands, so
+  neither can find `<xc.h>` unaided - and a missing `<xc.h>` cascades into ~20 "undeclared
+  identifier" errors (`LATCbits`, `ADCON1`, `ADPCH`, `NVMCON1bits`...) that bury whatever real
+  diagnostic exists. Both fixes live in `.vscode/settings.json` and both are required:
+  * **clangd:** `--query-driver=**/xc8-cc` in `clangd.arguments`. clangd will not query an unknown
+    driver unless told to, and xc8-cc is precisely the thing that *does* understand `-mdfp`, so
+    asking the compiler is how the pack's `pic/include` (and therefore `<xc.h>`) reaches the search
+    path. The glob keeps it OS-independent, which is the rule for `.clangd`.
+  * **C/C++ extension:** do **not** set `C_Cpp.default.compileCommands`. When it is set the extension
+    IGNORES `includePath`/`defines` and parses the XC8 command line instead - where `-mdfp` means
+    nothing to it. Left unset, `c_cpp_properties.json`'s per-OS pack include path (Mac-XC8 /
+    Windows-XC8) is what resolves the device headers.
+  * `-mdfp=` must also stay in the compile flags (removing it to silence `Unknown argument` makes
+    things far worse - that diagnostic is the cheap side of the trade). Only `-mcpu=` is redundant:
+    the part reaches clangd as the `__18F47Q10__` define.
+  * Settings changes do not apply until the language server restarts / the window reloads - the
+    Problems panel keeps showing the old errors until then, which reads as "the fix did not work".
 - **There are TWO build directories and only one holds the editor's compile database.** `.clangd` and
   `.vscode/settings.json` both point at `_build/My_Pic_Project/release`, while the Q10 build tasks
   also write `_build/My_Pic_Project/q10_release`. Building in one leaves the other's

@@ -4,6 +4,53 @@ set_property(TARGET My_Pic_Project_default_default_XC8_compile PROPERTY SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/freq_counter.c"
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/nvm.c")
 
+# Include paths for the LANGUAGE SERVERS, not for the build.
+#
+# XC8's driver is the normal way clangd discovers a toolchain's system includes, and it cannot work
+# here: clangd queries it as `xc8-cc -E -v -x c -`, and XC8 answers "(2042) no target device
+# specified" because clangd does not forward the `-mcpu=`/`-mdfp=` flags it does not understand. The
+# extraction fails, nothing is added to the search path, and the Problems panel fills with
+# `'xc.h' file not found` plus ~20 cascading undeclared-register errors (LATCbits, ADCON1, ADPCH,
+# NVMCON1bits...) - verified with `clangd --check`, whose log says
+#   System include extraction: driver execution failed with return code: 1 - ''
+# 2026-09-23.
+#
+# So state them here, where CMake resolves this machine's paths at configure time and writes them
+# into compile_commands.json as plain -I flags that any consumer understands. Every path is DERIVED
+# - the compiler's include from ${CMAKE_C_COMPILER}, the pack's from ${PICAMP_DFP_PATH}, which
+# device.cmake already resolves per OS (user pack repository vs the MPLAB X install) - so nothing
+# OS-specific is committed and Windows resolves its own. Harmless for XC8: it takes -I like any
+# compiler, and the build is unaffected either way.
+#
+# Three directories, for three different reasons:
+#   pic/include        the pack's pic18.h / pic18_chip_select.h
+#   pic/include/proc   the device header itself: pic18_chip_select.h does `#include
+#                      <pic18f47q10.h>` with NO proc/ prefix (verified in the 1.30.487 pack),
+#                      because XC8's `-mdfp` normally puts this directory on the search path
+#   <compiler>/pic/include  xc.h and the C library headers
+#
+# THE MACROS ARE THE ACTUAL ROOT CAUSE, and they matter more than the paths. XC8 defines these
+# itself, so a build never needs them - but a language server does, and without them the whole
+# header chain is inert:
+#   __XC8       xc.h's entire body is `#ifdef __XC8`; undefined, xc.h expands to nothing at all
+#   __PICC18__  xc.h reaches pic18.h only under `#if defined(__PICC18__)`
+#   _18F47Q10   pic18_chip_select.h tests this (single underscores, not __18F47Q10__) before
+#               including the device header
+# With all three, `LATCbits` and friends exist and the file parses cleanly; without them every
+# register is an undeclared identifier while every header is "found" - which is the confusing part.
+# Verified by preprocessing xc.h directly, 2026-09-23.
+get_filename_component(_picamp_xc8_bin "${CMAKE_C_COMPILER}" DIRECTORY)
+get_filename_component(_picamp_xc8_include "${_picamp_xc8_bin}/../pic/include" ABSOLUTE)
+target_compile_options(My_Pic_Project_default_default_XC8_compile PRIVATE
+    "-D__XC8"
+    "-D__PICC18__"
+    "-D_18F47Q10"
+    "-I${PICAMP_DFP_PATH}/pic/include"
+    "-I${PICAMP_DFP_PATH}/pic/include/proc"
+    "-I${PICAMP_DFP_PATH}/pic/include/c99"
+    "-I${_picamp_xc8_include}"
+    "-I${_picamp_xc8_include}/c99")
+
 # Optimisation policy (PIC18F47Q10 only).
 #
 # 8.5% of flash in Release, so there is no bloat problem to work around and no reason to pay for

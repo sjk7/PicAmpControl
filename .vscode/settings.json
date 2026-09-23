@@ -1,6 +1,11 @@
 {
     "clangd.arguments": [
         "--compile-commands-dir=${workspaceFolder}/_build/My_Pic_Project/release",
+        // Let clangd query the XC8 driver for its system includes. It needs this because it has no
+        // idea what `-mdfp=<pack>` means either - but xc8-cc does, so asking the compiler is how the
+        // pack's pic/include (and therefore <xc.h>) gets onto the search path. The glob keeps this
+        // machine-independent, which is the rule for .clangd; the same pattern matches on Windows.
+        "--query-driver=**/xc8-cc",
         "--header-insertion=never"
     ],
     "mplab.clangd.compileCommandsDir": "${workspaceFolder}/_build/My_Pic_Project/release",
@@ -13,7 +18,13 @@
     // timers, so the warning means nothing here - see Ai-Notes.txt. The adapter exposes no
     // true suppression option, so this is the output-routing lever, not a filter.
     "mplab.coreDebugger.categorizeOutputEvents": true,
-    "C_Cpp.default.compileCommands": "${workspaceFolder}/_build/My_Pic_Project/release/compile_commands.json",
+    // Deliberately NOT pointing C_Cpp at compile_commands.json. When that property is set, the C/C++
+    // extension IGNORES includePath/defines and parses the XC8 command line instead - and
+    // `-mdfp=<pack>` is an argument it does not understand, so it never learns where the device
+    // headers live: <xc.h> is "not found" and every register (LATCbits, ADCON1, ADPCH, NVMCON1bits)
+    // comes back undeclared, which buries the two real diagnostics under ~20 cascading ones.
+    // c_cpp_properties.json carries the per-OS pack include path (Mac-XC8 / Windows-XC8); that is
+    // what resolves the headers. Fixed 2026-09-23.
     "C_Cpp.default.includePath": [
         "${workspaceFolder}/**",
         "${workspaceFolder}/firmware/include"
