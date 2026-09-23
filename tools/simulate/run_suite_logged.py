@@ -33,8 +33,8 @@ def main() -> int:
                     default=Path(procutil.temp_dir()) / "pac_suite_run.log")
     args = ap.parse_args()
 
-    # Device comes from the environment so the same wrapper serves 16F (default) and Q10.
-    device = os.environ.get("PICAMP_DEVICE") or "PIC16F18875"
+    # Device comes from the environment so the same wrapper serves the Q10 (default) and the 16F.
+    device = os.environ.get("PICAMP_DEVICE") or "PIC18F47Q10"
     started = time.monotonic()
     code = run_logged.run_logged(
         [sys.executable, str(TOOLS_DIR / "run_suite_with_watchdog.py"),

@@ -1,38 +1,29 @@
 # Device selection for the PicAmpControl firmware.
 #
-# WHY THIS IS A VARIABLE NOW (2026-09-22)
-# --------------------------------------
-# `.generated/rule.cmake` is machine-generated and hardcoded `-mcpu=16F18875`,
-# `__16F18875__` and the `PIC16F1xxxx_DFP` pack in every compile, assemble and link rule. That
-# was fine while there was one device, but it means the PIC18F47Q10 image could only be built by
-# hand-written `xc8-cc` invocations - which is exactly what made the Q10 port hard to test
-# thoroughly, because `ctest` and every harness load `out/My_Pic_Project/default.elf`.
+# PIC18F47Q10 ONLY (decided 2026-09-23). The PIC16F18875 port is gone: its code paths, build
+# option, CI matrix entry and documentation were all removed. There is exactly one device and no
+# decision left to make - do not add a second one back.
 #
-# So the device facts live here, and `.generated/rule.cmake` reads them. Editing a generated file
-# is normally wrong; the alternative is a second copy of the whole generated tree that then
-# drifts, and a drift between "what the tests load" and "what the target builds" is precisely the
-# failure this is meant to remove. The edit is deliberately small, commented, and confined to the
-# device tokens.
+# WHY THE DEVICE FACTS LIVE HERE
+# ------------------------------
+# `.generated/rule.cmake` is machine-generated and hardcodes device tokens (`-mcpu=...`,
+# `__18F47Q10__`, the DFP pack path) in every compile, assemble and link rule. So the facts are
+# stated once here and `tools/setup/parameterise_device.py` rewrites those tokens to the CMake
+# variables below. Editing a generated file is normally wrong; the alternative is a second copy
+# of the whole generated tree that then drifts, and a drift between "what the tests load" and
+# "what the target builds" is precisely the failure this is meant to remove. The edit is
+# deliberately small, commented, and confined to the device tokens.
 #
-# Choose with `-DPICAMP_DEVICE=PIC18F47Q10` (default: PIC16F18875, so nothing changes for the
-# existing device or for anyone who does not pass the option).
-#
-# MEMORY ASYMMETRY - read this before adding code:
-#   PIC16F18875  8192 words flash, 1024 B RAM,  256 B EEPROM. The Debug image sits at ~99% of
-#                flash, so on this part a new feature usually means removing something else.
-#   PIC18F47Q10  131072 bytes flash, 3359 B RAM, 1024 B EEPROM. The Debug image sits at ~10%,
-#                so there is room to write things clearly instead of smallest.
-# Anything that must build on BOTH parts stays inside the 16F budget.
+# MEMORY BUDGET (this part, the only part): 131072 bytes flash, 3359 B RAM, 1024 B EEPROM. The
+# Debug image sits at ~10%, so there is room to write things clearly instead of smallest. Flash
+# reduction is still a standing work item: the headroom exists so the PTT sequencing can be
+# asserted strongly, with test evidence, as unable to damage the amplifier.
 
-set(PICAMP_DEVICE "PIC16F18875" CACHE STRING "Target PIC device (PIC16F18875 or PIC18F47Q10)")
+set(PICAMP_DEVICE "PIC18F47Q10" CACHE STRING "Target PIC device (PIC18F47Q10 only)")
 
-# Per-device facts. `DFP_PACK` is the pack directory under the pack repository root; the Q10 DFP
+# Device facts. `PICAMP_DFP` is the pack directory under the pack repository root; the Q10 DFP
 # ships inside MPLAB X's own install as well as the user pack repo, and `rule.cmake` already
 # resolves that distinction (see the pack-search rule in the build/test skill).
-set(PICAMP_DEVICE_MCPU_PIC16F18875 "16F18875")
-set(PICAMP_DEVICE_DEFINE_PIC16F18875 "__16F18875__")
-set(PICAMP_DEVICE_DFP_PIC16F18875 "PIC16F1xxxx_DFP/1.32.471")
-
 set(PICAMP_DEVICE_MCPU_PIC18F47Q10 "18F47Q10")
 set(PICAMP_DEVICE_DEFINE_PIC18F47Q10 "__18F47Q10__")
 set(PICAMP_DEVICE_DFP_PIC18F47Q10 "PIC18F-Q_DFP/1.30.487")
@@ -44,14 +35,15 @@ set(PICAMP_DFP "${PICAMP_DEVICE_DFP_${PICAMP_DEVICE}}")
 if(NOT PICAMP_MCPU)
     message(FATAL_ERROR
         "PICAMP_DEVICE='${PICAMP_DEVICE}' is not a known device. "
-        "Known: PIC16F18875, PIC18F47Q10. Add a PICAMP_DEVICE_<fact>_<device> entry for a new one.")
+        "PIC18F47Q10 is the only supported device. Add a PICAMP_DEVICE_<fact>_<device> entry if "
+        "a new part is ever added.")
 endif()
 
 # ---------------------------------------------------------------- pack repository roots
 # A DFP can live in either of two places, and the two parts in this project are split across them:
 #
-#   %USERPROFILE%\.mchp_packs/Microchip    the user pack repository; has PIC16F1xxxx_DFP, but on
-#                                          this machine has NO PIC18F-Q_DFP.
+#   %USERPROFILE%\.mchp_packs/Microchip    the user pack repository; on this machine it holds no
+#                                          PIC18F-Q_DFP.
 #   <MPLABX install>/packs/Microchip       MPLAB X ships a full pack set; holds PIC18F-Q_DFP/1.30.487.
 #
 # Searching only the user repository is what produced `error: (2104) no device-support files
@@ -63,8 +55,8 @@ endif()
 # PACK_REPO_PATH is normally set by `.generated/rule.cmake`, but rule.cmake includes THIS file at
 # its top BEFORE it defines PACK_REPO_PATH, so on a fresh configure the variable is still empty
 # here and the user pack repository is never searched. That works only where MPLAB X ships the
-# exact DFP; on macOS it does not - MPLAB X 6.35 bundles PIC16F1xxxx_DFP 1.31.465 while the
-# requested 1.32.471 lives only in the user repository under $HOME/.mchp_packs. Set a sensible
+# exact DFP being requested; MPLAB X 6.35 does ship PIC18F-Q_DFP/1.30.487 on macOS, but another
+# install or a newer requested pack may not. Set a sensible
 # per-OS default first, so the documented configure commands (run_tests.sh, the CMake presets)
 # work on a clean checkout with no -DPACK_REPO_PATH. rule.cmake's later `set(... CACHE ...)` does
 # not overwrite this value.

@@ -7,11 +7,11 @@
         "${workspaceFolder}/firmware/include",
         "${env:HOME}/tools/microchip/xc8/v4.00/xc8-v4.00/pic/include",
         "${env:HOME}/tools/microchip/xc8/v4.00/xc8-v4.00/pic/include/c99",
-        "${env:HOME}/.mchp_packs/Microchip/PIC16F1xxxx_DFP/1.32.471/xc8/pic/include"
+        "${env:HOME}/.mchp_packs/Microchip/PIC18F-Q_DFP/1.30.487/xc8/pic/include"
       ],
       "defines": [
-        "__16F18875__",
-        "_16F18875",
+        "__18F47Q10__",
+        "_18F47Q10",
         "__XC8",
         "__XC8_VERSION=4000",
         "__DEBUG=1",

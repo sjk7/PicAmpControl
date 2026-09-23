@@ -1,7 +1,6 @@
 # DEVICE SELECTION (hand-edited by tools/setup/parameterise_device.py, 2026-09-22).
-# The device tokens below are CMake variables from device.cmake, so this one tree builds either
-# the PIC16F18875 or the PIC18F47Q10 image. See device.cmake for why a generated file is edited
-# here, and for the flash/RAM asymmetry between the two parts.
+# The device tokens below are CMake variables from device.cmake. PIC18F47Q10 is the only device
+# (2026-09-23). See device.cmake for why a generated file is edited here.
 include("${CMAKE_CURRENT_LIST_DIR}/../device.cmake")
 
 # The following functions contains all the flags passed to the different build stages.

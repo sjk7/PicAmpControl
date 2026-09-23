@@ -72,28 +72,15 @@ ELF_PATH = harness.ELF_PATH
 SYM_PATH = harness.IMAGE_DIR / "default.sym"
 
 # ---------------------------------------------------------------- device selection
-# This harness has to drive either part, because the Q10 port is validated by running THIS test
-# rather than a bespoke one. `PICAMP_DEVICE` selects the part; the instruction rate is a property
-# of that part's clock chain:
-#
-#   PIC16F18875  32 MHz core, Fosc/4 -> 8 MHz Timer2 input, 1:64, PR2=124 -> ~8000 steps per
-#                simulated millisecond (the historical 8 MIPS figure).
-#   PIC18F47Q10  64 MHz core, T2CLK = Fosc/8 -> the same 8 MHz Timer2 input and the same 1 ms
-#                tick. The value is MEASURED, not assumed: 200,000 `Stepi` steps advance the 1 ms
-#                tick by 106, i.e. ~1887 steps per simulated millisecond (probe and transcript in
-#                docs/hardware/q10-bringup, 2026-09-22).
+# PIC18F47Q10 only, the sole device (see device.cmake). The instruction rate is a property of the
+# part's clock chain: 64 MHz core, T2CLK = Fosc/8 -> 8 MHz Timer2 input and a 1 ms tick. The value
+# is MEASURED, not assumed: 200,000 `Stepi` steps advance the 1 ms tick by 106, i.e. ~1887 steps
+# per simulated millisecond (probe and transcript in docs/hardware/q10-bringup, 2026-09-22).
 #
 # The unit matters: every wait in this module is `Stepi ms * INSTRUCTIONS_PER_MS`, so a wrong
 # figure makes the harness wait the wrong amount of simulated time.
-DEVICE_INSTRUCTIONS_PER_MS = {
-    "PIC16F18875": 8000,
-    "PIC18F47Q10": 1887,
-}
 DEVICE = harness.DEVICE
-if DEVICE not in DEVICE_INSTRUCTIONS_PER_MS:
-    sys.exit(f"error: unknown PICAMP_DEVICE '{DEVICE}'; known: "
-             f"{', '.join(sorted(DEVICE_INSTRUCTIONS_PER_MS))}")
-INSTRUCTIONS_PER_MS = DEVICE_INSTRUCTIONS_PER_MS[DEVICE]
+INSTRUCTIONS_PER_MS = 1887
 
 PTT_PIN = "RC0"
 SETTLE_PIN = "RC1"

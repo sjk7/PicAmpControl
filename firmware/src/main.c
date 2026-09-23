@@ -8,56 +8,38 @@
 
 #pragma config FEXTOSC = OFF
 
-/* Config words are named per family, so the three that differ are guarded. On the
-   PIC16F18875 the reset oscillator is selected as RSTOSC = HFINT32, MCLR is simply ON, and
-   the brown-out level is a bare number. On the PIC18F-Q10 RSTOSC must name the HFINTOSC rate,
+/* PIC18F47Q10 is the ONLY device in this project (decided 2026-09-23; the PIC16F18875 port,
+   and with it every 16F code path, build option and note, was removed). Config words therefore
+   use this part's names only: RSTOSC must name the HFINTOSC rate,
    MCLR is EXTMCLR/INTMCLR, and BORV uses VBOR_xxx names - see the DFP's 18f47q10.cfgmap.
    
-   THE Q10 CLOCK IS NOT A FREE CHOICE: the Q10 config map offers only two reset oscillator
-   settings, `HFINTOSC_64MHZ` and `HFINTOSC_1MHZ` (there is no HFINT32 there - that is a
-   16F-only name, and it is why this originally landed on 1 MHz). The rest of the firmware
-   assumes _XTAL_FREQ = 32 MHz, so 1 MHz would run the amplifier at 1/32 the design clock and
-   silently stretch the 1 ms tick, every band-settle delay and the trip response by 32x. Choose
-   64 MHz and keep the design clock honest at 32 MHz instead, by using Fosc/8 for Timer2.
-   64 MHz is the Q10's highest internal oscillator rate. */
-#if defined(__18F47Q10__)
+   THE CLOCK IS NOT A FREE CHOICE: this part's config map offers only two reset oscillator
+   settings, `HFINTOSC_64MHZ` and `HFINTOSC_1MHZ` (there is no HFINT32 name here). The rest of
+   the firmware assumes _XTAL_FREQ = 32 MHz, so 1 MHz would run the amplifier at 1/32 the design
+   clock and silently stretch the 1 ms tick, every band-settle delay and the trip response by
+   32x. Choose 64 MHz and keep the design clock honest at 32 MHz instead, by using Fosc/8 for
+   Timer2. 64 MHz is this part's highest internal oscillator rate. */
 #pragma config RSTOSC = HFINTOSC_64MHZ
-#else
-#pragma config RSTOSC = HFINT32
-#endif
 
 #pragma config WDTE = OFF
 #pragma config PWRTE = OFF
 
-#if defined(__18F47Q10__)
-/* RA6 doubles as CLKOUT/OSC2 on this part, and the Q10's CLKOUTEN default is ON (the config bit
+/* RA6 doubles as CLKOUT/OSC2 on this part, and the CLKOUTEN default is ON (the config bit
    reads clear = enabled; see the DFP's 18f47q10.cfgdata, CVALUE:1:OFF / CVALUE:0:ON). RA6 is
    OUTPUT_LCD_E in this design, so leaving the default silently hands the LCD enable line to the
    clock-output function and the panel never latches.
 
    Found on 2026-09-22 by reading the pin back under MDB in the boot trace: it reported
    `RA6 Ain 5.0V (RA6)/IOCA6/ANA6/CLKOUT/OSC2` even though the firmware had configured it as an
-   output, which is what pointed at the undocumented-by-us config default. The 16F does not have
-   this conflict, which is why it went unnoticed through the whole port.
-
-   CLKOUTEN only exists on the Q10, so the setting is device-guarded. */
+   output, which is what pointed at the undocumented-by-us config default. */
 #pragma config CLKOUTEN = OFF
-#endif
 
-#if defined(__18F47Q10__)
 #pragma config MCLRE = EXTMCLR
-#else
-#pragma config MCLRE = ON
-#endif
 
 #pragma config CP = OFF
 #pragma config BOREN = ON
 
-#if defined(__18F47Q10__)
 #pragma config BORV = VBOR_190
-#else
-#pragma config BORV = 19
-#endif
 
 typedef enum {
     STATE_STANDBY = 0,
@@ -385,15 +367,13 @@ void __interrupt() timer0_isr(void) {
         unsigned int sample = (unsigned int)ADRES;
         PIR1bits.ADIF = 0;
 
-#if defined(__18F47Q10__)
-        /* The Q10 ADCC is 12-bit (0..4095) while every converter below - temperature_c(),
+        /* The ADCC is 12-bit (0..4095) while every converter below - temperature_c(),
            drain_voltage(), overdrive_power_mw(), current_amperes() and the SWR maths - treats
            the raw value as 10-bit (0..1023). Downscale once here, at capture, so all eight
            channels stay on the 10-bit scale the firmware already assumes. Measured 2026-09-22:
            without this, 2.5 V on the temp pin reads 2048 and temperature_c(2048) -> 2048>>2 =
            512 > 250 -> 150C fault sentinel. */
         sample >>= 2;
-#endif
 
         /* Indexed store rather than an 8-case switch: g_adc_active_index is always a valid
            channel index (it is only ever loaded from g_adc_scan_index), and the switch cost
@@ -422,18 +402,12 @@ void timer0_init(void) {
        stalls under MDB after the first interrupt, and Timer2's simpler compare-based
        architecture doesn't hit that issue on either real hardware or the simulator.
 
-       Both devices are clocked so that (clock / prescale / (PR2+1)) = 1 kHz, which means the
-       prescale differs because the internal oscillator rate differs:
-         PIC16F18875: 32 MHz core, Fosc/4 = 8 MHz, 1:64, PR2 = 124 -> 8e6/64/125   = 1.000 kHz
+       Timer2 is clocked so that (clock / prescale / (PR2+1)) = 1 kHz:
          PIC18F47Q10: 64 MHz core, Fosc/8 = 8 MHz, 1:64, PR2 = 124 -> 8e6/64/125   = 1.000 kHz
-       The Q10 has no 32 MHz internal setting, so it takes the Fosc/8 clock divider to reach the
+       The part has no 32 MHz internal setting, so it takes the Fosc/8 clock divider to reach the
        same 8 MHz Timer2 input and keep _XTAL_FREQ = 32 MHz meaningful for the rest of the
        firmware. T2CLK is a code, not a divisor: 0x01 = Fosc/4, 0x02 = Fosc/8 (per the DFP). */
-#if defined(__18F47Q10__)
     T2CLK = 0x02;         /* Fosc/8: 64 MHz core -> 8 MHz Timer2 input */
-#else
-    T2CLKCON = 0x01;      /* Fosc/4: 32 MHz core -> 8 MHz Timer2 input */
-#endif
     T2CONbits.CKPS = 6;   /* 1:64 prescale */
     T2CONbits.OUTPS = 0;  /* 1:1 postscale */
     PR2 = 124;            /* (124+1) * 64 / 8MHz = 1.000ms */
@@ -441,14 +415,12 @@ void timer0_init(void) {
     PIR4bits.TMR2IF = 0;
     PIE4bits.TMR2IE = 1;
 
-#if defined(__18F47Q10__)
     /* This family needs its priority mechanism armed before anything is dispatched. Measured on
        the simulator: with IPEN = 0 no interrupt ever reaches the ISR, even though TMR2IF sets and
        the peripheral enable is set. IPEN = 1, the source's IPRx priority bit, and the matching
        global (GIE/GIEH) make it run at once. */
     INTCONbits.IPEN = 1;
     IPR4bits.TMR2IP = 1;    /* system tick at high priority */
-#endif
 
     T2CONbits.ON = 1;
 
@@ -785,15 +757,12 @@ void adc_init(void) {
     // The result must be a plain right-justified 0-1023 count: temperature_c(),
     // drain_voltage() and overdrive_power_mw() all treat the raw ADC value as 0-1023.
     //
-    // PIC16F18875: ADFM is ADCON1<7:6>; ADCON1=0x20 above sets ADFM<1:0>=10 = right-justified.
-    // PIC18F47Q10 (ADCC): ADFM is a SINGLE bit, ADCON0<2>, and 0 means LEFT-justified. The
-    // 10-bit result then sits in ADRES<15:6>, so a 2.5V temperature input (raw 512) reads as
-    // 512<<6 = 32768 and temperature_c() returns its 150C fault sentinel, which is exactly the
-    // spurious TEMPERATURE trip the Q10 bring-up hit (probe_q10_ptt_path.py, 2026-09-22).
+    // ADCC ADFM is a SINGLE bit, ADCON0<2>, and 0 means LEFT-justified. The 10-bit result then
+    // sits in ADRES<15:6>, so a 2.5V temperature input (raw 512) reads as 512<<6 = 32768 and
+    // temperature_c() returns its 150C fault sentinel, which is exactly the spurious TEMPERATURE
+    // trip the bring-up hit (probe_q10_ptt_path.py, 2026-09-22).
     ADCON0 = 0x88;
-#if defined(__18F47Q10__)
     ADCON0bits.ADFM = 1;
-#endif
     PIR1bits.ADIF = 0;
     PIE1bits.ADIE = 1;
     INTCONbits.PEIE = 1;

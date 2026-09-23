@@ -32,22 +32,14 @@ import platform_process as procutil  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
-# Which part the simulator models. `PICAMP_DEVICE` selects it so the same harness can drive the
-# PIC18F47Q10 during the upgrade; PIC16F18875 stays the default so nothing changes for the
-# existing device. The simulated part must match the image loaded into it, so this is one setting
-# rather than something each harness decides for itself. An empty value counts as unset - a shell
-# that exports `PICAMP_DEVICE=` should not be a hard error.
-DEVICE = os.environ.get("PICAMP_DEVICE") or "PIC16F18875"
+# The simulated part. PIC18F47Q10 is the only device (see device.cmake), and the simulated part
+# must match the image loaded into it, so this is stated once here rather than decided per harness.
+DEVICE = "PIC18F47Q10"
 
-# The image directory carries the device name. It has to, because both devices would otherwise
-# write `out/My_Pic_Project/default.elf` and the harness would load whichever was built last -
-# with no error, just a wrong verdict, and fault injection poking addresses from the other
-# device's .sym. CMake writes `<device>` via PICAMP_MCPU; the MCPU spelling is derived here from
-# the long device name to keep one source of truth.
-_DEVICE_MCPU = {
-    "PIC16F18875": "16F18875",
-    "PIC18F47Q10": "18F47Q10",
-}.get(DEVICE, DEVICE)
+# The image directory carries the device name, so a stale image from any other build can never be
+# loaded silently: `out/My_Pic_Project_<mcpu>/default.elf`. CMake writes `<device>` via PICAMP_MCPU;
+# the MCPU spelling is derived here from the long device name to keep one source of truth.
+_DEVICE_MCPU = "18F47Q10"
 IMAGE_DIR = REPO_ROOT / "out" / f"My_Pic_Project_{_DEVICE_MCPU}"
 
 HEX_PATH = IMAGE_DIR / "default.hex"
@@ -77,7 +69,7 @@ TRIP_REASON_BITS = [
 ]
 XTAL_FREQ = 32_000_000
 
-# How many simulated instructions make one firmware millisecond, PER DEVICE.
+# How many simulated instructions make one firmware millisecond.
 #
 # This is a measured property of the model, not a datasheet figure, and getting it wrong is
 # silent and expensive. Every `Stepi` in this harness is sized from it, so a wrong value does not
@@ -85,22 +77,20 @@ XTAL_FREQ = 32_000_000
 # decides whether a short sequence stage is observable at all.
 #
 # Measured 2026-09-22 by bracketing the firmware's own 1000 ms startup inhibit
-# (`g_startup_inhibit` clears after `g_startup_elapsed_ms >= 1000`) against `Stepi`:
-#   * PIC16F18875: 8000 instructions/ms - the historical value this harness was written to.
-#   * PIC18F47Q10: ~1625 instructions/ms. The 1000 ms inhibit ended between 1.50M and 1.75M
-#     instructions (docs/hardware/q10-bringup/rate_probe.mdb).
-# The Q10 figure is ~5x SMALLER, which had two consequences while it was unaccounted for: every
-# step advanced ~5x more firmware time than intended (so the 20 ms sequence stages 1/2/4 were
-# shorter than one sample and were never observed - "release did not enter stage 4"), and the
-# suite executed ~5x more instructions than needed to cover the intended simulated time, which is
-# a large part of why it is slow. Fixing the constant fixes both.
+# (`g_startup_inhibit` clears after `g_startup_elapsed_ms >= 1000`) against `Stepi`: the inhibit
+# ended between 1.50M and 1.75M instructions (docs/hardware/q10-bringup/rate_probe.mdb), i.e.
+# ~1625 instructions/ms for the PIC18F47Q10 - the only device this harness drives.
+# The figure is ~5x SMALLER than the 8000 the harness was originally written against, which had
+# two consequences while it was unaccounted for: every step advanced ~5x more firmware time than
+# intended (so the 20 ms sequence stages 1/2/4 were shorter than one sample and were never
+# observed - "release did not enter stage 4"), and the suite executed ~5x more instructions than
+# needed to cover the intended simulated time, which is a large part of why it was slow. Fixing
+# the constant fixes both.
 #
-# If a device is added, MEASURE this - do not assume the datasheet clock rate. The model does not
-# track the configured oscillator here (the Q10 runs 64 MHz yet steps as if far slower).
-INSTRUCTIONS_PER_MS = {
-    "PIC16F18875": 8000,
-    "PIC18F47Q10": 1625,
-}.get(DEVICE, 8000)
+# If the model's stepping rate changes, MEASURE this again - do not assume the datasheet clock
+# rate. The model does not track the configured oscillator (the part runs 64 MHz yet steps as if
+# far slower).
+INSTRUCTIONS_PER_MS = 1625
 
 SECONDS_PER_INSTRUCTION = 1.0 / (INSTRUCTIONS_PER_MS * 1000.0)
 

@@ -1,16 +1,11 @@
 /*
  * Internal (on-chip) non-volatile storage - the versioned, checksummed settings record.
  *
- * Two implementations, one per device family:
+ * PIC18F47Q10 ONLY. The legacy `eeprom_read`/`eeprom_write` helpers do not exist on this part:
+ * XC8 warns "The Read_b_eep routine is no longer supported" and the link fails with `undefined
+ * symbol "_Write_b_eep"`. This device therefore drives its own NVM block.
  *
- *   PIC16F18875 - XC8's legacy helpers. `eeprom_read`/`eeprom_write` expand through pic18.h to
- *                 Read_b_eep/Write_b_eep/Busy_eep, which the toolchain provides for this device.
- *
- *   PIC18F47Q10 - those helpers do not exist: XC8 warns "The Read_b_eep routine is no longer
- *                 supported" and the link fails with `undefined symbol "_Write_b_eep"`. This
- *                 device therefore drives its own NVM block.
- *
- * The Q10 register names and the read/write procedure come from the DFP header
+ * The register names and the read/write procedure come from the DFP header
  * (PIC18F-Q_DFP/1.30.487), NOT from the `Eeprom-changes.md` notes: those notes name
  * `NVMCON1bits.NVMREG` and `NVMCON0bits.GO`, neither of which exists on this part. Only the
  * 0x55/0xAA unlock destination (NVMCON2) matches. Code written to the notes' names does not
@@ -21,8 +16,6 @@
 #include <stdbool.h>
 
 #include "../include/nvm.h"
-
-#if defined(__18F47Q10__)
 
 static unsigned char eeprom_read_byte(unsigned char address) {
     NVMADRL = address;
@@ -54,18 +47,6 @@ static void eeprom_write_byte(unsigned char address, unsigned char value) {
     }
     NVMCON0bits.NVMEN = 0;
 }
-
-#else
-
-static unsigned char eeprom_read_byte(unsigned char address) {
-    return eeprom_read(address);
-}
-
-static void eeprom_write_byte(unsigned char address, unsigned char value) {
-    eeprom_write(address, value);
-}
-
-#endif
 
 bool internal_eeprom_read(unsigned char address, unsigned char *data, unsigned char length) {
     unsigned char index;

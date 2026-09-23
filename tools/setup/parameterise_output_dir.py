@@ -11,19 +11,19 @@ Why
     ELF_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.elf"
     SYM_PATH = REPO_ROOT / "out" / "My_Pic_Project" / "default.sym"
 
-With two devices that is a trap with no symptom. Build Q10, then build the 16F, and the harnesses
-happily run the 16F image against the Q10 expectations - or the reverse. The fault injection is
-worse still: `test_first_dit.py` writes to variable *addresses* read from `default.sym`, so a stale
-symbol file makes it poke the wrong memory. None of that reports an error; it just produces a wrong
-verdict.
+With two devices this was a trap with no symptom: build one, then the other, and the harnesses
+happily run the wrong image against the current expectations. The fault injection is worse still:
+`test_first_dit.py` writes to variable *addresses* read from `default.sym`, so a stale symbol file
+makes it poke the wrong memory. None of that reports an error; it just produces a wrong verdict.
 
-So the output directory becomes per-device:
+So the output directory carries the device. PIC18F47Q10 is the only device now (2026-09-23), but
+the directory keeps its name so that any stale image from an earlier build or a different device
+can never be loaded silently:
 
-    PIC16F18875  -> out/My_Pic_Project_16F18875/
     PIC18F47Q10  -> out/My_Pic_Project_18F47Q10/
 
-and the harnesses resolve the same directory from `PICAMP_DEVICE`, so what the tests load is
-necessarily what the selected device built.
+and the harnesses resolve the same directory, so what the tests load is necessarily what the device
+built.
 
 This is the same small, commented, device-token-only edit as `parameterise_device.py` applies to
 `rule.cmake`, for the same reason: the alternative is a duplicated generated tree that drifts, and

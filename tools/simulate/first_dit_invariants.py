@@ -47,13 +47,12 @@ BAND_PIN_FOR = {1: "RD2", 2: "RD3", 3: "RD4", 4: "RD5", 5: "RD6", 6: "RD7"}
 BAND_NAME = {1: "160m", 2: "80m", 3: "40m", 4: "20m", 5: "15m", 6: "10m"}
 BAND_OUT_OF_SPEC = 7
 
-# Instruction rate per device, MEASURED (see trace_ptt_sequence.py INSTRUCTIONS_PER_MS). This
-# file MUST stay in sync with that one - a wrong value makes every timing invariant (I6, hot-switch)
-# measure time ~5x short on the Q10, which reported a bogus "HOT SWITCH at 7.3ms" when the real
-# gap was 36.5ms against a 20ms settle. Read the rate from the same place; do not re-derive it.
-import os  # noqa: E402
-_DEVICE = os.environ.get("PICAMP_DEVICE") or "PIC16F18875"
-_INSTRUCTIONS_PER_MS = {"PIC16F18875": 8000, "PIC18F47Q10": 1625}.get(_DEVICE, 8000)
+# Instruction rate, MEASURED (see trace_ptt_sequence.py INSTRUCTIONS_PER_MS). This file MUST stay
+# in sync with that one - a wrong value makes every timing invariant (I6, hot-switch) measure time
+# ~5x short, which reported a bogus "HOT SWITCH at 7.3ms" when the real gap was 36.5ms against a
+# 20ms settle. Read the rate from the same place; do not re-derive it.
+# PIC18F47Q10 is the only device, so the rate is a constant: ~1625 instructions per simulated ms.
+_INSTRUCTIONS_PER_MS = 1625
 SECONDS_PER_INSTRUCTION = 1.0 / (_INSTRUCTIONS_PER_MS * 1000.0)
 
 

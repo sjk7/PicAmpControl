@@ -57,11 +57,10 @@ void freq_counter_init(void) {
     TRISDbits.TRISD1 = 1;
 
     // RD2-RD7: one digital output per band, driving the LPF relays.
-    // The analog-select register is cleared as a whole rather than bit by bit, because the
-    // bitfield names differ by family (ANSDn on the PIC16F18875, ANSELDn on the PIC18F-Q10)
-    // and every PORTD pin in this design is digital anyway: RD0 drives the LCD, RD1 is the
-    // T1CKI frequency-counter input, RD2-RD7 are the band relays. Selecting all-digital is
-    // therefore correct on either device and keeps this driver family-neutral.
+    // The analog-select register is cleared as a whole rather than bit by bit: every PORTD pin
+    // in this design is digital anyway - RD0 drives the LCD, RD1 is the T1CKI frequency-counter
+    // input, RD2-RD7 are the band relays - so selecting all-digital is correct for this part,
+    // whose analog-select register is ANSELD.
     ANSELD = 0x00;
     TRISDbits.TRISD2 = 0;
     TRISDbits.TRISD3 = 0;

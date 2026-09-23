@@ -14,10 +14,15 @@
 # with no -I or -mdfp lines present. Do not re-add per-machine paths.
 CompileFlags:
   CompilationDatabase: "_build/My_Pic_Project/release"
+  # Do NOT add `-mcpu=...` here. The compile database already carries the device (from
+  # device.cmake), and hand-adding it produced a Problems-panel error of its own:
+  #   Unsupported argument '18F47Q10' to option '-mcpu='
+  # because clang has no such CPU. `-mdfp=<pack>` stays in the database, because clangd needs the
+  # pack to resolve <xc.h>; the fix for a stale pack path is a fresh configure of
+  # `_build/My_Pic_Project/release`, not a flag edit here.
   Add:
-    - "-mcpu=16F18875"
-    - "-D__16F18875__"
-    - "-D_16F18875"
+    - "-D__18F47Q10__"
+    - "-D_18F47Q10"
     - "-D__XC8"
     - "-D__XC8_VERSION=4000"
     - "-D__DEBUG=1"

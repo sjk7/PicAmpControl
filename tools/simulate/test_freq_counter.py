@@ -17,10 +17,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import platform_process as procutil  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-ELF_PATH = REPO_ROOT / "out" / ("My_Pic_Project_" + {
-    "PIC16F18875": "16F18875", "PIC18F47Q10": "18F47Q10",
-}.get(os.environ.get("PICAMP_DEVICE") or "PIC16F18875", "16F18875")) / "default.elf"
-DEVICE = "PIC16F18875"
+# PIC18F47Q10 is the only device (see device.cmake and first_dit_invariants.py).
+DEVICE = "PIC18F47Q10"
+ELF_PATH = REPO_ROOT / "out" / "My_Pic_Project_18F47Q10" / "default.elf"
 
 STATE_VARS = [
     "g_startup_inhibit", "g_comparator_reset_active", "g_fault_latched", "g_trip_reason",
