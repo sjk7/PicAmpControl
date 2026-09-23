@@ -4,6 +4,41 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-23 — First macOS run: the merged suite passes, first-dit fails clause (c) (OPEN)
+
+The Q10-only tree was built and run on macOS for the first time (it had only ever been run on
+Windows). Configure and Release build are green, and the merged suite passes: `PTT suite passed: 11
+scenarios in one MDB session`, ~110 s, with every I1-I6 invariant line PASS.
+
+`FirstDit_BandDetectionAndHotSwitchGuards` fails:
+
+```
+  PASS  first-dit I1-I4 hold over 552 samples and 5 keyed runs ...
+  PASS  first-dit I5: all 2 observed band-select changes were seen with the amplifier cold ...
+  PASS  first-dit I6: all 5 T/R relay closes followed a band relay selection already settled
+        for at least 10ms (tightest 10.5ms)
+  PASS  (a) 10 samples with no band decoded: PTT latched, TX/TX_VCC/TX_BIAS inactive, stage 0 ...
+  PASS  (b) 20m first burst classified in bypass, RD5 selected with the amplifier cold ...
+AssertionError: clause (c): the warm-start PTT never keyed the amplifier
+```
+
+Two facts from that transcript, recorded because they narrow the search and are easy to lose:
+
+- **The harness cannot read the settle/verify globals in this run.** Every sample prints
+  `settle=? settle_ms=? verify=? verify_ms=?` - it can read `g_band_cache_*`, `g_state`,
+  `g_fc_status` and the pins, but not the settle/verify pair. In the merged suite the same fields
+  print real numbers (`tightest 92.0ms`). Since clause (c) is about the re-key path and the verify
+  state is exactly what decides whether an engage is abandoned, this is the first thing to fix: the
+  harness is blind to the state that would explain the failure.
+- **Keying itself works.** I1-I4 lists five keyed runs, and one of them (1917-2086 ms, band=20m)
+  comes after clause (b)'s engage - so the firmware does key on the remembered band later in the
+  session. Clause (c)'s window (PTT re-asserted, 40 x 1 ms samples, no RF) is specifically the one
+  with no keyed sample in it.
+
+That is where this stands: not diagnosed, and NOT caused by the 16F removal - the guards that were
+deleted were `#if defined(__18F47Q10__)` wrappers whose Q10 branch is byte-identical, and the
+merged suite passes on the same ELF.
+
 ## 2026-09-23 — The pre-flight cleanup was killing live runs, and the editor named the wrong device
 
 **Bug: `cleanup_sim_processes.py` kills a run that is in progress.** Its sweep is driven by

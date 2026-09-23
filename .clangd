@@ -30,6 +30,14 @@ CompileFlags:
     - "-Wno-unknown-pragmas"
     - "-Wno-unused-variable"
   Remove:
+    # XC8 driver flags that clang has no equivalent for. `-mcpu=<pic>` and `-mdfp=<pack>` are the two
+    # that reach the Problems panel, because the compile database carries them for XC8's driver and
+    # clangd parses them as its own:
+    #   Unsupported argument '18F47Q10' to option '-mcpu='
+    #   Unknown argument: '-mdfp=/Applications/microchip/mplabx/v6.35/packs/.../xc8'
+    # The includes and defines the firmware needs are in the same database's -I/-D entries.
+    - "-mcpu=*"
+    - "-mdfp=*"
     - "-msummary=*"
     - "-maddrqual=*"
     - "-mwarn=*"

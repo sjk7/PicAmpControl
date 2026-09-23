@@ -190,3 +190,23 @@ standing rule). What that touched, and what it caught:
   `out/My_Pic_Project_18F47Q10/default.elf`. Expect the benign linker warning
   `(1311) missing configuration setting for config word 0x300005; using default` on this part - it
   predates the 16F removal and is not caused by it.
+
+**Finding (2026-09-23): the first macOS run of the whole tree - and how to read a verdict when the
+agent's terminal launched the run.**
+
+- The merged suite PASSES on macOS: `PTT suite passed: 11 scenarios in one MDB session`, ~110 s, all
+  I1-I6 invariant lines PASS. first-dit FAILS: `AssertionError: clause (c): the warm-start PTT never
+  keyed the amplifier`, with I1-I6 and clauses (a)/(b) passing first. See `bugfixes.md` 2026-09-23.
+- **Do not read the wrapper's exit line as the verdict when the run came from the agent's terminal.**
+  When the terminal is cleaned up, the harness SIGTERMs the wrapper, so a run that COMPLETED still
+  leaves `SUITE_EXIT=143` / `CTEST_EXIT=143` behind. The harness's own printed lines - the scenario
+  list, the `PASS`/`FAIL` lines, the assertion - are authoritative, and 143 on its own says nothing
+  about the test. (This cost two rounds of "the run was killed" before the transcript showed a
+  complete 11-scenario pass above the 143.)
+- first-dit prints `settle=? settle_ms=? verify=? verify_ms=?` on every sample on macOS, while the
+  merged suite prints real numbers from the same ELF (`tightest 92.0ms`). The harness is blind to
+  the settle/verify state - which is precisely the state that decides whether an engage is
+  abandoned - so fix that before theorising about a clause (c) failure.
+- A VS Code `shell` task whose command ends in `echo "EXIT=$?"` always exits 0, so a task that
+  silently failed to start python looks exactly like success (empty log, exit 0). Keep the exit-code
+  capture, but check the log has content before believing a task ran.

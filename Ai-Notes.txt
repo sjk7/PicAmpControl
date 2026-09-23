@@ -219,12 +219,27 @@ were all deleted. Concretely, that means:
   MDB is ~2.4x slower on Windows: the merged suite is ~356 s there against ~150 s on macOS. All
   platform-specific harness code lives in `tools/simulate/platform_process.py`. Build/test procedure,
   the Windows gotchas and the timeout policy are in the skill - do not restate them here.
-- Last verified run: `ctest --test-dir _build/My_Pic_Project/debug --output-on-failure`, verdict read
-  from the log file: `100% tests passed, 0 tests failed out of 2`, `CTEST_EXIT=0`, total 408 s
-  (PTT_SequencerAndTripSuite 355 s, FirstDit_BandDetectionAndHotSwitchGuards 53 s). That was the
-  Windows run; the equivalent macOS figures are ~150 s and ~20 s. The PIC18F47Q10 spike that
-  followed changed no `main` firmware and ran no suite, so this is still the latest verdict - the
-  spike's evidence is register-level, from its own minimal image.
+- Last verified run (Windows): `ctest --test-dir _build/My_Pic_Project/debug --output-on-failure`,
+  verdict read from the log file: `100% tests passed, 0 tests failed out of 2`, `CTEST_EXIT=0`, total
+  408 s (PTT_SequencerAndTripSuite 355 s, FirstDit_BandDetectionAndHotSwitchGuards 53 s).
+- Last verified run (macOS, 2026-09-23, on the Q10-only tree) - THE FIRST macOS RUN OF EITHER TEST:
+  * Configure + Release build GREEN: `PicAmpControl device: PIC18F47Q10 (mcpu=18F47Q10)`, DFP from
+    the MPLAB X install, `BUILD_EXIT=0`, ELF at `out/My_Pic_Project_18F47Q10/default.elf`.
+  * `PTT_SequencerAndTripSuite`: **PASS**, twice - `PTT suite passed: 11 scenarios in one MDB
+    session` (log `/tmp/pac_mac_suite2.log`), ~110 s. All I1-I6 invariant lines PASS in every
+    scenario.
+  * `FirstDit_BandDetectionAndHotSwitchGuards`: **FAIL on macOS.** Invariants I1-I6 PASS, clauses
+    (a) and (b) PASS, then `AssertionError: clause (c): the warm-start PTT never keyed the
+    amplifier` (tools/simulate/test_first_dit.py line 375). Clause (c) re-keys on the remembered
+    band with no RF stimulus at all and requires the amplifier to key within 30 ms of PTT being
+    asserted. This is the open item - Windows passed the same clause, so it is either a real
+    macOS-only difference or a harness timing assumption that macOS exposes. Evidence in
+    `bugfixes.md` 2026-09-23 (including the two things the transcript shows: the harness cannot read
+    the settle/verify globals in this run - they print as `?` - and a 20m keyed run DOES appear
+    later, at 1917-2086 ms, so keying itself works).
+  * Reading verdicts: the agent's terminal harness SIGTERMs the wrapper once the terminal is
+    cleaned up, so the wrapper's last line reads `SUITE_EXIT=143` even for a completed run. The
+    harness's own printed lines (PASS/FAIL, the assertion, the scenario list) are the verdict.
 - The standing process rule that produced the most friction last session: never judge a test run
   from terminal output. MDB emits megabytes of trace and a command that "returned no output" can
   still have passed - always redirect to a log file, append the exit code, and read the file.
