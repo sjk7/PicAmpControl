@@ -1,6 +1,6 @@
 # Linear Amplifier Protection Controller – Project Schematic Package
 
-This folder collects all project-level resources needed to capture a complete, production-quality schematic for the PIC16F18875-based amplifier protection board.
+This folder collects all project-level resources needed to capture a complete, production-quality schematic for the PIC18F47Q10-based amplifier protection board.
 
 ## Contents
 - `component_list.csv` — full bill of materials and symbols to place (`component_list.md` is the readable summary)
@@ -9,7 +9,7 @@ This folder collects all project-level resources needed to capture a complete, p
 - `block_diagram.md` — high-level system structure plus the band selection/lockout flow
 
 > Pin assignments are not listed in this folder. Single source of truth:
-> [../PIC16F18875_pin_map.md](../PIC16F18875_pin_map.md).
+> [../PIC18F47Q10_pin_map_and_setup.md](../PIC18F47Q10_pin_map_and_setup.md).
 
 ## Recommended Use
 1. Place each symbol from `component_list` in the schematic tool of your choice.

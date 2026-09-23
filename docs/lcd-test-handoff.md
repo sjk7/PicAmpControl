@@ -7,8 +7,9 @@ is now an alias of the same commit and can be deleted).
 
 **Green and pushed:**
 - Full Q10 simulator suite passes: `SUITE_EXIT:0`, 11 scenarios (`tools/simulate/run_suite_with_watchdog.py --timeout 400`).
-- CI (`firmware-build.yml`) builds **both** PIC16F18875 and PIC18F47Q10 in a matrix and installs the
-  Q10 DFP (`PIC18F-Q_DFP/1.30.487`). Verified green on GitHub; Q10 links at 8.6% flash.
+- CI (`firmware-build.yml`) builds the PIC18F47Q10 and installs its DFP
+  (`PIC18F-Q_DFP/1.30.487`). Verified green on GitHub; Q10 links at 8.6% flash. (The 16F matrix leg
+  was removed on 2026-09-23, together with the 16F port itself.)
 - FREQ_CTR I5 hot-switch fixed (firmware): see the build/test skill for the root cause and the two
   fixes in `main.c`.
 

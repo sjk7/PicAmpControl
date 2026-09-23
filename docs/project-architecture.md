@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a PIC16F18875-I/P-based linear amplifier protection controller that monitors RF power, SWR, temperature, current, and drain stress, and shuts down the amplifier safely when the system enters a fault condition.
+Build a PIC18F47Q10-I/P-based linear amplifier protection controller that monitors RF power, SWR, temperature, current, and drain stress, and shuts down the amplifier safely when the system enters a fault condition.
 
 ## High-level blocks
 
@@ -56,7 +56,7 @@ This allows each SWR monitor to act independently and gives a clear, local prote
 
 SWR protection is computed entirely in firmware from the forward and reflected ADC readings at each RF point; no dedicated SWR comparator hardware is used.
 
-The eight measurements are wired directly to dedicated ADC-capable pins. No external analog multiplexer is required; the PIC selects the dedicated ADC channels sequentially. See [docs/hardware/PIC16F18875_pin_map.md](hardware/PIC16F18875_pin_map.md) for the authoritative pin assignments — they are deliberately not restated here.
+The eight measurements are wired directly to dedicated ADC-capable pins. No external analog multiplexer is required; the PIC selects the dedicated ADC channels sequentially. See [docs/hardware/PIC18F47Q10_pin_map_and_setup.md](hardware/PIC18F47Q10_pin_map_and_setup.md) for the authoritative pin assignments — they are deliberately not restated here.
 
 ## User threshold configuration
 
@@ -160,7 +160,7 @@ This is a valid analog threshold scheme, but the reference must be chosen carefu
 - Keep the firmware state machine separate from the MCU pin definitions.
 - Use named constants instead of raw magic numbers.
 - Treat the prototype folder as the measurement/reference implementation, not the final protection controller.
-- Build firmware in CI (`.github/workflows/firmware-build.yml`, `ubuntu-latest`, XC8 v4.00 plus the PIC16F1xxxx DFP pack) and publish releases from a successful `main` build artifact.
+- Build firmware in CI (`.github/workflows/firmware-build.yml`, `ubuntu-latest`, XC8 v4.00 plus the PIC18F-Q_DFP pack) and publish releases from a successful `main` build artifact.
 
 ## Recommended implementation order
 

@@ -203,7 +203,7 @@ points were added in [firmware/include/freq_counter.h](../firmware/include/freq_
   the latest measurement
 
 These are internal firmware interfaces; the external pin contract is unchanged
-(see [docs/hardware/PIC16F18875_pin_map.md](hardware/PIC16F18875_pin_map.md)).
+(see [docs/hardware/PIC18F47Q10_pin_map_and_setup.md](hardware/PIC18F47Q10_pin_map_and_setup.md)).
 
 ## Test coverage
 

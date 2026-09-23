@@ -2,7 +2,7 @@
 
 | RefDes  | Value         | Description/GUIDE        | Notes                                  |
 |---------|---------------|--------------------------|----------------------------------------|
-| U1      | PIC16F18875   | MCU_Microchip_PIC        | Main firmware controller               |
+| U1      | PIC18F47Q10   | MCU_Microchip_PIC        | Main firmware controller               |
 | U2      | ULN2803A      | Interface_ULN:ULN2803A   | Relay driver / high-current outputs    |
 | K1–K6   | RELAY         | Relay_SPST                | LPF relays (160,80,40,20,15,10m)       |
 | D1–D6   | 1N4007        | Diode                     | Flyback on relays                      |

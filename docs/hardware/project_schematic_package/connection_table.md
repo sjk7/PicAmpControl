@@ -4,7 +4,7 @@ The machine-readable netlist is **[connection_table.csv](connection_table.csv)**
 the single authoritative component-to-component connection list for this board.
 
 > **Do not restate the netlist or pin assignments in prose.** Pin assignments live in
-> [../PIC16F18875_pin_map.md](../PIC16F18875_pin_map.md); nets live in the CSV. Duplicating
+> [../PIC18F47Q10_pin_map_and_setup.md](../PIC18F47Q10_pin_map_and_setup.md); nets live in the CSV. Duplicating
 > either is what allowed the band-select, LCD, and comparator-reset drift found on 2026-09-21.
 
 ## Using the CSV
@@ -27,4 +27,4 @@ Columns are `From,To,Net,Notes`.
 
 - Component list: [component_list.csv](component_list.csv)
 - Capture order: [wiring_checklist.md](wiring_checklist.md)
-- Pin assignments (single source of truth): [../PIC16F18875_pin_map.md](../PIC16F18875_pin_map.md)
+- Pin assignments (single source of truth): [../PIC18F47Q10_pin_map_and_setup.md](../PIC18F47Q10_pin_map_and_setup.md)

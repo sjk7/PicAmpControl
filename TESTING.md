@@ -417,6 +417,6 @@ Simulator tests are **not** run in CI — they need MPLAB X `mdb`, which is not 
 the GitHub runners.
 
 [`.github/workflows/firmware-build.yml`](.github/workflows/firmware-build.yml) runs on
-`ubuntu-latest`, installs XC8 v4.00 and the `PIC16F1xxxx_DFP` pack, builds the Release
+`ubuntu-latest`, installs XC8 v4.00 and the `PIC18F-Q_DFP` pack, builds the Release
 firmware, and uploads a `firmware-<sha>` artifact. It compiles only. Run the simulator suite
 locally before pushing.

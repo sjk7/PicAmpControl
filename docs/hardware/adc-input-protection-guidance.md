@@ -1,6 +1,6 @@
 # ADC Input Protection Guidance
 
-This note defines the planned protection approach for the PIC16F18875 analogue inputs. Component values are starting points and must be confirmed against the final sensor circuits, source impedance, transient environment, and PIC16F18875 electrical specifications.
+This note defines the planned protection approach for the PIC18F47Q10 analogue inputs. Component values are starting points and must be confirmed against the final sensor circuits, source impedance, transient environment, and PIC18F47Q10 electrical specifications.
 
 ## Inputs requiring protection
 

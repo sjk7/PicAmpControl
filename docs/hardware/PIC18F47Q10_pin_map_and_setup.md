@@ -1,12 +1,12 @@
-# PIC18F47Q10 — pin map, device setup, and the temperature-reading fault
+# PIC18F47Q10 — pin map and device setup
 
-Date: 2026-09-22 · Branch: `upgrade/pic18f47q10`
+Date: 2026-09-23
 
 This file is written for someone reading the project cold: it states, in one place, (1) what every
-pin does, (2) how the PIC is configured, and (3) the open temperature-reading problem on the Q10
-port. The 40-pin PIC16F18875-I/P remains the shipping target; the Q10 is a pin-compatible drop-in
-being evaluated on this branch. See `docs/hardware/q10-pinout-compatibility.md` for the pin-by-pin
-fit check (39 of 40 pins identical; only pin 1 differs: `VPP/MCLR/RE3` on the Q10).
+pin does and (2) how the PIC is configured. **The PIC18F47Q10 is the shipping target and the only
+device in this project** (2026-09-23; the PIC16F18875 port was removed - see `Ai-Notes.txt`). See
+`docs/hardware/q10-pinout-compatibility.md` for the pin-by-pin fit check against the old 16F board
+(39 of 40 pins identical; only pin 1 differs: `VPP/MCLR/RE3` on the Q10).
 
 ---
 
@@ -90,21 +90,24 @@ RA4 digital (`ANSELA &= ~0x10`).
 
 ### 2.1 Configuration words
 
-Configuration pragmas live at the top of `firmware/src/main.c`. The Q10 and 16F differ in three of
-them, which are `#if defined(__18F47Q10__)` guarded. Authoritative names/values come from the DFP's
-`18f47q10.cfgmap`, not from memory.
+Configuration pragmas live at the top of `firmware/src/main.c`. PIC18F47Q10 is the only device, so
+they are unconditional (the 16F branches were removed on 2026-09-23). Authoritative names/values
+come from the DFP's `18f47q10.cfgmap`, not from memory.
 
-| Setting | PIC16F18875 | PIC18F47Q10 |
-|---|---|---|
-| FEXTOSC | `OFF` | `OFF` |
-| RSTOSC (reset oscillator) | `HFINT32` | `HFINTOSC_64MHZ` |
-| WDTE | `OFF` | `OFF` |
-| PWRTE | `OFF` | `OFF` |
-| CLKOUTEN | (not present) | `OFF` |
-| MCLRE | `ON` | `EXTMCLR` |
-| CP | `OFF` | `OFF` |
-| BOREN | `ON` | `ON` |
-| BORV | `19` | `VBOR_190` |
+| Setting | Value (PIC18F47Q10) |
+|---|---|
+| FEXTOSC | `OFF` |
+| RSTOSC (reset oscillator) | `HFINTOSC_64MHZ` |
+| WDTE | `OFF` |
+| PWRTE | `OFF` |
+| CLKOUTEN | `OFF` |
+| MCLRE | `EXTMCLR` |
+| CP | `OFF` |
+| BOREN | `ON` |
+| BORV | `VBOR_190` |
+
+(For the record, the values the removed 16F build used are preserved in
+`prototype_reference/docs/hardware/PIC16F18875_pin_map.md`.)
 
 Two Q10-only traps already hit and recorded in the skill / `bugfixes.md`:
 
@@ -114,19 +117,18 @@ Two Q10-only traps already hit and recorded in the skill / `bugfixes.md`:
   clock honest at 32 MHz by feeding Timer2 from Fosc/8.
 - **`CLKOUTEN`**: on the Q10 the default is *enabled*, and RA6 doubles as CLKOUT/OSC2. RA6 is
   `OUTPUT_LCD_E`, so the default silently hands the LCD enable line to the clock-output function
-  and the panel never latches. `CLKOUTEN = OFF` is device-guarded.
+  and the panel never latches. `CLKOUTEN = OFF` is set unconditionally in `main.c`.
 
 ### 2.2 Clock
 
 - Internal oscillator: **HFINTOSC at 64 MHz** (the Q10's highest internal rate).
 - `_XTAL_FREQ` is kept at **32 MHz** so all existing delay/baud maths is unchanged.
-- Timer2 is clocked at **Fosc/8 = 8 MHz** (`T2CLK = 0x02` on Q10; `T2CLKCON = 0x01` / Fosc/4 on
-  16F where the core is 32 MHz), prescale 1:64 (`CKPS = 6`), `PR2 = 124` → a **1.000 ms system
-  tick**.
+- Timer2 is clocked at **Fosc/8 = 8 MHz** (`T2CLK = 0x02`), prescale 1:64 (`CKPS = 6`),
+  `PR2 = 124` → a **1.000 ms system tick**.
 
 ### 2.3 Interrupts
 
-The Q10 needs the **priority** interrupt form, which the 16F does not:
+This part needs the **priority** interrupt form:
 
 - `INTCONbits.IPEN = 1` (priority enabled) — with `IPEN = 0` no interrupt ever reaches the ISR,
   even with the source enable and flag set.
@@ -146,12 +148,10 @@ configures it as follows (this is the working-tree state on this branch, uncommi
 FVRCON = 0x00;
 ANSELA = 0x2F;  ANSELA &= ~0x10;   // RA0-RA3,RA5 analogue; RA4 stays digital (LCD RS)
 ANSELB = 0x0E;                     // RB1-RB3 analogue
-ADCON1 = 0x20;                     // (16F ADFM field; a no-op field name on Q10)
+ADCON1 = 0x20;                     // ADCC guard/precharge control - ADFM is NOT here on this part
 ADPCH  = 0;
 ADCON0 = 0x88;                     // ADON=1, ADCS=0 (Fosc-derived), single conversion
-#if defined(__18F47Q10__)
-ADCON0bits.ADFM = 1;               // result format: right-justified
-#endif
+ADCON0bits.ADFM = 1;               // result format: right-justified (ADCON0<2>, a single bit)
 PIR1bits.ADIF = 0;  PIE1bits.ADIE = 1;  INTCONbits.PEIE = 1;
 __delay_us(ADC_ACQUISITION_US);
 ADCON0bits.GO_nDONE = 1;
@@ -169,9 +169,9 @@ Q10 ADCC register layout (from `PIC18F-Q_DFP/1.30.487/xc8/pic/include/proc/pic18
 | `ADPCH` | `ADPCH`(5:0) channel select |
 | `ADRES` | 16-bit result (`ADRESH` @ 0xF5F, `ADRESL` @ 0xF5E) |
 
-Key structural difference: **`ADFM` is a single bit (`ADCON0<2>`), not a 2-bit field.** On the 16F
-it is `ADCON1<7:6>`; on the Q10, `ADCON1 = 0x20` writes bits that have entirely different meanings
-(guard-ring/polarity). `0` means *left*-justified; `1` means *right*-justified.
+**`ADFM` is a single bit (`ADCON0<2>`), not a 2-bit field**, and `0` means *left*-justified while `1`
+means *right*-justified. The `ADCON1 = 0x20` above therefore writes guard/precharge and polarity
+bits, NOT a justification field: the 16F's `ADCON1<7:6>` ADFM field does not exist on this part.
 
 There is **no `ADREF` write and none should be added** — the Q10 reset default (`ADPREF=00`) is the
 `VDD`/`VSS` reference the design assumes.
@@ -186,7 +186,19 @@ There is **no `ADREF` write and none should be added** — the Q10 reset default
 
 ---
 
-## 3. The temperature-reading fault
+## 3. The temperature-reading fault — RESOLVED (kept as the record of how it was found)
+
+**Fixed and verified 2026-09-22; the analysis below is history, NOT an open problem.** Two changes in
+`firmware/src/main.c`, both now unconditional (the device guards were removed on 2026-09-23):
+1. `adc_init()` sets `ADCON0bits.ADFM = 1` — `ADFM` is a single bit (`ADCON0<2>`) and defaults to
+   LEFT-justified, which left the result sitting in `ADRES<15:6>`.
+2. The ADC ISR downscales once at capture — `sample >>= 2` — because the ADCC is **12-bit** while
+   every conversion function (`temperature_c()`, `drain_voltage()`, `overdrive_power_mw()`,
+   `current_amperes()`, the SWR maths) treats the raw value as 10-bit. Measured: 2.5 V read 2048 raw
+   and `temperature_c(2048)` returned the 150C sentinel.
+
+The subsections below are the original bring-up notes; the transferable part is the method - read
+the register back and measure the result width, do not assume it from the 16F.
 
 ### 3.1 Symptom
 
@@ -288,7 +300,7 @@ verdicts blamed the simulator for configuration that had never been written).
 - Q10 register/bit names and config values: `PIC18F-Q_DFP/1.30.487` in
   `C:\Program Files\Microchip\MPLABX\v6.35\packs\Microchip\` — read `xc8/pic/include/proc/pic18f47q10.h`
   and `xc8/pic/dat/cfgmap/18f47q10.cfgmap` before changing any setup code.
-- 16F pin table: `docs/hardware/PIC16F18875_pin_map.md`.
+- 16F pin table (historical only): `prototype_reference/docs/hardware/PIC16F18875_pin_map.md`.
 - Pin-by-pin fit vs the 16F: `docs/hardware/q10-pinout-compatibility.md`.
 - Bring-up measurements and simulator gotchas: `docs/hardware/q10-bringup/README.md`,
   `.github/skills/picampcontrol-build-test/SKILL.md`, `bugfixes.md`.

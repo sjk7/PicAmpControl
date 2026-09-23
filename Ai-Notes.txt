@@ -4,8 +4,32 @@ This file is the AI launch point for a new session: keep it ALWAYS up to date.
 Update the Date and any changed sections whenever design, firmware, docs, or
 CI/release workflows change - don't let it go stale.
 
+## THE DEVICE: PIC18F47Q10, AND NOTHING ELSE (user instruction, 2026-09-23)
+**PIC18F47Q10 ONLY. There is no second device, no "legacy part", and no device to choose
+between.** The PIC16F18875 port was removed on 2026-09-23: its `#if defined(__18F47Q10__)` code
+paths, its `-DPICAMP_DEVICE=PIC16F18875` build option, its CI matrix entry, its `.vscode` defines
+and include paths, its `run_sim.sh`/`run_sim.ps1` default device, and its entries in these notes
+were all deleted. Concretely, that means:
+- Do not re-add a device guard, a per-device lookup table, or a second `PICAMP_DEVICE_*` fact block
+  "just in case". `cmake/My_Pic_Project/default/device.cmake` states one device, and the harnesses
+  carry one instruction-rate constant (Q10: 1625 instructions per simulated millisecond).
+- Historical material about the 16F port, and the abandoned PIC16F18877 evaluation, now lives only
+  in `prototype_reference/` and `bugfixes.md`. Do not restate it in `docs/`, `README.md` or here.
+- If a document, comment or test disagrees with `device.cmake` about the target part, `device.cmake`
+  wins and that document is the bug.
+- The one deliberate exception: `tools/setup/parameterise_device.py` still *pattern-matches* the 16F
+  tokens, because MPLAB X emits them when it regenerates `.generated/rule.cmake` from the MPLAB
+  project the tree was created from. Those are the generator's tokens, not our target - removing the
+  match would let a regenerated rule.cmake silently build the wrong part.
+
 ## Standing AI instructions (things the user asked to always remember)
-- TEST RUNS ARE NEVER OBSERVED THROUGH THE TERMINAL (user instruction, restated 2026-09-21): do
+- TEST RUNS ARE NEVER OBSERVED THROUGH THE TERMINAL, AND NEVER ASK A RUN FOR ITS TERMINAL OUTPUT -
+  VERDICTS COME FROM FILES (user instruction, restated 2026-09-21 and again 2026-09-23: "we should
+  not ask for terminal output when running tests -- this breaks the terminal. We are using a
+  file-based approach instead."). Asking a running test for its output wedges the terminal and
+  returns nothing usable, so this is a hard rule, not a preference; the whole verdict method is
+  file-based: redirect the run into a log, append the exit code, read the log + the exit-code line +
+  the watchdog progress log. Do
   not run a test to watch its output, do not `tail`/`grep` a test log into the terminal, and do not
   ask a run for its terminal output. There is far too much data (MDB emits megabytes of pin/state
   trace) and the capture is unreliable. The terminal is only for *launching* a run and for short,
@@ -92,7 +116,7 @@ CI/release workflows change - don't let it go stale.
 - Keep README.md and docs/ purely current-facing: no "old prototype was replaced by..." style historical narrative. Historical context belongs only in prototype_reference/.
 - Never run bare `git status`/`git status --short`; use `git --no-pager status --short` (avoids hitting an interactive pager or the `gcm-core` credential helper prompt).
 - NEVER WRITE "Hmmm" - INCLUDING IN YOUR INTERNAL REASONING (user instruction, 2026-09-22, restated the same day because it was still happening, and repeated AGAIN twice more the same day after this rule existed - once in a reasoning trace the user quoted straight back). The user can see the thinking as well as the reply, so this covers reasoning traces, preambles to tool calls, and final answers alike. Do not use it as filler, as a thinking-out-loud opener, or as a hedge. State the finding, or the uncertainty, plainly. It was missed once already by reading "anywhere in a reply" as excluding the thinking - the first fix was too narrow, so do not repeat that misreading. The rule is now ALSO stated at the top of `.github/skills/picampcontrol-build-test/SKILL.md` as a hard writing rule, because a bullet in a long list demonstrably was not enough.
-- docs/hardware/PIC16F18875_pin_map.md is the SINGLE source of truth for MCU pin assignments. Never restate pin numbers or pin tables in README, architecture, schematic-package, or checklist docs - link to it instead. Keep it in sync with firmware/include/pin_map.h. The same rule applies to nets (project_schematic_package/connection_table.csv) and the BOM (component_list.csv).
+- docs/hardware/PIC18F47Q10_pin_map_and_setup.md is the SINGLE source of truth for MCU pin assignments. Never restate pin numbers or pin tables in README, architecture, schematic-package, or checklist docs - link to it instead. Keep it in sync with firmware/include/pin_map.h. The same rule applies to nets (project_schematic_package/connection_table.csv) and the BOM (component_list.csv).
 - Any new "remember this" instruction from the user must be added to this section, not just kept in assistant memory.
 - ALWAYS WRITE SILLY MISTAKES INTO THE SKILL, EVERY TIME - NOT JUST IN THE SESSION THEY HAPPENED
   (user instruction, 2026-09-22). Whenever a mistake costs a cycle, feed the lesson back into
@@ -100,7 +124,8 @@ CI/release workflows change - don't let it go stale.
   words: "Always write to the skill for silly mistakes like this. Always. Not just in this session."
   Silly mistakes are precisely the ones that recur, and a lesson left only in this file or only in
   the conversation that produced it does not reach the next session.
-- DEVICE UPGRADE PIC16F18877 EVALUATED, *PROVISIONALLY* REJECTED - THE VERDICT IS NOT SOUND
+- [HISTORY - superseded 2026-09-23; PIC18F47Q10 is the only device now] DEVICE UPGRADE PIC16F18877
+  EVALUATED, *PROVISIONALLY* REJECTED - THE VERDICT IS NOT SOUND
   (2026-09-22; requalified later the same day, see the Q10 entry below). PIC16F18877-I/P (same
   family, 40-pin PDIP, 4x flash = 32768 words, 4x RAM = 4096 bytes, ~£1.95 DigiKey UK / ~£2 Mouser,
   both in stock) builds fine with a one-line `-mcpu` change and gives a very comfortable 24.8%
@@ -120,8 +145,9 @@ CI/release workflows change - don't let it go stale.
   assuming 18875 equivalence, and use the discipline the Q10 re-test settled on - minimal bring-up,
   one variant per suspect setting, and a positive control behind every negative finding. Do not
   retry it as a one-line `-mcpu` change, and do not assume pin/peripheral equivalence from a clean
-  build. The PIC16F18875-I/P remains the shipping target, and flash pressure is instead addressed by
-  the software levers listed under Remaining work.
+  build. **Superseded 2026-09-23: PIC18F47Q10 is now the shipping target and the only device, and
+  flash pressure is addressed by the software levers under Remaining work.** This bullet is kept
+  only as the record of how a device-swap verdict must NOT be reached.
 - DO NOT START A DEVICE UPGRADE WITHOUT ASKING FIRST, AND DO IT ON A NEW BRANCH (user instruction,
   2026-09-22). Evaluating PIC18F47Q10 (or any other part) as a replacement is explicitly gated: do
   not change `-mcpu`, the DFP, `.clangd`, the pin map, or any firmware source for a new device until
@@ -142,7 +168,8 @@ CI/release workflows change - don't let it go stale.
   (`C:\Program Files\Microchip\MPLABX\v6.35\packs\Microchip\`), which is a different root from the
   user pack repository `%USERPROFILE%\.mchp_packs` that was checked. A Q10 build needs no download;
   the toolchain was never the blocker. See the skill for the pack-search rule.
-- PIC18F47Q10 PROVED VIABLE AFTER TWO WRONG VERDICTS IN ONE DAY (2026-09-22). Both retractions are
+- [HISTORY - superseded 2026-09-23; the port is done and the Q10 is the only device] PIC18F47Q10
+  PROVED VIABLE AFTER TWO WRONG VERDICTS IN ONE DAY (2026-09-22). Both retractions are
   mine; the sequence is the lesson. (1) The bring-up wrote `T2CLKCON = 0x00` and *assumed* it meant
   Fosc/4 - `firmware/src/main.c` already used `T2CLKCON = 0x01; /* Fosc/4 */`. With `0x01` the timer
   counts (`T2TMR` `106` then `92`). (2) Interrupts appeared dead - two independent sources raised
@@ -154,10 +181,10 @@ CI/release workflows change - don't let it go stale.
   dispatched. The two real differences from the PIC16F are that the Q10 needs the *priority*
   interrupt form (`IPEN = 1` + `IPRx`, not a plain `GIE = 1`) and that the tick calibrates at
   ~6,100-6,900 instructions against the harness's 8,000 for 1 ms. `OSCCON3.ORDY` reads `0` while the
-  timer demonstrably runs - never cite it about the clock. **No `main` firmware has been touched,
-  nothing has been ported, and the PIC16F18875 remains the shipping target; a port is the owner's
-  call.** Evidence: `bugfixes.md` 2026-09-22; branch `spike/pic18f47q10-retest` holds the images.
-- The firmware is the single source of truth for which PIC we are using: `-mcpu=16F18875` in `cmake/My_Pic_Project/default/.generated/rule.cmake` (mirrored in `.clangd`), i.e. PIC16F18875-I/P, 40-pin PDIP. If a document disagrees with the firmware about the target device, the firmware wins and the document is the bug.
+  timer demonstrably runs - never cite it about the clock. **Superseded 2026-09-23: the port was
+  done, PIC18F47Q10 is the only device in the project, and the 16F port has been removed.** Evidence:
+  `bugfixes.md` 2026-09-22; branch `spike/pic18f47q10-retest` holds the images.
+- The firmware is the single source of truth for which PIC we are using: PIC18F47Q10-I/P (40-pin PDIP), declared once in `cmake/My_Pic_Project/default/device.cmake` and emitted into `.generated/rule.cmake` as `-mcpu=18F47Q10` (mirrored in `.clangd`). If a document disagrees with the firmware about the target device, the firmware wins and the document is the bug.
 - Do NOT reintroduce schematic automation. Both attempts were abandoned outright and every trace of them has been removed. Gone for good: the EasyEDA generator/SVG-validation pipeline (`easyeda_pro_generator.py`, `svg_renderer.py`, `visual_validator.py`, `watch_and_render.py`, `pic_amp_control_full.yaml`, `out/picampcontrol_easyeda_*.json`, and the `easyeda-agent` / `easyeda-copilot` routes), the KiCad MCP `schematic-design` skill with its `generated/` `.kicad_sch` tree and `mcp-server-kicad`, all node/npm scaffolding (`package.json`, `node_modules`, `@jlceda`), the workflow documents that described them, and every KiCad symbol/toolchain reference in the docs. The user's instruction: EasyEDA "was a disaster and can be removed entirely", then "same for kicad stuff. Another disaster... it can all go". Do not add generators, MCP schematic servers, `.kicad_sch`/`.eext` tooling or node/npm back, and do not re-add tool-specific symbol references to the pin map. The schematic package at docs/hardware/project_schematic_package/ is deliberately static design inputs (block diagram, connection table, component list, wiring checklist), captured by hand end to end. Netlist-verification tooling (exporting the EDA netlist and diffing it against `connection_table.csv`) was offered as a lighter-weight alternative and has been declined as well, so this means no schematic automation of any kind - not drawing generation, not verification.
 - `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their configured active levels (active-low by default); keep it transient, then restore the user's saved home page.
 - Keep verified changes committed and pushed promptly; generated simulator CSVs belong in `_build/My_Pic_Project/sim/csv/` and graphs in `_build/My_Pic_Project/sim/graphs/`. Commit+push as soon as a step is verified green - the only valid reason to hold a commit is a verdict that is still running, and then you read that verdict from its log file and commit the moment it is green. Always pass explicit paths to `git add` (never `git add .`).
@@ -172,12 +199,14 @@ CI/release workflows change - don't let it go stale.
   command here - link to the skill.
 
 ## Date
-2026-09-22
+2026-09-23
 
 ## Session handoff (carry-over for a NEW session)
 - This is the ONLY AI carry-over file. `AI-HANDOFF.md` was deleted on 2026-09-21 (it duplicated
-  project-architecture.md, the pin map and TESTING.md, and had drifted). Do not recreate a second
-  handoff file - update this one.
+  project-architecture.md, the pin map and TESTING.md, and had drifted), and
+  `docs/next-session-prompt.md` was retired to a tombstone on 2026-09-23 (it still told a new
+  session to work on the now-deleted `upgrade/pic18f47q10` branch and to chase a Q10 temperature
+  trip that had long since been fixed). Do not recreate a second handoff file - update this one.
 - Working tree should be clean; read the current commit with `git --no-pager log --oneline -1`
   rather than trusting a SHA written here.
 - **The project now runs on Windows 10 as well as macOS** (MPLAB X 6.35 / XC8 4.00 / Python 3.14.7).

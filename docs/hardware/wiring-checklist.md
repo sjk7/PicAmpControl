@@ -1,11 +1,11 @@
 # Wiring Checklist – Linear Amplifier Protection Board
 
-Wiring, pull-up/pull-down, decoupling, and driver-stage guidance for the PIC16F18875-I/P
+Wiring, pull-up/pull-down, decoupling, and driver-stage guidance for the PIC18F47Q10-I/P
 protection board.
 
 > **Pin assignments are deliberately NOT restated here.**
 > The single source of truth for which signal is on which pin is
-> [PIC16F18875_pin_map.md](PIC16F18875_pin_map.md). This file covers only what to *do* at
+> [PIC18F47Q10_pin_map_and_setup.md](PIC18F47Q10_pin_map_and_setup.md). This file covers only what to *do* at
 > each signal. If a signal appears here that is not in the pin map, the pin map wins.
 
 Supply: regulated **5.0 V**. VDD is the ADC reference, so it must stay at 5.0 V — every

@@ -1,7 +1,7 @@
 # Schematic Section Breakdown – Linear Amplifier Protection Board
 
 > Pin assignments are not restated here. Single source of truth:
-> [../PIC16F18875_pin_map.md](../PIC16F18875_pin_map.md).
+> [../PIC18F47Q10_pin_map_and_setup.md](../PIC18F47Q10_pin_map_and_setup.md).
 
 ## 1. Power Supplies & Layout
 - +12V_IN (J1), +5V_IN (J2)
@@ -9,7 +9,7 @@
 - GND blocks
 
 ## 2. MCU & Digital Logic
-- PIC16F18875 (U1)
+- PIC18F47Q10 (U1)
   - MCLR pull-up (R1)
   - All analog sense, digital out, LCD, and EC11 encoder wiring
 

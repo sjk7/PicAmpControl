@@ -1,7 +1,7 @@
 # Block Diagram – Linear Amplifier Protection Board
 
 > **Pin assignments are not restated here.** Single source of truth:
-> [../PIC16F18875_pin_map.md](../PIC16F18875_pin_map.md). Component-level nets:
+> [../PIC18F47Q10_pin_map_and_setup.md](../PIC18F47Q10_pin_map_and_setup.md). Component-level nets:
 > [connection_table.csv](connection_table.csv).
 
 ```
@@ -13,7 +13,7 @@
                                |                |
                                |                |
    +---------------------------+----------------+--------------------------+
-   |                          PIC16F18875 (U1)                            |
+   |                          PIC18F47Q10 (U1)                            |
    +--+------+-------+------+------+------+------+-----------------------+
       |      |       |      |      |      |      |       |
      ADC    ADC     ADC    ADC    ADC   COMP   SNOOP   BAND SELECT

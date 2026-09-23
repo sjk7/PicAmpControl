@@ -1,8 +1,8 @@
 # Pull-Up Resistor Guidance
 
-This note records which signals need external bias resistors and which interfaces provide their own biasing. Resistor values are starting points and must be confirmed against the final schematic, connected equipment, and PIC16F18875 electrical specifications.
+This note records which signals need external bias resistors and which interfaces provide their own biasing. Resistor values are starting points and must be confirmed against the final schematic, connected equipment, and PIC18F47Q10 electrical specifications.
 
-> Pin assignments are not restated here. Single source of truth: [PIC16F18875_pin_map.md](PIC16F18875_pin_map.md).
+> Pin assignments are not restated here. Single source of truth: [PIC18F47Q10_pin_map_and_setup.md](PIC18F47Q10_pin_map_and_setup.md).
 
 | Signal | Pull-up requirement |
 |---|---|

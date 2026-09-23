@@ -13,6 +13,43 @@ or a hedge.** The user reads the reasoning as well as the final answer, and this
 times on 2026-09-22 *after* the rule already existed in `Ai-Notes.txt` - the third time the user
 quoted the word straight back. A bullet buried in a long list did not stop it, so it lives here too.
 State the finding, or the uncertainty, plainly, and move on.
+**Hard rule: NEVER ASK A RUNNING TEST FOR ITS TERMINAL OUTPUT - IT BREAKS THE TERMINAL.** (user
+instruction, restated 2026-09-23: *"we should not ask for terminal output when running tests --
+this breaks the terminal. We are using a file-based approach instead."*) The verdict method is
+file-based, always: launch the run with its output redirected into a log file, append the exit-code
+line, then read the log, that line, and the watchdog progress log. Do not run a test in order to
+watch it, do not `tail`/`grep` a log into the console, and do not ask the tool for captured terminal
+output - MDB emits megabytes, the capture wedges the shell, and "the terminal showed nothing" says
+nothing at all about the run. The terminal is for launching and for short bounded process checks
+only.
+
+**How a run is watched (STICKY user instruction, 2026-09-23): the user watches the log file - the
+heartbeat file - in a VS Code tab while the tests run. Never in the terminal.** The user's words:
+*"we watch files now during sim runs, and never output to terminal. The code user sees the log file
+(heartbeat file) in VSCODE when the tests run."* So opening the log in a tab and keeping it fresh is
+part of doing the job, not a courtesy: the user has complained repeatedly that long tasks (suite,
+probe, build) run with no visible output in VS Code. The method:
+1. Truncate the log FIRST (`Clear-Content <log>`, or `: > <log>` on macOS). The launcher appends, and
+   deleting a file a watcher holds open kills the watcher.
+2. Launch the run with its output redirected into that log. `run_suite_with_watchdog.py` /
+   `run_logged.py` open it, write a `RUN_BEGIN` header, and append the exit-code line at the end.
+3. Open that file in a VS Code tab so the user can watch it, and keep a heartbeat flowing into it
+   while the run is live: `tools/simulate/open_progress_log.py` opens the tab, `AppendLog` in
+   `tools/simulate/platform_process.py` is the heartbeat helper. Never just redirect to a temp file
+   and report the tail.
+4. Which file is the moving one depends on how you launched it: **when you pass `--log <file>`, the
+   heartbeat appends INTO that file** (verified 2026-09-23: the heartbeat process is spawned with
+   `--log` pointing at the same path), so that is the file to open in the tab. Only when `--log` is
+   omitted does the heartbeat use `DEFAULT_LOG` =
+   `platform_process.temp_dir()/picampcontrol_suite_progress.log`. Do not assume that is
+   `/tmp/...` on macOS: `temp_dir()` resolves to `$TMPDIR`, i.e. under `/var/folders/...`, and an
+   older file of the same name can be sitting in `/tmp` - which is exactly how a stale, empty-looking
+   log got opened instead of the live one. Confirm liveness from the file's mtime or from the
+   elapsed value in its latest `HEARTBEAT` line.
+5. Watching a log for visibility is sanctioned; judging a run from terminal output is not. The
+   verdict still comes from the run's own log plus its appended exit-code line.
+6. The log is there to be watched, so keep it a plain growing text file, and delete it once its
+   verdict has been read (standing rule: never accumulate run logs).
 **Hard rule: keep token and CPU output down.** The chat transcript is re-rendered on every streamed
 token, and this is not theoretical: a 2,041-line / 2.2 MB session drove the VS Code renderer to ~225%
 of one core and the extension host to ~112% for the whole of each assistant turn (measured
@@ -107,3 +144,32 @@ them as `settle`/`settle_ms`/`verify`/`verify_ms`. Without these the settle/veri
 invisible and only the symptom (the hot-switch sample) is seen. `tools/simulate/repro_i5_15m_10m.py`
 is the minimal single-band repro (set `BAND_TESTS` to isolate a band); it runs
 `validate_band_changes_are_cold` + `validate_freq_ctr` so the isolated verdict matches the suite.
+
+**Finding (2026-09-23): the device strip, and the traps in it.** The project is PIC18F47Q10 ONLY;
+the 16F port, its build option, its CI matrix leg and its docs are gone (`Ai-Notes.txt` carries the
+standing rule). What that touched, and what it caught:
+
+- `tools/simulate/run_sim.sh` and `run_sim.ps1` had `DEVICE="PIC16F18875"` / `$Device =
+  "PIC16F18875"` hardcoded while everything else defaulted to the Q10. **Whenever a device default
+  is changed, grep every launcher for the old name** - a launcher that disagrees with the build tree
+  asks the simulator for one part and loads the other part's image, and that produces a wrong verdict
+  with no error message.
+- `tools/setup/parameterise_device.py` still *pattern-matches* MPLAB X's 16F tokens on purpose: those
+  are the generator's tokens (MPLAB X regenerates `.generated/rule.cmake` from a 16F-created project),
+  not a target. Do not "clean" them out, or a regenerated rule.cmake silently builds the wrong part.
+  Its self-check had to be fixed to measure the body only - see `bugfixes.md` 2026-09-23.
+- The per-device lookup tables in the harnesses (`INSTRUCTIONS_PER_MS = {...}.get(DEVICE, ...)`) and
+  the `PICAMP_DEVICE` env indirection are gone: `DEVICE = "PIC18F47Q10"` and a single constant rate.
+  The Q10 rates are NOT the same everywhere - `trace_ptt_sequence.py` and `first_dit_invariants.py`
+  use **1625** instructions/ms while `test_first_dit.py` uses **1887**. That difference is measured,
+  not a typo; do not "unify" them without re-measuring against that harness's own waits.
+- **DO NOT ISSUE PARALLEL EDITS TO THE SAME FILE.** Two concurrent edits to `firmware/src/main.c`
+  interleaved and duplicated whole blocks (the IPEN block and the ADFM block both came back mangled),
+  and the file had to be restored from HEAD and redone one edit at a time. Batch edits across
+  *different* files freely; keep the same file strictly sequential.
+- macOS configure+build verified 2026-09-23: the DFP resolves out of the MPLAB X install
+  (`/Applications/microchip/mplabx/v6.35/packs/Microchip/PIC18F-Q_DFP/1.30.487/xc8`), configure
+  reports `PicAmpControl device: PIC18F47Q10 (mcpu=18F47Q10)`, and the Release build writes
+  `out/My_Pic_Project_18F47Q10/default.elf`. Expect the benign linker warning
+  `(1311) missing configuration setting for config word 0x300005; using default` on this part - it
+  predates the 16F removal and is not caused by it.

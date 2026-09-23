@@ -1,5 +1,5 @@
 RefDes,Value,Description/Lib,Notes
-U1,PIC16F18875,MCU_Microchip_PIC,Main firmware controller
+U1,PIC18F47Q10,MCU_Microchip_PIC,Main firmware controller
 U2,ULN2803A,Interface_ULN:ULN2803A,Relay driver
 K1,RELAY_160m,Relay_SPST,LPF relay for 160m
 K2,RELAY_80m,Relay_SPST,LPF relay for 80m

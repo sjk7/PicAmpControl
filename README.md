@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains the design for a PIC16F18875-I/P-based linear amplifier protection controller, covering hardware fault protection, safe amplifier enable/disable behavior, operator feedback, and startup/latched fault handling.
+This repository contains the design for a PIC18F47Q10-I/P-based linear amplifier protection controller, covering hardware fault protection, safe amplifier enable/disable behavior, operator feedback, and startup/latched fault handling.
 
 ## Current project status
 
@@ -18,7 +18,8 @@ The project is in a working firmware-validation stage:
 
 - Architecture overview: [docs/project-architecture.md](docs/project-architecture.md)
 - First-dit band switching (bypass-snoop) model: [docs/first-dit-band-detection.md](docs/first-dit-band-detection.md)
-- Hardware pin map: [docs/hardware/PIC16F18875_pin_map.md](docs/hardware/PIC16F18875_pin_map.md)
+- Hardware pin map: [docs/hardware/PIC18F47Q10_pin_map_and_setup.md](docs/hardware/PIC18F47Q10_pin_map_and_setup.md)
+- Device references (data sheet DS40002043, errata DS80000832): [docs/hardware/references/README.md](docs/hardware/references/README.md)
 - Pull-up resistor guidance: [docs/hardware/pull-up-resistor-guidance.md](docs/hardware/pull-up-resistor-guidance.md)
 - ADC input protection guidance: [docs/hardware/adc-input-protection-guidance.md](docs/hardware/adc-input-protection-guidance.md)
 - Schematic package (block diagram, connection table, component list): [docs/hardware/project_schematic_package/README.md](docs/hardware/project_schematic_package/README.md)
@@ -41,7 +42,7 @@ The project is in a working firmware-validation stage:
 - GitHub Actions auto-release workflow: [.github/workflows/auto-release.yml](.github/workflows/auto-release.yml)
 - GitHub Actions manual release workflow: [.github/workflows/release-firmware.yml](.github/workflows/release-firmware.yml)
 
-The build workflow packages each run's firmware output (`.hex`/`.elf`/`.map`/`.xml`) together with the pin map ([docs/hardware/PIC16F18875_pin_map.md](docs/hardware/PIC16F18875_pin_map.md)) into a single `firmware-<sha>` build artifact, under a `hardware/` subfolder for the pin map. The auto-release workflow publishes a matching release after a successful `main` build; the manual release workflow remains available for re-publishing an older artifact under an existing tag.
+The build workflow packages each run's firmware output (`.hex`/`.elf`/`.map`/`.xml`) together with the pin map ([docs/hardware/PIC18F47Q10_pin_map_and_setup.md](docs/hardware/PIC18F47Q10_pin_map_and_setup.md)) into a single `firmware-<sha>` build artifact, under a `hardware/` subfolder for the pin map. The auto-release workflow publishes a matching release after a successful `main` build; the manual release workflow remains available for re-publishing an older artifact under an existing tag.
 
 ## Design direction
 
@@ -82,7 +83,7 @@ flowchart LR
         COMP_RESET["Comparator latch reset"]
     end
 
-    subgraph MCU["PIC16F18875-I/P controller"]
+    subgraph MCU["PIC18F47Q10-I/P controller"]
         PTT["INPUT_PTT\nTransmit request"]
         RESET["OUTPUT_COMP_RESET\nComparator reset"]
         HARD["INPUT_OVERCURRENT_FAULT\nHardware overcurrent fault"]
@@ -142,7 +143,7 @@ flowchart LR
 
 ## Hardware pin map
 
-**Single source of truth:** [docs/hardware/PIC16F18875_pin_map.md](docs/hardware/PIC16F18875_pin_map.md),
+**Single source of truth:** [docs/hardware/PIC18F47Q10_pin_map_and_setup.md](docs/hardware/PIC18F47Q10_pin_map_and_setup.md),
 which must agree with [firmware/include/pin_map.h](firmware/include/pin_map.h).
 
 Pin assignments are deliberately **not** listed in this README. The duplicated table that
@@ -153,7 +154,7 @@ Menu settings persist in the PIC's internal EEPROM; no external EEPROM is requir
 
 ## Current hardware assumptions
 
-- MCU: PIC16F18875-I/P (PDIP-40)
+- MCU: PIC18F47Q10-I/P (PDIP-40)
 - Clock: internal HFINTOSC at 32 MHz (FEXTOSC = OFF, RSTOSC = HFINT32); no external crystal is fitted
 - Display: 1602 LCD driven in 4-bit parallel mode (RS, E, D4-D7); no I2C backpack
 - Frequency counter: `INPUT_FREQ_COUNTER` routed to Timer1 T1CKI through PPS

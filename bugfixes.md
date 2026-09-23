@@ -4,6 +4,23 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-23 — Q10-only conversion: two latent bugs found while stripping the 16F
+
+**Bug: the device launchers defaulted to the removed part.** `tools/simulate/run_sim.sh` and
+`run_sim.ps1` both selected `PIC16F18875` (`DEVICE="PIC16F18875"` / `$Device = "PIC16F18875"`) while
+the CMake build, the harnesses and `device.cmake` all default to `PIC18F47Q10`. A sim launched
+through either script would therefore have asked the simulator for the old part while `out/` held the
+Q10 image - the exact image/device mismatch that `parameterise_output_dir.py` exists to prevent, and
+one that produces a wrong verdict with no error. Fix: both scripts now select `PIC18F47Q10`.
+
+**Bug: `parameterise_device.py`'s self-check could never pass.** Its "no hardcoded device tokens
+left" check ran the regex over the entire rewritten file *including the header it had just
+prepended*, and that header names the device. The script therefore printed
+`hardcoded device tokens left=1` and exited 1 on every run, even when the body was completely
+clean - worse than having no check, because a genuine un-parameterised token would have been
+indistinguishable from the known false alarm. Fix: the check now measures the file body only, so a
+clean run reports `left=0` and exits 0.
+
 ## 2026-09-22 — PIC18F47Q10 spike: two wrong verdicts in a day, both from untested assumptions
 
 The Q10 spike produced two retractions on the same day. Both were my error, both were avoidable, and

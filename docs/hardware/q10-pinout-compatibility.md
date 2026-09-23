@@ -1,6 +1,6 @@
 # PIC18F47Q10 hardware fit: PDIP-40 pinout comparison
 
-Date: 2026-09-22 · Branch: `upgrade/pic18f47q10`
+Date: 2026-09-22 · updated 2026-09-23: PIC18F47Q10 is now the shipping target and the only device
 
 ## Question
 
@@ -11,9 +11,11 @@ Does the PIC18F47Q10 fit the existing PIC16F18875-I/P board, or does the board n
 Both pinouts were read from the part's own documentation, not from memory or from a family
 assumption:
 
-- **Q10**: the pin diagram in `PIC16(L)F18855-75-Data-Sheet-40001802H.pdf` (the 40-pin
-  SPDIP/PDIP diagram), extracted with `pypdf`.
-- **16F18875**: `docs/hardware/PIC16F18875_pin_map.md`, the project's authoritative pin table.
+- **Q10**: the pin diagram in the Q10 data sheet,
+  `docs/hardware/references/DS40002043_PIC18F27-47Q10_datasheet.pdf` (the 40-pin SPDIP/PDIP
+  diagram), extracted with `pypdf`.
+- **16F18875**: `prototype_reference/docs/hardware/PIC16F18875_pin_map.md` (retired 2026-09-23 - the
+  old device's pin table is historical reference only).
 
 Compared pin by pin, positions 1-40.
 

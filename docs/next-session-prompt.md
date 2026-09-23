@@ -1,4 +1,20 @@
-# Prompt for the next session
+# RETIRED - do not use this file
+
+**This file is a tombstone (2026-09-23). It was out of date and its instructions were wrong:** it
+told a new session to work on branch `upgrade/pic18f47q10` (that branch is an *ancestor* of `main`
+and has been deleted) and to hunt a Q10 temperature-trip bug that was fixed, verified and merged
+long before this file was read again.
+
+The AI carry-over is `Ai-Notes.txt` at the repo root - read that first, then
+`.github/skills/picampcontrol-build-test/SKILL.md`. Do not recreate a second handoff file: an
+earlier duplicate (`AI-HANDOFF.md`) was deleted for exactly this reason.
+
+The historical text below is kept only so that the stale instructions are recognisable if they are
+quoted back at a future session. Nothing below is current.
+
+---
+
+# Prompt for the next session (RETIRED - historical text follows)
 
 Copy the block below into a new chat session.
 
