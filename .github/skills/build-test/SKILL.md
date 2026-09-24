@@ -277,6 +277,13 @@ standing rule). What that touched, and what it caught:
   `out/My_Pic_Project_18F47Q10/default.elf`. Expect the benign linker warning
   `(1311) missing configuration setting for config word 0x300005; using default` on this part - it
   predates the 16F removal and is not caused by it.
+- **Search inside the MPLAB X install for a DFP before concluding a device is unbuildable.** MPLAB X
+  6.35 ships `PIC18F-Q_DFP/1.30.487` under its own install root
+  (`/Applications/microchip/mplabx/v6.35/packs/Microchip/`,
+  `C:\Program Files\Microchip\MPLABX\v6.35\packs\Microchip\`), which is a **different root** from the
+  user pack repository that the tooling also searches (`~/.mchp_packs` / `%USERPROFILE%\.mchp_packs`).
+  A "no Q10 DFP is installed" conclusion drawn from the user repository alone was wrong and cost a
+  session: the toolchain was never the blocker. Check both roots before reporting a part unbuildable.
 
 **Finding (2026-09-23): the first macOS run of the whole tree - and how to read a verdict when the
 agent's terminal launched the run.**

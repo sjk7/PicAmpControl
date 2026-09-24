@@ -48,6 +48,17 @@ actions:
   measurement, not a tidy-up. The skill now states it as UNRESOLVED with the provenance of both
   numbers (`ff931f7` documents 1887 as measured; the macOS re-probe supports 1625), rather than
   asserting that both are correct, which is what its previous wording implied.
+- **Four stale "do not change the MCU" instructions removed from `Ai-Notes.txt`** (user, 2026-09-24:
+  *"Any instructions there about not changing the mcu are out of date and need deleting. They were not
+  meant to be permanent."*). They were a temporary evaluation gate that outlived its purpose: the
+  `DO NOT START A DEVICE UPGRADE WITHOUT ASKING FIRST, AND DO IT ON A NEW BRANCH` rule with its
+  embedded rejected-scope note, the `Before any further 18877 work:` instruction, and the whole
+  `DEVICE UPGRADE SPIKE (RE-OPENED 2026-09-22)` section - which still asserted that the PIC16F18875
+  was the shipping target and that the port had not started, both false since 2026-09-23. The one
+  durable fact buried in them (MPLAB X ships the Q10 DFP under its *own* install root, a different
+  root from the user pack repository, so "no DFP installed" was a wrong conclusion) was moved into
+  the build/test skill first rather than deleted with the rest. What remains is the history only:
+  the record of how a device-swap verdict must not be reached.
 
 ## 2026-09-23 — OPEN: `run_mdb_probe.py`'s log can omit the probe's printed values (the reason a run went unwrapped)
 

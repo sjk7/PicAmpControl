@@ -157,33 +157,9 @@ were all deleted. Concretely, that means:
   pin-table difference in the model, or a different interrupt-enable form would all look identical
   from outside. The unchanged band-change timing also implies the timer tick *was* running, which
   sits badly with a blanket non-equivalence claim.
-  **Before any further 18877 work:** derive its register/peripheral values from the DFP rather than
-  assuming 18875 equivalence, and use the discipline the Q10 re-test settled on - minimal bring-up,
-  one variant per suspect setting, and a positive control behind every negative finding. Do not
-  retry it as a one-line `-mcpu` change, and do not assume pin/peripheral equivalence from a clean
-  build. **Superseded 2026-09-23: PIC18F47Q10 is now the shipping target and the only device, and
-  flash pressure is addressed by the software levers under Remaining work.** This bullet is kept
-  only as the record of how a device-swap verdict must NOT be reached.
-- DO NOT START A DEVICE UPGRADE WITHOUT ASKING FIRST, AND DO IT ON A NEW BRANCH (user instruction,
-  2026-09-22). Evaluating PIC18F47Q10 (or any other part) as a replacement is explicitly gated: do
-  not change `-mcpu`, the DFP, `.clangd`, the pin map, or any firmware source for a new device until
-  the user has said go. When they do, create a dedicated git branch for the attempt and do the work
-  there - never on `main`. Rationale: the 18877 attempt showed that a clean build says nothing about
-  simulator equivalence, and a port touches every peripheral driver (PPS codes, comparators, ADC,
-  timers, EEPROM/NVM, oscillator), so it must be reversible and isolated.
-  Rejected-scope note (analysis only, 2026-09-22, nothing changed in the tree): PIC18F47Q10-I/P is
-  40-pin PDIP and so fits the same footprint, but it is a different family - 128 KB flash / 3615 B
-  RAM / 1024 B EEPROM / 64 MHz vs 8192 words / 1024 B / 256 B / 32 MHz, and `firmware/src/
-  freq_counter.c` carries a device-specific `T1CKIPPS = 0x19`. MPLAB X 6.35 accepts `device
-  PIC18F47Q10` + `hwtool sim`, but warns `W9602-COMP:DAC Voltage Source Peripheral not yet
-  implemented to act as input to Comparator` - the comparator is in the overcurrent safety path. No
-  PIC18F-Q10 DFP is installed. Any attempt must start by proving the model on the existing
-  boot/PTT harness, exactly as the 18877 was proved unviable.
-  **The "no PIC18F-Q10 DFP is installed" line immediately above is WRONG** (corrected 2026-09-22):
-  MPLAB X 6.35 ships `PIC18F-Q_DFP/1.30.487` inside its own install
-  (`C:\Program Files\Microchip\MPLABX\v6.35\packs\Microchip\`), which is a different root from the
-  user pack repository `%USERPROFILE%\.mchp_packs` that was checked. A Q10 build needs no download;
-  the toolchain was never the blocker. See the skill for the pack-search rule.
+  **Superseded 2026-09-23: PIC18F47Q10 is the shipping target and the only device, and flash pressure
+  is addressed by the software levers under Remaining work.** This bullet is kept only as the record
+  of how a device-swap verdict must NOT be reached.
 - [HISTORY - superseded 2026-09-23; the port is done and the Q10 is the only device] PIC18F47Q10
   PROVED VIABLE AFTER TWO WRONG VERDICTS IN ONE DAY (2026-09-22). Both retractions are
   mine; the sequence is the lesson. (1) The bring-up wrote `T2CLKCON = 0x00` and *assumed* it meant
@@ -245,6 +221,10 @@ were all deleted. Concretely, that means:
   core is 64 MHz (`HFINTOSC_64MHZ`) and Timer2 takes Fosc/8 so `_XTAL_FREQ` stays the 32 MHz design
   clock. **Rule: never restate a rule in two files unless one is a pointer** - the copies drift, and
   whichever a session reads first wins, which is how `TESTING.md` came to outrank `user.cmake`.
+  **The temporary "do not change the MCU" gates are GONE from this file (same day).** There is no rule
+  about asking before a device change and no rule about a dedicated branch for one: those were written
+  for the evaluation and were never meant to be permanent. The current target statement stands on its
+  own - PIC18F47Q10 is what the firmware builds, and `device.cmake` is where that is declared.
   *state and user instructions* (what the firmware does now, what is in flight, what is left, the rules below) live
   in THIS file; *build/test/debug procedure* (toolchain paths, configure/build commands, the flash
   budget, mdb and harness techniques, test names and labels, failure triage) lives only in
@@ -482,22 +462,6 @@ re-derive it.
    Separately the simulator does NOT model Timer1's external clock (`W0106-SIM`), so T1CKI, the PPS
    routing, the 1:4 prescaler and the overflow path are untested - the first burst is injected by
    writing `TMR1H`/`TMR1L`. That gap closes on the bench only.
-
-### DEVICE UPGRADE SPIKE (RE-OPENED 2026-09-22) - PIC18F47Q10 does the basics; port not started
-
-The gated spike was run, reported wrongly twice, and re-tested until the measurements held up. State:
-
-- **Working on the Q10 model:** PTT reaches the firmware, outputs toggle, Timer2 counts
-  (`T2TMR` with `T2CLKCON = 0x01`), an RC0 interrupt-on-change works, and interrupts are dispatched
-  once `IPEN = 1` with a per-source priority bit (`IPR4bits.TMR2IP`).
-- **The two differences a port must handle:** (1) the priority interrupt form instead of the 16F's
-  plain `GIE = 1`; (2) a measured tick of ~6,100-6,900 instructions against the harness's 8,000 for
-  1 ms, so timing assumptions need recalibrating rather than copying.
-- **Not yet reached:** ADC/ADCC, the comparators in the overcurrent safety path (MPLAB warns
-  `W9602-COMP` for the DAC-to-comparator input), EEPROM/NVM, PPS and its device-specific codes, and
-  the pin map re-derived from the Q10 datasheet. A port touches all of those.
-- **Nothing has touched `main` firmware** and the PIC16F18875 remains the shipping target. Whether
-  to port is the owner's decision; the diagnostic images are on `spike/pic18f47q10-retest`.
 
 ### General
 
