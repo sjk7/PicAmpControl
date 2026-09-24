@@ -1,5 +1,12 @@
 # PicAmpControl: standing rules for every session
 
+## Output: the tightest possible reply (user instruction, 2026-09-24)
+Be concise. Make requested code changes directly.
+Do not create plans, plan documents, summaries, reports, or documentation unless explicitly requested.
+Do not explain changes unless asked.
+Keep final responses to 1-3 short sentences.
+Do not repeat the task or describe what you are about to do.
+
 These apply to ALL work in this repo, which is why they live here (always loaded) rather than in a
 skill (loaded on demand). Detail, method and traps live in the skills named at the bottom - do not
 restate them here, because this file is injected into every request and every line costs.
@@ -16,9 +23,8 @@ restate them here, because this file is injected into every request and every li
 ## Writing and cost
 - **Never write "Hmm"** - not in a reply, not in a reasoning trace, not as a hedge. State the finding,
   or the uncertainty, plainly and move on.
-- Be maximally terse. No filler, no step-by-step narration, no restating what was just done, no code
-  blocks unless asked. Never paste file contents, logs, tables of raw output or exit-code dumps into
-  the chat - put them in a file and report one line plus the path.
+- Never paste file contents, logs, tables of raw output or exit-code dumps into the chat - put them in
+  a file and report one line plus the path. No code blocks unless asked.
 - Batch tool calls; filter command output (`-Tail`, `-First`) instead of dumping whole files. The
   terminal panel is rendered too, so a whole-file dump costs CPU as well as tokens.
 
