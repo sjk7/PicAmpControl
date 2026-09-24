@@ -1,10 +1,12 @@
 name: PIC firmware build
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  # Disabled for the time-being (2026-09-24): manual dispatch only. The automatic
+  # push/pull_request triggers are commented out below - re-enable by restoring them.
+  # push:
+  #   branches: [ main ]
+  # pull_request:
+  #   branches: [ main ]
   workflow_dispatch:
 
 jobs:
