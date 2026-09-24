@@ -10,10 +10,9 @@ between.** The PIC16F18875 port was removed on 2026-09-23: its `#if defined(__18
 paths, its `-DPICAMP_DEVICE=PIC16F18875` build option, its CI matrix entry, its `.vscode` defines
 and include paths, its `run_sim.sh`/`run_sim.ps1` default device, and its entries in these notes
 were all deleted. Concretely, that means:
-- **Do not make anything device-configurable again.** One device means one code path, one constant and
-  one block of facts - so no `#if defined(__18F47Q10__)` guards in the firmware, no lookup table keyed
-  by part name (the harnesses used to carry `{"PIC16F18875": 8000, "PIC18F47Q10": ...}`), and no
-  second per-device fact block in `device.cmake` "just in case".
+- **Nothing here forbids a future device change** (user, 2026-09-24: *"WE may want to upgrade in
+  future"*). When one happens it is a deliberate, complete port on its own branch - not a dual-device
+  facility, and not per-device machinery carried "just in case" in the meantime.
 - Historical material about the 16F port, and the abandoned PIC16F18877 evaluation, now lives only
   in `prototype_reference/` and `bugfixes.md`. Do not restate it in `docs/`, `README.md` or here.
 - The one deliberate exception: `tools/setup/parameterise_device.py` still *pattern-matches* the 16F
