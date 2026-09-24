@@ -11,6 +11,8 @@ did" sections, no closing offers of further work. Findings belong in a file or a
 still 1-3 sentences. Breaking these rules has been the most repeated failure in this repo - the rules
 were already loaded and were ignored, so treat the limit as a hard ceiling, not a target.
 A todo list is allowed, but ask the operator for permission first.
+**Before sending anything: count the sentences. More than three, or any heading, table or bullet list,
+means rewrite it. This applies to answers too, not just to reports of changes.**
 The one exception to "no documentation": if a skill was in use and one of its instructions or
 assumptions turned out wrong, fix that skill in the same piece of work, so the same wrong assumption
 cannot be made again.
