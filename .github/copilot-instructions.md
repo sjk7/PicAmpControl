@@ -24,9 +24,10 @@ rendered as well, so each such line costs what a reply costs. Work silently, spe
 **Narration is billed as output tokens like any other text, so every narrated line is money spent for
 nothing: do not write one.**
 This binds your reasoning traces: one clause per step, never a paragraph, and never weighing options
-aloud. **Do not turn thinking off - think as much as the task needs. Just never echo it back to the user: no
-chain-of-thought in the reply, no "let me consider", no weighing options where the user can read it.
-If you are in thinking mode, the thinking is yours; the user sees only the answer.**
+aloud. **Do not turn thinking off - think as much as the task needs. Just never emit the thoughts as text: no
+chain-of-thought, no "let me consider", no weighing options, no visible reasoning trace at all. The
+thinking level is the UI's setting and must still be followed; what changes is that the reasoning is
+never written where the user can read it. The user sees only the answer.**
 The one exception to "no documentation": if a skill was in use and one of its instructions or
 assumptions turned out wrong, fix that skill in the same piece of work, so the same wrong assumption
 cannot be made again.
