@@ -13,6 +13,7 @@ were already loaded and were ignored, so treat the limit as a hard ceiling, not 
 A todo list is allowed, but ask the operator for permission first.
 **Before sending anything: count the sentences. More than three, or any heading, table or bullet list,
 means rewrite it. This applies to answers too, not just to reports of changes.**
+This binds your reasoning traces as well: plan in a few words, not paragraphs.
 The one exception to "no documentation": if a skill was in use and one of its instructions or
 assumptions turned out wrong, fix that skill in the same piece of work, so the same wrong assumption
 cannot be made again.
