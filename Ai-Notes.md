@@ -93,9 +93,10 @@ static, hand-captured design input. The user's words and the full list of what w
 ## Session handoff (carry-over for a NEW session)
 - This is the ONLY AI carry-over file. `AI-HANDOFF.md` was deleted on 2026-09-21 (it duplicated
   project-architecture.md, the pin map and TESTING.md, and had drifted), and
-  `docs/next-session-prompt.md` was retired to a tombstone on 2026-09-23 (it still told a new
-  session to work on the now-deleted `upgrade/pic18f47q10` branch and to chase a Q10 temperature
-  trip that had long since been fixed). Do not recreate a second handoff file - update this one.
+  `docs/next-session-prompt.md` was retired to a tombstone on 2026-09-23 and has since been deleted
+  (it still told a new session to work on the now-deleted `upgrade/pic18f47q10` branch and to chase a
+  Q10 temperature trip that had long since been fixed). Do not recreate a second handoff file - update
+  this one.
 - Working tree should be clean; read the current commit with `git --no-pager log --oneline -1`
   rather than trusting a SHA written here.
 - **The project now runs on Windows 10 as well as macOS** (MPLAB X 6.35 / XC8 4.00 / Python 3.14.7).
