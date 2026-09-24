@@ -292,12 +292,15 @@ standing rule). What that touched, and what it caught:
   1685). So **1625 is ~4% low, 1887 is ~11% high, and `BOOT_STEPS = 16_500_000` in
   `probe_q10_ptt_path.py` is ~10x too large (the 1000 ms boundary is at ~1.70M steps).** The startup
   window caps this counter at 1000 ticks, so it is the widest clean span available; the ±1% per-block
-  spread is the simulator's own jitter, not measurement noise. **All harness constants were set to
-  the measured 1695 on 2026-09-24** (`trace_ptt_sequence.py`, `first_dit_invariants.py`,
-  `test_first_dit.py`, and `probe_q10_ptt_path.py`'s `BOOT_STEPS = 1_695_000`) - a single measured
-  value everywhere is what makes the tests immune to the simulator's clock. Re-run the suite after
-  the change (it shifts every window, and the open first-dit clause (c) macOS failure must be
-  re-read against the corrected rate).
+  spread is the simulator's own jitter, not measurement noise. **Do NOT set every harness to 1695 -
+  tried 2026-09-24 and it broke the merged suite's SWR1 scenario ("did not clear and re-enter TX
+  after a PTT re-arm").** The scenario sample windows are phase-tuned to the per-harness value they
+  were built with, and one global rate is only an approximation of the boot/loop instruction mix, so
+  the measured 1695 does not transfer across harnesses. The harnesses therefore keep their validated
+  constants (1625 in `trace_ptt_sequence.py`/`first_dit_invariants.py`, 1887 in `test_first_dit.py`);
+  1695 stands as the tighter *measurement*, not the value to run with. This is why the open
+  first-dit clause (c) macOS failure must be read against the rate the harness actually uses, not the
+  probe's.
   **Do not use `TMR2` to measure time in the simulator.** It reads back a value that advances only
   ~16 counts per 300,000 steps (177 firmware-ms), which no Fosc/8-and-1:64 model can produce; the
   interrupt arrives on schedule but the model's timer *count* is not the datasheet count. `T2CON`

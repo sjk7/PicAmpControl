@@ -48,11 +48,10 @@ BAND_NAME = {1: "160m", 2: "80m", 3: "40m", 4: "20m", 5: "15m", 6: "10m"}
 BAND_OUT_OF_SPEC = 7
 
 # Instruction rate, MEASURED (see trace_ptt_sequence.py INSTRUCTIONS_PER_MS). This file MUST stay
-# in sync with that one - a wrong value makes every timing invariant (I6, hot-switch) measure time
-# wrong. Read the rate from the same place; do not re-derive it.
-# PIC18F47Q10 is the only device, so the rate is a constant: 1695 instructions per simulated
-# firmware-ms (measured 2026-09-24, docs/hardware/q10-bringup/tick_rate_probe.mdb).
-_INSTRUCTIONS_PER_MS = 1695
+# in sync with that one. PIC18F47Q10 is the only device, so the rate is a constant: 1625 instructions
+# per simulated firmware-ms (validated value; the tighter 1695 measurement broke the SWR1 scenario -
+# see trace_ptt_sequence.py).
+_INSTRUCTIONS_PER_MS = 1625
 SECONDS_PER_INSTRUCTION = 1.0 / (_INSTRUCTIONS_PER_MS * 1000.0)
 
 
