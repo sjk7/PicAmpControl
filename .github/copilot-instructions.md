@@ -19,10 +19,8 @@ cannot be made again.
 - **STEP ONE, EVERY SESSION, BEFORE ANY OTHER ACTION: read `Ai-Notes.txt` at the repo root.** It
   carries the target device, current design/firmware/display state, remaining work and the user's
   standing instructions. **Nothing loads it automatically** - it matches no VS Code convention, so it is
-  read only because this line says so. Do not "fix" its name to make it auto-load: at 499 lines it would
-  then be injected into every request. Read it, do not restate it.
-- Also read `deepseek-pic.md` (bare-metal PIC guardrail checklist - a cross-check, never project state).
-- The target is the **PIC18F47Q10, and nothing else**. There is no second device and no legacy part.
+  read only because this line says so. Do not "fix" its name to make it auto-load: injecting it into
+  every request is exactly what it is kept out of. Read it, do not restate it.
 
 ## Writing and cost
 - **Never write "Hmm"** - not in a reply, not in a reasoning trace, not as a hedge. State the finding,

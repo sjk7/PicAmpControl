@@ -33,14 +33,13 @@ were all deleted. Concretely, that means:
   traps (a command that returns nothing says nothing about the run; a stale cached log read looks like
   "the run produced nothing") are in `.github/skills/build-test/SKILL.md`.
 - Keep this file (Ai-Notes.txt) ALWAYS up to date; it's the launch point for a new session.
-- ALWAYS READ `deepseek-pic.md` IN THE REPOSITORY ROOT AT THE START OF EVERY SESSION (user
-  instruction, 2026-09-22, permanent). It is a bare-metal PIC guardrail checklist - TRIS vs LAT,
-  brief ISRs, `volatile` on ISR-shared globals, never guess config words, and a test-harness
-  protocol - written by another agent, and the user wants it used as a cross-check on this
-  project's work. Treat it as a *checklist*, not as project state: this file and
-  `.github/skills/build-test/SKILL.md` remain the sources of truth, and its own
-  `<session_state>` block ("Awaiting the first hardware assignment") is stale and does not describe
-  this project.
+- BARE-METAL FIRMWARE RULES live in `.github/instructions/firmware.instructions.md`, which VS Code
+  auto-applies when `firmware/` files are edited or written (register/LAT-PORT handling, ISR discipline,
+  `volatile`, config words, the clock chain). `deepseek-pic.md` - another agent's checklist, the source
+  of those rules and a required step-one read from 2026-09-22 - was merged into that file and DELETED on
+  2026-09-24, along with its stale `<session_state>`; its harness-design rules moved to
+  `.github/skills/build-test/SKILL.md` and its "comment heavily / code in markdown blocks" output block
+  was already superseded.
 - FILE FOLLOWING AND LOG WATCHING: method in `.github/skills/build-test/SKILL.md` (`tools/logfollower`,
   `open_progress_log.py`, `run_detached.py`, the FileTail cost finding, the console-tail trap).
 - FLASH REDUCTION - **SATISFIED ON THIS DEVICE** (the 16F-era work item, 2026-09-21, closed 2026-09-24).
@@ -206,8 +205,9 @@ This repository is the active PIC18F47Q10-I/P linear-amplifier protection contro
 - Current-sensor scaling (firmware/src/main.c): zero at raw 512 (2.5 V mid-rail), +511 counts = +70 A, 0 counts = -70 A. The default positive current trip is 40 A (g_thresholds initialiser).
 - On PTT release the sequencer unwinds in order - TX off immediately, TX_VCC after the VCC delay, then TX_BIAS - and the band is released only once every TX output is confirmed inactive (release_band_if_cold()). An engage still in progress when PTT releases is therefore unwound, not completed; the old "engages complete, then unsequence" description is obsolete (see bugfixes.md 2026-09-21).
 - SWR trips, power scales, drain/input thresholds, 10 kOhm NTC B-value profile, sequencer timing, and output polarities are user-configurable from the 1602 LCD menu.
-- Outputs are written through the `LAT` registers and inputs are read from `PORT` (`deepseek-pic.md`
-  guardrail 1). `pin_map.h` holds the write macros; the three TX outputs also carry `SENSE_TX*`
+- Outputs are written through the `LAT` registers and inputs are read from `PORT`
+  (`.github/instructions/firmware.instructions.md`). `pin_map.h` holds the write macros; the three TX
+  outputs also carry `SENSE_TX*`
   pin-level read macros, used by the two checks that must confirm the hardware actually reached a
   state (`release_band_if_cold()`, and the PTT COMPLETE condition) instead of trusting the latch.
   Do not reintroduce `PORTxbits` writes for outputs: on PORTC the relay lines share a port with the

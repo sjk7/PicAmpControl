@@ -398,6 +398,19 @@ reason.
   `microchip.mplab-core-da` and `microchip.mplab-data-visualizer` extensions drive the same mdb engine,
   so scripted simulation does not need them.
 
+## Harness design rules (moved from `deepseek-pic.md` 2026-09-24)
+
+- **Cover the boundaries, not just the happy path.** Every harness needs a register-overflow case (the
+  16-bit `TMR1` count wrapping), a timeout that never arrives, and a missing sensor pulse. The last is
+  `FREQ_CTR_FAIL`, which is deliberately a negative test and must never be "fixed" into a passing trip.
+- **A harness must not block the device under test.** Wait with non-blocking timing - a deadline plus a
+  poll, the way the watchdog does it - rather than sleeping inside the sample loop, or the harness's own
+  latency becomes part of the timing being measured.
+- **Drive the device, do not stub it.** Stimulus goes through the simulator's own interface (`write pin`,
+  `write /r` into a `.sym`-resolved address) so the firmware under test is the shipping image, not a
+  build with compiled-in test stubs. Anything that has to be reached by address must be parsed from the
+  `.sym` at run time, because addresses move on every rebuild.
+
 ## Windows shell traps (moved here from `Ai-Notes.txt` 2026-09-24)
 
 These silently no-op a build, i.e. they return success while compiling nothing:
