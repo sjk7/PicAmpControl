@@ -42,11 +42,6 @@ were all deleted. Concretely, that means:
   was already superseded.
 - FILE FOLLOWING AND LOG WATCHING: method in `.github/skills/build-test/SKILL.md` (`tools/logfollower`,
   `open_progress_log.py`, `run_detached.py`, the FileTail cost finding, the console-tail trap).
-- FLASH REDUCTION - **SATISFIED ON THIS DEVICE** (the 16F-era work item, 2026-09-21, closed 2026-09-24).
-  The Q10 has room: Release measured 11214/131072 bytes of program flash (8.6%). Levers, the policy and
-  the two measured-negative refactors live in the skill's `## Flash space`; re-open the work item only
-  if a change pushes the figure up by an order of magnitude. The original point - enough headroom to
-  assert with test evidence that the PTT sequencing cannot damage the amplifier - still stands.
 - COMMIT AND PUSH OFTEN - LOCAL AND REMOTE (user instruction, restated 2026-09-21 because it was
   forgotten). Commit and push to `origin/main` as soon as each change is verified green; do not
   batch a session's work into one large commit at the end, and never leave verified work sitting
@@ -183,14 +178,10 @@ This repository is the active PIC18F47Q10-I/P linear-amplifier protection contro
   during bypass (relay open, band selection possibly moving) could latch a spurious STATE_TRIP
   during the very first dit. Hardware overcurrent, current, temperature, overdrive and drain trips
   remain ungated. The gate is applied once inside `update_protection_state()` for flash reasons.
-- **Flash is NOT tight on this device.** Measured 2026-09-24, Release: 11214/131072 bytes of program
-  flash used (8.6%). The "effectively full" claim here was a PIC16F18875 property (8192 words) and does
-  not apply to the Q10; the 2026-09-21 LCD-label shortening is therefore housekeeping, not a
-  constraint - the labels it shortened (`S1 SWR TRIP` -> `SWR1 TRIP`, `NTC B VALUE` -> `NTC B`,
-  `CURRENT TRIP` -> `CURR TRIP`, `TX-VCC DELAY` -> `TX-VCC DLY`, `TX-VCC ACTIVE` -> `TX-VCC POL`,
-  `POWER DISPLAY` -> `POWER MODE`, `PEAK HOLD` -> `PK HOLD`, boot message -> a single `Booting` line)
-  were matched in `tools/simulate/render_lcd_lifecycle_diagram.py`, whose SETTINGS_PANELS hard-code the
-  on-screen text. Policy and how to read the live figure: the skill's `## Flash space`.
+- **Flash, measured 2026-09-24 on Release: 11214/131072 bytes (8.6%) - nothing is tight.** The
+  "effectively full" claim that used to sit here was a PIC16F18875 property (8192 words). One durable
+  coupling survives: the LCD menu labels are hard-coded in `tools/simulate/render_lcd_lifecycle_diagram.py`'s
+  `SETTINGS_PANELS`, so shortening or renaming a label means updating that script too.
 - **The remembered band is verified, not trusted (fold-back).** A first-dit engage taken from the
   band memory is a blind decision - at keydown the radio has not started transmitting, so there is
   nothing to measure yet. The remembered band is therefore re-checked against the first usable
@@ -284,8 +275,8 @@ harness timings and the first-dit clauses are sensitive to it.
 
 ### Open items carried out of the relay-ordering work (2026-09-22)
 
-All three are OPEN. Each states what "done" means, so a later session can close it rather than
-re-derive it.
+Both are OPEN. Each states what "done" means, so a later session can close it rather than
+derive it.
 
 1. **Prove clause (h) on its own.** Clause (h) checks that the LPF relay selection HOLDS through RX
    instead of following the 160m no-signal default. Re-introducing that defect does fail the test, but
@@ -294,13 +285,7 @@ re-derive it.
    the injection narrower: give clause (h) its own session, or restructure the phases so (a)-(c) do not
    depend on the selection surviving the previous release. Either way record the observed failure
    message in the defect table in docs/first-dit-band-detection.md.
-2. **Measure per-function flash, then cut the biggest genuinely safe win.** Do NOT trust the earlier
-   "table-drive `adjust_selected_setting()`, save 80-100 words" estimate: several of those settings are
-   16-bit, so a closed-form `{min,max,step}` row costs ~6 bytes and a 20-page table is ~120 bytes plus
-   lookup code - probably MORE than the branch chain it replaces. Measure real sizes first (the map's
-   psects, or build-delta experiments on a scratch branch), then implement only what actually wins.
-   Policy, lever list and the inline-assembly rule: the skill's `## Flash space`.
-3. **Bench-confirm the relay timings and the Timer1 path.** The 20 ms relay assumption is what both
+2. **Bench-confirm the relay timings and the Timer1 path.** The 20 ms relay assumption is what both
    `BAND_SETTLE_MS` and `tx_vcc_delay_ms` rest on, and invariant I6 asserts only a 10 ms floor
    (deliberately below 20 ms and above the 1-6 ms a defect produces) at 1-5 ms sampling, so the margin
    is thin: measure the fitted K1-K6 and T/R relay operate times and confirm or adjust both constants.
@@ -312,12 +297,8 @@ re-derive it.
 
 The open work is hardware validation: final sensor calibration, comparator thresholds and polarity, ADC transient protection, TX timing, fan implementation, LCD/menu/internal EEPROM persistence testing, final PCB review, and CI validation. First-dit specifics to confirm on the bench: BAND_CACHE_IDLE_TIMEOUT_MS (60 s) against real band-change habits, BAND_SETTLE_MS (20 ms) against the fitted LPF relay's operate time, and BAND_VERIFY_MS (20 ms) - i.e. how long a wrong remembered band may stay engaged before fold-back, which is the one figure that trades amplifier protection against nuisance drop-outs on a noisy first dit.
 
-Flash space is NOT the next constraint any more - the Q10 has 8.6% of program flash used, and the
-levers that used to be listed here were aimed at the PIC16F18875's full 8192-word map. The two
-measured lessons survive and are in the skill's `## Flash space`: table-driving `adjust_selected_setting()`
-was estimated at 80-100 words and is probably a loss, and compiling the harness-invisible translation
-units at `-Os` reclaims exactly nothing because XC8's linker normalises the per-file `-O` level.
-The one item that would still need explicit consent is compiling the whole simulator image `-Os`
-instead of `-O1`, because it degrades mdb symbol/breakpoint resolution for the VS Code debug session.
-If space ever does bind, the cheapest room is the LCD string literals (`STRCODE`), and commented
-inline assembly is allowed where a hot path justifies it (every block needs an equivalent-C comment).
+If the simulator image is ever compiled `-Os` instead of `-O1` it would reclaim space, but it degrades
+mdb symbol/breakpoint resolution for the VS Code "Simulate PicAmpControl (Debug)" session - that needs
+explicit user consent. If space ever does bind, the cheapest room is the LCD string literals
+(`STRCODE`), and commented inline assembly where a hot path justifies it (every block needs an
+equivalent-C comment).
