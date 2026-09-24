@@ -148,18 +148,28 @@ def describe(sample, extra=()):
 def validate_keyed_band_invariants(all_samples, label):
     """I1-I4. Returns evidence strings; raises AssertionError on violation."""
     keyed_runs = []
+    previous_band = None
     for index, sample in enumerate(all_samples):
         pins, state = sample[1], sample[2]
         band = state.get("g_fc_status.current_band")
 
-        # I4: the relay selection and current_band must always agree. Skipped during the
-        # startup inhibit, before freq_counter_init() has driven the band outputs.
-        if state.get("g_startup_inhibit") == "false" and band != str(BAND_OUT_OF_SPEC):
+        # I4: the relay selection and current_band must agree. Skipped during the startup
+        # inhibit (before freq_counter_init() has driven the band outputs), and on the ONE sample
+        # where current_band first changes: the firmware sets current_band and then rewrites the
+        # six band-select LAT bits one by one in the same tick, and `Stepi` can stop between two
+        # of those writes, so the transition sample legitimately shows the new current_band with
+        # the old (or a half-cleared) relay selection. The NEXT sample must agree - a stuck
+        # disagreement still fails here. I5/I6 separately prove the change is cold and that the
+        # settle window elapses before the T/R relay closes.
+        band_changed = index > 0 and previous_band != band
+        if (state.get("g_startup_inhibit") == "false" and band != str(BAND_OUT_OF_SPEC)
+                and not band_changed):
             expected = BAND_PIN_FOR.get(int(band)) if band and band.isdigit() else None
             if selected_band_pin(sample) != expected:
                 raise AssertionError(
                     f"{label} I4: band-select output for current_band={band} is "
                     f"{selected_band_pin(sample)}, expected {expected}\n      {describe(sample)}")
+        previous_band = band
 
         if not keyed(sample):
             continue

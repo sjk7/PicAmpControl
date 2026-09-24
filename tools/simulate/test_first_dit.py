@@ -83,7 +83,7 @@ SYM_PATH = harness.IMAGE_DIR / "default.sym"
 # The unit matters: every wait in this module is `Stepi ms * INSTRUCTIONS_PER_MS`, so a wrong
 # figure makes the harness wait the wrong amount of simulated time.
 DEVICE = harness.DEVICE
-INSTRUCTIONS_PER_MS = 1887
+INSTRUCTIONS_PER_MS = 1625
 
 PTT_PIN = "RC0"
 SETTLE_PIN = "RC1"
@@ -105,6 +105,8 @@ STATE_VARS = [
     # failure has to be diagnosed. Added 2026-09-23.
     "g_band_settle_active", "g_band_settle_elapsed_ms",
     "g_band_verify_active", "g_band_verify_mismatch_ms",
+    "g_status_refresh_ms", "g_menu_changed", "g_menu_page", "g_lcd_drawn_page",
+    "g_boot_message_active",
 ]
 SYSTEM_SYMBOLS = ["g_band_cache_idle_ms", "g_band_cache_band"]
 
@@ -200,10 +202,12 @@ def build_script(addrs):
         b.step(10)
 
     with b.phase("b_first_burst"):
-        # The radio's first RF burst (20m), still with PTT held down. Sampled every 1 ms so
-        # the relay move, the BAND_SETTLE_MS bypass window and the keying that follows are
-        # separately observable. Injection stops once the band is locked.
-        b.inject_step(14000, 25, ms=1)
+        # The radio's first RF burst (20m), still with PTT held down. Inject and step a FULL 10 ms
+        # gate per iteration (the merged suite's FREQ_CTR cadence): the firmware reads-and-zeroes
+        # TMR1 on every 10 ms tick, so a 10 ms step gives each gate a clean count and lets
+        # STABILITY_REQUIRED_TICKS=2 consecutive gates classify 20m. Then keep sampling the relay
+        # move and settle window at 1 ms.
+        b.inject_step(14000, 6, ms=10)
         b.step(65, ms=1)
 
     with b.phase("c_warm_start"):
@@ -219,13 +223,13 @@ def build_script(addrs):
         # usable measurement confirms it and the sequencer may engage. Two 10 ms gates are needed
         # for the classifier's STABILITY_REQUIRED_TICKS, so the count is topped up across both.
         b.inject_step(14000, 26, ms=1)
-        # Engage, then let the sequencer run on into its steady keyed state (TX + TX_VCC +
-        # TX_BIAS all up) and release from there. Release timing cannot be aimed at stage 2
-        # exactly: the model's steps-per-firmware-ms varies by ~10x between an idle loop and a
-        # ticking one (see the I6 note), so 20-tick stages can pass in under one sample. Stage 2
-        # and stage 3 unwind through the SAME branch in update_tx_sequence(), so releasing with
-        # TX_VCC up is the precondition the defect needs and the one the clause checks for.
-        b.step(40, ms=1)
+        # Hold the key well past the point the sequencer could reach stage 2/3. The window has to
+        # survive the LCD status-page render: `g_status_refresh_ms` reaching 100 makes
+        # show_menu_page() flush the queued bytes (lcd_service(255)) in one pass, and in this model
+        # that pass is LONG - measured 2026-09-24 as ~60 ms of harness time in which nothing else in
+        # the loop runs, including the PTT poll. A 40 ms hold was swallowed whole by that stall and
+        # the keyed window ended before the loop came round again.
+        b.step(150, ms=1)
         b.ptt(False)
         b.step(10)
 
