@@ -183,10 +183,16 @@ class Builder:
 def build_script(addrs):
     b = Builder(addrs)
     b.ptt(False)
-    # Startup inhibit is 1000 ms counted from when the main loop's ms tick starts; 1050 ms
-    # of simulated time also covers the LCD/ADC init before the loop.
+    # Startup inhibit is 1000 ms counted from when the main loop's ms tick starts, and the LCD/ADC
+    # init runs before it. 1050 ms used to be the wait here and it is NOT enough: measured
+    # 2026-09-24, the inhibit was still active at 1050-1060ms of harness time and only cleared at
+    # ~1070ms, so the phase (a) key-down landed inside the inhibit, was ignored by
+    # handle_ptt_transition(), and every phase (a) sample read ptt_active=false - clause (a)
+    # failed on a lost key-down edge, not on a firmware fault. The model's steps-per-tick is not
+    # the harness's INSTRUCTIONS_PER_MS (see the I6 note in first_dit_invariants.py), so wait with
+    # real margin rather than to the nominal figure: 1500 ms.
     with b.phase("startup"):
-        b.step(105)
+        b.step(150)
 
     with b.phase("a_ptt_without_band"):
         # PTT drops with no RF at all: no band can be decoded.
@@ -204,9 +210,22 @@ def build_script(addrs):
         b.ptt(False)
         b.step(10)              # release ramp unwinds; cache must survive
         b.ptt(True)
-        b.step(40, ms=1)        # 1 ms resolution; no TMR1 writes anywhere in this phase
-        # Release during sequencer stage 2 (TX + TX_VCC up, bias still ramping): TX_VCC
-        # must still be spun down and the band must stay locked until the amplifier is cold.
+        # Keyed with NO RF at all: the remembered band must be restored and locked, and the
+        # amplifier must stay in BYPASS, because at keydown there is nothing to verify the memory
+        # against yet (docs/first-dit-band-detection.md, "Verifying a remembered band" - keying on
+        # an unverified memory is the exact defect the verify step exists to prevent).
+        b.step(12, ms=1)
+        # The radio's RF follows the key. 14000 kHz is the band the memory holds, so the first
+        # usable measurement confirms it and the sequencer may engage. Two 10 ms gates are needed
+        # for the classifier's STABILITY_REQUIRED_TICKS, so the count is topped up across both.
+        b.inject_step(14000, 26, ms=1)
+        # Engage, then let the sequencer run on into its steady keyed state (TX + TX_VCC +
+        # TX_BIAS all up) and release from there. Release timing cannot be aimed at stage 2
+        # exactly: the model's steps-per-firmware-ms varies by ~10x between an idle loop and a
+        # ticking one (see the I6 note), so 20-tick stages can pass in under one sample. Stage 2
+        # and stage 3 unwind through the SAME branch in update_tx_sequence(), so releasing with
+        # TX_VCC up is the precondition the defect needs and the one the clause checks for.
+        b.step(40, ms=1)
         b.ptt(False)
         b.step(10)
 
@@ -291,6 +310,10 @@ def parse(output):
     harness.PINS = PINS
     harness.ADC_PINS = []   # ADC pins are stimulus-only here; fewer prints, faster runs
     harness.STATE_VARS = STATE_VARS
+    # Report times at the rate this harness actually steps at. The invariants' own default is the
+    # merged suite's 1625, and scaling 1887-stepped samples by 1625 inflated every reported time by
+    # 16% - enough to matter for a check that compares a gap against a millisecond threshold.
+    inv.set_instruction_rate(INSTRUCTIONS_PER_MS)
     return harness.parse_trace(output)
 
 
@@ -308,7 +331,14 @@ def validate_clause_a(samples):
     if any(sample[1][PTT_PIN] != 0 for sample in samples):
         raise AssertionError("clause (a): the PTT stimulus never drove RC0 low")
     if any(sample[2]["g_ptt_active"] != "true" for sample in samples):
-        raise AssertionError("clause (a): PTT was not latched while snooping")
+        # Print the phase, not just the verdict: "not latched" is either the startup inhibit still
+        # running (the key-down landed too early) or a firmware refusal, and only the samples say
+        # which. Reporting it bare cost a whole run on 2026-09-24.
+        bad = [sample for sample in samples if sample[2]["g_ptt_active"] != "true"]
+        raise AssertionError(
+            "clause (a): PTT was not latched while snooping\n"
+            f"      {len(bad)} of {len(samples)} samples:\n"
+            + "\n".join(f"        {fmt(entry)}" for entry in bad[:8]))
     if any(keyed(sample) for sample in samples):
         raise AssertionError("clause (a): a TX output went active with no band decoded")
     if any(sample[2]["g_sequence_stage"] != "0" for sample in samples):
@@ -347,10 +377,16 @@ def validate_clause_b(samples):
     if key_index <= move_index:
         raise AssertionError("clause (b): the amplifier was keyed in the same sample interval "
                              "as the relay selection moved")
+    # The window is the firmware's BAND_SETTLE_MS, witnessed through the firmware's own counter (a
+    # millisecond threshold here fails on the model's clock, not on the firmware - see the I6 note
+    # in first_dit_invariants.py).
+    settle_counts = inv.settle_counts_reached(samples, move_index, key_index)
     settle_ms = millis(samples[key_index]) - millis(samples[move_index])
-    if settle_ms < 10:
-        raise AssertionError(f"clause (b): only {settle_ms:.1f}ms of bypass between the relay "
-                             "selection and keying")
+    if settle_counts is None or settle_counts < inv.BAND_SETTLE_MS:
+        raise AssertionError(
+            f"clause (b): the amplifier was keyed after the relay selection moved without the "
+            f"firmware counting its full {inv.BAND_SETTLE_MS}-count bypass window (settle counter "
+            f"{settle_counts}; {settle_ms:.1f}ms of harness time between the two samples)")
     cached = [sample for sample in samples if sample[2]["g_band_cache_valid"] == "true"]
     if not cached:
         raise AssertionError("clause (b): the decoded band was not remembered")
@@ -368,8 +404,8 @@ def validate_clause_b(samples):
     show("(b) first RF burst (20m) decoded in bypass, then active TX engages",
          [samples[move_index], samples[key_index], engaged])
     print(f"  PASS  (b) 20m first burst classified in bypass, RD5 selected with the amplifier "
-          f"cold, {settle_ms:.1f}ms of relay settling, band cached, then "
-          "TX/TX_VCC/TX_BIAS engaged on the locked 20m band")
+          f"cold, {settle_counts} counts ({settle_ms:.1f}ms of harness time) of relay settling, "
+          "band cached, then TX/TX_VCC/TX_BIAS engaged on the locked 20m band")
 
 
 def validate_clause_c(samples):
@@ -380,39 +416,91 @@ def validate_clause_c(samples):
     if assert_index is None:
         raise AssertionError("clause (c): the warm-start PTT was never asserted")
     asserted = samples[assert_index]
-    keyed_sample = next((sample for sample in samples[assert_index:] if keyed(sample)), None)
-    if keyed_sample is None:
+    # The previous over can still be unwinding when PTT is re-asserted (the release ramp holds
+    # TX_BIAS up for its delay), so the first keyed sample after the assert is usually the LEFTOVER
+    # of that over, not an engage. The old version of this clause took it as the engage and
+    # reported "engaged 0.0ms after the falling edge", which was vacuous - it was measuring the
+    # ramp it was supposed to be waiting for. Count the engage from the first fully cold sample.
+    cold_index = next((index for index in range(assert_index, len(samples))
+                       if not keyed(samples[index])), None)
+    if cold_index is None:
+        raise AssertionError("clause (c): the amplifier never went cold after the PTT re-assert")
+    key_index = next((index for index in range(cold_index, len(samples))
+                      if keyed(samples[index])), None)
+    if key_index is None:
         # Print the WHOLE window, not show()'s usual six samples: the question a clause (c) failure
         # asks is whether the firmware latched PTT at all and how far the engage got, and that is
         # decided by how the flags evolve across the window. Truncating to six samples hides it.
-        print("    (c) warm-start window, PTT re-asserted with no RF: NO keyed sample in it, "
+        print("    (c) warm-start window, PTT re-asserted: NO keyed sample in it, "
               "full window follows")
         for sample in samples[assert_index:]:
             print(f"      {fmt(sample)}")
         raise AssertionError("clause (c): the warm-start PTT never keyed the amplifier")
+
+    # Restoring the remembered band is a blind decision, so it must happen with the amplifier cold
+    # and the selection must be locked before any RF is measured.
+    pre_key = samples[cold_index:key_index]
+    restored = [sample for sample in pre_key
+                if sample[2]["g_fc_status.current_band"] == "4"]
+    if not restored:
+        # Print the window: "the memory was not restored before keying" is decided by how the band
+        # and bypass flags evolve between the PTT assert and the first keyed sample, and the
+        # offending sample alone cannot show that (2026-09-24, cost a run).
+        raise AssertionError(
+            "clause (c): the remembered 20m band was not restored before keying\n"
+            f"      PTT asserted at {fmt(asserted)}\n"
+            "      window (oldest first):\n"
+            + "\n".join(f"        {fmt(sample)}" for sample in samples[assert_index:key_index + 4]))
+    if inv.selected_band_pin(restored[0]) != "RD5":
+        raise AssertionError("clause (c): the restored 20m band did not select RD5\n"
+                             f"      {fmt(restored[0])}")
+    if any(sample[2]["g_band_cache_band"] != "4" for sample in pre_key):
+        raise AssertionError("clause (c): the cache did not still hold 20m at the warm re-key")
+    if any(sample[2]["g_fc_status.band_locked"] != "true" for sample in restored):
+        raise AssertionError("clause (c): the remembered band was not locked before keying\n"
+                             f"      {fmt([s for s in restored if s[2]['g_fc_status.band_locked'] != 'true'][0])}")
+    # The engage must wait for the first usable measurement of the transmission: keying straight
+    # off the memory (with no RF yet) would amplify the first RF through an unverified filter.
+    first_rf = next((index for index in range(cold_index, len(samples))
+                     if int(samples[index][2]["g_fc_status.frequency_khz"]) > 0), None)
+    if first_rf is None or key_index <= first_rf:
+        raise AssertionError(
+            "clause (c): the amplifier keyed on the remembered band before the first usable "
+            "measurement of the transmission could confirm it\n"
+            f"      PTT at {fmt(asserted)}\n"
+            f"      keyed at {fmt(samples[key_index])}")
+
+    keyed_sample = samples[key_index]
     delay_ms = millis(keyed_sample) - millis(asserted)
-    if delay_ms > 30:
-        raise AssertionError(f"clause (c): engaging from the remembered band took "
-                             f"{delay_ms:.1f}ms, which is not an immediate engage")
-    if keyed_sample[1]["RD5"] != 1:
-        raise AssertionError("clause (c): the remembered 20m band was not restored")
-    if keyed_sample[2]["g_band_cache_band"] != "4":
-        raise AssertionError("clause (c): the cache did not still hold 20m")
-    show("(c) second PTT on the remembered band, with no RF stimulus at all",
-         [asserted, keyed_sample])
-    print(f"  PASS  (c) PTT engaged from the remembered band {delay_ms:.1f}ms after the "
-          "PTT falling edge with zero RF injected (no snoop, RD5 selected, cached band 20m)")
-    if not any(sample[2]["g_sequence_stage"] == "2" for sample in samples):
-        raise AssertionError("clause (c): the sequencer never reached stage 2, so the "
-                             "stage-2 PTT-release path was not exercised")
+    show("(c) second PTT on the remembered band restored while bypassed, then verified by "
+         "the first RF of the transmission", [asserted, restored[0], samples[first_rf], keyed_sample])
+    print(f"  PASS  (c) PTT re-assert with no RF restored and locked the remembered 20m band with "
+          f"the amplifier in bypass (no snoop, RD5 selected, cached band 20m), and the engage "
+          f"waited {(key_index - first_rf) + 1} sample(s) for the first usable measurement "
+          f"({delay_ms:.1f}ms of harness time after the falling edge)")
+
+    # Release path: find the last sample still keyed before the PTT release and require the over to
+    # have had TX_VCC up, which is the precondition of the defect this clause guards (releasing
+    # mid-ramp used to leave TX_VCC asserted and release the band early).
+    release_index = next((index for index in range(key_index, len(samples))
+                          if samples[index][1][PTT_PIN] != 0), None)
+    if release_index is None:
+        raise AssertionError("clause (c): the warm-start PTT was never released")
+    held = samples[release_index - 1]
+    if held[1]["RC6"] != 0:
+        raise AssertionError(
+            "clause (c): PTT was released before TX_VCC came up, so the mid-sequence release "
+            "path was not exercised\n"
+            f"      last keyed sample: {fmt(held)}")
+    stage_seen = held[2]["g_sequence_stage"]
     tail = samples[-1]
     if keyed(tail):
-        raise AssertionError("clause (c): the stage-2 release left a TX output asserted\n"
+        raise AssertionError("clause (c): the mid-sequence release left a TX output asserted\n"
                              f"      {fmt(tail)}")
     if tail[2]["g_fc_status.band_locked"] == "true":
         raise AssertionError("clause (c): the band stayed locked after the release completed")
-    print("  PASS  (c) PTT released during stage 2: TX_VCC was spun down, the release ended "
-          "cold and only then was the band released")
+    print(f"  PASS  (c) PTT released with TX_VCC up (sequencer stage {stage_seen}): TX_VCC was "
+          "spun down, the release ended cold and only then was the band released")
 
 
 def idle_runs(release_samples):
@@ -618,16 +706,18 @@ def validate_clause_i(samples):
                    if samples[index][1]["RC5"] == 0), None)
     if closed is None:
         raise AssertionError("clause (i): the T/R relay never closed after the relay move")
+    settle_counts = inv.settle_counts_reached(samples, move_index, closed)
     settle_ms = inv.millis(samples[closed]) - inv.millis(samples[move_index])
-    if settle_ms < 10:
+    if settle_counts is None or settle_counts < inv.BAND_SETTLE_MS:
         raise AssertionError(
-            f"clause (i): only {settle_ms:.1f}ms of bypass between the band-relay selection change "
-            "and the T/R relay closing - the T/R relay closed onto relay contacts that were still "
-            "moving")
+            f"clause (i): the T/R relay closed after the band-relay selection change without the "
+            f"firmware counting its full {inv.BAND_SETTLE_MS}-count bypass window (settle counter "
+            f"{settle_counts}; {settle_ms:.1f}ms of harness time) - it closed onto relay contacts "
+            "that were still moving")
     print(f"  PASS  (i) the remembered-band engage moved "
           f"{inv.selected_band_pin(samples[move_index - 1])} -> {inv.selected_band_pin(moved)} "
-          f"with the amplifier cold, then held {settle_ms:.1f}ms of bypass before the T/R relay "
-          "closed")
+          f"with the amplifier cold, then held {settle_counts} counts ({settle_ms:.1f}ms of "
+          "harness time) of bypass before the T/R relay closed")
 
 
 def validate_clause_j(samples):

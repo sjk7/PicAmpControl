@@ -484,11 +484,57 @@ agent's terminal launched the run.**
   cur_band=4 freq_khz=13926 settle=false settle_ms=20` - the band change itself was seen at t=1388ms
   (RD2 -> RD5, amplifier cold). **This is NOT caused by the FREQ_CTR work:** `test_first_dit.py` does
   its own stepping (`INSTRUCTIONS_PER_MS = 1887`) and only borrows `parse_trace`/`run_mdb` from
-  `trace_ptt_sequence.py`. Prime suspect is the standing UNRESOLVED per-harness rate mismatch (1887
-  here vs 1625 in the merged suite): the same I6 invariant passes in the merged suite with
-  `tightest 147.0ms` and `365.0ms`, against a firmware `BAND_SETTLE_MS = 20`, so a 4.6 ms gap is not
-  reachable if the harness clock matches the firmware clock. Re-measure the rate against the current
-  ELF before touching firmware; do not widen `BAND_SETTLE_MIN_MS` to make it pass.
+  `trace_ptt_sequence.py`.
+
+**RESOLVED AND ROOT-CAUSED, 2026-09-24 (read this before touching any harness timing again): the
+model's steps-per-firmware-millisecond is NOT a constant, and it is not even a property of the
+firmware - it depends on HOW THE HARNESS STEPPED.** Same run, same tick counters (both are incremented
+once per pending TMR2 tick in the same drain loop), measured from one first-dit transcript:
+
+| window | how the harness stepped | measured steps per firmware-ms |
+| --- | --- | --- |
+| startup inhibit, 1000 ticks | `Stepi 18870` (10 ms steps) | ~2000 |
+| 20-tick band settle | `write TMR1L/H` + `Stepi 1887` per sample | ~380-470 |
+| released, cache valid | `Stepi 18870` | ~5000 |
+| released, cache valid, right after a PTT assert | `Stepi 1887` | ~5000+ |
+
+The last two rows are the give-away: the rate changes with the *sample cadence*, so the model is
+charging time per MDB command as well as per instruction. Consequences, all of which cost runs here:
+
+- A millisecond threshold compared against a sample-index gap measures the harness, not the firmware.
+  I6, clause (b) and clause (i) each failed on the firmware holding its full `BAND_SETTLE_MS = 20`
+  bypass window (settle counter plainly visible going 4 -> 10 -> 14 -> 20, T/R relay closing only
+  afterwards) purely because 20 ticks came out as 4.0 ms of harness time against a 10 ms floor.
+- `INSTRUCTIONS_PER_MS` (1625 / 1887) is an approximation of an average and cannot be made right.
+  Fix applied: I6, clause (b) and clause (i) now witness the window through the FIRMWARE's own
+  `g_band_settle_elapsed_ms` (`first_dit_invariants.settle_counts_reached()`), and the wall-clock gap
+  is reported as evidence only. `first_dit_invariants.set_instruction_rate()` lets each harness
+  declare the rate it steps at, so reported times are at least self-consistent.
+- **A key-down that lands while the startup inhibit is still active is silently lost.** With
+  `Stepi 18870` the inhibit (1000 ticks) did not clear until ~1070 ms of harness time, so the old
+  105-step startup wait put the phase (a) key-down inside the inhibit; `handle_ptt_transition()`
+  returns early on an asserted edge, no new edge follows, and every phase (a) sample read
+  `ptt_active=false`. The startup phase is now 150 steps (1500 ms). Wait with real margin; never to
+  the nominal figure.
+
+**Still open (2026-09-24): clause (c) does not pass, and the reason is NOT a clock threshold now.**
+Facts from the window dump:
+
+- The old clause (c) engage check was **vacuous**: the previous over is still unwinding when PTT is
+  re-asserted (the release ramp holds TX_BIAS up for its delay), so `next(keyed_sample)` picked the
+  LEFTOVER ramp and reported "engaged 0.0ms after the falling edge". Clause (c) now counts the
+  engage from the first fully COLD sample (fixed), and the phase gives the firmware RF to verify the
+  remembered band against, because `docs/first-dit-band-detection.md` requires the amplifier to hold
+  bypass until the first usable measurement confirms the memory - an ultra-short "engage with zero RF"
+  phase can never reach stage 2 by design.
+- With that fixed, the run fails with `clause (c): the warm-start PTT never keyed the amplifier`, and
+  the window shows the firmware STOPPING: `ptt_active=false` at every sample after the re-assert even
+  though `print pin RC0` reads 0, `idle_ms` frozen at 151, `freq_khz` frozen, `stage=0`. The last
+  observed movement is `idle_ms` crossing 100 - i.e. the first LCD status refresh during a long
+  released run - and the freeze begins ~8 ms of harness time later. Next step is a focused repro of
+  that freeze (does the firmware hang in `show_menu_page()`/`lcd_service()` when the model has no LCD
+  rising edge to give it?), NOT more clause tuning: the PTT poll and the tick drain are both inside
+  the same main-loop pass, and a pass that never returns explains "no latch AND no ticks" at once.
 - **Do not read the wrapper's exit line as the verdict when the run came from the agent's terminal.**
   When the terminal is cleaned up, the harness SIGTERMs the wrapper, so a run that COMPLETED still
   leaves `SUITE_EXIT=143` / `CTEST_EXIT=143` behind. The harness's own printed lines - the scenario

@@ -88,9 +88,28 @@ function isShowingTail(editor) {
   return ranges[ranges.length - 1].end.line >= doc.lineCount - 3;
 }
 
+/** True when this VS Code window is the frontmost one.
+ *
+ * Used to decide whether the follow may MOVE the view. It must not while the window is in the
+ * background: setting `editor.selection` activates its editor group, and on macOS that brings the
+ * whole VS Code window to the front - so following a log from another application dragged VS Code
+ * over the top of whatever the user was doing, once per append (user report 2026-09-24: the
+ * follower "is forcing vscode to be top window and it should not do that"). A background window
+ * cannot be being read, so while it is unfocused the follow degrades to keeping the buffer current
+ * (refreshAndScroll still reverts the document) and the tail is pinned again on the next poll, or
+ * immediately when the window is re-focused (onDidChangeWindowState below).
+ */
+function windowIsFocused() {
+  return vscode.window.state ? vscode.window.state.focused : true;
+}
+
 function scrollToEnd(editor) {
   const doc = editor.document;
   if (doc.lineCount === 0) return;
+  // Never move the cursor or the view while this window is in the background - see
+  // windowIsFocused(). The buffer is still refreshed; the view catches up when the window is
+  // focused again.
+  if (!windowIsFocused()) return;
   const last = doc.lineCount - 1;
   const end = doc.lineAt(last).range.end;
   // `revealRange` alone is not enough to behave like `tail -f`. Its Default reveal type only
@@ -323,6 +342,16 @@ function activate(context) {
     // Wheel, scrollbar drag, page keys, minimap and goto-line all land here.
     vscode.window.onDidChangeTextEditorVisibleRanges((event) => {
       pauseInteractive(key(event.textEditor.document.uri), 'you scrolled');
+    }),
+    // While the window is in the background scrollToEnd() deliberately does nothing, so a followed
+    // log can be behind the moment the user comes back to it. Pin every followed tab as soon as the
+    // window is focused again - that is a user action, so it can never steal focus from anything.
+    vscode.window.onDidChangeWindowState((state) => {
+      if (!state.focused) return;
+      for (const editor of vscode.window.visibleTextEditors) {
+        const k = key(editor.document.uri);
+        if (following.has(k) && !userTookOver.has(k)) scrollToEnd(editor);
+      }
     }),
     // Opening a matching log follows it automatically, so the common case needs no command.
     vscode.workspace.onDidOpenTextDocument((doc) => {
