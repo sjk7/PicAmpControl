@@ -11,8 +11,9 @@ paths, its `-DPICAMP_DEVICE=PIC16F18875` build option, its CI matrix entry, its 
 and include paths, its `run_sim.sh`/`run_sim.ps1` default device, and its entries in these notes
 were all deleted. Concretely, that means:
 - Do not re-add a device guard, a per-device lookup table, or a second `PICAMP_DEVICE_*` fact block
-  "just in case". `cmake/My_Pic_Project/default/device.cmake` states one device, and the harnesses
-  carry one instruction-rate constant (Q10: 1625 instructions per simulated millisecond).
+  "just in case". `cmake/My_Pic_Project/default/device.cmake` states one device, and each harness carries
+  its own single instruction-rate constant - **and the two constants disagree; see the REMINDER under
+  Remaining work. Do not unify them by picking the tidier number.**
 - Historical material about the 16F port, and the abandoned PIC16F18877 evaluation, now lives only
   in `prototype_reference/` and `bugfixes.md`. Do not restate it in `docs/`, `README.md` or here.
 - If a document, comment or test disagrees with `device.cmake` about the target part, `device.cmake`
@@ -42,26 +43,16 @@ were all deleted. Concretely, that means:
   was already superseded.
 - FILE FOLLOWING AND LOG WATCHING: method in `.github/skills/build-test/SKILL.md` (`tools/logfollower`,
   `open_progress_log.py`, `run_detached.py`, the FileTail cost finding, the console-tail trap).
-- COMMIT AND PUSH OFTEN - LOCAL AND REMOTE (user instruction, restated 2026-09-21 because it was
-  forgotten). Commit and push to `origin/main` as soon as each change is verified green; do not
-  batch a session's work into one large commit at the end, and never leave verified work sitting
-  only in the working tree. The only acceptable reason to hold a commit is a verdict that is still
-  running, and then it is committed the moment that verdict reads green. Always push to origin/main
-  after a successful compile/build of a change. Firmware only truly compiles via CI
-  (firmware-build.yml, which runs on ubuntu-latest), so this means: commit, push, and confirm the
-  triggered build succeeds.
-- DELETE LARGE FILES WHEN DONE WITH THEM, INCLUDING IN /tmp (user instruction, 2026-09-21). Test
-  logs and MDB transcripts are megabytes; remove them (`rm -f /tmp/<log>`) as soon as the verdict
-  has been read. Keep a log only while its run's verdict is still in use, and never accumulate a
-  series of run logs (the stale-read workaround of copying a log to a second path doubles the
-  space, so delete both).
 - Keep README.md and docs/ purely current-facing: no "old prototype was replaced by..." style historical narrative. Historical context belongs only in prototype_reference/.
-- Never run bare `git status`/`git status --short`; use `git --no-pager status --short` (avoids hitting an interactive pager or the `gcm-core` credential helper prompt).
 - docs/hardware/PIC18F47Q10_pin_map_and_setup.md is the SINGLE source of truth for MCU pin assignments. Never restate pin numbers or pin tables in README, architecture, schematic-package, or checklist docs - link to it instead. Keep it in sync with firmware/include/pin_map.h. The same rule applies to nets (project_schematic_package/connection_table.csv) and the BOM (component_list.csv).
 - Any new "remember this" instruction from the user must be added to this section, not just kept in assistant memory.
 - The firmware is the single source of truth for which PIC we are using: PIC18F47Q10-I/P (40-pin PDIP), declared once in `cmake/My_Pic_Project/default/device.cmake` and emitted into `.generated/rule.cmake` as `-mcpu=18F47Q10` (mirrored in `.clangd`). If a document disagrees with the firmware about the target device, the firmware wins and the document is the bug.
-- Do NOT reintroduce schematic automation. Both attempts were abandoned outright and every trace of them has been removed. Gone for good: the EasyEDA generator/SVG-validation pipeline (`easyeda_pro_generator.py`, `svg_renderer.py`, `visual_validator.py`, `watch_and_render.py`, `pic_amp_control_full.yaml`, `out/picampcontrol_easyeda_*.json`, and the `easyeda-agent` / `easyeda-copilot` routes), the KiCad MCP `schematic-design` skill with its `generated/` `.kicad_sch` tree and `mcp-server-kicad`, all node/npm scaffolding (`package.json`, `node_modules`, `@jlceda`), the workflow documents that described them, and every KiCad symbol/toolchain reference in the docs. The user's instruction: EasyEDA "was a disaster and can be removed entirely", then "same for kicad stuff. Another disaster... it can all go". Do not add generators, MCP schematic servers, `.kicad_sch`/`.eext` tooling or node/npm back, and do not re-add tool-specific symbol references to the pin map. The schematic package at docs/hardware/project_schematic_package/ is deliberately static design inputs (block diagram, connection table, component list, wiring checklist), captured by hand end to end. Netlist-verification tooling (exporting the EDA netlist and diffing it against `connection_table.csv`) was offered as a lighter-weight alternative and has been declined as well, so this means no schematic automation of any kind - not drawing generation, not verification.
-- `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their configured active levels (active-low by default); keep it transient, then restore the user's saved home page.
+- Do NOT reintroduce schematic automation. Both attempts (EasyEDA, then KiCad/MCP) were abandoned and
+their traces deleted: no generators, no MCP schematic servers, no `.kicad_sch`/`.eext` tooling, no
+node/npm scaffolding, and no tool-specific symbol references in the pin map. Netlist-verification
+tooling was offered as a lighter alternative and has been declined as well, so this means none of it -
+not drawing generation and not verification. `docs/hardware/project_schematic_package/` is deliberately
+static, hand-captured design input. The user's words and the full list of what was removed: `bugfixes.md`.
 - Generated simulator CSVs belong in `_build/My_Pic_Project/sim/csv/` and graphs in `_build/My_Pic_Project/sim/graphs/`.
 - WHERE A FACT LIVES (so this file does not drift, and so nothing is written twice):
   *the general standing rules* - the ones that apply to every task here (never write "Hmm", terse
@@ -101,7 +92,7 @@ were all deleted. Concretely, that means:
   command here - link to the skill.
 
 ## Date
-2026-09-23
+2026-09-24
 
 ## Session handoff (carry-over for a NEW session)
 - This is the ONLY AI carry-over file. `AI-HANDOFF.md` was deleted on 2026-09-21 (it duplicated
@@ -210,7 +201,6 @@ This repository is the active PIC18F47Q10-I/P linear-amplifier protection contro
 `## Timeout and platform policy` sections. Those cover the mdb command set, `run_sim.sh`/`.ps1`, the
 `.sym`-address fault injection, the idle-ADC stimulus recipe, `ANSELC`, `W0106-SIM`, the GUI debug
 session, the shared-ELF/rebuild trap, the `platform_process.py` ownership rule and the timeout budgets.
-Not restated here: this section had drifted to the PIC16F18875 and to its 8192-word memory map.
 
 ## References
 - Hardware source of truth: docs/hardware/PIC18F47Q10_pin_map_and_setup.md
