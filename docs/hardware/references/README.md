@@ -1,6 +1,6 @@
 # Device reference documents
 
-This project targets the **PIC18F47Q10 only** (see `Ai-Notes.txt`). These are the authoritative
+This project targets the **PIC18F47Q10 only** (see `Ai-Notes.md`). These are the authoritative
 vendor documents for that part, kept in-repo so a session does not have to re-find them or work
 from a paraphrase.
 

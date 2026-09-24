@@ -1,6 +1,6 @@
 # Handoff: the parallel LCD driver test (still open)
 
-**Reviewed 2026-09-24. This file is NOT a session launch point - `Ai-Notes.txt` is.** The single
+**Reviewed 2026-09-24. This file is NOT a session launch point - `Ai-Notes.md` is.** The single
 item here that is still live is the LCD blocker below; the "green and pushed" state and the commands
 have been superseded, and are marked where they were wrong.
 

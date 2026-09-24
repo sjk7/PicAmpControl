@@ -51,7 +51,7 @@ probe, build) run with no visible output in VS Code. The method:
    2026-09-23). The watchdog is what writes the `HEARTBEAT`/`MDB` lines that make the log live - its
    value is not just the timeout, it is the visibility.
 
-**The tool that follows the file (moved from `Ai-Notes.txt` 2026-09-24).** Following is done by the
+**The tool that follows the file (moved from `Ai-Notes.md` 2026-09-24).** Following is done by the
 in-repo extension `tools/logfollower` (Log Follower): one `stat()` per poll (400 ms default - agreed
 across `package.json`, the code fallback and the README), a revert plus a single scroll only on real
 growth, and nothing at all while paused or while the followed tab is not the visible one. Pause is PER
@@ -253,7 +253,7 @@ raised `the warm-start PTT never keyed the amplifier` with no trace of the windo
 `show()` is called on the success path. Failures now print the phase's samples before raising.
 
 **Finding (2026-09-23): the device strip, and the traps in it.** The project is PIC18F47Q10 ONLY;
-the 16F port, its build option, its CI matrix leg and its docs are gone (`Ai-Notes.txt` carries the
+the 16F port, its build option, its CI matrix leg and its docs are gone (`Ai-Notes.md` carries the
 standing rule). What that touched, and what it caught:
 
 - `tools/simulate/run_sim.sh` and `run_sim.ps1` had `DEVICE="PIC16F18875"` / `$Device =
@@ -330,7 +330,7 @@ agent's terminal launched the run.**
   silently failed to start python looks exactly like success (empty log, exit 0). Keep the exit-code
   capture, but check the log has content before believing a task ran.
 
-## Simulation method (moved here from `Ai-Notes.txt` 2026-09-24)
+## Simulation method (moved here from `Ai-Notes.md` 2026-09-24)
 
 **mdb command reference.** `write pin <name> high|low|<N>v` drives an input, `print pin <name>` reads
 an output, `Stepi <count>` single-steps, `break <function>` / `break <file>:<line>` plus
@@ -374,7 +374,7 @@ Watch panel by hand. Breakpoints on functions/statics that mysteriously fail to 
 lost `-O0`: check `user.cmake`, where `-Os` is gated behind `$<$<CONFIG:Release>:-Os>` for exactly this
 reason.
 
-## Timeout and platform policy (moved here from `Ai-Notes.txt` 2026-09-24)
+## Timeout and platform policy (moved here from `Ai-Notes.md` 2026-09-24)
 
 - **Budgets are sized for the slowest platform, and that is Windows.** MDB is ~2.4x slower there (suite
   356 s vs ~150 s; first-dit ~55 s vs ~20 s). `run_mdb(timeout=1500)` is the last-resort inner net,
@@ -411,7 +411,7 @@ reason.
   build with compiled-in test stubs. Anything that has to be reached by address must be parsed from the
   `.sym` at run time, because addresses move on every rebuild.
 
-## Windows shell traps (moved here from `Ai-Notes.txt` 2026-09-24)
+## Windows shell traps (moved here from `Ai-Notes.md` 2026-09-24)
 
 These silently no-op a build, i.e. they return success while compiling nothing:
 
@@ -430,7 +430,7 @@ These silently no-op a build, i.e. they return success while compiling nothing:
   Windows `C:/Program Files/Microchip/xc8/` plus `%USERPROFILE%/.mchp_packs`, since `$ENV{HOME}` is not
   set there), so no cache overrides are needed on a standard install.
 
-## Flash space (policy moved here from `Ai-Notes.txt` 2026-09-24)
+## Flash space (policy moved here from `Ai-Notes.md` 2026-09-24)
 
 **Measured on the Q10, Release, 2026-09-24: program 11214/131072 bytes used (8.6%), data 368/3359
 bytes (11.0%). The flash pressure that drove this policy was a PIC16F18875 property (8192 words) and

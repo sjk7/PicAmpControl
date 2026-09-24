@@ -16,7 +16,7 @@ assumptions turned out wrong, fix that skill in the same piece of work, so the s
 cannot be made again.
 
 ## Read first
-- **STEP ONE, EVERY SESSION, BEFORE ANY OTHER ACTION: read `Ai-Notes.txt` at the repo root.** It
+- **STEP ONE, EVERY SESSION, BEFORE ANY OTHER ACTION: read `Ai-Notes.md` at the repo root.** It
   carries the target device, current design/firmware/display state, remaining work and the user's
   standing instructions. **Nothing loads it automatically** - it matches no VS Code convention, so it is
   read only because this line says so. Do not "fix" its name to make it auto-load: injecting it into
@@ -44,7 +44,7 @@ cannot be made again.
 - Commit and push small verified increments promptly to `origin/main`. Always pass explicit paths to
   `git add` (never `git add .`), and use `git --no-pager status --short`.
 - Delete large logs and transcripts as soon as their verdict has been read - never accumulate runs.
-- Keep `Ai-Notes.txt` up to date at the end of any session that changes design, firmware, docs or
+- Keep `Ai-Notes.md` up to date at the end of any session that changes design, firmware, docs or
   workflow.
 - **Record every durable finding** - a trap that cost time, a method that worked, a measurement that
   replaces a guess, a mistake of mine a reader should not repeat - **in the relevant skill in the same

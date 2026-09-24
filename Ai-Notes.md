@@ -32,7 +32,7 @@ were all deleted. Concretely, that means:
   file-based approach instead."). The verdict method, the redirect/exit-code pattern and the two
   traps (a command that returns nothing says nothing about the run; a stale cached log read looks like
   "the run produced nothing") are in `.github/skills/build-test/SKILL.md`.
-- Keep this file (Ai-Notes.txt) ALWAYS up to date; it's the launch point for a new session.
+- Keep this file (Ai-Notes.md) ALWAYS up to date; it's the launch point for a new session.
 - BARE-METAL FIRMWARE RULES live in `.github/instructions/firmware.instructions.md`, which VS Code
   auto-applies when `firmware/` files are edited or written (register/LAT-PORT handling, ISR discipline,
   `volatile`, config words, the clock chain). `deepseek-pic.md` - another agent's checklist, the source
@@ -70,7 +70,7 @@ were all deleted. Concretely, that means:
   **`.github/copilot-instructions.md`**, which VS Code injects into EVERY request automatically. That
   file is deliberately short: each of its lines costs on every query, so it carries rules and pointers
   only, never detail. **Nothing loads THIS file automatically** - there is no hook or instruction that
-  opens `Ai-Notes.txt`, so a session only reads it because these notes say to (or because the user
+  opens `Ai-Notes.md`, so a session only reads it because these notes say to (or because the user
   says so). That is exactly why the rules that must never be missed are no longer only here.
 - THREE NAMES, SHORT (2026-09-24, user request: *"just name each skill (with a short name) so I know
   what they do"*): skill **`build-test`**, skill **`editor-clangd`**, agent **`build-runner`**. The

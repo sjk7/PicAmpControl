@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 This file is written for someone reading the project cold: it states, in one place, (1) what every
 pin does and (2) how the PIC is configured. **The PIC18F47Q10 is the shipping target and the only
-device in this project** (2026-09-23; the PIC16F18875 port was removed - see `Ai-Notes.txt`). See
+device in this project** (2026-09-23; the PIC16F18875 port was removed - see `Ai-Notes.md`). See
 `docs/hardware/q10-pinout-compatibility.md` for the pin-by-pin fit check against the old 16F board
 (39 of 40 pins identical; only pin 1 differs: `VPP/MCLR/RE3` on the Q10).
 
