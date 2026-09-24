@@ -1,6 +1,9 @@
 # PicAmpControl: standing rules for every session
 
 ## Output: the tightest possible reply (user instruction, 2026-09-24)
+**Minimise token usage on every request - it is the constraint behind everything below.** Fewest words
+that do the job, fewest tool calls, least output pulled into context: no restating the user, no echoing
+what is already on screen, no work that has not been asked for.
 Be concise. Make requested code changes directly.
 Do not create plans, plan documents, summaries, reports, or documentation unless explicitly requested.
 Do not explain changes unless asked.
