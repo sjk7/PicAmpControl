@@ -17,6 +17,29 @@ output - MDB emits megabytes, the capture wedges the shell, and "the terminal sh
 nothing at all about the run. The terminal is for launching and for short bounded process checks
 only.
 
+**Process traps re-hit the hard way on 2026-09-24 - read these before touching a run.**
+1. **The rule above was broken repeatedly and the terminal did wedge.** The damage is concrete: after
+   one `grep` over a multi-megabyte MDB transcript, *every* later `run_in_terminal` call in that
+   shell returned empty - even `echo`, `pwd` and `git log` - until the shell was recreated. A wedged
+   shell looks identical to "the command found nothing", so it silently produced wrong conclusions
+   ("the run isn't progressing") for a long stretch. If a terminal stops echoing a plain `echo`, STOP
+   using it and relaunch rather than re-running the command.
+2. **Run the suite through the sanctioned wrapper only.** `run_suite_with_watchdog.py` is the entry
+   point the skill mandates: it opens the log in a VS Code tab and beats a heartbeat into it. That is
+   the ONLY thing that makes a run visible to the user. `run_detached.py` starts a private session
+   and does **not** open a tab: on 2026-09-24 its child died silently (empty run log, empty heartbeat
+   log, `ps` showed the PID dead, zero sim processes), so the user was told to "watch the tab" while
+   nothing existed to watch. Use `run_detached.py` only to escape the terminal's SIGTERM, and only
+   when its log is opened by hand.
+3. **Commit each verified increment the moment it passes.** A fix that passed its own test was held
+   uncommitted for many steps because a *different, later* assertion was still failing - the user's
+   complaint: "been a looooong time with no commits". Bundling unrelated work behind an open item is
+   the failure; commit the verified step, then continue.
+4. **One hypothesis, one cheap test - no essays.** When a failure "moves" (SWR1 -> 80m -> 15m across
+   runs), suspect the shared stimulus, not the band. Isolate with the single-band repro
+   (`repro_i5_15m_10m.py`) instead of re-running the 11-scenario suite; state the hypothesis in one
+   clause, test it, then move.
+
 **How a run is watched (STICKY user instruction, 2026-09-23): the user watches the log file - the
 heartbeat file - in a VS Code tab while the tests run. Never in the terminal.** The user's words:
 *"we watch files now during sim runs, and never output to terminal. The code user sees the log file
