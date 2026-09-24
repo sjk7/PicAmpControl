@@ -204,8 +204,16 @@ were all deleted. Concretely, that means:
 - Do NOT reintroduce schematic automation. Both attempts were abandoned outright and every trace of them has been removed. Gone for good: the EasyEDA generator/SVG-validation pipeline (`easyeda_pro_generator.py`, `svg_renderer.py`, `visual_validator.py`, `watch_and_render.py`, `pic_amp_control_full.yaml`, `out/picampcontrol_easyeda_*.json`, and the `easyeda-agent` / `easyeda-copilot` routes), the KiCad MCP `schematic-design` skill with its `generated/` `.kicad_sch` tree and `mcp-server-kicad`, all node/npm scaffolding (`package.json`, `node_modules`, `@jlceda`), the workflow documents that described them, and every KiCad symbol/toolchain reference in the docs. The user's instruction: EasyEDA "was a disaster and can be removed entirely", then "same for kicad stuff. Another disaster... it can all go". Do not add generators, MCP schematic servers, `.kicad_sch`/`.eext` tooling or node/npm back, and do not re-add tool-specific symbol references to the pin map. The schematic package at docs/hardware/project_schematic_package/ is deliberately static design inputs (block diagram, connection table, component list, wiring checklist), captured by hand end to end. Netlist-verification tooling (exporting the EDA netlist and diffing it against `connection_table.csv`) was offered as a lighter-weight alternative and has been declined as well, so this means no schematic automation of any kind - not drawing generation, not verification.
 - `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their configured active levels (active-low by default); keep it transient, then restore the user's saved home page.
 - Keep verified changes committed and pushed promptly; generated simulator CSVs belong in `_build/My_Pic_Project/sim/csv/` and graphs in `_build/My_Pic_Project/sim/graphs/`. Commit+push as soon as a step is verified green - the only valid reason to hold a commit is a verdict that is still running, and then you read that verdict from its log file and commit the moment it is green. Always pass explicit paths to `git add` (never `git add .`).
-- WHERE A FACT LIVES (so this file does not drift, and so nothing is written twice): *state and user
-  instructions* (what the firmware does now, what is in flight, what is left, the rules below) live
+- WHERE A FACT LIVES (so this file does not drift, and so nothing is written twice):
+  *the general standing rules* - the ones that apply to every task here (never write "Hmm", terse
+  output, never judge a run from the terminal, every run through the watchdog, commit-and-push often,
+  delete logs once read, record every durable finding, PIC18F47Q10 only) - live in
+  **`.github/copilot-instructions.md`**, which VS Code injects into EVERY request automatically. That
+  file is deliberately short: each of its lines costs on every query, so it carries rules and pointers
+  only, never detail. **Nothing loads THIS file automatically** - there is no hook or instruction that
+  opens `Ai-Notes.txt`, so a session only reads it because these notes say to (or because the user
+  says so). That is exactly why the rules that must never be missed are no longer only here.
+  *state and user instructions* (what the firmware does now, what is in flight, what is left, the rules below) live
   in THIS file; *build/test/debug procedure* (toolchain paths, configure/build commands, the flash
   budget, mdb and harness techniques, test names and labels, failure triage) lives only in
   `.github/skills/picampcontrol-build-test/SKILL.md`, with `.github/agents/firmware-build-test.agent.md`

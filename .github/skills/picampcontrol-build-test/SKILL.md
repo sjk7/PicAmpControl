@@ -3,16 +3,10 @@ name: picampcontrol-build-test
 description: "Use when building, testing or debugging PicAmpControl firmware on macOS or Windows: Debug or Release builds, CMake configuration, ctest, run_tests.sh / run_tests.ps1, simulator/mdb runs, the VS Code Simulate debug session, breakpoints and symbol reads, PTT/frequency-counter tests, band-lock tests, first-dit band detection, remembered-band fold-back, band-change/hot-switch guards, or build/test failures."
 
 # PicAmpControl Build, Test and Debug
-**Hard rule: be maximally token-efficient at ALL times.** The user has flagged thinking/reasoning
-output as wasteful more than once (2026-09-22). Keep every reply, every reasoning trace and every
-tool-call preamble to the absolute minimum; no filler, no step-by-step narration, no restating what
-was just done. Batch tool calls; filter command output; put detail in files, not the chat. This is a
-standing, permanent constraint, not a one-off.
-**Hard writing rule: never write "Hmm". Not in a reply, not in a reasoning trace, not as a preamble
-or a hedge.** The user reads the reasoning as well as the final answer, and this was repeated three
-times on 2026-09-22 *after* the rule already existed in `Ai-Notes.txt` - the third time the user
-quoted the word straight back. A bullet buried in a long list did not stop it, so it lives here too.
-State the finding, or the uncertainty, plainly, and move on.
+
+**The general rules - terse output, never "Hmm", verdicts from files, watchdog-only runs,
+commit-and-push often, record durable findings - are ALWAYS-ON in `.github/copilot-instructions.md`.**
+They are not restated here: this skill carries only the method and the traps of this domain.
 **Hard rule: NEVER ASK A RUNNING TEST FOR ITS TERMINAL OUTPUT - IT BREAKS THE TERMINAL.** (user
 instruction, restated 2026-09-23: *"we should not ask for terminal output when running tests --
 this breaks the terminal. We are using a file-based approach instead."*) The verdict method is
@@ -106,33 +100,11 @@ misreports the firmware - `'xc.h' file not found`, undeclared registers such as 
 None of it can affect a build or a test: XC8 is invoked directly and needs none of that configuration,
 so a green build says nothing about it.
 
-**Hard rule: keep token and CPU output down.** The chat transcript is re-rendered on every streamed
-token, and this is not theoretical: a 2,041-line / 2.2 MB session drove the VS Code renderer to ~225%
-of one core and the extension host to ~112% for the whole of each assistant turn (measured
-2026-09-22; the transcript is at
-`...\workspaceStorage\<hash>\GitHub.copilot-chat\transcripts\<session>.jsonl` if it needs checking).
-Therefore, permanently:
-- reply in as few words as the answer allows; never restate the context or re-list what was just done;
-- never paste file contents, logs, tables of raw output or exit-code dumps into the chat unless asked;
-  put findings in the run's log file, this skill, or a repo doc, and report one line plus the path;
-- batch work into fewer, longer tool calls instead of many small ones;
-- filter command output (`-Tail`, `-First`, `Select-String`); the terminal panel is rendered too, so a
-  whole-file dump costs CPU as well as tokens;
-- no code blocks unless the user asked for one. Durable knowledge goes in this skill, not the chat.
-**Hard rule: EVERY durable finding goes into this skill in the same session it is found, and "it can
-never happen again" is only true once it is written here.** Standing user instruction, 2026-09-22:
-*"'so it can't happen again' needs to be: wrote to skill so it never happens again.' Don't forget to
-feedback things like this to the skill, always. Sticky."*
-A fix in code, a comment in a file, or a commit message is **not** a finding recorded. Only this
-skill, `Ai-Notes.txt`, or a repo doc counts, because those are what a future session reads before it
-starts work. Concretely, whenever any of these happens, write it to the skill before moving on:
-- a trap that cost time (a wrong flag, a silent failure, an assumed value, a tool that lied);
-- a *method* that worked (positive controls, staged probes, per-device build configuration);
-- a measurement that replaces a guess (timings, memory figures, instruction rates);
-- a mistake of mine that a reader should not repeat, including wrong verdicts I had to retract.
-The test of whether it is recorded: could a fresh session hit the same problem and be stopped by
-what is written here? If not, it is not written yet. Do not batch this "for later" - the session that
-found it is the only one that still has the context.
+**Output discipline and the "record every durable finding" rule are always-on in
+`.github/copilot-instructions.md`.** What is specific to this skill: findings from a build or a test
+run belong in THIS file, and the session that found one is the only one that still has the context -
+so write it before moving on, never "for later". The test of whether it is recorded: could a fresh
+session hit the same problem and be stopped by what is written here? If not, it is not written yet.
 **Traps found 2026-09-23 (second batch) - each one cost a run or a wrong conclusion.**
 
 - **A probe that reads a peripheral register BEFORE stepping gets reset defaults.** `print T2CLK` and
