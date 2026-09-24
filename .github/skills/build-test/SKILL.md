@@ -1,6 +1,6 @@
 ---
-name: picampcontrol-build-test
-description: "Use when building, testing or debugging PicAmpControl firmware on macOS or Windows: Debug or Release builds, CMake configuration, ctest, run_tests.sh / run_tests.ps1, simulator/mdb runs, the VS Code Simulate debug session, breakpoints and symbol reads, PTT/frequency-counter tests, band-lock tests, first-dit band detection, remembered-band fold-back, band-change/hot-switch guards, or build/test failures."
+name: build-test
+description: "Use when building, testing or debugging PicAmpControl firmware on macOS and Windows: Debug or Release builds, CMake configuration, ctest, run_tests.sh / run_tests.ps1, simulator/mdb runs, the VS Code Simulate debug session, breakpoints and symbol reads, PTT/frequency-counter tests, band-lock tests, first-dit band detection, remembered-band fold-back, band-change/hot-switch guards, or build/test failures."
 
 # PicAmpControl Build, Test and Debug
 
@@ -96,9 +96,14 @@ wait for the run. Run it *before* launching, never during.
 misreports the firmware - `'xc.h' file not found`, undeclared registers such as `LATCbits`/`ADCON1`/
 `ADRES`/`PIR1bits`, `Unknown argument`/`Unsupported argument` for `-mdfp=`/`-mcpu=`, a stale
 `compile_commands.json`, or `.clangd` / `.vscode/settings.json` / `c_cpp_properties.json` edits - then
-**read `.github/skills/picampcontrol-editor-toolchain/SKILL.md`** rather than working it out from here.
+**read `.github/skills/editor-clangd/SKILL.md`** rather than working it out from here.
 None of it can affect a build or a test: XC8 is invoked directly and needs none of that configuration,
 so a green build says nothing about it.
+
+**Skill identity.** The *folder* name is the skill's name and must equal the frontmatter `name:`; the
+file must be exactly `SKILL.md`. Renaming the file - even to something descriptive - makes the skill
+silently undiscoverable, because VS Code matches that literal filename inside `.github/skills/<name>/`.
+The two skills here are `build-test` (this one) and `editor-clangd`.
 
 **Output discipline and the "record every durable finding" rule are always-on in
 `.github/copilot-instructions.md`.** What is specific to this skill: findings from a build or a test

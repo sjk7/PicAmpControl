@@ -237,7 +237,7 @@ of these defects makes the first-dit test fail with the message shown.
 | Releasing PTT during sequencer stage 2 | `clause (c): the stage-2 release left a TX output asserted` |
 | Relay selection follows silence in RX | `clause (c): the remembered 20m band was not restored` — an *earlier* clause trips first, because one phase of the session feeds the next. Clause (h) is the direct guard for this defect, but its own proof is still outstanding: the cascade masks it. |
 | No relay settle on a remembered-band engage | `clause (i): only 6.0ms of bypass between the band-relay selection change and the T/R relay closing` — the focused proof, with (g) and (h) still passing. |
-| SWR trips left ungated | `clause (j): an SWR fault injected while the amplifier was bypassed latched a trip`, with the failing sample showing `state=3` (TRIP) and `snoop=true`. Focused proof: (h) and (i) still passed. (The first attempt at this injection was masked by a layout-sensitivity in clause (d), which has since been fixed - see the snags section of [the build/test skill](../.github/skills/picampcontrol-build-test/SKILL.md).) |
+| SWR trips left ungated | `clause (j): an SWR fault injected while the amplifier was bypassed latched a trip`, with the failing sample showing `state=3` (TRIP) and `snoop=true`. Focused proof: (h) and (i) still passed. (The first attempt at this injection was masked by a layout-sensitivity in clause (d), which has since been fixed - see the snags section of [the build/test skill](../.github/skills/build-test/SKILL.md).) |
 
 Two limits are worth stating:
 

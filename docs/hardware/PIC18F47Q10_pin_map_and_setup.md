@@ -303,4 +303,4 @@ verdicts blamed the simulator for configuration that had never been written).
 - 16F pin table (historical only): `prototype_reference/docs/hardware/PIC16F18875_pin_map.md`.
 - Pin-by-pin fit vs the 16F: `docs/hardware/q10-pinout-compatibility.md`.
 - Bring-up measurements and simulator gotchas: `docs/hardware/q10-bringup/README.md`,
-  `.github/skills/picampcontrol-build-test/SKILL.md`, `bugfixes.md`.
+  `.github/skills/build-test/SKILL.md`, `bugfixes.md`.

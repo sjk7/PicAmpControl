@@ -6,7 +6,7 @@ and has been deleted) and to hunt a Q10 temperature-trip bug that was fixed, ver
 long before this file was read again.
 
 The AI carry-over is `Ai-Notes.txt` at the repo root - read that first, then
-`.github/skills/picampcontrol-build-test/SKILL.md`. Do not recreate a second handoff file: an
+`.github/skills/build-test/SKILL.md`. Do not recreate a second handoff file: an
 earlier duplicate (`AI-HANDOFF.md`) was deleted for exactly this reason.
 
 The historical text below is kept only so that the stale instructions are recognisable if they are
@@ -22,7 +22,7 @@ Copy the block below into a new chat session.
 PicAmpControl — continue the PIC18F47Q10 upgrade.
 
 FIRST, before anything else:
-1. Read .github/skills/picampcontrol-build-test/SKILL.md — hard rules + Windows/Q10/ADCC traps.
+1. Read .github/skills/build-test/SKILL.md — hard rules + Windows/Q10/ADCC traps.
 2. Read Ai-Notes.txt (sticky user rules), deepseek-pic.md and mistakes.md.
 3. Never write "Hmm" anywhere, including reasoning.
 4. Be maximally token-efficient at all times; stream long-op output to a VS Code tab (heartbeat),
@@ -73,7 +73,7 @@ rely on the g_live_* globals.
 ## Working tree (UNCOMMITTED — decide what to keep)
 - firmware/src/main.c — ADFM=1 fix.
 - tools/simulate/probe_q10_ptt_path.py — pin setup + trip decode + live/threshold reads.
-- .github/skills/picampcontrol-build-test/SKILL.md — ADCC register map + six mistakes +
+- .github/skills/build-test/SKILL.md — ADCC register map + six mistakes +
   token-efficiency rule.
 - DELETED (working tree shows D): docs/pin-write-question-ELI5.txt,
   docs/remaining-blocker-ELI5.txt, q10_trip_resolution.txt. Confirm intentional before committing.

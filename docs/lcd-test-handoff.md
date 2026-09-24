@@ -61,7 +61,7 @@ was configured in. An edited source under a *different* build dir (e.g. `_build/
 does not update that path unless that dir is built, and `cmake --build` can print
 `ninja: no work to do` and silently leave a stale image. Always confirm the ELF timestamp is newer
 than every source file you changed before running any simulator test. Full rule is in
-`.github/skills/picampcontrol-build-test/SKILL.md`.
+`.github/skills/build-test/SKILL.md`.
 
 ## Quick commands
 

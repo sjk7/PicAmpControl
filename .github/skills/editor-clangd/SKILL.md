@@ -1,5 +1,5 @@
 ---
-name: picampcontrol-editor-toolchain
+name: editor-clangd
 description: "Use when VS Code misreports PicAmpControl firmware rather than XC8 doing it: the Problems panel or IntelliSense showing 'xc.h' file not found, undeclared registers (LATCbits, ADCON1, ADPCH, ADRES, PIR1bits, NVMCON1bits), 'Unknown argument' or 'Unsupported argument' for -mdfp= or -mcpu=, a stale compile_commands.json, clangd or the C/C++ extension failing to resolve XC8 device headers, or when editing .clangd, .vscode/settings.json, c_cpp_properties.json, or the include/macro options that feed them."
 
 # PicAmpControl Editor and Toolchain (VS Code, clangd, C/C++ extension)
@@ -9,7 +9,7 @@ of it - they invoke XC8 directly - so a problem in here can never make the firmw
 build says nothing about whether this is correct. Two separate failure domains, hence two skills.
 
 **For building, running tests, reading verdicts or debugging firmware behaviour, read
-`.github/skills/picampcontrol-build-test/SKILL.md`** - and note its standing rule that every simulator
+`.github/skills/build-test/SKILL.md`** - and note its standing rule that every simulator
 run goes through the watchdog wrapper, no exceptions.
 
 ## The one-line summary

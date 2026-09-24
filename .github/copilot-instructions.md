@@ -40,9 +40,9 @@ restate them here, because this file is injected into every request and every li
   session.** A code comment or a commit message is not a finding recorded.
 
 ## Where detail lives
-- Build, test, harnesses, watchdog, verdict method, flash budget:
-  `.github/skills/picampcontrol-build-test/SKILL.md`
-- VS Code Problems panel, clangd, C/C++ extension, compile database, XC8 header/macro resolution:
-  `.github/skills/picampcontrol-editor-toolchain/SKILL.md`
+- Skill **`build-test`** - building, testing, harnesses, watchdog, verdict method, flash budget:
+  `.github/skills/build-test/SKILL.md`
+- Skill **`editor-clangd`** - VS Code Problems panel, clangd, C/C++ extension, compile database, XC8
+  header/macro resolution: `.github/skills/editor-clangd/SKILL.md`
 - Design detail: `docs/`. Defects and their fixes: `bugfixes.md`. Historical narrative:
   `prototype_reference/` only.

@@ -49,14 +49,14 @@ were all deleted. Concretely, that means:
   about the run, and `read_file` can serve a stale cached copy of a log that is still being written,
   which also looks like "the run produced nothing" - copy the log to a fresh path and read that.
   The mechanics (exact commands and the redirect/exit-code pattern) live in
-  `.github/skills/picampcontrol-build-test/SKILL.md` and TESTING.md, deliberately not restated here.
+  `.github/skills/build-test/SKILL.md` and TESTING.md, deliberately not restated here.
 - Keep this file (Ai-Notes.txt) ALWAYS up to date; it's the launch point for a new session.
 - ALWAYS READ `deepseek-pic.md` IN THE REPOSITORY ROOT AT THE START OF EVERY SESSION (user
   instruction, 2026-09-22, permanent). It is a bare-metal PIC guardrail checklist - TRIS vs LAT,
   brief ISRs, `volatile` on ISR-shared globals, never guess config words, and a test-harness
   protocol - written by another agent, and the user wants it used as a cross-check on this
   project's work. Treat it as a *checklist*, not as project state: this file and
-  `.github/skills/picampcontrol-build-test/SKILL.md` remain the sources of truth, and its own
+  `.github/skills/build-test/SKILL.md` remain the sources of truth, and its own
   `<session_state>` block ("Awaiting the first hardware assignment") is stale and does not describe
   this project.
 - FOR LONG-RUNNING JOBS, WRITE THE LOG TO A FILE AND FOLLOW IT IN A VS CODE *TAB* WITH FILETAIL -
@@ -131,12 +131,12 @@ were all deleted. Concretely, that means:
   space, so delete both).
 - Keep README.md and docs/ purely current-facing: no "old prototype was replaced by..." style historical narrative. Historical context belongs only in prototype_reference/.
 - Never run bare `git status`/`git status --short`; use `git --no-pager status --short` (avoids hitting an interactive pager or the `gcm-core` credential helper prompt).
-- NEVER WRITE "Hmmm" - INCLUDING IN YOUR INTERNAL REASONING (user instruction, 2026-09-22, restated the same day because it was still happening, and repeated AGAIN twice more the same day after this rule existed - once in a reasoning trace the user quoted straight back). The user can see the thinking as well as the reply, so this covers reasoning traces, preambles to tool calls, and final answers alike. Do not use it as filler, as a thinking-out-loud opener, or as a hedge. State the finding, or the uncertainty, plainly. It was missed once already by reading "anywhere in a reply" as excluding the thinking - the first fix was too narrow, so do not repeat that misreading. The rule is now ALSO stated at the top of `.github/skills/picampcontrol-build-test/SKILL.md` as a hard writing rule, because a bullet in a long list demonstrably was not enough.
+- NEVER WRITE "Hmmm" - INCLUDING IN YOUR INTERNAL REASONING (user instruction, 2026-09-22, restated the same day because it was still happening, and repeated AGAIN twice more the same day after this rule existed - once in a reasoning trace the user quoted straight back). The user can see the thinking as well as the reply, so this covers reasoning traces, preambles to tool calls, and final answers alike. Do not use it as filler, as a thinking-out-loud opener, or as a hedge. State the finding, or the uncertainty, plainly. It was missed once already by reading "anywhere in a reply" as excluding the thinking - the first fix was too narrow, so do not repeat that misreading. The rule is now ALSO stated at the top of `.github/skills/build-test/SKILL.md` as a hard writing rule, because a bullet in a long list demonstrably was not enough.
 - docs/hardware/PIC18F47Q10_pin_map_and_setup.md is the SINGLE source of truth for MCU pin assignments. Never restate pin numbers or pin tables in README, architecture, schematic-package, or checklist docs - link to it instead. Keep it in sync with firmware/include/pin_map.h. The same rule applies to nets (project_schematic_package/connection_table.csv) and the BOM (component_list.csv).
 - Any new "remember this" instruction from the user must be added to this section, not just kept in assistant memory.
 - ALWAYS WRITE SILLY MISTAKES INTO THE SKILL, EVERY TIME - NOT JUST IN THE SESSION THEY HAPPENED
   (user instruction, 2026-09-22). Whenever a mistake costs a cycle, feed the lesson back into
-  `.github/skills/picampcontrol-build-test/SKILL.md` as part of that same piece of work. The user's
+  `.github/skills/build-test/SKILL.md` as part of that same piece of work. The user's
   words: "Always write to the skill for silly mistakes like this. Always. Not just in this session."
   Silly mistakes are precisely the ones that recur, and a lesson left only in this file or only in
   the conversation that produced it does not reach the next session.
@@ -213,14 +213,18 @@ were all deleted. Concretely, that means:
   only, never detail. **Nothing loads THIS file automatically** - there is no hook or instruction that
   opens `Ai-Notes.txt`, so a session only reads it because these notes say to (or because the user
   says so). That is exactly why the rules that must never be missed are no longer only here.
+- TWO SKILLS, SHORT NAMES (2026-09-24, user request: *"just name each skill (with a short name) so I
+  know what they do"*): **`build-test`** and **`editor-clangd`**. The folder under `.github/skills/` is
+  the skill's name - the file inside must be exactly `SKILL.md`, so the name can only live in the
+  folder. A `name:` that does not match its folder fails SILENTLY, with no error anywhere.
   *state and user instructions* (what the firmware does now, what is in flight, what is left, the rules below) live
   in THIS file; *build/test/debug procedure* (toolchain paths, configure/build commands, the flash
   budget, mdb and harness techniques, test names and labels, failure triage) lives only in
-  `.github/skills/picampcontrol-build-test/SKILL.md`, with `.github/agents/firmware-build-test.agent.md`
+  `.github/skills/build-test/SKILL.md`, with `.github/agents/firmware-build-test.agent.md`
   as the thin runner that must stay in sync with it and TESTING.md as the human-facing guide;
   *editor/toolchain problems* (VS Code's Problems panel, clangd, the C/C++ extension,
   `compile_commands.json`, `-mdfp=`/`-mcpu=` complaints, XC8 device headers or missing family macros)
-  live only in `.github/skills/picampcontrol-editor-toolchain/SKILL.md`, with the forensic detail in
+  live only in `.github/skills/editor-clangd/SKILL.md`, with the forensic detail in
   its `references/xc8-headers.md`. That is a SEPARATE skill on purpose: neither its rules nor its
   traps can affect a build or a test - XC8 is invoked directly and needs none of it - and keeping it
   out of the build/test skill makes that skill cheaper to read on every build and test task. The

@@ -5,9 +5,9 @@ tools: [read, edit, search, execute, todo, Build_CMakeTools, ListBuildTargets_CM
 ---
 You are a build/test runner for the PicAmpControl firmware project. Your job is to configure, build, and test the firmware (Debug/Release/sim targets) and report clear pass/fail results.
 
-Follow `.github/skills/picampcontrol-build-test/SKILL.md` for the exact commands, the simulator constraints, and failure triage. It is authoritative over any generic build habit.
+Follow `.github/skills/build-test/SKILL.md` for the exact commands, the simulator constraints, and failure triage. It is authoritative over any generic build habit.
 
-If the problem is the *editor* rather than the build - the Problems panel or IntelliSense showing `'xc.h' file not found`, undeclared registers, `Unknown argument` for `-mdfp=`/`-mcpu=`, a stale `compile_commands.json` - that is a different skill: read `.github/skills/picampcontrol-editor-toolchain/SKILL.md`. Nothing there can affect a build or a test.
+If the problem is the *editor* rather than the build - the Problems panel or IntelliSense showing `'xc.h' file not found`, undeclared registers, `Unknown argument` for `-mdfp=`/`-mcpu=`, a stale `compile_commands.json` - that is a different skill: read `.github/skills/editor-clangd/SKILL.md`. Nothing there can affect a build or a test.
 
 ## Constraints
 - Never judge a run from terminal output, and never ask a running test for its terminal output - that breaks the terminal. Redirect test/build output to a log file, append the exit code, and read the verdict from the file — MDB emits megabytes of trace and a command can return no captured output while still having passed.

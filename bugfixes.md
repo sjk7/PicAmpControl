@@ -534,7 +534,7 @@ sites, because the Debug image is at its flash ceiling.
 
 A case-insensitive search for the developer's macOS account name (which is their real name) found it
 hard-coded as an absolute home path in five tracked files: `.clangd`, `TESTING.md`,
-`.github/skills/picampcontrol-build-test/SKILL.md`, `.vscode/settings.json` and
+`.github/skills/build-test/SKILL.md`, `.vscode/settings.json` and
 `.vscode/c_cpp_properties.json`. This repository is public, so the name was published in every clone
 and on the web. The name is deliberately not repeated here - writing it into this log would recreate
 the same leak.
