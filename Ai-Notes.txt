@@ -311,6 +311,20 @@ Measure them, never quote them from memory:
 
 ## Remaining work
 
+### REMINDER: the MCU speed / oscillator question (flagged 2026-09-24, user asked to be reminded)
+
+Two "instruction rate" figures in this repo disagree by ~10x and neither has been re-measured against
+the ELF the tests actually load. `tools/simulate/probe_q10_ptt_path.py` sets `BOOT_STEPS = 16_500_000`
+for the firmware's 1000 ms gate, derived from "Q10 at 64 MHz = 16 MIPS, so 1000 ms needs ~16,000,000
+steps"; the direct probe of that same 1000 ms boundary put it at ~1.5-1.75M steps, i.e. ~1625 per
+firmware-ms. Related: the two harnesses disagree by 16% (`test_first_dit.py` uses 1887, the others
+1625), and 1887 is documented as measured in `ff931f7`. The clock chain itself is settled and must not
+be re-litigated without evidence: core `RSTOSC = HFINTOSC_64MHZ`, Timer2 on `T2CLK = Fosc/8` with
+`PR2 = 124` giving the 1.000 ms tick, and `_XTAL_FREQ = 32 MHz` kept as the design clock for delays.
+The open question is what MDB's `Stepi` actually counts - one instruction or something else - and
+therefore which constant is right. One measurement settles it; do not "fix" it by picking the tidier
+number. Detail: the skill's instruction-rate block and `bugfixes.md` 2026-09-23/24.
+
 ### Open items carried out of the relay-ordering work (2026-09-22)
 
 All three are OPEN. Each states what "done" means, so a later session can close it rather than
