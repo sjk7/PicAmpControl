@@ -44,5 +44,6 @@ restate them here, because this file is injected into every request and every li
   `.github/skills/build-test/SKILL.md`
 - Skill **`editor-clangd`** - VS Code Problems panel, clangd, C/C++ extension, compile database, XC8
   header/macro resolution: `.github/skills/editor-clangd/SKILL.md`
+- Agent **`build-runner`** - thin delegate for builds and tests: `.github/agents/build-runner.agent.md`
 - Design detail: `docs/`. Defects and their fixes: `bugfixes.md`. Historical narrative:
   `prototype_reference/` only.

@@ -213,14 +213,24 @@ were all deleted. Concretely, that means:
   only, never detail. **Nothing loads THIS file automatically** - there is no hook or instruction that
   opens `Ai-Notes.txt`, so a session only reads it because these notes say to (or because the user
   says so). That is exactly why the rules that must never be missed are no longer only here.
-- TWO SKILLS, SHORT NAMES (2026-09-24, user request: *"just name each skill (with a short name) so I
-  know what they do"*): **`build-test`** and **`editor-clangd`**. The folder under `.github/skills/` is
-  the skill's name - the file inside must be exactly `SKILL.md`, so the name can only live in the
-  folder. A `name:` that does not match its folder fails SILENTLY, with no error anywhere.
+- THREE NAMES, SHORT (2026-09-24, user request: *"just name each skill (with a short name) so I know
+  what they do"*): skill **`build-test`**, skill **`editor-clangd`**, agent **`build-runner`**. The
+  folder (skills) or filename (agents) IS the name - a skill file must be exactly `SKILL.md`, so its
+  name can only live in the folder. A skill `name:` that does not match its folder fails SILENTLY, with
+  no error anywhere; an agent with no `name:` takes its filename.
+- THIS FILE'S NAME IS DELIBERATELY NOT A CONVENTION (user question 2026-09-24). VS Code's primitives
+  are exactly: `.github/copilot-instructions.md` (== `AGENTS.md`; use ONE, never both),
+  `.github/instructions/*.instructions.md`, `.github/prompts/*.prompt.md`, `.github/agents/*.agent.md`,
+  `.github/skills/<name>/SKILL.md`. `Ai-Notes.txt` matches none of them, so **nothing loads it
+  automatically** - it is read only because `.github/copilot-instructions.md` names it first and the
+  user asks. That is the intent: this file is 499 lines / ~57 KB of session state, and renaming it to
+  an always-on primitive would inject all of it into EVERY request (the "kitchen sink" anti-pattern).
+  State stays here non-auto-loaded; the rules that must never be missed stay in the 48-line
+  `copilot-instructions.md`. Do not "fix" the extension.
   *state and user instructions* (what the firmware does now, what is in flight, what is left, the rules below) live
   in THIS file; *build/test/debug procedure* (toolchain paths, configure/build commands, the flash
   budget, mdb and harness techniques, test names and labels, failure triage) lives only in
-  `.github/skills/build-test/SKILL.md`, with `.github/agents/firmware-build-test.agent.md`
+  `.github/skills/build-test/SKILL.md`, with `.github/agents/build-runner.agent.md`
   as the thin runner that must stay in sync with it and TESTING.md as the human-facing guide;
   *editor/toolchain problems* (VS Code's Problems panel, clangd, the C/C++ extension,
   `compile_commands.json`, `-mdfp=`/`-mcpu=` complaints, XC8 device headers or missing family macros)

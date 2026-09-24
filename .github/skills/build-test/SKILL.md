@@ -103,7 +103,8 @@ so a green build says nothing about it.
 **Skill identity.** The *folder* name is the skill's name and must equal the frontmatter `name:`; the
 file must be exactly `SKILL.md`. Renaming the file - even to something descriptive - makes the skill
 silently undiscoverable, because VS Code matches that literal filename inside `.github/skills/<name>/`.
-The two skills here are `build-test` (this one) and `editor-clangd`.
+The two skills here are `build-test` (this one) and `editor-clangd`; the delegate agent is
+`build-runner`, and an agent with no `name:` simply takes its filename.
 
 **Output discipline and the "record every durable finding" rule are always-on in
 `.github/copilot-instructions.md`.** What is specific to this skill: findings from a build or a test
