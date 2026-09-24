@@ -233,8 +233,18 @@ were all deleted. Concretely, that means:
   unimplemented in MDB. The durable part - the core and the interrupt controller ARE modelled,
   `W0106-SIM` is scoped strictly to PPS/clock-source routing, and the workaround is to poke the
   peripheral/flag registers directly behind `#ifdef __MPLAB_DEBUGGER_SIMULATOR` - now lives in
-  `.github/skills/build-test/SKILL.md` with the rest of the simulator method. `blockers.txt` is the
-  same category of file and still awaits the same treatment.
+  `.github/skills/build-test/SKILL.md` with the rest of the simulator method. `blockers.txt` and
+  `Eeprom-changes.md` were deleted in the same pass: both were superseded AI pastes, and blockers.txt's
+  two diagnoses were BOTH wrong (step-count maths superseded by the measured rate; the RA6/FEXTOSC
+  theory disproved when ANSELA6 turned out to be already clear). Supersessions are in `bugfixes.md`.
+- DOC HYGIENE (2026-09-24, from the review of every .md and skill). Canonical build directories:
+  `_build/My_Pic_Project/release` is what the editor reads, `_build/My_Pic_Project/sim` is where the
+  tests run. The `q10_*` trees and the two Q10 VS Code tasks are GONE - the Q10 is the default device,
+  so it needs no build tree of its own. `TESTING.md` had been teaching a bare `test_first_dit.py`,
+  which is the cheat, and now shows the wrapped form. The README's clock line said 32 MHz/HFINT32: the
+  core is 64 MHz (`HFINTOSC_64MHZ`) and Timer2 takes Fosc/8 so `_XTAL_FREQ` stays the 32 MHz design
+  clock. **Rule: never restate a rule in two files unless one is a pointer** - the copies drift, and
+  whichever a session reads first wins, which is how `TESTING.md` came to outrank `user.cmake`.
   *state and user instructions* (what the firmware does now, what is in flight, what is left, the rules below) live
   in THIS file; *build/test/debug procedure* (toolchain paths, configure/build commands, the flash
   budget, mdb and harness techniques, test names and labels, failure triage) lives only in

@@ -78,6 +78,22 @@ not work around it with raw `mdb.sh`; the workaround is exactly the cheat this r
 test must be registered in `cmake/My_Pic_Project/default/user.cmake` **and** given a `--test` choice
 in the launcher, or the watchdog cannot wrap it and this rule is broken by construction.
 
+**Trap (2026-09-24): the docs can teach the cheat.** `TESTING.md` listed the first-dit test's command
+as a bare `test_first_dit.py`, while `user.cmake` actually registers
+`run_suite_with_watchdog.py --test first-dit --timeout 600`. A session following the doc would have
+run a harness directly - the forbidden thing - and been given a tab that never moves. **When a test
+registration or a budget changes, grep the docs for the old command in the same commit.** The same
+check applies to `--timeout` values: `--timeout 400` was still quoted in
+`docs/lcd-test-handoff.md` long after the budget became 1200/1500, and a 400 s budget would have
+killed a healthy Windows suite.
+
+**Canonical build directories (2026-09-24).** `_build/My_Pic_Project/release` is the one the editor
+reads (`.clangd`, `.vscode/settings.json`); `_build/My_Pic_Project/sim` is where the tests run and
+what `run_tests.sh`/`.ps1` configure. **The `q10_*` trees are gone** - the Q10 is the default device,
+so it no longer needs a build tree, a `-DPICAMP_DEVICE` on every command, or its own VS Code tasks.
+A new build directory is a new place for a stale database and a stale ELF to hide, so do not add one
+without a reason that a single directory cannot serve.
+
 **Hard rule: never run the pre-flight cleanup while a run is live - it kills it.** User-visible
 symptom: the wrapper records `SUITE_EXIT=143` / `CTEST_EXIT=143` (SIGTERM) and the log stops
 mid-file, which reads exactly like a test failure and is not one (2026-09-23: one complete
@@ -234,10 +250,23 @@ standing rule). What that touched, and what it caught:
   not a target. Do not "clean" them out, or a regenerated rule.cmake silently builds the wrong part.
   Its self-check had to be fixed to measure the body only - see `bugfixes.md` 2026-09-23.
 - The per-device lookup tables in the harnesses (`INSTRUCTIONS_PER_MS = {...}.get(DEVICE, ...)`) and
-  the `PICAMP_DEVICE` env indirection are gone: `DEVICE = "PIC18F47Q10"` and a single constant rate.
-  The Q10 rates are NOT the same everywhere - `trace_ptt_sequence.py` and `first_dit_invariants.py`
-  use **1625** instructions/ms while `test_first_dit.py` uses **1887**. That difference is measured,
-  not a typo; do not "unify" them without re-measuring against that harness's own waits.
+  the `PICAMP_DEVICE` env indirection are gone: each harness now names `DEVICE = "PIC18F47Q10"`.
+  **The per-harness instruction rates disagree, and the disagreement is UNRESOLVED (2026-09-24).**
+  `trace_ptt_sequence.py` and `first_dit_invariants.py` use **1625**; `test_first_dit.py` uses
+  **1887**. Neither is a typo or a guess: 1887 came from a probe recorded in commit `ff931f7`
+  (*"the Q10's rate MEASURED at ~1887 steps per simulated millisecond"*), and 1625 is the figure the
+  later macOS work settled on. **One of the two is wrong and neither has been re-measured against the
+  ELF the tests load today.** Do not "unify" them by picking the tidier number - re-measure both
+  against the current ELF (method in `docs/hardware/q10-bringup/README.md`) and set both. Note that
+  correcting 1887 *down* to 1625 only **shortens** every window, so on its own it is not an
+  explanation for the first-dit clause (c) failure - but the constant has to be right before that
+  clause's verdict means anything. **A second, larger contradiction sits in the same area (found
+  2026-09-24): `tools/simulate/probe_q10_ptt_path.py` sets `BOOT_STEPS = 16_500_000` for a 1000 ms
+  gate, derived from "Q10 at 64 MHz = 16 MIPS, so 1000 ms needs ~16,000,000 steps" - while the direct
+  probe of that same 1000 ms boundary put it at ~1.5-1.75M steps. The two differ by ~10x, and they can
+  both be right only if `Stepi` counts something other than one instruction. Nothing was changed in
+  either place: settle it with a single measurement, because if the harness rate is wrong by 10x then
+  every assertion window in both harnesses is wrong by 10x.**
 - **DO NOT ISSUE PARALLEL EDITS TO THE SAME FILE.** Two concurrent edits to `firmware/src/main.c`
   interleaved and duplicated whole blocks (the IPEN block and the ADFM block both came back mangled),
   and the file had to be restored from HEAD and redone one edit at a time. Batch edits across

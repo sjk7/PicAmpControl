@@ -89,8 +89,9 @@ $dfp = 'C:\Program Files\Microchip\MPLABX\v6.35\packs\Microchip\PIC18F-Q_DFP\1.3
 ## Findings worth keeping
 
 - **`NVMCON1` has no `WREN` bit on this device.** Its members are `RD`, `SECRD`, `WR`, `SECWR`,
-  `SECER`. `Eeprom-changes.md` names `WREN`, `NVMCMD`, `NVMCON0bits.GO` and `INTCON0`; none of
-  those exist here. Take the *procedure* from that file, the *bit names* from the DFP header.
+  `SECER`. The (since deleted) `Eeprom-changes.md` draft named `WREN`, `NVMCMD`, `NVMCON0bits.GO`
+  and `INTCON0`; none of those exist here. Take the *procedure* from the corrected
+  `firmware/src/nvm.c`, the *bit names* from the DFP header.
   Writing `NVMCON1bits.WREN` fails to compile - which is how this got caught, twice.
 - **MDB scripts may not contain comments.** `//` and `;` are both reported as
   `Undefined command` and MDB exits `-1` before executing a single line, which looks exactly like

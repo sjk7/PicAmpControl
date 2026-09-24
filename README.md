@@ -155,7 +155,7 @@ Menu settings persist in the PIC's internal EEPROM; no external EEPROM is requir
 ## Current hardware assumptions
 
 - MCU: PIC18F47Q10-I/P (PDIP-40)
-- Clock: internal HFINTOSC at 32 MHz (FEXTOSC = OFF, RSTOSC = HFINT32); no external crystal is fitted
+- Clock: internal HFINTOSC at 64 MHz (`RSTOSC = HFINTOSC_64MHZ`, `FEXTOSC = OFF`); no external crystal is fitted. The part has no 32 MHz internal setting, so Timer2 is fed Fosc/8 (8 MHz) and `_XTAL_FREQ` stays at the 32 MHz design clock - see the configuration note at the top of `firmware/src/main.c`
 - Display: 1602 LCD driven in 4-bit parallel mode (RS, E, D4-D7); no I2C backpack
 - Frequency counter: `INPUT_FREQ_COUNTER` routed to Timer1 T1CKI through PPS
 - LPF band select: one dedicated active-high output per band (six bands)
@@ -383,7 +383,7 @@ Firmware behaviour is verified in the MPLAB X `mdb` simulator through CTest. A s
 .\run_tests.ps1         # Windows
 ```
 
-The suite is Python 3 only and takes roughly 2-3 minutes. Write test output to a log file rather than the terminal — the simulator emits megabytes of pin/state trace, which overflows the terminal scrollback and loses the pass/fail line:
+The suite is Python 3 only and takes roughly 2.5 minutes on macOS and 6 minutes on Windows (MDB is about 2.4x slower there). Write test output to a log file rather than the terminal — the simulator emits megabytes of pin/state trace, which overflows the terminal scrollback and loses the pass/fail line:
 
 ```bash
 cmake --build _build/My_Pic_Project/sim
@@ -397,7 +397,7 @@ ctest --test-dir _build/My_Pic_Project/sim --output-on-failure *> $log
 Add-Content $log "CTEST_EXIT=$LASTEXITCODE"
 ```
 
-GitHub Actions builds on `ubuntu-latest`. The workflow downloads and caches XC8 v4.00 plus the `PIC16F1xxxx_DFP` 1.32.471 pack into `/opt/microchip`, then configures and builds the Release firmware; no repository variables need to be set for that runner.
+GitHub Actions builds on `ubuntu-latest`. The workflow downloads and caches XC8 v4.00 plus the `PIC18F-Q_DFP` 1.30.487 pack into `/opt/microchip`, then configures and builds the Release firmware; no repository variables need to be set for that runner.
 
 The build workflow runs on pushes and pull requests to `main` and uploads an artifact named `firmware-<commit SHA>`. It builds firmware only — the simulator tests need MPLAB X `mdb`, so they are not executed in CI and must be run locally before pushing. The auto-release workflow tags a successful `main` build as the next `v0.0.N` and publishes the matching release; the manual release workflow remains available for re-publishing an older artifact under an existing tag.
 

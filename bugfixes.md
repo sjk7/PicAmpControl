@@ -4,6 +4,51 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-24 — Ambiguity/repetition review of every `.md` and skill; three superseded files removed
+
+A pass over the tracked markdown, the two skills, the agent and the always-on files, looking for
+statements that contradict each other or repeat a rule in two places that can drift. Findings and
+actions:
+
+- **`mistakes.md` deleted** (folded into the build/test skill first). It was never a mistake log: one
+  pasted paragraph correcting a false claim that MDB does not implement interrupts.
+- **`blockers.txt` deleted.** 86 lines from another agent, dated 2026-09-22, citing the deleted
+  `upgrade/pic18f47q10` branch. Both diagnoses were wrong: its `Stepi 16500000` step-count maths is
+  superseded by the measured instruction rate, and its RA6-`FEXTOSC` theory was disproved when
+  `ANSELA6` turned out to be already clear. Its surviving content was already in the skill and
+  `tools/simulate/test_boot_safety_order.py`.
+- **`Eeprom-changes.md` deleted.** Its corrections are implemented in `firmware/src/nvm.c` and logged
+  here; its only unique claim was the now-false "device-guarded so the PIC16F18875 keeps
+  `eeprom_read`/`eeprom_write`".
+- **`README.md` carried three stale facts.** The clock ("internal HFINTOSC at 32 MHz, `RSTOSC =
+  HFINT32`") - the part has no `HFINT32` rate at all, and the firmware is `HFINTOSC_64MHZ` with Timer2
+  on Fosc/8 so `_XTAL_FREQ` stays the 32 MHz design clock; the CI pack (`PIC16F1xxxx_DFP` 1.32.471 -
+  the workflow installs `PIC18F-Q_DFP` 1.30.487); and the suite runtime ("2-3 minutes" - measured
+  ~150 s macOS / ~356 s Windows). The README is the entry point, so a wrong line there is the one a
+  reader trusts first.
+- **`TESTING.md` taught the forbidden method.** It listed first-dit's command as a bare
+  `test_first_dit.py`, while `user.cmake` registers `run_suite_with_watchdog.py --test first-dit
+  --timeout 600`. Following the doc would have bypassed the watchdog - the exact thing the sticky rule
+  forbids - and produced a log tab that never moves. Fixed; the skill now requires grepping the docs
+  for the old command whenever a registration or a budget changes. It had also kept a stale
+  `--timeout 400` alive in `docs/lcd-test-handoff.md`, a budget that would kill a healthy Windows run.
+- **Build directories consolidated.** Seven names were in play (`sim`, `release`, `debug`,
+  `q10_release`, `default`, `q10`, `q10_lcdtest`). Canonical now: `release` for the editor, `sim` for
+  tests. The two Q10 VS Code tasks and their trees are gone - the Q10 is the default device, so a
+  per-device tree is only a second place for a stale database and a stale ELF to hide.
+- **`deepseek-pic.md` fought the repo rules** - "comment code heavily" and "enclose all code in
+  markdown blocks" against the terse-output rules, plus a `<session_state>` still awaiting an
+  assignment. It now opens with a precedence note (the repository wins) and the stale blocks are
+  marked rather than silently obeyed.
+- **`docs/lcd-test-handoff.md` was a third "where things stand" document.** It presented itself as a
+  handoff with done next-steps. It is now scoped to the one item genuinely still open - the parallel
+  LCD driver has no working test - and its superseded claims are marked.
+- **Deliberately NOT changed: the instruction-rate disagreement** (1887 vs 1625). Editing a harness
+  timing constant changes test semantics and, downward, would only shorten every window - so it needs a
+  measurement, not a tidy-up. The skill now states it as UNRESOLVED with the provenance of both
+  numbers (`ff931f7` documents 1887 as measured; the macOS re-probe supports 1625), rather than
+  asserting that both are correct, which is what its previous wording implied.
+
 ## 2026-09-23 — OPEN: `run_mdb_probe.py`'s log can omit the probe's printed values (the reason a run went unwrapped)
 
 A rate probe launched through the sanctioned wrapper

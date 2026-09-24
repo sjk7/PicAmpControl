@@ -1,12 +1,21 @@
-# Handoff: PIC18F47Q10 upgrade — state and next steps
+# Handoff: the parallel LCD driver test (still open)
 
-Date: 2026-09-22. Branch: `main` (the Q10 work was fast-forwarded onto `main`; `upgrade/pic18f47q10`
-is now an alias of the same commit and can be deleted).
+**Reviewed 2026-09-24. This file is NOT a session launch point - `Ai-Notes.txt` is.** The single
+item here that is still live is the LCD blocker below; the "green and pushed" state and the commands
+have been superseded, and are marked where they were wrong.
+
+Still open: `firmware/src/lcd_parallel.c` is untested. `tools/simulate/test_lcd_parallel.py` exists and
+does not work yet, and no LCD test is registered in `cmake/My_Pic_Project/default/user.cmake`. The
+blocker - the Q10 simulator reporting RA4/RA6/RA7 as `Aout` and never as `Dout` - is unresolved.
+
+Original header follows. Date: 2026-09-22; the branch it names, `upgrade/pic18f47q10`, has since been
+deleted (it was an ancestor of `main`).
 
 ## Where things stand
 
 **Green and pushed:**
-- Full Q10 simulator suite passes: `SUITE_EXIT:0`, 11 scenarios (`tools/simulate/run_suite_with_watchdog.py --timeout 400`).
+- Full Q10 simulator suite passes: `SUITE_EXIT:0`, 11 scenarios. *(The `--timeout 400` quoted here on
+  2026-09-22 is stale - the budget is `--timeout 1200`; see `TESTING.md`.)*
 - CI (`firmware-build.yml`) builds the PIC18F47Q10 and installs its DFP
   (`PIC18F-Q_DFP/1.30.487`). Verified green on GitHub; Q10 links at 8.6% flash. (The 16F matrix leg
   was removed on 2026-09-23, together with the 16F port itself.)
@@ -66,19 +75,17 @@ than every source file you changed before running any simulator test. Full rule 
 ## Quick commands
 
 ```powershell
-# suite
-python tools/simulate/cleanup_sim_processes.py
-$env:PICAMP_DEVICE="PIC18F47Q10"
-python tools/simulate/run_suite_with_watchdog.py --timeout 400
+# suite (watchdog-wrapped, like everything else - see the build-test skill)
+python tools/simulate/run_suite_with_watchdog.py --timeout 1200
 
-# targeted FREQ_CTR I5 repro
+# targeted FREQ_CTR I5 repro (also wrapped: run_mdb_probe.py or --test first-dit)
 python tools/simulate/repro_i5_15m_10m.py
 
-# LCD test build (builds the shared ELF; rebuild the normal config afterwards)
-cmake -S cmake/My_Pic_Project/default -B _build/My_Pic_Project/q10_lcdtest -G Ninja `
-  -DPICAMP_DEVICE=PIC18F47Q10 -DCMAKE_BUILD_TYPE=Debug `
+# LCD test build (writes the SHARED ELF; rebuild the normal config afterwards)
+cmake -S cmake/My_Pic_Project/default -B _build/My_Pic_Project/lcdtest -G Ninja `
+  -DCMAKE_BUILD_TYPE=Debug `
   -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/My_Pic_Project/default/.generated/toolchain.cmake" `
   -DCMAKE_USER_MAKE_RULES_OVERRIDE="$PWD/cmake/My_Pic_Project/default/.generated/overrides.cmake" `
   -DCMAKE_C_FLAGS="-DPICAMP_LCD_TEST=1"
-cmake --build _build/My_Pic_Project/q10_lcdtest --verbose
+cmake --build _build/My_Pic_Project/lcdtest --verbose
 ```

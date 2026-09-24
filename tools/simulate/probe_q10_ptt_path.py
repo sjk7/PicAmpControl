@@ -58,7 +58,13 @@ THRESHOLD_VARS = ["g_thresholds.temp_trip_c", "g_thresholds.current_trip_a",
 # An earlier revision used 800,000 steps, which is only 50 ms of simulated time - 20x too early.
 # The probe then reported "startup inhibit never expired" as a firmware fault, when it was purely
 # the probe cutting off before the gate. That wrong conclusion is recorded in the skill; this
-# constant is the correction (from blockers.txt, 2026-09-22).
+# constant is the correction (from the 2026-09-22 blockers note, since deleted - see bugfixes.md
+# 2026-09-24).
+#
+# WARNING - this constant and the harnesses' INSTRUCTIONS_PER_MS disagree by ~10x, and that is
+# UNRESOLVED (2026-09-24). The arithmetic above says 1000 ms = 16,000,000 steps at 16 MIPS, but the
+# direct probe found the same 1000 ms boundary at ~1.5-1.75M steps, i.e. ~1625 steps per firmware-ms
+# (bugfixes.md 2026-09-23). Both cannot be right. Nothing was changed: see the build-test skill.
 BOOT_STEPS = 16_500_000
 
 

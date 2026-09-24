@@ -29,8 +29,9 @@ Canonical sources (re-download if a newer revision appears):
   The data sheet explains *behaviour*. When the two disagree, the DFP decides what compiles and
   the data sheet decides what it means.
 - Do not paraphrase a register description out of these documents into code comments without
-  citing the section - a wrong paraphrase is how the `NVMCON1`/`NVMCON0` bit-name mistake in
-  `Eeprom-changes.md` happened.
+  citing the section - a wrong paraphrase is how the `NVMCON1`/`NVMCON0` bit-name mistake in the
+  (since deleted) `Eeprom-changes.md` draft happened. The corrected implementation is
+  `firmware/src/nvm.c`.
 
 Historical data sheets for parts this project no longer uses (PIC16F18875, PIC16F722A/723A) belong
 under `prototype_reference/`, not here.

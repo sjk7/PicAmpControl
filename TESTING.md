@@ -53,6 +53,12 @@ Both configure `_build/My_Pic_Project/sim`, build the firmware, then run CTest. 
 workflow with the same behaviour; `run_tests.sh` is the bash original and `run_tests.ps1` its
 PowerShell twin.
 
+**Build directories (canonical, 2026-09-24).** `_build/My_Pic_Project/sim` is the directory the tests
+run in and the only one `run_tests.sh`/`.ps1` configure. `_build/My_Pic_Project/release` is the one the
+editor reads (`.clangd`, `.vscode/settings.json`). The former Q10-suffixed trees (`q10`, `q10_release`,
+`q10_lcdtest`) are gone: the Q10 is the only device, so it no longer needs a build tree or a set of VS
+Code tasks of its own.
+
 ## Manual run
 
 ```bash
@@ -118,7 +124,12 @@ CTest registers two tests in [`cmake/My_Pic_Project/default/user.cmake`](cmake/M
 | Test | Command | Labels | Time |
 |---|---|---|---|
 | `PTT_SequencerAndTripSuite` | `run_suite_with_watchdog.py --timeout 1200` | `sim`, `suite` | ~150 s macOS / ~356 s Windows |
-| `FirstDit_BandDetectionAndHotSwitchGuards` | `test_first_dit.py` | `sim`, `first-dit` | ~20 s macOS / ~55 s Windows |
+| `FirstDit_BandDetectionAndHotSwitchGuards` | `run_suite_with_watchdog.py --test first-dit --timeout 600` | `sim`, `first-dit` | ~20 s macOS / ~55 s Windows |
+
+Both registered tests go through the watchdog launcher. **`test_first_dit.py` is never run directly**
+- that gives a log tab that never moves (the harness's stdout is block-buffered through the redirect)
+and no timeout, no heartbeat and no orphan clean-up. `--test first-dit` is the wrapped spelling of
+the same harness. See `.github/skills/build-test/SKILL.md`.
 
 The 1200 s figure is the *budget*, not the expected time - it is sized so that a healthy run on
 the slower platform cannot be mistaken for a failure. A timeout is a budget problem: before
@@ -128,11 +139,11 @@ producing MDB output while a genuinely hung one sits at `delta=0`.
 Run everything, or select one test at a time, from the build directory:
 
 ```bash
-ctest --test-dir _build/My_Pic_Project/debug --output-on-failure     # both tests
-ctest --test-dir _build/My_Pic_Project/debug -R FirstDit             # first-dit only
-ctest --test-dir _build/My_Pic_Project/debug -R PTT_Sequencer        # merged suite only
-ctest --test-dir _build/My_Pic_Project/debug -L sim                  # everything labelled sim
-ctest --test-dir _build/My_Pic_Project/debug -N                      # list without running
+ctest --test-dir _build/My_Pic_Project/sim --output-on-failure     # both tests
+ctest --test-dir _build/My_Pic_Project/sim -R FirstDit             # first-dit only
+ctest --test-dir _build/My_Pic_Project/sim -R PTT_Sequencer        # merged suite only
+ctest --test-dir _build/My_Pic_Project/sim -L sim                  # everything labelled sim
+ctest --test-dir _build/My_Pic_Project/sim -N                      # list without running
 ```
 
 Redirect to a log file as in the examples above when you need the pass/fail line to survive.
