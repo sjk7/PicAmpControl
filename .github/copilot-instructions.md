@@ -10,10 +10,10 @@ This holds after long or multi-file tasks too: no review write-ups, no tables of
 did" sections, no closing offers of further work. Findings belong in a file or a skill; the reply is
 still 1-3 sentences. Breaking these rules has been the most repeated failure in this repo - the rules
 were already loaded and were ignored, so treat the limit as a hard ceiling, not a target.
-
-These apply to ALL work in this repo, which is why they live here (always loaded) rather than in a
-skill (loaded on demand). Detail, method and traps live in the skills named at the bottom - do not
-restate them here, because this file is injected into every request and every line costs.
+A todo list is allowed, but ask the operator for permission first.
+The one exception to "no documentation": if a skill was in use and one of its instructions or
+assumptions turned out wrong, fix that skill in the same piece of work, so the same wrong assumption
+cannot be made again.
 
 ## Read first
 - **STEP ONE, EVERY SESSION, BEFORE ANY OTHER ACTION: read `Ai-Notes.txt` at the repo root.** It
