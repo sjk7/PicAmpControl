@@ -420,13 +420,14 @@ def build_script(trip_name=None) -> str:
             sample()
         lines.append("write pin RC0 0v")
         # Re-arm: the trip must clear and the TX sequence must run back to stage 3 with every TX
-        # output active-low. That is three 20 ms sequencer stages (1 -> 2 -> 3) plus the 5 ms trip
-        # shutdown unwind, so it needs comfortably more than 65 ms of simulated time. A shorter
-        # window was why this scenario read as "did not clear and re-enter TX" on the Q10 run of
-        # 2026-09-22: the recovery trace showed the firmware part-way through stage 1 with the
-        # outputs already unwinding (RC5 low, RC6/RC7 still high), i.e. recovering correctly, just
-        # not yet at stage 3 when the harness stopped stepping.
-        for _ in range(120):
+        # output active-low. That is the 10 ms comparator-reset pulse, the band re-establish
+        # (bypass-snoop decode of the 7000 kHz injection plus relay settle), then three 20 ms
+        # sequencer stages (0 -> 1 -> 2 -> 3) and the 5 ms trip shutdown unwind. The old 120 ms
+        # window was too short: it only reached stage 1 (band just established) before the harness
+        # stopped stepping, which read as "did not clear and re-enter TX" even though the fault had
+        # already cleared. 400 ms covers decode + settle + 3 stages with margin; sample every 1 ms
+        # so the stage-3 re-entry is caught wherever it lands.
+        for _ in range(400):
             write_tmr1_count(7000)
             lines.append(stepi(1))
             sample()

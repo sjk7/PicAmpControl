@@ -4,6 +4,24 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-24 — SWR1 trip scenario: re-arm window too short (harness bug, not firmware)
+
+The merged suite's SWR1 scenario failed `did not clear and re-enter TX after a PTT re-arm`. The
+firmware was correct: the raw MDB transcript shows the fault **did** clear (`g_fault_latched=false`,
+`g_trip_reason=0`) and the sequence re-entered at stage 1, but the harness's recovery window
+(120 x `stepi(1)` = 120 firmware-ms) only stepped far enough to re-establish the band and reach
+stage 1 - never stage 3, so `validate_trip`'s assertion on `g_fault_latched==false` **and**
+`g_sequence_stage==3` tripped. Root cause is the re-arm path has more stages than the old comment
+assumed: comparator-reset pulse (10 ms) + band re-establish (snoop decode + relay settle) + three
+20 ms sequencer stages + the 5 ms shutdown unwind.
+
+Fix: lengthen the re-arm sample window from 120 to 400 x `stepi(1)` so stage 3 is always reached.
+Verified: `--trip SWR1` now prints `SWR1 cleared by PTT re-arm; TX sequence resumed` (exit 0).
+
+The suite's separate FREQ_CTR 10m failure (25000 kHz aliases to 24985/25022, band 6 not classified)
+is pre-existing and unrelated.
+
+
 ## 2026-09-24 — `_XTAL_FREQ` corrected from 32 MHz to 64 MHz
 
 `firmware/include/pin_map.h` defined `_XTAL_FREQ 32000000UL` while the core runs

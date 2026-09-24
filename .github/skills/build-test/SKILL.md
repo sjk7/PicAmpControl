@@ -300,7 +300,10 @@ standing rule). What that touched, and what it caught:
   constants (1625 in `trace_ptt_sequence.py`/`first_dit_invariants.py`, 1887 in `test_first_dit.py`);
   1695 stands as the tighter *measurement*, not the value to run with. This is why the open
   first-dit clause (c) macOS failure must be read against the rate the harness actually uses, not the
-  probe's.
+  probe's. Also note the merged suite also has a **separate, pre-existing FREQ_CTR failure** on the
+  10m band (25000 kHz injects as 24985/25022 via TMR1 tick aliasing, so `current_band` never settles
+  on 6) - not caused by any rate change, and reachable only in the full-suite run (it sits after all
+  the trip scenarios).
   **Do not use `TMR2` to measure time in the simulator.** It reads back a value that advances only
   ~16 counts per 300,000 steps (177 firmware-ms), which no Fosc/8-and-1:64 model can produce; the
   interrupt arrives on schedule but the model's timer *count* is not the datasheet count. `T2CON`
