@@ -30,6 +30,12 @@ code-insiders --install-extension pac-log-follower.vsix --force   # or: code
   *deliberate* - the toggle command - so the view is never yanked out from under you while you read.
 - **Stays cheap.** Following costs one file stat per interval plus one reveal per actual growth
   (plus watcher events). Paused, it costs nothing.
+- **Never takes the editor's focus while you are somewhere else.** While the VS Code window is in
+  the background the follow keeps the log's buffer current but does not move the cursor or the view,
+  because assigning `editor.selection` activates its editor group and on macOS that brings the whole
+  window to the front - following a log from another application used to drag VS Code over the top of
+  whatever you were doing, once per append (reported 2026-09-24). The tail is pinned again as soon as
+  the window is focused, so a tab followed in the background is still at the end when you come back.
 
 ## Commands
 
