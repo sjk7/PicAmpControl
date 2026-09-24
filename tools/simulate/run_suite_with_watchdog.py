@@ -277,10 +277,10 @@ def main():
     kill_previous(log)
     log.write(f"[{stamp()}] TEST_BEGIN name={test_name} timeout={args.timeout:.0f}s "
               f"command={' '.join(command)}")
-    # Open the progress log in the running editor *before* the long wait, not after: the user
-    # watches this file during a multi-minute MDB run, and a progress log nobody can see is the
-    # same as no log (user instruction, 2026-09-22). Best-effort by design - a headless host has
-    # no editor to open, and that must not fail the test.
+    # Open the progress log in the running editor *before* the long wait so the user can watch it.
+    # `code -r` reuses the existing window WITHOUT raising it or stealing focus from another app -
+    # the old in-repo logfollower extension was the focus thief, and it is gone. Best-effort by
+    # design: a headless host has no editor, and that must not fail the test.
     if os.environ.get("PICAMP_NO_EDITOR_OPEN") != "1":
         open_progress_log.open_in_editor([args.log], quiet=True)
     _, child_log = log.open_for_child()

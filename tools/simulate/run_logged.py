@@ -46,6 +46,8 @@ def run_logged(command, log, label="", interval=2.0, max_repeats=DEFAULT_MAX_REP
     # Write a delimited header BEFORE opening the tab, so the log has a line to show immediately.
     appender.write(f"RUN_BEGIN {time.strftime('%Y-%m-%dT%H:%M:%S%z')} "
                    f"{label or command[0]} :: {' '.join(str(c) for c in command)}")
+    # `open_in_editor` uses `code -r` (reuse window, no raise): it opens the tab for the user to
+    # watch without stealing focus. The old logfollower extension was the focus thief, now removed.
     open_progress_log.open_in_editor([log])
 
     started = time.monotonic()
