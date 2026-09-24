@@ -17,6 +17,19 @@ write pin RB6 5v
 write pin RC0 high
 
 Stepi 300000
+print OSCCON1
+print OSCFRQ
+print OSCCON3
+print T2CON
+print g_startup_elapsed_ms
+Stopwatch
+Stepi 300000
+print g_startup_elapsed_ms
+Stopwatch
+
+write OSCFRQ 0x07
+print OSCFRQ
+Stepi 300000
 print g_startup_elapsed_ms
 Stopwatch
 Stepi 300000

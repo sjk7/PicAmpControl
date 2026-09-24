@@ -230,11 +230,14 @@ at ~1.70M steps). **The harness constants have not been changed yet** - that shi
 window and interacts with the open first-dit clause (c) failure, so it is a decision for the operator,
 not a tidy-up.
 
-**And there is no single "sim MHz": MDB's own `Stopwatch` (1000 cycles = 1 ms -> a 4 MHz / 1 MIPS
-base) shows the core running at ~847 instructions per simulated ms, while the firmware's 1 ms tick
-arrives every 2.0 simulated ms - as if the timers were clocked from 32 MHz. Core and peripherals
-disagree by ~8x and both sit an order of magnitude below the real 64 MHz / 16 MIPS, so simulator
-steps must be converted with the measured 1695/firmware-ms, never with datasheet clock arithmetic.
+**And there is no single "sim MHz": the model ignores the oscillator configuration outright.**
+After 300,000 steps `OSCCON1`/`OSCFRQ`/`OSCCON3` all read 0 - it does not apply `RSTOSC =
+HFINTOSC_64MHZ` - and forcing `OSCFRQ = 0x07` by hand changes nothing measurable. MDB's own `Stopwatch`
+(1000 cycles = 1 ms -> a 4 MHz-equivalent base) shows the core delivering ~847 instructions per
+simulated ms, while the firmware's 1 ms tick arrives every 2.0 simulated ms (as if the timers were
+clocked from 32 MHz). Core and peripherals disagree by ~8x and both sit an order of magnitude below
+the real 64 MHz / 16 MIPS, so simulator steps must be converted with the measured 1695/firmware-ms,
+never with datasheet clock arithmetic. Evidence: `docs/hardware/q10-bringup/clock_check_probe.mdb`.
 
 **Same family, and probably a live bug (2026-09-24): `_XTAL_FREQ = 32000000UL` in `pin_map.h` while
 the core actually runs at 64 MHz.** `RSTOSC = HFINTOSC_64MHZ` is the internal HFINTOSC at its maximum

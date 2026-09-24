@@ -88,12 +88,12 @@ high, and the 16.5M-step `BOOT_STEPS` in `probe_q10_ptt_path.py` is ~10x too lar
 (177 firmware-ms) - impossible for the configured Fosc/8 and 1:64 - even though the overflow
 interrupt arrives on schedule. The interrupt count is trustworthy; the model's timer *count* is not.
 
-## stopwatch_probe.mdb - what the simulator thinks its clock is (2026-09-24)
+## clock_check_probe.mdb - the model ignores the oscillator configuration (2026-09-24)
 
-Same image and stimulus as `tick_rate_probe.mdb`, but it also asks MDB for its own clock:
+Same image and stimulus as `tick_rate_probe.mdb`, plus MDB's own clock and a forced `OSCFRQ`:
 
 ```
-python tools/simulate/run_mdb_probe.py docs/hardware/q10-bringup/stopwatch_probe.mdb
+python tools/simulate/run_mdb_probe.py docs/hardware/q10-bringup/clock_check_probe.mdb
 ```
 
 | Steps | `g_startup_elapsed_ms` | `Stopwatch` |
@@ -101,22 +101,30 @@ python tools/simulate/run_mdb_probe.py docs/hardware/q10-bringup/stopwatch_probe
 | 300,000 | 0 | 447502 cycles (447.502 ms) |
 | 600,000 | 381 (includes the saturating-pending burst) | 841767 cycles (841.767 ms) |
 | 900,000 | 559 | 1196036 cycles (1.196036 s) |
+| 300,000 more, after `write OSCFRQ 0x07` | 734 | 1550210 cycles (1.55021 s) |
+| 300,000 more | 912 | 1904477 cycles (1.904477 s) |
 
-`Stopwatch` converts **1000 cycles to 1 ms**, so its time base is one instruction cycle = 1 us: a
-**4 MHz part, 1 MIPS**. Against that base:
+After 300,000 steps the oscillator registers read **`OSCCON1 = 0`, `OSCFRQ = 0`, `OSCCON3 = 0`**: the
+model does **not** apply the firmware's `#pragma config RSTOSC = HFINTOSC_64MHZ`, and `main.c` never
+writes `OSCFRQ` because on silicon the config word already sets HFFRQ to 64 MHz. Forcing it by hand -
+`write OSCFRQ 0x07`, read back `OSCFRQ=7` - changed **nothing**: the two blocks after the write advanced
+354,174 and 354,267 cycles per 300,000 steps, against 354,269 before it, and the tick counts stayed
+175/178 per block. The model's execution rate is fixed by the simulator, not by the device clock
+configuration, so a probe cannot "set the chip up at 64 MHz" and then measure.
 
-- 300,000 steps advanced 354,269 cycles = 354.3 ms in the clean 600k-900k block, so **~847
-  instructions per simulated millisecond** (0.85 MIPS; instructions average 1.18 cycles each).
-- The firmware's designed 1.000 ms tick arrived **178 times in those 354.3 ms**, i.e. every **1990
-  cycles = 2.0 simulated ms**.
+What it nets out at, from the clean 600k-900k block (300,000 steps = 354,269 cycles, 178 ticks):
 
-So the model's core behaves like a ~3.4 MHz-equivalent part while its Timer2 is clocked as if Fosc
-were ~32 MHz (`125 counts x 64 x 8 / 32 MHz = 2.0 ms`). Those two disagree with each other by ~8x,
-and both are an order of magnitude away from the real 64 MHz / 16 MIPS. There is therefore **no single
-"sim MHz"** to quote, and no datasheet arithmetic may be used to convert steps: use the measured
-relationship instead, **1695 `Stepi` steps per firmware millisecond**. This is also why firmware-ms
-windows look 2x longer than the model's own ms, and why `BOOT_STEPS = 16_500_000` (from "16 MIPS at
-64 MHz") is ~10x too large.
+- `Stopwatch` converts **1000 cycles to 1 ms**, so its time base is one instruction cycle = 1 us.
+- **~847 instructions per simulated millisecond** (0.85 MIPS; instructions average 1.18 cycles each).
+  At 1 us per cycle that is a ~1 MHz instruction-cycle clock, i.e. a **4 MHz-equivalent core**.
+- The firmware's designed 1.000 ms tick arrived every **1990 cycles = 2.0 simulated ms**, as if the
+timer were clocked from ~32 MHz (`125 counts x 64 x 8 / 32 MHz = 2.0 ms`).
+
+Core and peripherals therefore disagree with each other by ~8x, and both are an order of magnitude
+below the real 64 MHz / 16 MIPS. There is **no single "sim MHz"** to quote and no datasheet arithmetic
+to convert steps with: use the measured relationship, **1695 `Stepi` steps per firmware millisecond**.
+This is also why the firmware's ms windows look 2x longer than the model's own ms, and why
+`BOOT_STEPS = 16_500_000` (from "16 MIPS at 64 MHz") is ~10x too large.
 
 ## Why this exists
 
