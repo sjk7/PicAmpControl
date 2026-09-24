@@ -301,6 +301,21 @@ standing rule). What that touched, and what it caught:
   interrupt arrives on schedule but the model's timer *count* is not the datasheet count. `T2CON`
   readback is trustworthy and confirms the configuration (`224` = `ON`, `CKPS = 6`, `OUTPS = 0`,
   since `CKPS` is bits 6:4 and `ON` is bit 7).
+- **What the simulator's own clock says (2026-09-24, `stopwatch_probe.mdb`): there is no single
+  "sim MHz" for this model, and the core is NOT running at the configured 64 MHz.** `Stopwatch`
+  reports a cycle count plus a time, and it converts **1000 cycles = 1 ms**, i.e. it treats one
+  instruction cycle as 1 us - the time base of a **4 MHz part (1 MIPS)**, not this one. Measured
+  against that base: 300,000 `Stepi` steps advanced 354,269 cycles = 354.3 ms, so **~847 instructions
+  per simulated millisecond** (0.85 MIPS; instructions average 1.18 cycles each), and the firmware's
+  1 ms Timer2 tick arrived every **1990 cycles = 2.0 simulated ms**. So the model's core behaves like
+  a ~3.4 MHz-equivalent part while its Timer2 is clocked as if Fosc were ~32 MHz - a factor of ~8
+  apart from each other, and an order of magnitude below the hardware's 64 MHz / 16 MIPS. Consequences:
+  (a) never convert simulator steps with the datasheet clock - `BOOT_STEPS = 16_500_000` came from
+  doing exactly that; (b) the tick period the firmware sees in the model is 2x its designed value, so
+  a 1 ms tick is 2 simulated ms and *firmware* ms must be converted with the measured 1695 steps,
+  not with 4 x Fosc arithmetic; (c) any harness that multiplies a firmware-ms window by a
+  simulated-MHz figure is wrong twice over. Cross-check with `Stopwatch` before trusting any
+  rate-derived window.
 - **`_XTAL_FREQ` is 32 MHz while the core is 64 MHz, and that is probably a live bug (2026-09-24).**
   The oscillator is not at fault: `RSTOSC = HFINTOSC_64MHZ` is the internal HFINTOSC at its maximum,
   and the part has no higher internal setting. But XC8 computes `__delay_us()`/`__delay_ms()` from

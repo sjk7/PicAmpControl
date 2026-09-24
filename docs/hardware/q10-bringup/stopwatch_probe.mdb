@@ -1,0 +1,28 @@
+device PIC18F47Q10
+hwtool sim
+program /Users/stevekerr/mydocs/code/PicAmpControl/out/My_Pic_Project_18F47Q10/default.elf
+
+write pin RA0 0v
+write pin RA1 0v
+write pin RA2 0v
+write pin RA3 0v
+write pin RA5 2.5v
+write pin RB1 0v
+write pin RB2 0v
+write pin RB3 0v
+write pin RB4 0v
+write pin RC2 5v
+write pin RB0 5v
+write pin RB6 5v
+write pin RC0 high
+
+Stepi 300000
+print g_startup_elapsed_ms
+Stopwatch
+Stepi 300000
+print g_startup_elapsed_ms
+Stopwatch
+Stepi 300000
+print g_startup_elapsed_ms
+Stopwatch
+quit
