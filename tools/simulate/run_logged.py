@@ -26,7 +26,6 @@ from pathlib import Path
 TOOLS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS_DIR))
 import platform_process as procutil  # noqa: E402
-import open_progress_log  # noqa: E402
 
 # Collapse a run of identical consecutive lines after this many copies.
 DEFAULT_MAX_REPEATS = 3
@@ -43,12 +42,11 @@ def run_logged(command, log, label="", interval=2.0, max_repeats=DEFAULT_MAX_REP
     log.write_text("", encoding="utf-8")  # truncate at START only, never when a run finishes
 
     appender = procutil.AppendLog(log)
-    # Write a delimited header BEFORE opening the tab, so the log has a line to show immediately.
+    # Write a delimited header BEFORE anything reads the log, so it has a line to show immediately.
     appender.write(f"RUN_BEGIN {time.strftime('%Y-%m-%dT%H:%M:%S%z')} "
                    f"{label or command[0]} :: {' '.join(str(c) for c in command)}")
-    # `open_in_editor` uses `code -r` (reuse window, no raise): it opens the tab for the user to
-    # watch without stealing focus. The old logfollower extension was the focus thief, now removed.
-    open_progress_log.open_in_editor([log])
+    # No auto-open: opening the log tab steals focus from the user. The file is followed through
+    # the Log Viewer extension instead. Callers that explicitly want a tab call open_in_editor().
 
     started = time.monotonic()
 

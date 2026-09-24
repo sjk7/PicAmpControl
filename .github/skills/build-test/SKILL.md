@@ -49,24 +49,29 @@ only.
    once a hypothesis explains the evidence, TEST it immediately - write the change, build, run one
    harness - and only broaden if the test contradicts it. Never emit a visible chain of "reconsider
    X / reconsider Y" reasoning; it is billed output for zero information.
+   **DO NOT HEDGE.** (user instruction, 2026-09-24) No "I can fix it -> actually -> wait, no ->
+   or even...". No "maybe", no "perhaps", no "I think", no qualifying every claim. State what you
+   know and what you are doing, and do it. When evidence contradicts a hypothesis, say so in one
+   sentence and state the NEXT action; do not narrate the reversal. Every hedge line is billed
+   output and reads as indecision.
 
 **How a run is watched (STICKY user instruction, 2026-09-23): the user watches the log file - the
 heartbeat file - in a VS Code tab while the tests run. Never in the terminal.** The user's words:
 *"we watch files now during sim runs, and never output to terminal. The code user sees the log file
-(heartbeat file) in VSCODE when the tests run."* So opening the log in a tab and keeping it fresh is
-part of doing the job, not a courtesy: the user has complained repeatedly that long tasks (suite,
-probe, build) run with no visible output in VS Code. The method:
+(heartbeat file) in VSCODE when the tests run."* So the log must stay visible while the run is live,
+but **it must NOT steal focus** (user instruction, 2026-09-24): the user types in the chat or works
+in another window, and a `code -r <log>` call raises VS Code over what they are doing. The method:
 1. Truncate the log FIRST (`Clear-Content <log>`, or `: > <log>` on macOS). The launcher appends, and
    deleting a file a watcher holds open kills the watcher.
 2. Launch the run with its output redirected into that log. `run_suite_with_watchdog.py` /
-   `run_logged.py` open it, write a `RUN_BEGIN` header, and append the exit-code line at the end.
-3. Open that file in a VS Code tab so the user can watch it, and keep a heartbeat flowing into it
-   while the run is live: `tools/simulate/open_progress_log.py` opens the tab, `AppendLog` in
-   `tools/simulate/platform_process.py` is the heartbeat helper. Never just redirect to a temp file
-   and report the tail.
+   `run_logged.py` write a `RUN_BEGIN` header and append the exit-code line at the end.
+3. **Do NOT call `open_progress_log.open_in_editor()` from a test/run path** - it runs `code -r` and
+   raises the window. The log is followed instead through the Log Viewer extension's Webview panel
+   (re-reads the file on an interval, no focus steal). `open_in_editor()` exists only for an explicit
+   user request to open a tab. `AppendLog` in `platform_process.py` is the heartbeat helper.
 4. Which file is the moving one depends on how you launched it: **when you pass `--log <file>`, the
    heartbeat appends INTO that file** (verified 2026-09-23: the heartbeat process is spawned with
-   `--log` pointing at the same path), so that is the file to open in the tab. Only when `--log` is
+   `--log` pointing at the same path). Only when `--log` is
    omitted does the heartbeat use `DEFAULT_LOG` =
    `platform_process.temp_dir()/picampcontrol_suite_progress.log`. Do not assume that is
    `/tmp/...` on macOS: `temp_dir()` resolves to `$TMPDIR`, i.e. under `/var/folders/...`, and an

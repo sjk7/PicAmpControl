@@ -22,7 +22,6 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import open_progress_log  # noqa: E402
 import platform_process as procutil  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -277,12 +276,10 @@ def main():
     kill_previous(log)
     log.write(f"[{stamp()}] TEST_BEGIN name={test_name} timeout={args.timeout:.0f}s "
               f"command={' '.join(command)}")
-    # Open the progress log in the running editor *before* the long wait so the user can watch it.
-    # `code -r` reuses the existing window WITHOUT raising it or stealing focus from another app -
-    # the old in-repo logfollower extension was the focus thief, and it is gone. Best-effort by
-    # design: a headless host has no editor, and that must not fail the test.
-    if os.environ.get("PICAMP_NO_EDITOR_OPEN") != "1":
-        open_progress_log.open_in_editor([args.log], quiet=True)
+    # Do NOT open the log in an editor tab here: `code -r` raises the VS Code window and steals
+    # focus from whatever the user is doing (user instruction, 2026-09-24). The log stays visible
+    # through the Log Viewer extension's Webview panel (which re-reads the file without focusing
+    # anything). open_in_editor() remains available to callers that explicitly want a tab.
     _, child_log = log.open_for_child()
     env = os.environ.copy()
     env.setdefault("PICAMP_MDB_DEBUG_LOG", str(mdb_log))
