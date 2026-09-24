@@ -24,32 +24,14 @@ were all deleted. Concretely, that means:
 
 ## Standing AI instructions (things the user asked to always remember)
 - EVERY SIMULATOR TEST RUNS THROUGH THE WATCHDOG - ALWAYS (user instruction, 2026-09-23: "ALL these
-  tests should run through the watchdog -- always"). The watchdog is
-  `tools/simulate/run_suite_with_watchdog.py`; `ctest --test-dir _build/My_Pic_Project/release
-  --output-on-failure` is the canonical local entry point (both registered tests route through the
-  watchdog), and `run_suite_with_watchdog.py --test suite|first-dit` is the direct one. Never run
-  `test_first_dit.py` / `trace_ptt_sequence.py` bare and never drive a test with raw `mdb.sh`: a bare
-  run has no timeout, no heartbeat (the log tab the user watches never moves), no orphan clean-up,
-  and its verdict lands outside the run's log. A new test must be registered in
-  `cmake/My_Pic_Project/default/user.cmake` AND given a `--test` choice, or the watchdog cannot wrap
-  it.
+  tests should run through the watchdog -- always"). Wrapped entry points, why a bare run is useless
+  and how a new test gets wrapped: `.github/skills/build-test/SKILL.md`.
 - TEST RUNS ARE NEVER OBSERVED THROUGH THE TERMINAL, AND NEVER ASK A RUN FOR ITS TERMINAL OUTPUT -
   VERDICTS COME FROM FILES (user instruction, restated 2026-09-21 and again 2026-09-23: "we should
   not ask for terminal output when running tests -- this breaks the terminal. We are using a
-  file-based approach instead."). Asking a running test for its output wedges the terminal and
-  returns nothing usable, so this is a hard rule, not a preference; the whole verdict method is
-  file-based: redirect the run into a log, append the exit code, read the log + the exit-code line +
-  the watchdog progress log. Do
-  not run a test to watch its output, do not `tail`/`grep` a test log into the terminal, and do not
-  ask a run for its terminal output. There is far too much data (MDB emits megabytes of pin/state
-  trace) and the capture is unreliable. The terminal is only for *launching* a run and for short,
-  bounded process checks (`pgrep`, `ps`, `wc -c`). Every verdict, progress report and diagnostic is
-  read from the run's files: the log it was redirected into, the exit-code line appended to it, and
-  the watchdog progress logs. Two traps: a terminal command that returns no output says nothing
-  about the run, and `read_file` can serve a stale cached copy of a log that is still being written,
-  which also looks like "the run produced nothing" - copy the log to a fresh path and read that.
-  The mechanics (exact commands and the redirect/exit-code pattern) live in
-  `.github/skills/build-test/SKILL.md` and TESTING.md, deliberately not restated here.
+  file-based approach instead."). The verdict method, the redirect/exit-code pattern and the two
+  traps (a command that returns nothing says nothing about the run; a stale cached log read looks like
+  "the run produced nothing") are in `.github/skills/build-test/SKILL.md`.
 - Keep this file (Ai-Notes.txt) ALWAYS up to date; it's the launch point for a new session.
 - ALWAYS READ `deepseek-pic.md` IN THE REPOSITORY ROOT AT THE START OF EVERY SESSION (user
   instruction, 2026-09-22, permanent). It is a bare-metal PIC guardrail checklist - TRIS vs LAT,
@@ -59,11 +41,6 @@ were all deleted. Concretely, that means:
   `.github/skills/build-test/SKILL.md` remain the sources of truth, and its own
   `<session_state>` block ("Awaiting the first hardware assignment") is stale and does not describe
   this project.
-- DO NOT ASK FOR PERMISSION TO OVERWRITE FILES - JUST DO IT (user instruction, 2026-09-22). The user
-  does not want to be prompted about overwriting, nor asked "say the word" before an edit that was
-  already agreed; when the intent is to change a file, change it. Related and worth avoiding: writing
-  to a file the user has open in an editor tab makes VS Code raise its own "file changed on disk"
-  prompt, so clear/recreate such a log *before* opening it in the editor rather than after.
 - FILE FOLLOWING AND LOG WATCHING: method in `.github/skills/build-test/SKILL.md` (`tools/logfollower`,
   `open_progress_log.py`, `run_detached.py`, the FileTail cost finding, the console-tail trap).
 - FLASH REDUCTION - **SATISFIED ON THIS DEVICE** (the 16F-era work item, 2026-09-21, closed 2026-09-24).
@@ -115,32 +92,14 @@ were all deleted. Concretely, that means:
   an always-on primitive would inject all of it into EVERY request (the "kitchen sink" anti-pattern).
   State stays here non-auto-loaded; the rules that must never be missed stay in the 48-line
   `copilot-instructions.md`. Do not "fix" the extension.
-- `mistakes.md` DELETED 2026-09-24 (user question: *"shouldn't the mistakes.md content be in the build
-  skill and mistakes.md deleted?"*). It was never a mistake log - it was ONE pasted paragraph (the file
-  had a single line, no newlines) from another agent correcting a false claim that interrupts are
-  unimplemented in MDB. The durable part - the core and the interrupt controller ARE modelled,
-  `W0106-SIM` is scoped strictly to PPS/clock-source routing, and the workaround is to poke the
-  peripheral/flag registers directly behind `#ifdef __MPLAB_DEBUGGER_SIMULATOR` - now lives in
-  `.github/skills/build-test/SKILL.md` with the rest of the simulator method. `blockers.txt` and
-  `Eeprom-changes.md` were deleted in the same pass: both were superseded AI pastes, and blockers.txt's
-  two diagnoses were BOTH wrong (step-count maths superseded by the measured rate; the RA6/FEXTOSC
-  theory disproved when ANSELA6 turned out to be already clear). Supersessions are in `bugfixes.md`.
-- DOC HYGIENE (2026-09-24, from the review of every .md and skill). Canonical build directories:
-  `_build/My_Pic_Project/release` is what the editor reads, `_build/My_Pic_Project/sim` is where the
-  tests run. The `q10_*` trees and the two Q10 VS Code tasks are GONE - the Q10 is the default device,
-  so it needs no build tree of its own. `TESTING.md` had been teaching a bare `test_first_dit.py`,
-  which is the cheat, and now shows the wrapped form. The README's clock line said 32 MHz/HFINT32: the
-  core is 64 MHz (`HFINTOSC_64MHZ`) and Timer2 takes Fosc/8 so `_XTAL_FREQ` stays the 32 MHz design
-  clock. **Rule: never restate a rule in two files unless one is a pointer** - the copies drift, and
-  whichever a session reads first wins, which is how `TESTING.md` came to outrank `user.cmake`.
-  **Output style lives in `.github/copilot-instructions.md` only** (the file the user's `tight.md`
-  became, 2026-09-24): be concise, make requested changes directly, no plans/summaries/reports/docs
-  unless asked, no explanation unless asked, 1-3 sentences, never restate the task. Not repeated here.
-  **The temporary "do not change the MCU" gates are GONE from this file (same day).** There is no rule
-  about asking before a device change and no rule about a dedicated branch for one: those were written
-  for the evaluation and were never meant to be permanent. The current target statement stands on its
-  own - PIC18F47Q10 is what the firmware builds, and `device.cmake` is where that is declared.
-  *state and user instructions* (what the firmware does now, what is in flight, what is left, the rules below) live
+- DOC HYGIENE (2026-09-24). Canonical build directories: `_build/My_Pic_Project/release` is what the
+  editor reads, `_build/My_Pic_Project/sim` is where the tests run. The `q10_*` trees and the two Q10
+  VS Code tasks are GONE - the Q10 is the default device, so it needs no build tree of its own.
+  **Rule: never restate a rule in two files unless one is a pointer** - the copies drift, and whichever
+  a session reads first wins, which is how `TESTING.md` came to outrank `user.cmake`. Output style and
+  the general standing rules live in `.github/copilot-instructions.md` only, and are not repeated here.
+  **Where a fact lives:** *state and user instructions* (what the firmware does now, what is in flight,
+  what is left, the rules above) live
   in THIS file; *build/test/debug procedure* (toolchain paths, configure/build commands, the flash
   budget, mdb and harness techniques, test names and labels, failure triage) lives only in
   `.github/skills/build-test/SKILL.md`, with `.github/agents/build-runner.agent.md`
@@ -171,39 +130,25 @@ were all deleted. Concretely, that means:
   MDB is ~2.4x slower on Windows: the merged suite is ~356 s there against ~150 s on macOS. All
   platform-specific harness code lives in `tools/simulate/platform_process.py`. Build/test procedure,
   the Windows gotchas and the timeout policy are in the skill - do not restate them here.
-- Last verified run (Windows): `ctest --test-dir _build/My_Pic_Project/debug --output-on-failure`,
-  verdict read from the log file: `100% tests passed, 0 tests failed out of 2`, `CTEST_EXIT=0`, total
-  408 s (PTT_SequencerAndTripSuite 355 s, FirstDit_BandDetectionAndHotSwitchGuards 53 s).
-- Last verified run (macOS, 2026-09-23, on the Q10-only tree) - THE FIRST macOS RUN OF EITHER TEST:
-  * Configure + Release build GREEN: `PicAmpControl device: PIC18F47Q10 (mcpu=18F47Q10)`, DFP from
-    the MPLAB X install, `BUILD_EXIT=0`, ELF at `out/My_Pic_Project_18F47Q10/default.elf`.
-  * `PTT_SequencerAndTripSuite`: **PASS**, twice - `PTT suite passed: 11 scenarios in one MDB
-    session` (log `/tmp/pac_mac_suite2.log`), ~110 s. All I1-I6 invariant lines PASS in every
-    scenario.
-  * `FirstDit_BandDetectionAndHotSwitchGuards`: **FAIL on macOS.** Invariants I1-I6 PASS, clauses
-    (a) and (b) PASS, then `AssertionError: clause (c): the warm-start PTT never keyed the
-    amplifier` (tools/simulate/test_first_dit.py line 375). Clause (c) re-keys on the remembered
-    band with no RF stimulus at all and requires the amplifier to key within 30 ms of PTT being
-    asserted. This is the open item - Windows passed the same clause, so it is either a real
-    macOS-only difference or a harness timing assumption that macOS exposes. Evidence in
-    `bugfixes.md` 2026-09-23 (including the two things the transcript shows: the harness cannot read
-    the settle/verify globals in this run - they print as `?` - and a 20m keyed run DOES appear
-    later, at 1917-2086 ms, so keying itself works).
-  * Reading verdicts: the agent's terminal harness SIGTERMs the wrapper once the terminal is
-    cleaned up, so the wrapper's last line reads `SUITE_EXIT=143` even for a completed run. The
-    harness's own printed lines (PASS/FAIL, the assertion, the scenario list) are the verdict.
-- The standing process rule that produced the most friction last session: never judge a test run
-  from terminal output. MDB emits megabytes of trace and a command that "returned no output" can
-  still have passed - always redirect to a log file, append the exit code, and read the file.
+- Last verified runs: Windows `100% tests passed, 0 tests failed out of 2`, `CTEST_EXIT=0`, 408 s;
+  macOS 2026-09-23 merged suite PASS twice (~110 s). **`FirstDit_BandDetectionAndHotSwitchGuards`
+  FAILS `clause (c)` on macOS only - OPEN**, with I1-I6 and clauses (a)/(b) passing first and a 20m
+  keyed run appearing later in the same session. Windows passes the same clause, so it is either a
+  macOS-only difference or a harness timing assumption macOS exposes. Evidence: `bugfixes.md`
+  2026-09-23 and the skill. See also the REMINDER at the top of Remaining work - a wrong
+  instruction-rate constant sits behind exactly this kind of clause.
 - Earlier session history - the `platform_process.py` rewrite, the timeout re-sizing, the 16F pin-map
   corrections, the device spike and its two retracted verdicts - is in `bugfixes.md` 2026-09-22 and the
   skill. Not restated here.
 
 ## Simulator timing limitation (IMPORTANT)
-- The firmware uses Timer2 for the approximately 1 ms scheduler tick because MDB's Timer0 model stalled during earlier testing.
-- The simulator is still a debugger model, not a substitute for silicon timing. The suite validates state ordering, LCD lifecycle, trip latching, and recovery behavior; bench validation remains required for exact hardware timing.
-- **Timer1 external clock (T1CKI) is NOT modelled** (`W0106-SIM`), so the frequency counter cannot be proven end-to-end in simulation. The suite injects `TMR1H`/`TMR1L` instead, which covers the frequency maths, band classification, band-select outputs and TX lock, but not the T1CKI pin, the PPS routing, the 1:4 prescaler, or the overflow path. Do not try to clock the pin.
-- **MDB SCL / `stim` is NOT usable in this build** (re-tested 2026-09-22). No stimulus of any kind can clock Timer1 - the clock-source mux is not modelled - and an SCL script driving RC0 would prove nothing anyway, since RC0 is INPUT_PTT here (T1CKI is RD1 via PPS). Treat SCL as unavailable until someone shows a file that actually loads, and treat any stimulus that claims to drive a pin as undelivered until `print pin <name>` proves otherwise. The re-tests and their error output are in `TESTING.md`.
+- The simulator is a debugger model, not silicon: it validates state ordering, LCD lifecycle, trip
+  latching and recovery, but exact hardware timing needs the bench.
+- **Timer1's external clock (T1CKI) is not modelled and MDB's SCL `stim` is not usable in this build**,
+  so the frequency counter cannot be proven end-to-end in simulation - the harness injects
+  `TMR1H`/`TMR1L` instead, which covers the maths, band classification, band-select outputs and TX lock
+  but not the pin, the PPS routing, the prescaler or the overflow path. Do not try to clock the pin.
+  Traps and the re-tests: `.github/skills/build-test/SKILL.md` and `TESTING.md`.
 
 ## Current design
 This repository is the active PIC18F47Q10-I/P linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
