@@ -273,6 +273,33 @@ own-frequency hold window blindly or relax `validate_freq_ctr` - the injection i
 it and masked the real symptom. The reliable repro is isolating ONE band with `BAND_TESTS`, not the
 full 11-scenario suite.
 
+**2026-09-24 (later): the FREQ_CTR failure is a STIMULUS CADENCE bug, and it must not be "fixed" by
+window nudging.** Root cause, proved with the per-sample dump: the firmware classifies a band only
+after `STABILITY_REQUIRED_TICKS = 2` consecutive 10 ms gates read the SAME band, and the harness's
+`write_tmr1_count` + `stepi(5)` cadence races the firmware's 10 ms `freq_counter_tick_10ms()` gate, so
+the measured frequency flickers (1800 -> 16 -> 3600 -> 0) and `current_band` never settles. The
+failure then moves to whichever band runs last (80m, 15m, 10m) and reads `freq=0, current_band=1,
+locked=false, stage=0` - the classifier parked on its 160m no-signal default, NOT a lock loss and NOT
+a firmware bug. Injecting with a FULL 10 ms gate per iteration reaches stability and the bands do
+lock - but **every attempt to do so traded the lock check for the I5 hot-switch invariant**
+(`band-select outputs changed while the amplifier was keyed`) because the longer/full-gate holds move
+the injected-frequency switch relative to the keyed window. Tested and rejected on 2026-09-24:
+widening the per-band windows (40/20/30 -> 80/30/40), full-gate PREFLIGHT (breaks the base PTT
+release - "release did not enter stage 5" - because the preflight is shared by every scenario),
+full-gate band-check holds (passes lock, fails I5), atomic T1CON stop/inject/restart (no effect on the
+lock bug), and an 800 ms trip re-arm window. **The scenario needs the injection redesigned so the
+classifier is stable AND the frequency only changes while the amplifier is unkeyed - not more window
+tuning.** Do the redesign with `repro_i5_15m_10m.py` (it runs the I5 and lock invariants together, so
+a fix that breaks one is caught immediately).
+
+**Open regression (2026-09-24): SWR1's trip re-arm fails on the committed tree.** `--trip SWR1`
+reports `SWR1 did not clear and re-enter TX after a PTT re-arm` on HEAD as well as on the FREQ_CTR work
+in progress, and widening the re-arm window (400 -> 800 ms) does not change it - so it is NOT the
+window and NOT caused by the FREQ_CTR edits. `de2ebe3` verified the same scenario passing earlier the
+same day; the failure appeared after `7d4c502`. Diagnose from the raw transcript (the fault clears in
+the firmware in the earlier runs; check whether `g_fault_latched` clears and how far the sequence
+gets), do not widen the window again.
+
 **Harness note: sample settle/verify state when debugging band timing.** `STATE_VARS` in
 `trace_ptt_sequence.py` now carries `g_band_settle_active`, `g_band_settle_elapsed_ms`,
 `g_band_verify_active`, `g_band_verify_mismatch_ms`, and `first_dit_invariants.describe()` prints
