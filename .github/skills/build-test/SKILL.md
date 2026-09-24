@@ -474,6 +474,21 @@ agent's terminal launched the run.**
 - The merged suite PASSES on macOS: `PTT suite passed: 11 scenarios in one MDB session`, ~110 s, all
   I1-I6 invariant lines PASS. first-dit FAILS: `AssertionError: clause (c): the warm-start PTT never
   keyed the amplifier`, with I1-I6 and clauses (a)/(b) passing first. See `bugfixes.md` 2026-09-23.
+- **Update 2026-09-24 (later): the first-dit macOS blocker MOVED from clause (c) to I6, and it is
+  still failing - do not report first-dit as OK on macOS.** Clauses (a)-(j) now pass (nothing is
+  printed for them on success; the log goes straight from `Parsed 552 samples across 11 phases` to the
+  invariant block), I1-I4 and I5 PASS, then:
+  `AssertionError: first-dit I6: the T/R relay closed 4.6ms after the band relay selection changed
+  (HOT SWITCH of the band relay ...)` with
+  `t=1392.3ms PTT=0 TX/VCC/BIAS=011 bandpins=000100 stage=1 state=6 snoop=false locked=true
+  cur_band=4 freq_khz=13926 settle=false settle_ms=20` - the band change itself was seen at t=1388ms
+  (RD2 -> RD5, amplifier cold). **This is NOT caused by the FREQ_CTR work:** `test_first_dit.py` does
+  its own stepping (`INSTRUCTIONS_PER_MS = 1887`) and only borrows `parse_trace`/`run_mdb` from
+  `trace_ptt_sequence.py`. Prime suspect is the standing UNRESOLVED per-harness rate mismatch (1887
+  here vs 1625 in the merged suite): the same I6 invariant passes in the merged suite with
+  `tightest 147.0ms` and `365.0ms`, against a firmware `BAND_SETTLE_MS = 20`, so a 4.6 ms gap is not
+  reachable if the harness clock matches the firmware clock. Re-measure the rate against the current
+  ELF before touching firmware; do not widen `BAND_SETTLE_MIN_MS` to make it pass.
 - **Do not read the wrapper's exit line as the verdict when the run came from the agent's terminal.**
   When the terminal is cleaned up, the harness SIGTERMs the wrapper, so a run that COMPLETED still
   leaves `SUITE_EXIT=143` / `CTEST_EXIT=143` behind. The harness's own printed lines - the scenario
