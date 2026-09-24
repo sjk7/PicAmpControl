@@ -276,7 +276,7 @@ harness timings and the first-dit clauses are sensitive to it.
 ### Open items carried out of the relay-ordering work (2026-09-22)
 
 Both are OPEN. Each states what "done" means, so a later session can close it rather than
-derive it.
+re-derive it.
 
 1. **Prove clause (h) on its own.** Clause (h) checks that the LPF relay selection HOLDS through RX
    instead of following the 160m no-signal default. Re-introducing that defect does fail the test, but
