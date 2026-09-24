@@ -38,6 +38,10 @@ echo "✓ Prerequisites OK"
 echo "  • CMake: $(cmake --version | head -1)"
 echo "  • Python: $(python3 --version)"
 echo "  • Ninja: $(ninja --version)"
+
+# The log the user watches is followed by the in-repo Log Follower extension. A fresh clone has no
+# VSIX (it is gitignored), so make sure the matching version is installed before the run starts.
+"$REPO_ROOT/tools/setup/install_logfollower.sh" || echo "⚠ Log Follower not installed - the log tab will not follow"
 echo ""
 
 # Configure

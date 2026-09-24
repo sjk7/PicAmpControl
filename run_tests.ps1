@@ -43,6 +43,13 @@ Write-Host "  Python: $(& $Python --version)"
 Write-Host "  Ninja:  $(ninja --version)"
 Write-Host ''
 
+# The log the user watches is followed by the in-repo Log Follower extension. A fresh clone has no
+# VSIX (it is gitignored), so make sure the matching version is installed before the run starts.
+$follower = Join-Path $RepoRoot 'tools\setup\install_logfollower.ps1'
+if (Test-Path $follower) {
+    try { & $follower } catch { Write-Host "WARNING: Log Follower not installed - the log tab will not follow" }
+}
+
 # --- Configure ---------------------------------------------------------------
 Write-Host 'Configuring CMake...'
 cmake -S $CmakeSrc -B $BuildDir -G Ninja -DCMAKE_BUILD_TYPE=Debug `

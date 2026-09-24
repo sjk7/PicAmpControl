@@ -8,7 +8,9 @@ Be concise. Make requested code changes directly.
 Do not create plans, plan documents, summaries, reports, or documentation unless explicitly requested.
 Do not explain changes unless asked.
 Keep final responses to 1-3 short sentences.
-Do not repeat the task or describe what you are about to do.
+Do not repeat the task or describe what you are about to do. **Never quote the user's words back at them,
+not even to confirm you have understood - it is pure waste. Say what you did or ask the question, and
+stop.**
 This holds after long or multi-file tasks too: no review write-ups, no tables of findings, no "what I
 did" sections, no closing offers of further work. Findings belong in a file or a skill; the reply is
 still 1-3 sentences. Breaking these rules has been the most repeated failure in this repo - the rules
@@ -56,6 +58,10 @@ cannot be made again.
 - Commit and push small verified increments promptly to `origin/main`. Always pass explicit paths to
   `git add` (never `git add .`), and use `git --no-pager status --short`.
 - Delete large logs and transcripts as soon as their verdict has been read - never accumulate runs.
+- **Before deleting anything, prove the OTHER platform does not need it** (user instruction, 2026-09-24).
+  The tree is built and tested on both macOS and Windows, so a file that looks unused from one host may
+  be a script only the other one calls: grep the `.ps1` files as well as the `.sh` ones, and check
+  `tools/simulate` and `tools/setup` on both sides. When in doubt, list the candidate and ask.
 - Keep `Ai-Notes.md` up to date at the end of any session that changes design, firmware, docs or
   workflow.
 - **Record every durable finding** - a trap that cost time, a method that worked, a measurement that
