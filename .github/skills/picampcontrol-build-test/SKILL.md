@@ -98,13 +98,13 @@ wait for the run. Run it *before* launching, never during.
 2026-09-23). Keep `.mdb` scripts comment-free and document them in the neighbouring `README.md`
 (`docs/hardware/q10-bringup/README.md` now carries the rate-probe method for exactly this reason).
 
-**Hard rule: keep the editor's compile database pointing at a fresh Q10 configure.** `.clangd` and
-`.vscode/settings.json` both use `_build/My_Pic_Project/release/compile_commands.json`. If that
-directory holds an old configure, the Problems panel reports the *old* device - on 2026-09-23 it
-said `Unknown argument: '-mdfp=.../PIC16F1xxxx_DFP/1.32.471/xc8'` because the database predated the
-Q10 switch. Do not "fix" that by editing flags: re-configure that directory (the device now defaults
-to the Q10 in `device.cmake`). And do not hand-add `-mcpu=` in `.clangd` - clang has no such CPU and
-reports `Unsupported argument '18F47Q10' to option '-mcpu='`; the database already carries it.
+**Editor/language-server problems belong to a different skill.** If the Problems panel or IntelliSense
+misreports the firmware - `'xc.h' file not found`, undeclared registers such as `LATCbits`/`ADCON1`/
+`ADRES`/`PIR1bits`, `Unknown argument`/`Unsupported argument` for `-mdfp=`/`-mcpu=`, a stale
+`compile_commands.json`, or `.clangd` / `.vscode/settings.json` / `c_cpp_properties.json` edits - then
+**read `.github/skills/picampcontrol-editor-toolchain/SKILL.md`** rather than working it out from here.
+None of it can affect a build or a test: XC8 is invoked directly and needs none of that configuration,
+so a green build says nothing about it.
 
 **Hard rule: keep token and CPU output down.** The chat transcript is re-rendered on every streamed
 token, and this is not theoretical: a 2,041-line / 2.2 MB session drove the VS Code renderer to ~225%
@@ -133,67 +133,8 @@ starts work. Concretely, whenever any of these happens, write it to the skill be
 The test of whether it is recorded: could a fresh session hit the same problem and be stopped by
 what is written here? If not, it is not written yet. Do not batch this "for later" - the session that
 found it is the only one that still has the context.
-**The language servers: what actually makes XC8's headers parse (2026-09-23).** The Problems panel
-claimed `'xc.h' file not found` and then ~20 undeclared registers (`LATCbits`, `ADCON1`, `ADPCH`,
-`ADRES`, `PIR1bits`). There were FIVE separate causes, and each one on its own is enough to keep the
-cascade alive - they are listed in the order the diagnostics mislead you:
-
-1. **`clangd --query-driver` cannot work with XC8 at all.** clangd extracts a toolchain's system
-   includes by running the driver as `xc8-cc -E -v -x c -`; XC8 answers
-   `(2042) no target device specified` because clangd does not forward the `-mcpu=`/`-mdfp=` flags it
-   does not understand. Its own log says `System include extraction: driver execution failed with
-   return code: 1`. So the include paths must be stated explicitly.
-2. **The include paths belong in CMake, not in `.clangd`.** They are machine- and OS-specific, and
-   `user.cmake` can *derive* them at configure time - the compiler's include from
-   `${CMAKE_C_COMPILER}`, the pack's from `${PICAMP_DFP_PATH}`, which `device.cmake` already resolves
-   per OS - and write them into `compile_commands.json` as plain `-I` flags that every consumer
-   understands. Do not commit absolute pack paths.
-3. **Three include directories are needed, and one is easy to miss:**
-   `<pack>/xc8/pic/include` (pic18.h), **`<pack>/xc8/pic/include/proc`** (the device header itself -
-   `pic18_chip_select.h` does `#include <pic18f47q10.h>` with NO `proc/` prefix, because `-mdfp`
-   normally puts that directory on the path), and `<xc8>/pic/include` (xc.h + the C library).
-4. **The three macros are the real root cause, and they are the ones nobody guesses.** With every
-   header found, `xc.h` still expanded to *nothing*: its whole body is `#ifdef __XC8`, it reaches
-   `pic18.h` only under `#if defined(__PICC18__)`, and `pic18_chip_select.h` tests `_18F47Q10`
-   (single underscores - `__18F47Q10__` is NOT what it looks for) before including the device
-   header. XC8 defines all three itself, so a build never needs them - but a language server does,
-   and without them you get "every header found, every register undeclared", which reads like a
-   config problem and is a preprocessor problem. Verify by preprocessing directly:
-   `clang -E -D__XC8 -D__PICC18__ -D_18F47Q10 ... ` and grep the output for `LATCbits`.
-5. **XC8's own C99 header uses types clang has never heard of**: `__int24`, `__uint24`, `__bit`,
-   plus the `__far`/`__at(...)` qualifiers. Map them in `.clangd`'s Add list
-   (`-D__int24=long`, `-D__uint24=unsigned long`, `-D__bit=unsigned char`, `-D__far=`, `-D__at(x)=`)
-   - and keep that mapping OUT of the CMake options, because redefining a compiler type for the real
-     XC8 build is a genuine risk to the firmware, whereas for indexing it is free.
-
-Also, on the C/C++ extension: setting `C_Cpp.default.compileCommands` makes it **ignore**
-`includePath`/`defines` and parse the XC8 command line instead, which it cannot do - so that property
-is deliberately absent from `.vscode/settings.json`, with the reasoning written next to it.
-
-Diagnose this class of problem with `clangd --check=<file> --compile-commands-dir=<dir>` and read its
-`E[...]` lines, not the panel: the panel caches, and it kept showing `-mdfp`/`xc.h` errors that
-clangd's own check no longer produced. The extension needs a restart to drop them.
-
 **Traps found 2026-09-23 (second batch) - each one cost a run or a wrong conclusion.**
 
-- **The editor/language-server cascade - read the section above** ("The language servers: what
-  actually makes XC8's headers parse") for all five causes, in the order the diagnostics mislead you.
-  Three corrections to what was written here first, each verified on 2026-09-23:
-  * **`--query-driver=**/xc8-cc` does NOT work with XC8** and was removed from `settings.json`.
-    clangd queries the driver as `xc8-cc -E -v -x c -`, which answers
-    `(2042) no target device specified`, so the include paths must come from the compile database.
-  * **`-mdfp=` IS removable now** - but only *after* those `-I` flags exist. Removing it first is
-    exactly what turned one diagnostic into the whole cascade.
-  * **C/C++ extension:** do not set `C_Cpp.default.compileCommands`. When it is set the extension
-    IGNORES `includePath`/`defines` and parses the XC8 command line instead - where `-mdfp` means
-    nothing to it. Unset, `c_cpp_properties.json`'s per-OS pack include path resolves the headers.
-  * `.clangd`/settings changes do not apply until the language server restarts; the panel keeps
-    showing the old errors until then, which reads as "the fix did not work" - it did, twice here.
-- **There are TWO build directories and only one holds the editor's compile database.** `.clangd` and
-  `.vscode/settings.json` both point at `_build/My_Pic_Project/release`, while the Q10 build tasks
-  also write `_build/My_Pic_Project/q10_release`. Building in one leaves the other's
-  `compile_commands.json` stale - that is what put a 16F pack path in the Problems panel. After a
-  device change, re-configure the directory the editor actually reads.
 - **A probe that reads a peripheral register BEFORE stepping gets reset defaults.** `print T2CLK` and
   `print PR2` straight after `program` answered `0` and `255` - the reset values - which reads
   exactly like "the firmware's timer configuration never took effect". Step past init first

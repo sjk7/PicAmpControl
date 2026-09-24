@@ -210,6 +210,13 @@ were all deleted. Concretely, that means:
   budget, mdb and harness techniques, test names and labels, failure triage) lives only in
   `.github/skills/picampcontrol-build-test/SKILL.md`, with `.github/agents/firmware-build-test.agent.md`
   as the thin runner that must stay in sync with it and TESTING.md as the human-facing guide;
+  *editor/toolchain problems* (VS Code's Problems panel, clangd, the C/C++ extension,
+  `compile_commands.json`, `-mdfp=`/`-mcpu=` complaints, XC8 device headers or missing family macros)
+  live only in `.github/skills/picampcontrol-editor-toolchain/SKILL.md`, with the forensic detail in
+  its `references/xc8-headers.md`. That is a SEPARATE skill on purpose: neither its rules nor its
+  traps can affect a build or a test - XC8 is invoked directly and needs none of it - and keeping it
+  out of the build/test skill makes that skill cheaper to read on every build and test task. The
+  build/test skill keeps only a one-line pointer to it, and vice versa;
   *design detail* lives in `docs/` (e.g. docs/first-dit-band-detection.md); *defects and their fixes*
   in `bugfixes.md`; *historical/origin narrative* only in `prototype_reference/`. Never restate a
   command here - link to the skill.
