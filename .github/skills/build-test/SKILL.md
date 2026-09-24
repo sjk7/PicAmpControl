@@ -330,6 +330,37 @@ agent's terminal launched the run.**
   silently failed to start python looks exactly like success (empty log, exit 0). Keep the exit-code
   capture, but check the log has content before believing a task ran.
 
+## Build output paths: the device suffix, and the stale-16F-path defect class (2026-09-24)
+
+**CMake emits into a device-suffixed `out/` directory: `out/My_Pic_Project_18F47Q10/`.**
+`tools/setup/parameterise_output_dir.py` derives that suffix from the device, so it is not a free
+choice - hard-coding `out/My_Pic_Project/` anywhere names a directory the build no longer writes.
+Six live scripts did exactly that and were fixed in one pass: `tools/simulate/build_firmware.{sh,ps1}`,
+`tools/simulate/run_sim.{sh,ps1}` and `run_tests.sh` (the hex/ELF size echo). The damage was not
+cosmetic: `build_firmware.*` *verified* a hex the build had not produced - passing silently on any
+machine that still had the stale 2026-09-22 16F hex lying there - and `run_sim.*` handed **that 16F
+hex** to MDB. After any device or output-directory change, grep for the old path *and* the old device
+tokens before trusting a "verified" run.
+
+**Same class, `.vscode/`:** the `Windows-XC8` editor profile was still the 16F one
+(`PIC16F1xxxx_DFP` include path, `__16F18875__` defines), and `.vscode/launch.json` programmed the
+debug session with `out/My_Pic_Project/default.elf` - the stale 16F image. Both now use the Q10 pack
+and the suffixed path. Check `.vscode/` in any device sweep: it is not covered by the build, so
+nothing fails when it is wrong. Also note the pack roots differ per platform - on this Mac
+`~/.mchp_packs/Microchip` holds only `PIC16F1xxxx_DFP`, and the Q10 pack resolves from the MPLAB X
+install at `/Applications/microchip/mplabx/v6.35/packs/Microchip/`, which is why both roots are listed
+in each profile.
+
+## The ADC clock is not set by `ADCON1` (2026-09-24)
+
+Worth knowing before anyone derives a timing budget again. On the Q10's ADCC, **`ADCON1` has no
+clock-select field**: it is `ADDSEN`/`ADGPOL`/`ADIPEN`/`ADPPOL`, so `ADCON1 = 0x20` in `adc_init()`
+sets a guard-ring polarity bit. The divider is `ADCLKbits.ADCS` (6 bits, off Fosc), and **`adc_init()`
+never writes `ADCLK`** - the ADC runs at that register's reset default. So no TAD can be computed from
+the firmware as written; read `ADCLK`'s reset value from the datasheet and confirm it against the
+module minimum. The `Fosc/32 => TAD = 1.0 us` figure that `docs/hardware/bench-validation.md` used to
+carry was a PIC16F-era number dressed up as a derivation.
+
 ## Simulation method (moved here from `Ai-Notes.md` 2026-09-24)
 
 **mdb command reference.** `write pin <name> high|low|<N>v` drives an input, `print pin <name>` reads

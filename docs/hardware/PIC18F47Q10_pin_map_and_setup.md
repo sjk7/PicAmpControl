@@ -113,8 +113,8 @@ Two Q10-only traps already hit and recorded in the skill / `bugfixes.md`:
 
 - **`RSTOSC`**: the Q10 config map has only `HFINTOSC_64MHZ` and `HFINTOSC_1MHZ` — no `HFINT32`.
   Landing on 1 MHz runs the whole design at 1/32 clock and stretches the 1 ms tick, every
-  band-settle delay and the trip response by 32×. The port selects 64 MHz and keeps the design
-  clock honest at 32 MHz by feeding Timer2 from Fosc/8.
+  band-settle delay and the trip response by 32×. The port selects 64 MHz and feeds Timer2 from Fosc/8 so
+  the tick stays 1.000 ms; the `_XTAL_FREQ` constant was left at 32 MHz, which is a suspected bug (see 2.2).
 - **`CLKOUTEN`**: on the Q10 the default is *enabled*, and RA6 doubles as CLKOUT/OSC2. RA6 is
   `OUTPUT_LCD_E`, so the default silently hands the LCD enable line to the clock-output function
   and the panel never latches. `CLKOUTEN = OFF` is set unconditionally in `main.c`.
@@ -122,7 +122,12 @@ Two Q10-only traps already hit and recorded in the skill / `bugfixes.md`:
 ### 2.2 Clock
 
 - Internal oscillator: **HFINTOSC at 64 MHz** (the Q10's highest internal rate).
-- `_XTAL_FREQ` is kept at **32 MHz** so all existing delay/baud maths is unchanged.
+- `_XTAL_FREQ` is **32 MHz in `firmware/include/pin_map.h`, and that is probably a live bug** - not a
+  deliberate design clock. XC8 compiles `__delay_us`/`__delay_ms` from this constant, so with the core
+  actually at 64 MHz every delay in the firmware (LCD init 50/5/2/1 ms, page-clear settle,
+  `ADC_ACQUISITION_US`) runs at about **half** its nominal length. Keeping the constant at 32 MHz does not
+  preserve the old maths, it breaks it. The 32-vs-64 MHz question is open and recorded in `Ai-Notes.md`;
+  correct it only after measuring on the bench, and fix every delay dependent on it in the same change.
 - Timer2 is clocked at **Fosc/8 = 8 MHz** (`T2CLK = 0x02`), prescale 1:64 (`CKPS = 6`),
   `PR2 = 124` → a **1.000 ms system tick**.
 

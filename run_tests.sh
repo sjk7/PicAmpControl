@@ -62,8 +62,8 @@ echo ""
 echo "🔨 Building firmware..."
 cmake --build "$BUILD_DIR" > /dev/null 2>&1
 echo "✓ Firmware built"
-echo "  Hex: $(ls -lh "$REPO_ROOT/out/My_Pic_Project/default.hex" | awk '{print $5}')"
-echo "  ELF: $(ls -lh "$REPO_ROOT/out/My_Pic_Project/default.elf" | awk '{print $5}')"
+echo "  Hex: $(ls -lh "$REPO_ROOT/out/My_Pic_Project_18F47Q10/default.hex" | awk '{print $5}')"
+echo "  ELF: $(ls -lh "$REPO_ROOT/out/My_Pic_Project_18F47Q10/default.elf" | awk '{print $5}')"
 echo ""
 
 # Run tests. All CTest and simulator output goes to a log file: the MDB trace is

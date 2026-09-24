@@ -10,7 +10,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-HEX_PATH="$REPO_ROOT/out/My_Pic_Project/default.hex"
+HEX_PATH="$REPO_ROOT/out/My_Pic_Project_18F47Q10/default.hex"
 DEVICE="PIC18F47Q10"
 
 MDB_SH="$(ls -d /Applications/microchip/mplabx/*/mplab_platform/bin/mdb.sh 2>/dev/null | sort -V | tail -1 || true)"

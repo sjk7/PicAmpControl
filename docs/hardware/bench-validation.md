@@ -77,20 +77,50 @@ All detector outputs must remain within 0 to VDD at the PIC, including expected 
 
 1. Apply controlled SWR, overdrive, and drain-threshold breaches and measure the interval from the conditioned ADC signal crossing the configured threshold to the TX outputs becoming inactive. Include the ADC conversion-complete ISR capture path in the timing record.
 2. Confirm LCD refresh and internal EEPROM writes do not occur before protection evaluation in the main loop.
-3. Confirm the external overcurrent comparator trips independently of the Timer0 and ADC polling schedule.
+3. Confirm the external overcurrent comparator trips independently of the Timer2 and ADC polling schedule.
 
 ### Firmware-derived timing budget (computed from the code; confirm on the bench)
 
-These figures come directly from the clock/register configuration in `firmware/src/main.c`, at the configured `_XTAL_FREQ = 32,000,000` Hz (internal HFINTOSC, `RSTOSC = HFINT32`). Bench-confirm all of them, especially anything marked "typical", since HFINTOSC accuracy (datasheet electrical characteristics, on the order of a few percent over the full temperature/voltage range) proportionally scales every number below.
+These figures come from the clock/register configuration in `firmware/src/main.c`. The core runs at
+**64 MHz** (internal HFINTOSC, `RSTOSC = HFINTOSC_64MHZ`, `FEXTOSC = OFF`) - there is no 32 MHz internal
+setting on this part, so any older derivation that said `HFINT32` was wrong. Bench-confirm all of them,
+especially anything marked "typical": HFINTOSC accuracy (datasheet electrical characteristics, a few percent
+over the full temperature/voltage range) proportionally scales every number below.
 
-- **Timer0 tick period:** `T0CS = Fosc/4` (8 MHz instruction clock, 125 ns/instruction), prescaler `T0CKPS = 1:32` (4 us/count), `TMR0L` reloaded to 6 each interrupt (250 counts to overflow) => 250 x 4 us = **1.000 ms nominal**. This governs PEP decay, TX sequencing delays, the comparator-reset pulse, and startup-inhibit timing - it does **not** gate the trip decision itself (see below).
-- **ADC clock (TAD):** `ADCON1` selects `ADCS = Fosc/32` => TAD = 32/32,000,000 Hz = **1.0 us**. This is at or near the minimum TAD most PIC16F1xxxx ADC modules specify across temperature - confirm the PIC18F47Q10 electrical characteristics table before relying on this at temperature extremes. Note also that `ADCON1`/`ADCS` are NOT the 16F field layout on the ADCC - check the Q10 DFP header before trusting this derivation.
-- **Per-channel conversion time:** using the typical Microchip 10-bit conversion timing of ~11 TAD, each channel takes ~11 us to convert, plus an explicit **5 us acquisition delay** (`ADC_ACQUISITION_US` in `firmware/src/main.c`) inserted after switching `ADPCH` and before starting the conversion, so the sample-and-hold cap settles to the newly-selected channel first - **~16 us/channel** total. The ISR round-robins 8 channels (`g_adc_scan_channels`), so any one channel is at most **~128 us stale** when `update_protection_state()` reads it. Confirm the 5 us figure against the datasheet's acquisition-time formula for each detector's actual source impedance; it is a common conservative industry baseline, not yet bench-verified for this board.
-- **Acquisition delay applied in the ISR itself:** the `__delay_us(5)` runs inside the ADC-conversion-complete interrupt, so it briefly (5 us) delays servicing of any other pending interrupt (e.g. Timer0) - negligible next to the 1 ms tick period, and far preferable to converting on an unsettled sample.
-- **Trip-decision cadence:** `update_protection_state()` runs on every main-loop pass, unconditionally - it is not gated by the 1 ms Timer0 tick. So the software decision latency is bounded only by ADC staleness above, plus however long the main loop is blocked elsewhere before it loops back.
+- **System tick (1.000 ms):** driven by **Timer2, not Timer0** (the function is still named
+  `timer0_init()` for historical reasons, and TMR0's Fosc/4 overflow model stalled in the simulator, so
+  the tick was moved). `T2CLK = 0x02` selects Fosc/8 = 8 MHz, `T2CONbits.CKPS = 6` is a 1:64 prescale
+  => 125 kHz count rate, and `PR2 = 124` gives 125 counts => **1.000 ms nominal**. The tick is timed in
+  hardware by the PR2/prescaler chain, so it does **not** depend on `_XTAL_FREQ` and is unaffected by the
+  32-vs-64 MHz uncertainty below. This governs PEP decay, TX sequencing delays, the comparator-reset pulse
+  and startup-inhibit timing - it does **not** gate the trip decision itself (see below).
+- **ADC clock (TAD): NOT determinable from the code as written - measure it.** On the ADCC in the Q10,
+  `ADCON1` has no clock-select field at all (`ADCON1` is `ADDSEN`/`ADGPOL`/`ADIPEN`/`ADPPOL`, so the
+  firmware's `ADCON1 = 0x20` sets the guard-ring polarity bit, not a divider). The divider lives in
+  `ADCLKbits.ADCS`, a 6-bit field off Fosc, and `adc_init()` never writes `ADCLK`, so the ADC runs at the
+  **reset default** of that register. Read the reset value of `ADCLK` from the Q10 datasheet and confirm
+  the resulting TAD against the module's minimum before quoting any TAD figure; do not carry over the
+  PIC16F1xxxx `Fosc/32` numbers, which were computed for a different device and a different register.
+- **Per-channel conversion time:** using the typical Microchip 10-bit conversion timing of ~11 TAD, each
+  channel takes ~11 TAD to convert, plus an explicit **5 us acquisition delay** (`ADC_ACQUISITION_US`
+  in `firmware/src/main.c`) inserted after switching `ADPCH` and before starting the conversion, so the
+  sample-and-hold cap settles to the newly-selected channel first. In TAD terms that total is unknown until
+  `ADCLK` is resolved; convert the TAD figure above into microeconds before relying on the staleness number.
+  The ISR round-robins 8 channels (`g_adc_scan_channels`), so any one channel is at most 8 conversion times
+  stale when `update_protection_state()` reads it. Confirm the 5 us figure against the datasheet's
+  acquisition-time formula for each detector's actual source impedance; it is a conservative industry
+  baseline, not yet bench-verified for this board.
+- **Acquisition delay applied in the ISR itself:** the `__delay_us(5)` runs inside the ADC-conversion-complete
+  interrupt, so it briefly (5 us) delays servicing of any other pending interrupt (e.g. Timer2) - negligible
+  next to the 1 ms tick period, and far preferable to converting on an unsettled sample. Note that
+  `__delay_us` is compiled from `_XTAL_FREQ`, which currently reads **32 MHz in `firmware/include/pin_map.h`
+  while the core runs at 64 MHz** - so this delay, the LCD init delays and every other `__delay_*` in the
+  firmware are currently about **half** their nominal duration. That is a live bug (recorded in `Ai-Notes.md`),
+  and it makes all of the delay-based numbers here unreliable until `_XTAL_FREQ` is corrected or confirmed.
+- **Trip-decision cadence:** `update_protection_state()` runs on every main-loop pass, unconditionally - it is not gated by the 1 ms Timer2 tick. So the software decision latency is bounded only by ADC staleness above, plus however long the main loop is blocked elsewhere before it loops back.
 - **LCD writes are queued, not blocking.** `lcd_write_byte()` in `lcd_parallel.c` enqueues into a 56-entry ring buffer instead of bit-banging immediately; the main loop drains it via `lcd_service(2)` (2 bytes per pass, ~780 us worst case) after `update_protection_state()` has already run that pass. Each byte still costs ~390 us to actually transmit (2 nibbles x 2 I2C byte-writes x (8 bits x ~10 us/bit-cell + ~10 us ACK)), so a full ~34-byte STATUS-page redraw still takes ~13 ms of *wall-clock* time to fully appear, spread across ~17 loop passes - but `update_protection_state()` is no longer starved for more than ~2 bytes' worth (~780 us) between checks. The one exception is the LCD "Clear Display" command on an actual page/state transition (`lcd_write_byte_now()` + a mandatory 2 ms settle delay per the HD44780 timing spec) - that one remains a real, synchronous block, but it only happens on a transition, not on every periodic refresh.
-- **Combined worst-case firmware reaction time:** ADC staleness (<= ~0.13 ms) + LCD queue drain (~0.8 ms between `update_protection_state()` calls, or up to ~2 ms including a page-transition clear) => **low single-digit milliseconds**, no longer dominated by a ~13 ms LCD stall. This applies both to ADC-based software trips and to how quickly firmware can act on the external overcurrent comparator's output (`INPUT_OVERCURRENT_FAULT`) - the comparator itself trips asynchronously in hardware, but cutting `OUTPUT_TX`/`OUTPUT_TX_VCC`/`OUTPUT_TX_BIAS` in response still goes through this same main-loop path.
-- Measure item 1 above with this budget in mind: if the bench-measured interval is markedly larger than a few milliseconds, suspect an unexpectedly slow loop iteration or a stuck LCD transaction rather than the ADC/Timer0 configuration.
+- **Combined worst-case firmware reaction time:** ADC staleness (one full 8-channel scan - resolve in us once `ADCLK` is known) + LCD queue drain (~0.8 ms between `update_protection_state()` calls, or up to ~2 ms including a page-transition clear) => **low single-digit milliseconds**, no longer dominated by a ~13 ms LCD stall. This applies both to ADC-based software trips and to how quickly firmware can act on the external overcurrent comparator's output (`INPUT_OVERCURRENT_FAULT`) - the comparator itself trips asynchronously in hardware, but cutting `OUTPUT_TX`/`OUTPUT_TX_VCC`/`OUTPUT_TX_BIAS` in response still goes through this same main-loop path.
+- Measure item 1 above with this budget in mind: if the bench-measured interval is markedly larger than a few milliseconds, suspect an unexpectedly slow loop iteration or a stuck LCD transaction rather than the ADC/Timer2 configuration.
 
 ## Records
 

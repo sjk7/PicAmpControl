@@ -1,5 +1,5 @@
 # Builds firmware/ locally with the checked-in CMake toolchain files, producing
-# out/My_Pic_Project/default.hex for use by run_sim.ps1.
+# out/My_Pic_Project_18F47Q10/default.hex for use by run_sim.ps1.
 
 $ErrorActionPreference = "Stop"
 
@@ -20,7 +20,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 cmake --build $BuildDir
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$HexPath = Join-Path $RepoRoot "out/My_Pic_Project/default.hex"
+$HexPath = Join-Path $RepoRoot "out/My_Pic_Project_18F47Q10/default.hex"
 if (-not (Test-Path $HexPath)) {
     Write-Error "expected hex not found at $HexPath"
     exit 1

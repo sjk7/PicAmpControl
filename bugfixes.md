@@ -4,6 +4,48 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-24 — Device docs and the Windows build: stale 16F paths, a 16F editor profile, and a fabricated timing budget
+
+Four independent defects, all one shape: a fact that was true of the PIC16F18875 survived the Q10 port
+because nothing anyone edits ever pointed at it.
+
+1. **Six scripts still named the pre-port output directory `out/My_Pic_Project/`**, while CMake emits
+   into `out/My_Pic_Project_18F47Q10/` (the suffix comes from the device via
+   `parameterise_output_dir.py`). Two live consequences: `tools/simulate/build_firmware.{sh,ps1}`
+   *verified* a hex the build had not produced - passing silently wherever the stale 2026-09-22 16F
+   hex still existed - and `tools/simulate/run_sim.{sh,ps1}` handed **that 16F hex** to MDB.
+   `run_tests.sh` printed the wrong hex/ELF sizes. All six now use the suffixed path.
+2. **`.vscode/c_cpp_properties.json`'s `Windows-XC8` profile was still the 16F profile** - include path
+   at `PIC16F1xxxx_DFP/1.32.471`, defines `__16F18875__`/`_16F18875` - so on Windows the Problems panel
+   resolved the whole firmware against the wrong device header. Now the Q10 pack and
+   `__18F47Q10__`/`_18F47Q10`, with both plausible Windows pack roots listed. The `Mac-XC8` profile was
+   wrong in a quieter way: it pointed at `~/.mchp_packs/Microchip/PIC18F-Q_DFP/1.30.487`, which does
+   not exist on this Mac (`~/.mchp_packs` holds only `PIC16F1xxxx_DFP`) - the Q10 pack resolves from the
+   MPLAB X install. Both roots are now listed there too.
+3. **`.vscode/launch.json` programmed the Simulate session with `out/My_Pic_Project/default.elf`** - the
+   stale 16F ELF - so the debug session was debugging the wrong image. Fixed to the suffixed path, the
+   same one the harnesses use.
+4. **`docs/hardware/bench-validation.md`'s entire timing budget was derived from registers the firmware
+   does not write.** The Q10's ADCC has **no clock-select field in `ADCON1`** (`ADCON1` is
+   `ADDSEN`/`ADGPOL`/`ADIPEN`/`ADPPOL`, so `ADCON1 = 0x20` sets a guard-ring polarity bit); the divider
+   is `ADCLKbits.ADCS`, a 6-bit off-Fosc field, **and `adc_init()` never writes `ADCLK`**, so the ADC
+   runs at that register's reset default. The doc's "TAD = 1.0 us from `ADCS = Fosc/32`" was therefore a
+   PIC16F-era number dressed up as a derivation. The same section called the 1.000 ms tick a Timer0 tick
+   (`T0CS`/`T0CKPS`/`TMR0L = 6`) when the tick has been Timer2 since the simulator's Timer0 model stalled,
+   and claimed `RSTOSC = HFINT32`, a rate this part does not have. The section now states the true chain
+   (64 MHz core, `T2CLK = Fosc/8`, `CKPS = 1:64`, `PR2 = 124` => 1.000 ms in hardware, independent of
+   `_XTAL_FREQ`), says plainly that TAD must be read from `ADCLK`'s reset value, and records that
+   `_XTAL_FREQ = 32 MHz` against a 64 MHz core halves every `__delay_*` in the firmware.
+   `docs/project-architecture.md` and `docs/hardware/PIC18F47Q10_pin_map_and_setup.md` carried the same
+   Timer0 / "design clock" claims and are corrected too. `q10_probe.c`'s comments claimed it used "the
+   value main.c uses" for `T2CLK` - it is now marked as the pre-change Fosc/4 probe it is.
+
+Method note, because it is the reusable part: find this class of defect by grepping the **live** files
+for the previous device's tokens (`16F18875`, `PIC16F1xxxx_DFP`, `HFINT32`, `Timer0`) and for the
+unsuffixed `out/My_Pic_Project/`, rather than trusting that a documented device port touched them. All
+four survived a change whose prose documentation was thorough, and none of them lives anywhere the build
+can fail on it.
+
 ## 2026-09-24 — Ambiguity/repetition review of every `.md` and skill; three superseded files removed
 
 A pass over the tracked markdown, the two skills, the agent and the always-on files, looking for

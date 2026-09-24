@@ -6,7 +6,7 @@
       "name": "Simulate PicAmpControl (Debug)",
       "type": "mplab-core-da",
       "request": "launch",
-      "program": "${workspaceFolder}/out/My_Pic_Project/default.elf",
+      "program": "${workspaceFolder}/out/My_Pic_Project_18F47Q10/default.elf",
       "device": "PIC18F47Q10",
       "tool": "Simulator",
       "stopOnEntry": true

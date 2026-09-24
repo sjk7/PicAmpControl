@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds firmware/ locally with the checked-in CMake toolchain files, producing
-# out/My_Pic_Project/default.hex for use by run_sim.sh.
+# out/My_Pic_Project_18F47Q10/default.hex for use by run_sim.sh.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -15,7 +15,7 @@ cmake -S "$CMAKE_SRC" -B "$BUILD_DIR" -G Ninja \
 
 cmake --build "$BUILD_DIR"
 
-HEX_PATH="$REPO_ROOT/out/My_Pic_Project/default.hex"
+HEX_PATH="$REPO_ROOT/out/My_Pic_Project_18F47Q10/default.hex"
 if [[ ! -f "$HEX_PATH" ]]; then
     echo "error: expected hex not found at $HEX_PATH" >&2
     exit 1

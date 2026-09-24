@@ -3,7 +3,10 @@
  *
  * Purpose: answer the questions the Q10 port has never actually answered, with measured
  * evidence rather than assumed register values:
- *   1. Does the tick run at the frequency the firmware assumes (PR2/1:64 off Fosc/4)?
+ *   1. Does the tick run at the frequency the firmware assumes (PR2/1:64 off the selected
+ *      Timer2 clock)? NOTE: this probe predates the move to T2CLK = Fosc/8 in main.c - it still
+ *      writes 0x01 (Fosc/4), so its timing confirms the PR2/prescaler chain only, not the clock
+ *      source the shipping firmware now uses.
  *   2. Does an interrupt actually dispatch once IPEN + the source priority bit are set?
  *   3. Does T1CKIPPS accept the value the firmware writes (0x19), and is that RD1 on this device?
  *   4. Does the NVM (EEPROM) register sequence complete, i.e. is the Q10 NVM driver plausible?
@@ -56,8 +59,10 @@ void main(void) {
     TRISCbits.TRISC0 = 1;
     WPUCbits.WPUC0 = 1;
 
-    /* --- Timer2: the same setup timer0_init() uses (T2CLK = Fosc/4, 1:64, PR2 = 124) --- */
-    T2CLK = 0x01;              /* Fosc/4: the value main.c uses and that was verified on Q10 */
+    /* --- Timer2: prescaler/PR2 as timer0_init() uses, but T2CLK here is still Fosc/4;
+     *     main.c now selects Fosc/8 (T2CLK = 0x02) so the tick lands at 1.000 ms off the
+     *     64 MHz core. This probe's Fosc/4 predates that change. --- */
+    T2CLK = 0x01;              /* Fosc/4: what the probe was written against, NOT what main.c uses now */
     T2CONbits.CKPS = 6;        /* 1:64 prescale */
     T2CONbits.OUTPS = 0;
     PR2 = 124;                 /* (124+1) * 64 / Fosc = 1.000ms at 8 MHz */

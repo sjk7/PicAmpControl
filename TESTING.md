@@ -258,7 +258,7 @@ rather than passing vacuously.
 
 The test drives two firmware globals directly (`write /r <address> <bytes>`), because this mdb
 build cannot write a C variable by name — it fails with `For input string: "<addr> "`. The
-addresses are read from `out/My_Pic_Project/default.sym` at run time, so they follow rebuilds.
+addresses are read from `out/My_Pic_Project_18F47Q10/default.sym` at run time, so they follow rebuilds.
 
 Because simulating the full 60 s timeout would need ~480M instructions, clause 4 proves the
 counter really advances (~1 ms/ms) and then injects an idle count just below the threshold, so

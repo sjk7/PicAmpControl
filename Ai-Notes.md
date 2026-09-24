@@ -234,6 +234,13 @@ Fosc/8 is a separate, deliberate choice (64 MHz / 8 = the same 8 MHz timer input
 had) and is correct. Do not change the constant until it is measured on the simulator, because the
 harness timings and the first-dit clauses are sensitive to it.
 
+**And a second firmware clock item, found while clearing up the device docs (2026-09-24): the ADC
+clock divider is never set.** On the Q10's ADCC the divider is `ADCLKbits.ADCS` (6 bits off Fosc), and
+`adc_init()` never writes `ADCLK`, so the ADC runs at that register's reset default. The Q10's `ADCON1`
+has no clock field at all (`ADDSEN`/`ADGPOL`/`ADIPEN`/`ADPPOL`), so `ADCON1 = 0x20` there is a
+guard-ring polarity bit, not `ADCS`. Any TAD claim must be read from the datasheet's `ADCLK` reset value
+and confirmed against the module minimum; `docs/hardware/bench-validation.md` no longer quotes one.
+
 ### Open items carried out of the relay-ordering work (2026-09-22)
 
 Both are OPEN. Each states what "done" means, so a later session can close it rather than
