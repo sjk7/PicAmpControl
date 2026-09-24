@@ -126,6 +126,45 @@ to convert steps with: use the measured relationship, **1695 `Stepi` steps per f
 This is also why the firmware's ms windows look 2x longer than the model's own ms, and why
 `BOOT_STEPS = 16_500_000` (from "16 MIPS at 64 MHz") is ~10x too large.
 
+## clock_only_probe.c / .mdb - the clock on its own, oscillator programmed in code (2026-09-24)
+
+`clock_check_probe.mdb` measured the *firmware*, which drags the LCD, the ADC scan, the EEPROM and the
+menu loop through every step and makes MDB print a warning for each. This probe removes all of that:
+`clock_only_probe.c` is the config words, the Timer2 setup from `timer0_init()`, one ISR that
+increments `g_ticks`, and a bare `while (1) {}` - no peripherals, no printing, no delays.
+
+It also programs the oscillator **in code**, because the model does not apply the config word:
+
+```
+OSCCON1 = 0x60;   /* NDIV = 0 (/1), NOSC = 0b0110 = HFINTOSC as the system clock */
+OSCFRQ  = 0x07;   /* HFFRQ = 64 MHz */
+```
+
+Build and run:
+
+```
+xc8-cc -mcpu=18F47Q10 -mdfp=/Applications/microchip/mplabx/v6.35/packs/Microchip/PIC18F-Q_DFP/1.30.487/xc8 \
+       -O1 -gdwarf-3 -std=c99 docs/hardware/q10-bringup/clock_only_probe.c -o _build/clock_probe/clock_only_probe.elf
+python tools/simulate/run_mdb_probe.py docs/hardware/q10-bringup/clock_only_probe.mdb
+```
+
+| Steps | `g_ticks` | `Stopwatch` |
+|---|---|---|
+| 5,000 | 4 | 9958 cycles (9.958 ms) |
+| 305,000 | 304 | 609056 cycles (609.056 ms) |
+| 605,000 | 604 | 1208154 cycles (1.208154 s) |
+| 905,000 | 903 | 1807255 cycles (1.807255 s) |
+
+- **1000.0 `Stepi` steps per tick**, in every block, and **599,098 cycles per 300,000 steps**
+  (1.997 cycles per step for the tight `while (1)` loop).
+- So the tick costs **1997 model cycles = 2.0 model-ms** where silicon would give 1000 cycles = 1.000 ms.
+  The full firmware measured 1990 cycles per tick against the same clock - the tick period is a
+  property of the model's Timer2, not of what the code is doing.
+- Writing `OSCCON1`/`OSCFRQ` by hand changes neither figure, so **the model cannot be made to run at
+  64 MHz**: it ignores the config word and the oscillator registers, clocks Timer2 2x slow (as if
+  Fosc were 32 MHz, or the prescaler were 1:128), and runs the core itself ~8x slow. There is no
+  setting to correct and no valid "sim MHz" to quote; convert with measurements only.
+
 ## Why this exists
 
 The Q10 port had been through several rounds of "the simulator can't do it" verdicts, each of

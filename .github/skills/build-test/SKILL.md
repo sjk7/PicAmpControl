@@ -322,6 +322,18 @@ standing rule). What that touched, and what it caught:
   `BOOT_STEPS = 16_500_000` (derived from "16 MIPS at 64 MHz") and any harness that multiplies a
   firmware-ms window by a simulated-MHz figure. Cross-check with `Stopwatch`, and expect the
   firmware's ms to run 2x the model's ms.
+- **Clock-only control (2026-09-24, `clock_only_probe.c`/`.mdb`): the 2x is the model's Timer2, not
+  the firmware's work load, and no setup can fix it.** Strip everything - config words, the
+  `timer0_init()` Timer2 setup, one ISR incrementing a counter, a bare `while (1) {}`, no LCD, no ADC,
+  no NVM, no printing - and program the oscillator in code (`OSCCON1 = 0x60`, `OSCFRQ = 0x07`), since
+  the model does not apply the `RSTOSC` config word. Result: **exactly 1000.0 `Stepi` steps per tick**
+  in every 300,000-step block, 599,098 cycles per 300,000 steps (1.997 cycles/step), i.e. **1997 model
+  cycles = 2.0 model-ms per tick** where silicon gives 1000 cycles = 1.000 ms - the same ~1990
+  cycles/tick the full firmware showed. So the model ignores the clock configuration (config word and
+  SFR writes alike), clocks Timer2 2x slow and the core ~8x slow against the real 64 MHz / 16 MIPS,
+  and **there is no "sim MHz" to set**: keep every timing assertion in measured `Stepi` counts, and
+  when a measurement is wanted, measure a peripheral-free image like this one so the rate is not
+  blended with LCD/ADC work.
 - **`_XTAL_FREQ` is 32 MHz while the core is 64 MHz, and that is probably a live bug (2026-09-24).**
   The oscillator is not at fault: `RSTOSC = HFINTOSC_64MHZ` is the internal HFINTOSC at its maximum,
   and the part has no higher internal setting. But XC8 computes `__delay_us()`/`__delay_ms()` from

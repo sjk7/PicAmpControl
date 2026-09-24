@@ -239,6 +239,13 @@ clocked from 32 MHz). Core and peripherals disagree by ~8x and both sit an order
 the real 64 MHz / 16 MIPS, so simulator steps must be converted with the measured 1695/firmware-ms,
 never with datasheet clock arithmetic. Evidence: `docs/hardware/q10-bringup/clock_check_probe.mdb`.
 
+**And it cannot be fixed: the clock-only image agrees.** `clock_only_probe.c` (config words, the
+`timer0_init()` Timer2 setup, one ISR, a bare `while (1) {}` - no LCD/ADC/NVM/printing) with the
+oscillator programmed in code (`OSCCON1 = 0x60`, `OSCFRQ = 0x07`) gives **exactly 1000 `Stepi` steps
+per tick** and **1997 model cycles = 2.0 model-ms per tick**, the same ~1990 as the full firmware. The
+model ignores the clock configuration and clocks Timer2 2x slow, so no setting makes it run at 64 MHz;
+measure peripheral-free when a rate is wanted.
+
 **Same family, and probably a live bug (2026-09-24): `_XTAL_FREQ = 32000000UL` in `pin_map.h` while
 the core actually runs at 64 MHz.** `RSTOSC = HFINTOSC_64MHZ` is the internal HFINTOSC at its maximum
 - there is no higher internal setting - so the oscillator is not the problem. The mismatch is that
