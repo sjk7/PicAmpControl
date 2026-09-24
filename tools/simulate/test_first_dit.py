@@ -74,13 +74,14 @@ SYM_PATH = harness.IMAGE_DIR / "default.sym"
 # ---------------------------------------------------------------- device selection
 # PIC18F47Q10 only, the sole device (see device.cmake). The instruction rate is a property of the
 # part's clock chain: 64 MHz core, T2CLK = Fosc/8 -> 8 MHz Timer2 input and a 1 ms tick. The value
-# is MEASURED, not assumed: 200,000 `Stepi` steps advance the 1 ms tick by 106, i.e. ~1887 steps
-# per simulated millisecond (probe and transcript in docs/hardware/q10-bringup, 2026-09-22).
+# is MEASURED, not assumed: 531 Timer2-interrupt ticks per 900,000 `Stepi` steps -> 1695 steps per
+# firmware millisecond (docs/hardware/q10-bringup/tick_rate_probe.mdb, 2026-09-24). An earlier
+# 200,000-step bracket read 1887; the longer measurement supersedes it.
 #
 # The unit matters: every wait in this module is `Stepi ms * INSTRUCTIONS_PER_MS`, so a wrong
 # figure makes the harness wait the wrong amount of simulated time.
 DEVICE = harness.DEVICE
-INSTRUCTIONS_PER_MS = 1887
+INSTRUCTIONS_PER_MS = 1695
 
 PTT_PIN = "RC0"
 SETTLE_PIN = "RC1"

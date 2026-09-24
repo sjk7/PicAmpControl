@@ -226,9 +226,10 @@ number. Detail: the skill's instruction-rate block and `bugfixes.md` 2026-09-23/
 900,000 `Stepi` steps, from the firmware's own tick counter; probe and table in
 `docs/hardware/q10-bringup/tick_rate_probe.mdb` / its README). So 1625 is ~4% low, 1887 is ~11% high,
 and `BOOT_STEPS = 16_500_000` in `probe_q10_ptt_path.py` is ~10x too large (the 1000 ms boundary is
-at ~1.70M steps). **The harness constants have not been changed yet** - that shifts every assertion
-window and interacts with the open first-dit clause (c) failure, so it is a decision for the operator,
-not a tidy-up.
+at ~1.70M steps). **All harness constants were set to 1695 on 2026-09-24** (`trace_ptt_sequence.py`,
+`first_dit_invariants.py`, `test_first_dit.py`, and `probe_q10_ptt_path.py`'s `BOOT_STEPS =
+1_695_000`) so the tests are immune to the simulator's clock; the suite must be re-run against the
+new rate (it shifts every window, and the open first-dit clause (c) failure must be re-read).
 
 **And there is no single "sim MHz": the model ignores the oscillator configuration outright.**
 After 300,000 steps `OSCCON1`/`OSCFRQ`/`OSCCON3` all read 0 - it does not apply `RSTOSC =

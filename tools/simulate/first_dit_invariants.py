@@ -49,10 +49,10 @@ BAND_OUT_OF_SPEC = 7
 
 # Instruction rate, MEASURED (see trace_ptt_sequence.py INSTRUCTIONS_PER_MS). This file MUST stay
 # in sync with that one - a wrong value makes every timing invariant (I6, hot-switch) measure time
-# ~5x short, which reported a bogus "HOT SWITCH at 7.3ms" when the real gap was 36.5ms against a
-# 20ms settle. Read the rate from the same place; do not re-derive it.
-# PIC18F47Q10 is the only device, so the rate is a constant: ~1625 instructions per simulated ms.
-_INSTRUCTIONS_PER_MS = 1625
+# wrong. Read the rate from the same place; do not re-derive it.
+# PIC18F47Q10 is the only device, so the rate is a constant: 1695 instructions per simulated
+# firmware-ms (measured 2026-09-24, docs/hardware/q10-bringup/tick_rate_probe.mdb).
+_INSTRUCTIONS_PER_MS = 1695
 SECONDS_PER_INSTRUCTION = 1.0 / (_INSTRUCTIONS_PER_MS * 1000.0)
 
 

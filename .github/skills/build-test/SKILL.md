@@ -290,12 +290,14 @@ standing rule). What that touched, and what it caught:
   `run_mdb_probe.py`. Readings: 381 -> 559 -> 734 -> 912 ticks over four 300,000-step blocks, so
   531 ticks per 900,000 steps = **1694.9 steps/ms** (each single block agrees within ~1%: 1685, 1714,
   1685). So **1625 is ~4% low, 1887 is ~11% high, and `BOOT_STEPS = 16_500_000` in
-  `probe_q10_ptt_path.py` is ~10x too large (the 1000 ms boundary is at ~1.70M steps) - replace that
-  one with ~1_695_000.** The startup window caps this counter at 1000 ticks, so it is the widest
-  clean span available; the ±1% per-block spread is the simulator's own jitter, not measurement
-  noise. **The harness constants were deliberately NOT changed in that pass**: moving them shifts
-  every window in both harnesses and interacts with the open first-dit clause (c) failure, so it is a
-  separate, test-affecting change.
+  `probe_q10_ptt_path.py` is ~10x too large (the 1000 ms boundary is at ~1.70M steps).** The startup
+  window caps this counter at 1000 ticks, so it is the widest clean span available; the ±1% per-block
+  spread is the simulator's own jitter, not measurement noise. **All harness constants were set to
+  the measured 1695 on 2026-09-24** (`trace_ptt_sequence.py`, `first_dit_invariants.py`,
+  `test_first_dit.py`, and `probe_q10_ptt_path.py`'s `BOOT_STEPS = 1_695_000`) - a single measured
+  value everywhere is what makes the tests immune to the simulator's clock. Re-run the suite after
+  the change (it shifts every window, and the open first-dit clause (c) macOS failure must be
+  re-read against the corrected rate).
   **Do not use `TMR2` to measure time in the simulator.** It reads back a value that advances only
   ~16 counts per 300,000 steps (177 firmware-ms), which no Fosc/8-and-1:64 model can produce; the
   interrupt arrives on schedule but the model's timer *count* is not the datasheet count. `T2CON`
