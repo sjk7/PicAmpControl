@@ -3,7 +3,11 @@
 
 #include <xc.h>
 
-#define _XTAL_FREQ 32000000UL
+/* System oscillator: HFINTOSC at 64 MHz (RSTOSC = HFINTOSC_64MHZ, the core the part actually
+   runs). XC8 compiles __delay_us()/__delay_ms() from this, so it must match the real 64 MHz core
+   or every delay in the LCD init, the page-clear settle and the ADC acquisition runs at the wrong
+   length. There is no 32 MHz internal setting on this part. */
+#define _XTAL_FREQ 64000000UL
 
 /* Outputs are written through the LAT register, inputs are read from PORT.
    Writing a PORT bit is a read-modify-write of the whole port latch, so a pin whose

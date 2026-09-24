@@ -4,6 +4,18 @@ Tracks bugs found in this codebase (via code review, refactors, or testing) alon
 the fix applied. Newest entries at the top. This file is maintained going forward as
 part of normal development, not just during large refactors.
 
+## 2026-09-24 — `_XTAL_FREQ` corrected from 32 MHz to 64 MHz
+
+`firmware/include/pin_map.h` defined `_XTAL_FREQ 32000000UL` while the core runs
+`RSTOSC = HFINTOSC_64MHZ` (64 MHz, 16 MIPS). XC8 compiles `__delay_us()`/`__delay_ms()` from that
+macro, so every firmware delay - the LCD init sequence (50/5/2/1 ms), the page-clear settle and
+`ADC_ACQUISITION_US` - was compiled about half its nominal length. It had been flagged "under
+investigation" on 2026-09-24; the fix is simply to set `_XTAL_FREQ 64000000UL` to match the real
+core, and the `main.c` comments that described 32 MHz as a deliberate "design clock" were corrected.
+This only affects the firmware's own compiled delay loops: the simulator harnesses' `Stepi` constants
+(1625/1887, measured 1695) are independent of `_XTAL_FREQ` and were deliberately not changed.
+
+
 ## 2026-09-24 — Device docs and the Windows build: stale 16F paths, a 16F editor profile, and a fabricated timing budget
 
 Four independent defects, all one shape: a fact that was true of the PIC16F18875 survived the Q10 port

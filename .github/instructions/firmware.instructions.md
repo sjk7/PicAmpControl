@@ -37,10 +37,9 @@ build or a test, because XC8 is invoked directly and needs none of it.
 
 - The clock chain is fixed and deliberate: `RSTOSC = HFINTOSC_64MHZ` (the internal oscillator's
   maximum - the part has no 32 MHz setting), Timer2 `T2CLK = Fosc/8` (8 MHz) with `PR2 = 124` for the
-  1.000 ms tick, and `_XTAL_FREQ = 32 MHz` kept as the design clock.
-- **`_XTAL_FREQ` is under investigation.** XC8 computes `__delay_us`/`__delay_ms` from it, so a 32 MHz
-  constant against a 64 MHz core makes the LCD init, page-clear and ADC-acquisition delays about half
-  as long as their names claim. Do not change it - and do not "tidy" the clock chain - until that is
-  measured on the simulator; the harness windows are sensitive to it.
+  1.000 ms tick, and `_XTAL_FREQ = 64000000UL` in `pin_map.h` matching the real core (it had been
+  left at 32 MHz; fixed 2026-09-24).
+- XC8 compiles `__delay_us`/`__delay_ms` from `_XTAL_FREQ`, so it must match the 64 MHz core or the
+  LCD init, page-clear and ADC-acquisition delays run at the wrong length. It now does.
 - Never guess a configuration word. Derive it from the DFP's cfgmap, and leave the pragma block at the
   top of `main.c` as the one place they are declared.

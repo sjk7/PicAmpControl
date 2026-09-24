@@ -155,7 +155,7 @@ Menu settings persist in the PIC's internal EEPROM; no external EEPROM is requir
 ## Current hardware assumptions
 
 - MCU: PIC18F47Q10-I/P (PDIP-40)
-- Clock: internal HFINTOSC at 64 MHz (`RSTOSC = HFINTOSC_64MHZ`, `FEXTOSC = OFF`); no external crystal is fitted. The part has no 32 MHz internal setting, so Timer2 is fed Fosc/8 (8 MHz) and `_XTAL_FREQ` stays at the 32 MHz design clock - see the configuration note at the top of `firmware/src/main.c`
+- Clock: internal HFINTOSC at 64 MHz (`RSTOSC = HFINTOSC_64MHZ`, `FEXTOSC = OFF`); no external crystal is fitted. The part has no 32 MHz internal setting, so Timer2 is fed Fosc/8 (8 MHz) and `_XTAL_FREQ` is 64 MHz to match the core (`firmware/include/pin_map.h`).
 - Display: 1602 LCD driven in 4-bit parallel mode (RS, E, D4-D7); no I2C backpack
 - Frequency counter: `INPUT_FREQ_COUNTER` routed to Timer1 T1CKI through PPS
 - LPF band select: one dedicated active-high output per band (six bands)

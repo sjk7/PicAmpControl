@@ -330,19 +330,29 @@ standing rule). What that touched, and what it caught:
   in every 300,000-step block, 599,098 cycles per 300,000 steps (1.997 cycles/step), i.e. **1997 model
   cycles = 2.0 model-ms per tick** where silicon gives 1000 cycles = 1.000 ms - the same ~1990
   cycles/tick the full firmware showed. So the model ignores the clock configuration (config word and
-  SFR writes alike), clocks Timer2 2x slow and the core ~8x slow against the real 64 MHz / 16 MIPS,
-  and **there is no "sim MHz" to set**: keep every timing assertion in measured `Stepi` counts, and
-  when a measurement is wanted, measure a peripheral-free image like this one so the rate is not
-  blended with LCD/ADC work.
-- **`_XTAL_FREQ` is 32 MHz while the core is 64 MHz, and that is probably a live bug (2026-09-24).**
-  The oscillator is not at fault: `RSTOSC = HFINTOSC_64MHZ` is the internal HFINTOSC at its maximum,
-  and the part has no higher internal setting. But XC8 computes `__delay_us()`/`__delay_ms()` from
-  `_XTAL_FREQ`, and the firmware uses them for real work - the LCD init sequence (50/5/2/1 ms), the
-  page-clear settle, and `ADC_ACQUISITION_US`. A 32 MHz constant against a 64 MHz core makes those
-  delays about half as long as their names claim. Timer2's `T2CLK = Fosc/8` is separate and correct
-  (64/8 = the 8 MHz timer input the 32 MHz design used). **Do not change the constant to "fix" it
-  before measuring**: the harness windows and the first-dit clauses are sensitive to it, and this is
-  the same unresolved unit question as the block above.
+  SFR writes alike), clocks Timer2 2x slow and the core ~8x slow against the real 64 MHz / 16 MIPS.
+  **The authoritative fix (Microchip docs, 2026-09-24): the MPLAB X Simulator is a discrete-event
+  model that ignores config bits and oscillator registers, and times everything from
+  Project Properties > Simulator > Oscillator Options > Instruction Frequency (Fcyc).** Set Fcyc to
+  64 MHz there and the Stopwatch and instruction timing run at 64 MHz regardless of the code.
+  **Scripted `mdb.sh <file>` runs have no project, so that property cannot reach the harnesses** - a
+  64 MHz simulation needs an MPLAB X project (or the VS Code `microchip.mplab-core-da` Simulate
+  session) with Fcyc set there. The MDB `set` command does not expose it either (tried 2026-09-24):
+  `set InstructionFrequency 64` and `... 64000000` are accepted without error but leave the tick
+  counts and `Stopwatch` bit-identical (4/304 ticks, 9958/609056 cycles), and `print
+  InstructionFrequency` / `print Simulator.InstructionFrequency` both answer `Symbol does not exist`,
+  so the key is not settable in command-file mode. Until a project exists, keep every timing
+  assertion in measured `Stepi`
+  counts (1695 per firmware-ms), and when a measurement is wanted, use a peripheral-free image like
+  `clock_only_probe.c` so the rate is not blended with LCD/ADC work. This firmware has no PLL-lock
+  wait (HFINTOSC is directly 64 MHz), so the usual `#ifndef SIMULATION` skip is not required.
+- **`_XTAL_FREQ` must match the real 64 MHz core (fixed 2026-09-24 - it had been 32 MHz).** XC8
+  compiles `__delay_us()`/`__delay_ms()` from it, and the firmware uses them for the LCD init sequence
+  (50/5/2/1 ms), the page-clear settle and `ADC_ACQUISITION_US`. It now reads `64000000UL` in
+  `firmware/include/pin_map.h`, matching `RSTOSC = HFINTOSC_64MHZ`. Timer2's `T2CLK = Fosc/8` is
+  separate and untouched. This changes only the firmware's compiled delay loops - it does NOT change
+  the harness `Stepi` constants (1625/1887, measured 1695), which are independent of `_XTAL_FREQ` and
+  remain unsettled until the operator picks one.
 - **DO NOT ISSUE PARALLEL EDITS TO THE SAME FILE.** Two concurrent edits to `firmware/src/main.c`
   interleaved and duplicated whole blocks (the IPEN block and the ADFM block both came back mangled),
   and the file had to be restored from HEAD and redone one edit at a time. Batch edits across

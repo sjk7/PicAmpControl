@@ -14,11 +14,10 @@
    MCLR is EXTMCLR/INTMCLR, and BORV uses VBOR_xxx names - see the DFP's 18f47q10.cfgmap.
    
    THE CLOCK IS NOT A FREE CHOICE: this part's config map offers only two reset oscillator
-   settings, `HFINTOSC_64MHZ` and `HFINTOSC_1MHZ` (there is no HFINT32 name here). The rest of
-   the firmware assumes _XTAL_FREQ = 32 MHz, so 1 MHz would run the amplifier at 1/32 the design
-   clock and silently stretch the 1 ms tick, every band-settle delay and the trip response by
-   32x. Choose 64 MHz and keep the design clock honest at 32 MHz instead, by using Fosc/8 for
-   Timer2. 64 MHz is this part's highest internal oscillator rate. */
+   settings, `HFINTOSC_64MHZ` and `HFINTOSC_1MHZ` (there is no HFINT32 name here). Choose the
+   64 MHz setting - the part's highest internal rate - and match `_XTAL_FREQ` to it (pin_map.h)
+   so the XC8 `__delay_*` loops are compiled for the real core. Timer2 takes Fosc/8 so its input
+   is 8 MHz and the 1 ms tick falls out of the PR2/prescaler chain below. */
 #pragma config RSTOSC = HFINTOSC_64MHZ
 
 #pragma config WDTE = OFF
@@ -404,9 +403,7 @@ void timer0_init(void) {
 
        Timer2 is clocked so that (clock / prescale / (PR2+1)) = 1 kHz:
          PIC18F47Q10: 64 MHz core, Fosc/8 = 8 MHz, 1:64, PR2 = 124 -> 8e6/64/125   = 1.000 kHz
-       The part has no 32 MHz internal setting, so it takes the Fosc/8 clock divider to reach the
-       same 8 MHz Timer2 input and keep _XTAL_FREQ = 32 MHz meaningful for the rest of the
-       firmware. T2CLK is a code, not a divisor: 0x01 = Fosc/4, 0x02 = Fosc/8 (per the DFP). */
+       T2CLK is a code, not a divisor: 0x01 = Fosc/4, 0x02 = Fosc/8 (per the DFP). */
     T2CLK = 0x02;         /* Fosc/8: 64 MHz core -> 8 MHz Timer2 input */
     T2CONbits.CKPS = 6;   /* 1:64 prescale */
     T2CONbits.OUTPS = 0;  /* 1:1 postscale */
@@ -1573,6 +1570,19 @@ int main(void) {
     unsigned int overdrive_power = 0;
     unsigned int drain_voltage_v = 0;
     unsigned int current_raw = 0;
+
+    /* Internal oscillator at 64 MHz, written explicitly.
+     *
+     * On silicon the config word (`#pragma config RSTOSC = HFINTOSC_64MHZ`) selects this at reset,
+     * which is why it was implicit until now. The MDB simulator does NOT apply the config word -
+     * after a full boot its `OSCCON1`/`OSCFRQ` still read 0 (measured 2026-09-24) - so a simulated
+     * run is not at the design clock unless the clock is programmed in code. Writing what the config
+     * word already implies is harmless on hardware and makes the simulation match:
+     *   NDIV = 0 (/1), NOSC = 0b0110 = HFINTOSC, HFFRQ = 0x07 = 64 MHz
+     * (HFFRQ has no 32 MHz step above 16: 0 = 1, 1 = 2, 2 = 4, 3 = 8, 4 = 12, 5 = 16, 6 = 32, 7 = 64.) */
+    OSCCON1 = 0x60;
+    OSCFRQ = 0x07;
+
     TRISAbits.TRISA0 = 1;
     TRISAbits.TRISA1 = 1;
     TRISAbits.TRISA2 = 1;

@@ -217,7 +217,7 @@ steps"; the direct probe of that same 1000 ms boundary put it at ~1.5-1.75M step
 firmware-ms. Related: the two harnesses disagree by 16% (`test_first_dit.py` uses 1887, the others
 1625), and 1887 is documented as measured in `ff931f7`. The clock chain itself is settled and must not
 be re-litigated without evidence: core `RSTOSC = HFINTOSC_64MHZ`, Timer2 on `T2CLK = Fosc/8` with
-`PR2 = 124` giving the 1.000 ms tick, and `_XTAL_FREQ = 32 MHz` kept as the design clock for delays.
+`PR2 = 124` giving the 1.000 ms tick, and `_XTAL_FREQ = 64000000UL` in `pin_map.h` matching the core.
 The open question is what MDB's `Stepi` actually counts - one instruction or something else - and
 therefore which constant is right. One measurement settles it; do not "fix" it by picking the tidier
 number. Detail: the skill's instruction-rate block and `bugfixes.md` 2026-09-23/24.
@@ -246,17 +246,19 @@ per tick** and **1997 model cycles = 2.0 model-ms per tick**, the same ~1990 as 
 model ignores the clock configuration and clocks Timer2 2x slow, so no setting makes it run at 64 MHz;
 measure peripheral-free when a rate is wanted.
 
-**Same family, and probably a live bug (2026-09-24): `_XTAL_FREQ = 32000000UL` in `pin_map.h` while
-the core actually runs at 64 MHz.** `RSTOSC = HFINTOSC_64MHZ` is the internal HFINTOSC at its maximum
-- there is no higher internal setting - so the oscillator is not the problem. The mismatch is that
-`__delay_us()`/`__delay_ms()` are computed by XC8 from `_XTAL_FREQ`, and this firmware uses them for
-real work: the LCD init sequence (50/5/2/1 ms), the page-clear settle, and the ADC acquisition delay.
-A 32 MHz constant against a 64 MHz core means those delays come out about twice too short as a
-matter of arithmetic, not of opinion - which is the opposite of what the comment at `main.c`'s
-`timer0_init()` intends when it says keeping `_XTAL_FREQ` at 32 MHz stays "meaningful". Timer2's
-Fosc/8 is a separate, deliberate choice (64 MHz / 8 = the same 8 MHz timer input the 32 MHz design
-had) and is correct. Do not change the constant until it is measured on the simulator, because the
-harness timings and the first-dit clauses are sensitive to it.
+**The actual lever is MPLAB X's Simulator > Oscillator Options > Instruction Frequency (Fcyc),** set to
+64 MHz - the simulator ignores config bits/oscillator registers and times from that project property.
+Scripted `mdb.sh` runs have no project, so the harnesses can't use it and stay on the measured 1695
+steps per firmware-ms; a 64 MHz simulation needs an MPLAB X project (or the VS Code MPLAB Simulate
+session) with Fcyc = 64 MHz.
+
+**FIXED 2026-09-24: `_XTAL_FREQ` was 32 MHz against the real 64 MHz core.** `__delay_us()`/
+`__delay_ms()` are computed by XC8 from `_XTAL_FREQ`, and this firmware uses them for real work: the
+LCD init sequence (50/5/2/1 ms), the page-clear settle, and the ADC acquisition delay - so a 32 MHz
+constant against a 64 MHz core made every one of those about half as long as its name claims.
+`firmware/include/pin_map.h` now defines `_XTAL_FREQ 64000000UL`, matching `RSTOSC = HFINTOSC_64MHZ`.
+This changes only the firmware's compiled delay loops, not the harness `Stepi` constants (1625/1887,
+measured 1695), which stay unsettled until the operator picks one. Timer2's Fosc/8 chain is untouched.
 
 **And a second firmware clock item, found while clearing up the device docs (2026-09-24): the ADC
 clock divider is never set.** On the Q10's ADCC the divider is `ADCLKbits.ADCS` (6 bits off Fosc), and
