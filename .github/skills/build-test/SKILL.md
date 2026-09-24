@@ -283,6 +283,15 @@ standing rule). What that touched, and what it caught:
   both be right only if `Stepi` counts something other than one instruction. Nothing was changed in
   either place: settle it with a single measurement, because if the harness rate is wrong by 10x then
   every assertion window in both harnesses is wrong by 10x.**
+- **`_XTAL_FREQ` is 32 MHz while the core is 64 MHz, and that is probably a live bug (2026-09-24).**
+  The oscillator is not at fault: `RSTOSC = HFINTOSC_64MHZ` is the internal HFINTOSC at its maximum,
+  and the part has no higher internal setting. But XC8 computes `__delay_us()`/`__delay_ms()` from
+  `_XTAL_FREQ`, and the firmware uses them for real work - the LCD init sequence (50/5/2/1 ms), the
+  page-clear settle, and `ADC_ACQUISITION_US`. A 32 MHz constant against a 64 MHz core makes those
+  delays about half as long as their names claim. Timer2's `T2CLK = Fosc/8` is separate and correct
+  (64/8 = the 8 MHz timer input the 32 MHz design used). **Do not change the constant to "fix" it
+  before measuring**: the harness windows and the first-dit clauses are sensitive to it, and this is
+  the same unresolved unit question as the block above.
 - **DO NOT ISSUE PARALLEL EDITS TO THE SAME FILE.** Two concurrent edits to `firmware/src/main.c`
   interleaved and duplicated whole blocks (the IPEN block and the ADFM block both came back mangled),
   and the file had to be restored from HEAD and redone one edit at a time. Batch edits across

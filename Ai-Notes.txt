@@ -325,6 +325,18 @@ The open question is what MDB's `Stepi` actually counts - one instruction or som
 therefore which constant is right. One measurement settles it; do not "fix" it by picking the tidier
 number. Detail: the skill's instruction-rate block and `bugfixes.md` 2026-09-23/24.
 
+**Same family, and probably a live bug (2026-09-24): `_XTAL_FREQ = 32000000UL` in `pin_map.h` while
+the core actually runs at 64 MHz.** `RSTOSC = HFINTOSC_64MHZ` is the internal HFINTOSC at its maximum
+- there is no higher internal setting - so the oscillator is not the problem. The mismatch is that
+`__delay_us()`/`__delay_ms()` are computed by XC8 from `_XTAL_FREQ`, and this firmware uses them for
+real work: the LCD init sequence (50/5/2/1 ms), the page-clear settle, and the ADC acquisition delay.
+A 32 MHz constant against a 64 MHz core means those delays come out about twice too short as a
+matter of arithmetic, not of opinion - which is the opposite of what the comment at `main.c`'s
+`timer0_init()` intends when it says keeping `_XTAL_FREQ` at 32 MHz stays "meaningful". Timer2's
+Fosc/8 is a separate, deliberate choice (64 MHz / 8 = the same 8 MHz timer input the 32 MHz design
+had) and is correct. Do not change the constant until it is measured on the simulator, because the
+harness timings and the first-dit clauses are sensitive to it.
+
 ### Open items carried out of the relay-ordering work (2026-09-22)
 
 All three are OPEN. Each states what "done" means, so a later session can close it rather than
