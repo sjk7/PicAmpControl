@@ -81,6 +81,17 @@ actions:
   a document claimed was already in the skill but was not** - the DFP pack-search rule, the Windows
   shell traps, and (earlier in this pass) the `W0106-SIM` scoping. A note saying "see the skill" is not
   evidence that the skill has it.
+- **`deepseek-pic.md` merged into a new auto-applied instruction file and deleted** (user, 2026-09-24:
+  *"Do what you need to deepseek.md to put as much as possible in a skill or the instructions.md."*).
+  Its five bare-metal guardrails were the valuable part; its output-formatting block already fought the
+  repo's terse-output rules and its `<session_state>` was stale. The guardrails went to a new
+  `.github/instructions/firmware.instructions.md` with `applyTo: "firmware/**"`, so they are
+  auto-attached when firmware source is edited and cost nothing on any other request - that file also
+  gave the `PORTxbits` read-modify-write trap a home, since it had none. Its three harness-design rules
+  became `## Harness design rules` in the build/test skill. Deleted with it: the file itself, the
+  `Also read deepseek-pic.md` line in `copilot-instructions.md`, and the two `Ai-Notes.txt` references.
+  **This was a user instruction marked "permanent" from 2026-09-22, so it is a deliberate reversal by
+  the user, not drift.**
 - **Four stale "do not change the MCU" instructions removed from `Ai-Notes.txt`** (user, 2026-09-24:
   *"Any instructions there about not changing the mcu are out of date and need deleting. They were not
   meant to be permanent."*). They were a temporary evaluation gate that outlived its purpose: the
@@ -94,7 +105,6 @@ actions:
   the record of how a device-swap verdict must not be reached.
 
 ## 2026-09-23 — OPEN: `run_mdb_probe.py`'s log can omit the probe's printed values (the reason a run went unwrapped)
-
 A rate probe launched through the sanctioned wrapper
 (`python tools/simulate/run_mdb_probe.py docs/hardware/q10-bringup/rate_probe_macos.mdb --log ...`)
 exited 0 but left a ~180-byte log containing only its `RUN_BEGIN`/heartbeat lines: none of the MDB
