@@ -39,6 +39,16 @@ only.
    runs), suspect the shared stimulus, not the band. Isolate with the single-band repro
    (`repro_i5_15m_10m.py`) instead of re-running the 11-scenario suite; state the hypothesis in one
    clause, test it, then move.
+5. **DO NOT over-analyse: act on first instinct and prove it with a quick test, do not re-litigate
+   the same deduction in circles.** (user instruction, restated twice on 2026-09-24: *"Why are you
+   making it so hard?"*, *"Stop saying 'but wait'. Go with your first instinct instead of over-
+   analyzing, and prove it (or not) with a quick test. You are spending more time thinking than you
+   are testing."*) The failure mode it guards: the agent spent dozens of tool calls re-deriving the
+   SAME conclusion (a frequency-classification timing artifact) while the user had already given the
+   correct, simpler rule, and each "but wait, let me reconsider" cost a full round-trip. The rule:
+   once a hypothesis explains the evidence, TEST it immediately - write the change, build, run one
+   harness - and only broaden if the test contradicts it. Never emit a visible chain of "reconsider
+   X / reconsider Y" reasoning; it is billed output for zero information.
 
 **How a run is watched (STICKY user instruction, 2026-09-23): the user watches the log file - the
 heartbeat file - in a VS Code tab while the tests run. Never in the terminal.** The user's words:
@@ -74,19 +84,24 @@ probe, build) run with no visible output in VS Code. The method:
    2026-09-23). The watchdog is what writes the `HEARTBEAT`/`MDB` lines that make the log live - its
    value is not just the timeout, it is the visibility.
 
-**The tool that follows the file (moved from `Ai-Notes.md` 2026-09-24).** Following is done by the
-in-repo extension `tools/logfollower` (Log Follower): one `stat()` per poll (400 ms default - agreed
-across `package.json`, the code fallback and the README), a revert plus a single scroll only on real
-growth, and nothing at all while paused or while the followed tab is not the visible one. Pause is PER
-RUN: clicking, wheeling, dragging the scrollbar or highlighting text stops the follow for that run
-only, and the next run's truncation re-arms it automatically. `tools/simulate/open_progress_log.py
-<log>` opens the tab, and `tools/simulate/run_detached.py` starts a run in its OWN session so the
-agent's terminal harness cannot SIGTERM it mid-run - it did exactly that twice on 2026-09-23, and the
-damage reads as `SUITE_EXIT=143` with the log stopping mid-file, i.e. like a test failure when it is
-not one. `spacetown.filetail` was rejected for cost (~110% of one core in the extension host plus
-~24% in the main process); if FileTail is used at all it is toggled (`filetail.toggle`) ON only while
-a job runs and OFF the moment it ends, and any tool showing that load again is dropped in favour of
-reading the log on demand. **A console tail is forbidden**, and it is also silently broken:
+**The tool that follows the file (moved from `Ai-Notes.md` 2026-09-24, replaced 2026-09-24).**
+Following is done by the marketplace **Log Viewer** extension (`berublan.vscode-log-viewer`): it
+re-reads the file on an interval (`logViewer.options.fileCheckInterval`, default 500 ms) and follows
+tail by scroll position (`logViewer.followTailMode`, "auto"/"manual"), all inside its own Webview
+panel - it never opens or reclaims the text-editor tab, and never pulls focus, in VS Code or from
+another app. That focus-stealing is exactly why the in-repo `tools/logfollower` extension (Log
+Follower) and its `install_logfollower.sh`/`.ps1` installers were DELETED on 2026-09-24 - it kept
+raising VS Code above other windows while the user was elsewhere. **Install it once per machine:
+`code --install-extension berublan.vscode-log-viewer`** (its install is not automated - neither
+`run_tests.sh` nor `run_tests.ps1` touches it). To watch a run: open the Log Viewer panel and point
+it at the log (a `logViewer.watch` entry or the "Toggle log view" command).
+`tools/simulate/open_progress_log.py <log>` still opens the log in a plain tab (it is the file, not
+the following, that the user reads), and `tools/simulate/run_detached.py` starts a run in its OWN
+session so the agent's terminal harness cannot SIGTERM it mid-run - it did exactly that twice on
+2026-09-23, and the damage reads as `SUITE_EXIT=143` with the log stopping mid-file, i.e. like a test
+failure when it is not one. `spacetown.filetail` was rejected for cost (~110% of one core in the
+extension host plus ~24% in the main process); any tool showing that load again is dropped in favour
+of reading the log on demand. **A console tail is forbidden**, and it is also silently broken:
 `Get-Content -Wait` holds the handle to the file it opened, and the launcher unlinks and recreates its
 log at startup, so a tail started before the run reads a deleted file and shows nothing.
 **Hard rule: EVERY simulator run goes through the watchdog wrapper - NO CHEATING.** (user

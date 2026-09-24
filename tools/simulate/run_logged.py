@@ -9,9 +9,10 @@ The user has also asked for two specific refinements after seeing the raw result
     underflow.` 8,638 times in a 20 s probe - 99% of the log was one line repeated. Repetition is
     noise; the fact of the warning is the signal. Consecutive identical lines are emitted
     `max_repeats` times, then summarised once as `... (N more repeats of the line above)`.
-  * **Follow the tail.** The editor tab must auto-scroll as the file grows. That is what the
-    bundled `_build/logfollower` extension (`pac-log-follower.vsix`) is for - it is driven by the
-    `logFollower.autoFollowGlobs` setting, which must include `*.log` or nothing happens.
+  * **Follow the tail.** The editor tab must auto-scroll as the file grows. That is the
+    marketplace **Log Viewer** extension (`berublan.vscode-log-viewer`), which re-reads the file
+    on an interval and follows tail by scroll position without pulling focus from the active tab
+    or from another app.
 
 Everything that runs a job writes through `run_logged()` so the behaviour cannot diverge between
 entry points (it did: folding was added to one runner and not the other).
@@ -42,8 +43,7 @@ def run_logged(command, log, label="", interval=2.0, max_repeats=DEFAULT_MAX_REP
     log.write_text("", encoding="utf-8")  # truncate at START only, never when a run finishes
 
     appender = procutil.AppendLog(log)
-    # Write a delimited header BEFORE opening the tab: the Log Follower attaches when a matching
-    # file is opened, and a header line gives it something to latch onto.
+    # Write a delimited header BEFORE opening the tab, so the log has a line to show immediately.
     appender.write(f"RUN_BEGIN {time.strftime('%Y-%m-%dT%H:%M:%S%z')} "
                    f"{label or command[0]} :: {' '.join(str(c) for c in command)}")
     open_progress_log.open_in_editor([log])

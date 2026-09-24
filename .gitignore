@@ -15,7 +15,7 @@ out/
 __pycache__/
 *.pyc
 
-# Packaged extension build output (rebuild from tools/logfollower sources)
+# Packaged extension build output
 *.vsix
 node_modules/
 
