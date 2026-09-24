@@ -43,11 +43,44 @@ actions:
 - **`docs/lcd-test-handoff.md` was a third "where things stand" document.** It presented itself as a
   handoff with done next-steps. It is now scoped to the one item genuinely still open - the parallel
   LCD driver has no working test - and its superseded claims are marked.
-- **Deliberately NOT changed: the instruction-rate disagreement** (1887 vs 1625). Editing a harness
-  timing constant changes test semantics and, downward, would only shorten every window - so it needs a
-  measurement, not a tidy-up. The skill now states it as UNRESOLVED with the provenance of both
-  numbers (`ff931f7` documents 1887 as measured; the macOS re-probe supports 1625), rather than
-  asserting that both are correct, which is what its previous wording implied.
+- **The instruction-rate disagreement is NOT resolved by this pass.** Editing a harness timing constant
+  changes test semantics and, downward, would only shorten every window, so it needs a measurement
+  rather than a tidy-up. The skill now states it as UNRESOLVED with the provenance of both numbers
+  (`ff931f7` documents 1887 as measured; the macOS re-probe supports 1625) instead of implying both are
+  correct, and it records a second, larger contradiction found while repointing references:
+  `probe_q10_ptt_path.py` sets `BOOT_STEPS = 16_500_000` for a 1000 ms gate while the direct probe of
+  the same boundary found it at ~1.5-1.75M steps - a ~10x gap that needs one measurement to settle.
+- **Four stale "do not change the MCU" instructions removed from `Ai-Notes.txt`** (user, 2026-09-24:
+  *"Any instructions there about not changing the mcu are out of date and need deleting. They were not
+  meant to be permanent."*). They were a temporary evaluation gate that outlived its purpose: the
+  `DO NOT START A DEVICE UPGRADE WITHOUT ASKING FIRST, AND DO IT ON A NEW BRANCH` rule with its
+  embedded rejected-scope note, the `Before any further 18877 work:` instruction, and the whole
+  `DEVICE UPGRADE SPIKE (RE-OPENED 2026-09-22)` section - which still asserted that the PIC16F18875
+  was the shipping target and that the port had not started, both false since 2026-09-23. The one
+  durable fact buried in them (MPLAB X ships the Q10 DFP under its *own* install root, a different
+  root from the user pack repository, so "no DFP installed" was a wrong conclusion) was moved into
+  the build/test skill first rather than deleted with the rest. What remains is the history only:
+  the record of how a device-swap verdict must not be reached.
+- **`Ai-Notes.txt` de-duplicated and corrected: 491 -> 352 lines, most of the reduction moved into the
+  build/test skill** (306 -> 433). It had drifted badly enough to describe the wrong device:
+  `## Current design` called the repo "the active PIC16F18875-I/P controller", `## References` and the
+  CI section pointed at `docs/hardware/PIC16F18875_pin_map.md`, `nvm.c` was described as
+  "device-guarded so the PIC16F18875 keeps XC8's legacy eeprom helpers", the Simulation section named
+  the 16F in four places (including `run_sim.sh`'s device and `launch.json`), the CTest line gave
+  first-dit as a bare `test_first_dit.py`, and `## Device memory usage` quoted the 8192-word 16F map -
+  including a "FLASH IS EFFECTIVELY FULL" claim that is simply false on the Q10, where Release measures
+  **11214/131072 bytes of program flash (8.6%)** and 368/3359 bytes of RAM. Moved to the skill:
+  the whole Simulation method (mdb commands, `run_sim.sh`, `.sym`/`write /r` injection, the idle-ADC
+  stimulus recipe, `ANSELC`, `gpsim`, the GUI debug session), the timeout/platform policy
+  (`run_mdb(timeout=1500)`, the `platform_process.py` ownership rule, the Python-3 configure check),
+  the flash-space policy, the log-following method (`tools/logfollower`, `run_detached.py`, FileTail's
+  measured cost, the console-tail trap) and the Windows shell traps. Deleted as duplicates of the
+  always-on rules or of `bugfixes.md`: the token/CPU discipline bullet, the commit-and-push bullet,
+  the delete-logs bullet, the `git --no-pager` bullet, the "Hmmm" bullet, the write-mistakes-to-the-skill
+  bullet, and both `[HISTORY - superseded]` device bullets. **Three of the moves revealed content that
+  a document claimed was already in the skill but was not** - the DFP pack-search rule, the Windows
+  shell traps, and (earlier in this pass) the `W0106-SIM` scoping. A note saying "see the skill" is not
+  evidence that the skill has it.
 - **Four stale "do not change the MCU" instructions removed from `Ai-Notes.txt`** (user, 2026-09-24:
   *"Any instructions there about not changing the mcu are out of date and need deleting. They were not
   meant to be permanent."*). They were a temporary evaluation gate that outlived its purpose: the
