@@ -50,6 +50,22 @@ probe, build) run with no visible output in VS Code. The method:
    at zero bytes until the process exits, and the user is left looking at an empty tab (reported
    2026-09-23). The watchdog is what writes the `HEARTBEAT`/`MDB` lines that make the log live - its
    value is not just the timeout, it is the visibility.
+
+**The tool that follows the file (moved from `Ai-Notes.txt` 2026-09-24).** Following is done by the
+in-repo extension `tools/logfollower` (Log Follower): one `stat()` per poll (400 ms default - agreed
+across `package.json`, the code fallback and the README), a revert plus a single scroll only on real
+growth, and nothing at all while paused or while the followed tab is not the visible one. Pause is PER
+RUN: clicking, wheeling, dragging the scrollbar or highlighting text stops the follow for that run
+only, and the next run's truncation re-arms it automatically. `tools/simulate/open_progress_log.py
+<log>` opens the tab, and `tools/simulate/run_detached.py` starts a run in its OWN session so the
+agent's terminal harness cannot SIGTERM it mid-run - it did exactly that twice on 2026-09-23, and the
+damage reads as `SUITE_EXIT=143` with the log stopping mid-file, i.e. like a test failure when it is
+not one. `spacetown.filetail` was rejected for cost (~110% of one core in the extension host plus
+~24% in the main process); if FileTail is used at all it is toggled (`filetail.toggle`) ON only while
+a job runs and OFF the moment it ends, and any tool showing that load again is dropped in favour of
+reading the log on demand. **A console tail is forbidden**, and it is also silently broken:
+`Get-Content -Wait` holds the handle to the file it opened, and the launcher unlinks and recreates its
+log at startup, so a tail started before the run reads a deleted file and shows nothing.
 **Hard rule: EVERY simulator run goes through the watchdog wrapper - NO CHEATING.** (user
 instruction, 2026-09-23: *"ALL these tests should run through the watchdog -- always"*, then
 *"everything runs via the watchdog. No cheating!"* - the second time because a raw `mdb.sh` probe had
@@ -304,3 +320,114 @@ agent's terminal launched the run.**
 - A VS Code `shell` task whose command ends in `echo "EXIT=$?"` always exits 0, so a task that
   silently failed to start python looks exactly like success (empty log, exit 0). Keep the exit-code
   capture, but check the log has content before believing a task ran.
+
+## Simulation method (moved here from `Ai-Notes.txt` 2026-09-24)
+
+**mdb command reference.** `write pin <name> high|low|<N>v` drives an input, `print pin <name>` reads
+an output, `Stepi <count>` single-steps, `break <function>` / `break <file>:<line>` plus
+`Run`/`Continue`/`Halt` gives real breakpoint debugging, and `Stopwatch [nror]` reports real simulated
+elapsed time. Worked examples: `tools/simulate/scenarios/boot_smoke.mdb`, `ptt_cycle.mdb`.
+
+**`run_sim.sh` / `run_sim.ps1 [scenario.mdb]`** build, then launch mdb with the hex programmed and the
+benign TMR1/3/5 `W0106-SIM` warnings filtered out. With no argument it is an interactive mdb session;
+with a scenario file it runs those commands and exits. It is a build-and-drive helper, **not** a
+substitute for the watchdog: a scenario run still has no timeout, no heartbeat and no orphan clean-up.
+
+**Fault injection into firmware state: parse the address, never invent it.** This mdb build cannot
+write a C variable by name (`write g_x 1` fails with `For input string: "<addr> "`, and `print /a g_x`
+fails the same way). Read the address from `out/My_Pic_Project_18F47Q10/default.sym` (line format
+`_g_name <hexaddr> 0 BANKn <size>`, e.g. `_g_band_cache_idle_ms B4 0 BANK1 1`), then use
+`write /r 0x<addr> <lo> <hi>` for a 16-bit value (little-endian, one byte per word) or
+`write /r 0x<addr> <byte>` for a bool/enum. **Addresses move on every rebuild**, so parse the `.sym`
+at run time - `test_first_dit.py` does.
+
+**Stimulus recipe for a steady-state-then-PTT run.** Drive plausible idle ADC voltages first: without
+explicit stimulus the floating analogue inputs read very low or very high, which spams `W0222/W0223-ADC`
+(cosmetic) but can also make `swr_trip()` and friends behave unpredictably. `write pin RA0/RA1/RA2/RA3 0v`
+(the two SWR pairs' forward/reflected), `RA5 2.5v` (temperature), `RB1/RB2/RB3 0v`
+(current/overdrive/drain), `RB4 low` (hardware overcurrent fault, active-high). PTT is `RC0` and is
+active-low: hold `high` for idle, then `low` to assert.
+
+**`ANSELC` is cleared explicitly in `main.c`** so RC0 and RC3-RC7 are digital I/O. Keep that
+initialisation when the port map changes; losing it turns those pins analogue again.
+
+**Why the tick is Timer2 and not Timer0:** mdb's Timer0 model stalled during the original bring-up, so
+the ~1 ms scheduler tick moved to Timer2.
+
+**`gpsim` is not an option** for this part - its newest PIC16F1 support stops at the 1788/1823/1825/1847
+family, which lacks this chip's ADCC/CLC peripherals.
+
+**VS Code GUI debug session.** `.vscode/launch.json`'s "Simulate PicAmpControl (Debug)" drives
+`microchip.mplab-core-da` against `Simulator`/`PIC18F47Q10` - breakpoints, variables, watch, registers,
+no terminal. It needs `out/My_Pic_Project_18F47Q10/default.elf` to exist (build first). Watch
+expressions cannot be pre-seeded from a file: add `PORTA`/`LATA`/`TRISA` (or `PORTCbits.RC5`) to the
+Watch panel by hand. Breakpoints on functions/statics that mysteriously fail to resolve are usually a
+lost `-O0`: check `user.cmake`, where `-Os` is gated behind `$<$<CONFIG:Release>:-Os>` for exactly this
+reason.
+
+## Timeout and platform policy (moved here from `Ai-Notes.txt` 2026-09-24)
+
+- **Budgets are sized for the slowest platform, and that is Windows.** MDB is ~2.4x slower there (suite
+  356 s vs ~150 s; first-dit ~55 s vs ~20 s). `run_mdb(timeout=1500)` is the last-resort inner net,
+  `run_suite_with_watchdog.py --timeout 1200` is the real suite budget, and the CTest registrations
+  match (1500 for the suite, 900 for first-dit). **Never shrink them to macOS-sized numbers** - the old
+  280 s inner timeout killed a perfectly healthy Windows run while it was still printing progress. And
+  never read a timeout as a firmware regression: check the heartbeat log (`delta=0` with frozen
+  `mdb_bytes` = hung; still increasing = slow but healthy).
+- **All platform-specific harness code lives in `tools/simulate/platform_process.py`** (`temp_dir`,
+  `find_mdb`, `isolated_spawn_kwargs`, `pid_is_alive`, `terminate_tree`/`kill_tree`,
+  `running_processes`), and every harness imports it. Do not put `start_new_session` / `os.killpg` /
+  `signal.SIGKILL` / `ps` / `/tmp` back into a harness: on Windows the first three raise
+  `AttributeError` or are silently ignored, and `os.kill(pid, 0)` actually KILLS the process there.
+- The suite is Python 3 only, and configure now **fails** if the discovered interpreter is not Python 3.
+  `PYTHON_EXECUTABLE` is cached, so clear it with `-U PYTHON_EXECUTABLE` when reconfiguring an existing
+  build directory.
+- `tools/simulate/build_firmware.sh` (macOS) / `build_firmware.ps1` (Windows) build locally into
+  `_build/My_Pic_Project/sim` and `out/My_Pic_Project/default.hex`.
+- macOS setup: `brew install --cask mplabx-ide mplab-xc8`. Windows: install the full MPLAB X IDE (not
+  just MPLAB IPE) so `mdb.bat` under `mplab_platform/bin` is present. The already-installed
+  `microchip.mplab-core-da` and `microchip.mplab-data-visualizer` extensions drive the same mdb engine,
+  so scripted simulation does not need them.
+
+## Windows shell traps (moved here from `Ai-Notes.txt` 2026-09-24)
+
+These silently no-op a build, i.e. they return success while compiling nothing:
+
+- **Nested `cmd /c` quoting.** Wrapping a command in `cmd /c "..."` where the inner command has its own
+  quotes mangles the argument list; the command does nothing and still exits 0.
+- **A mangled multi-line invocation returned exit 0 and compiled nothing.** Whenever a build seems to
+  have succeeded, confirm the log has content and that the compile line for the file you changed is in
+  it - an empty log plus exit 0 is not a build.
+- **`2>&1` is unsafe in PowerShell.** With `$ErrorActionPreference = 'Stop'`, merging a native
+  command's stderr turns its warnings into terminating `ErrorRecord`s and aborts the script. Use `*>` to
+  redirect both streams to the log, then `Add-Content $log "EXIT=$LASTEXITCODE"`.
+- **The interpreter is `python` on Windows** - there is no `python3` on the PATH. CMake's
+  `find_program(PYTHON_EXECUTABLE NAMES python3 python)` and `run_tests.ps1` both resolve this, so it
+  only matters when typing a command by hand.
+- The cross-platform toolchain files auto-detect XC8 and the DFP per OS (macOS `$HOME/tools/microchip/`,
+  Windows `C:/Program Files/Microchip/xc8/` plus `%USERPROFILE%/.mchp_packs`, since `$ENV{HOME}` is not
+  set there), so no cache overrides are needed on a standard install.
+
+## Flash space (policy moved here from `Ai-Notes.txt` 2026-09-24)
+
+**Measured on the Q10, Release, 2026-09-24: program 11214/131072 bytes used (8.6%), data 368/3359
+bytes (11.0%). The flash pressure that drove this policy was a PIC16F18875 property (8192 words) and
+does not exist on this part - the standing "flash reduction" work item is satisfied and only needs
+re-opening if something runs that figure up by an order of magnitude.**
+
+- `memoryfile.xml` (and `mem.map`) is regenerated by XC8 on every build and ships inside every
+  release, so it always reflects the current firmware rather than a stale snapshot. To read the live
+  figure, take it from the build directory, or `gh release download <tag> -p memoryfile.xml` and read
+  `<memory name="program">`/`<memory name="data">` `used`/`free`/`length`.
+- **Debug is the binding image, not Release.** `user.cmake` compiles Debug at `-O1` (not `-Os`) so mdb
+  can resolve symbols and breakpoints. Budget against Release and expect Debug to be the larger of the
+  two, but measure before believing any estimate.
+- If space ever does bind: the cheapest room is in the `STRCODE` string literals (the LCD text), as it
+  was when the 16F was full. Inline assembly is allowed when it genuinely wins, **and every block must
+  carry an equivalent-C comment for review**.
+- Do not trust estimates of a refactor's saving. Two recorded cases: table-driving
+  `adjust_selected_setting()` was estimated at 80-100 words and is probably a loss once the ~6-byte rows
+  and the lookup code are counted, and compiling the harness-invisible translation units at `-Os` was
+  measured to reclaim exactly nothing, because XC8's linker optimises at the `-O1` in the link rule and
+  normalises the per-file level. Measure the real sizes (the map's psects, or a build-delta experiment)
+  before implementing anything "for space".

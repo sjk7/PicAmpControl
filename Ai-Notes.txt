@@ -59,63 +59,18 @@ were all deleted. Concretely, that means:
   `.github/skills/build-test/SKILL.md` remain the sources of truth, and its own
   `<session_state>` block ("Awaiting the first hardware assignment") is stale and does not describe
   this project.
-- FOR LONG-RUNNING JOBS, WRITE THE LOG TO A FILE AND FOLLOW IT IN A VS CODE *TAB* WITH FILETAIL -
-  NEVER TAIL IT IN THE CONSOLE (user instruction, 2026-09-22, sticky/permanent, restated several
-  times as the method was refined: generalised to all long jobs, then "tail mode", then "delete and
-  recreate first", then "not in the console, open it in a tab", then "use FileTail"). The final
-  method: truncate the old log (`Clear-Content` - the launcher appends now, and deleting a file a
-  watcher has open kills the watcher), write the job's output there, open that file in a VS Code tab,
-  and toggle **FileTail** (`filetail.toggle`) ONLY while a job is actually running. **FileTail is
-  conditional now, not mandatory - this supersedes the earlier "must be installed" rule (user
-  instruction, 2026-09-22). It measured ~110% of one core in the VS Code extension host plus ~24% in
-  the main process while following a log; toggling it off dropped both to roughly 1%. A tool that eats
-  a core to follow a text file is badly written and must not be used: turn it off when the run ends,
-  and if it shows that load again stop using it and read the log on demand instead (a one-shot
-  `Get-Content -Tail 20` is a read, not a console tail).** A console tail
-  is forbidden, and it was also silently broken: `Get-Content -Wait` holds the handle to the file it
-  opened, and the suite launcher unlinks and recreates its log at startup, so a console tail started
-  before the run reads a deleted file and shows nothing. This applies to every long job - suites,
-  cmake builds, ctest runs, spike runs, anything taking minutes. For the mdb suite the file that
-  "updates often with progress" is the watchdog heartbeat log (`%TEMP%\picampcontrol_suite_progress.log`
-  on Windows, `/tmp/...` on macOS), NOT the ctest log: ctest prints nothing until a test completes, so
-  its log sits at four lines for the whole run and looks hung. Watching a log for visibility is
-  sanctioned; judging a run from terminal output is not - verdicts are still read from the run's own
-  log file and exit-code line.
-- KEEP TOKEN AND CPU USE DOWN - OUTPUT DISCIPLINE (user instruction, 2026-09-22, sticky/permanent).
-  The chat transcript is re-rendered on every streamed token: this session reached 2,041 lines / 2.2 MB,
-  and that drove the renderer to ~225% of one core and the extension host to ~112% for the whole of
-  each assistant turn. So: answer in as few words as the answer allows and never restate the context;
-  never paste file contents, logs, tables of raw output, or exit-code dumps into the chat unless asked;
-  put findings in the run's log file, the skill, or a repo doc and report one line plus the path; batch
-  work into fewer, longer tool calls rather than many small ones; filter command output (`-Tail`,
-  `-First`, `Select-String`) instead of dumping whole files into the terminal panel, which is rendered
-  too; do not print a code block unless the user asked for it. The skill is where durable knowledge
-  goes - not the chat.
-- FOLLOWING A GROWING FILE IS OURS NOW (user instruction, 2026-09-23: "we need a decent tail plugin" -
-  the CPU-eater that was rejected is `spacetown.filetail`, ~110% of one core in the extension host).
-  The capability is the in-repo extension `tools/logfollower` (Log Follower): one `stat()` per poll
-  (400 ms default - package.json, the code fallback and the README now all agree; they previously
-  said 250/400/60), a revert plus one scroll only on real growth, and nothing at all while paused or
-  while the followed tab is not the visible one. The user watches a run by having its log open in a
-  VS Code tab: `tools/simulate/open_progress_log.py <log>` opens it, and
-  `tools/simulate/run_detached.py` starts a run in its OWN session so the agent's terminal harness
-  cannot SIGTERM it mid-run - it did exactly that twice on 2026-09-23, and the damage reads as
-  `SUITE_EXIT=143` with the log stopping mid-file, i.e. like a test failure when it is not one.
-  Pause is PER RUN: interaction with the text or the scrollbars (click, wheel, scrollbar drag,
-  highlighting text) stops the follow for that run only, and the next run's truncation re-arms it
-  automatically. Still to do when there is slack: fold the generic method into its own skill, since
-  it is not PicAmpControl-specific.
 - DO NOT ASK FOR PERMISSION TO OVERWRITE FILES - JUST DO IT (user instruction, 2026-09-22). The user
   does not want to be prompted about overwriting, nor asked "say the word" before an edit that was
   already agreed; when the intent is to change a file, change it. Related and worth avoiding: writing
   to a file the user has open in an editor tab makes VS Code raise its own "file changed on disk"
   prompt, so clear/recreate such a log *before* opening it in the editor rather than after.
-- FLASH REDUCTION IS A STANDING WORK ITEM (user instruction, 2026-09-21). A near-full Debug image
-  is not an acceptable steady state: when a build or test leaves you waiting, spend the time finding
-  space. Inline assembly is allowed if every block carries an equivalent-C comment for review. The
-  point of the headroom is to be able to assert strongly - and with test evidence - that the PTT
-  sequencing cannot damage the amplifier, so no gaps and no excuses in the test coverage. Levers and
-  the policy detail live in the skill's `## Flash space`.
+- FILE FOLLOWING AND LOG WATCHING: method in `.github/skills/build-test/SKILL.md` (`tools/logfollower`,
+  `open_progress_log.py`, `run_detached.py`, the FileTail cost finding, the console-tail trap).
+- FLASH REDUCTION - **SATISFIED ON THIS DEVICE** (the 16F-era work item, 2026-09-21, closed 2026-09-24).
+  The Q10 has room: Release measured 11214/131072 bytes of program flash (8.6%). Levers, the policy and
+  the two measured-negative refactors live in the skill's `## Flash space`; re-open the work item only
+  if a change pushes the figure up by an order of magnitude. The original point - enough headroom to
+  assert with test evidence that the PTT sequencing cannot damage the amplifier - still stands.
 - COMMIT AND PUSH OFTEN - LOCAL AND REMOTE (user instruction, restated 2026-09-21 because it was
   forgotten). Commit and push to `origin/main` as soon as each change is verified green; do not
   batch a session's work into one large commit at the end, and never leave verified work sitting
@@ -131,55 +86,12 @@ were all deleted. Concretely, that means:
   space, so delete both).
 - Keep README.md and docs/ purely current-facing: no "old prototype was replaced by..." style historical narrative. Historical context belongs only in prototype_reference/.
 - Never run bare `git status`/`git status --short`; use `git --no-pager status --short` (avoids hitting an interactive pager or the `gcm-core` credential helper prompt).
-- NEVER WRITE "Hmmm" - INCLUDING IN YOUR INTERNAL REASONING (user instruction, 2026-09-22, restated the same day because it was still happening, and repeated AGAIN twice more the same day after this rule existed - once in a reasoning trace the user quoted straight back). The user can see the thinking as well as the reply, so this covers reasoning traces, preambles to tool calls, and final answers alike. Do not use it as filler, as a thinking-out-loud opener, or as a hedge. State the finding, or the uncertainty, plainly. It was missed once already by reading "anywhere in a reply" as excluding the thinking - the first fix was too narrow, so do not repeat that misreading. The rule is now ALSO stated at the top of `.github/skills/build-test/SKILL.md` as a hard writing rule, because a bullet in a long list demonstrably was not enough.
 - docs/hardware/PIC18F47Q10_pin_map_and_setup.md is the SINGLE source of truth for MCU pin assignments. Never restate pin numbers or pin tables in README, architecture, schematic-package, or checklist docs - link to it instead. Keep it in sync with firmware/include/pin_map.h. The same rule applies to nets (project_schematic_package/connection_table.csv) and the BOM (component_list.csv).
 - Any new "remember this" instruction from the user must be added to this section, not just kept in assistant memory.
-- ALWAYS WRITE SILLY MISTAKES INTO THE SKILL, EVERY TIME - NOT JUST IN THE SESSION THEY HAPPENED
-  (user instruction, 2026-09-22). Whenever a mistake costs a cycle, feed the lesson back into
-  `.github/skills/build-test/SKILL.md` as part of that same piece of work. The user's
-  words: "Always write to the skill for silly mistakes like this. Always. Not just in this session."
-  Silly mistakes are precisely the ones that recur, and a lesson left only in this file or only in
-  the conversation that produced it does not reach the next session.
-- [HISTORY - superseded 2026-09-23; PIC18F47Q10 is the only device now] DEVICE UPGRADE PIC16F18877
-  EVALUATED, *PROVISIONALLY* REJECTED - THE VERDICT IS NOT SOUND
-  (2026-09-22; requalified later the same day, see the Q10 entry below). PIC16F18877-I/P (same
-  family, 40-pin PDIP, 4x flash = 32768 words, 4x RAM = 4096 bytes, ~£1.95 DigiKey UK / ~£2 Mouser,
-  both in stock) builds fine with a one-line `-mcpu` change and gives a very comfortable 24.8%
-  flash. What was actually OBSERVED on the simulator: the firmware never sees PTT asserted (0 keyed
-  runs, no STATE_BYPASS_SNOOP), so tools/simulate/test_first_dit.py aborts at clause (a); band-change
-  timing was unchanged (1161/1705 ms against 1162/1699 ms). Reverted; the tree was byte-identical to
-  the last commit.
-  **Why the verdict is not sound:** it was reached from a single configuration, with no positive
-  control - the exact method that then produced TWO wrong verdicts for the PIC18F47Q10 in the same
-  session (an assumed `T2CLKCON` value, then a missing `IPEN`/priority enable), both of which blamed
-  the simulator for firmware configuration that had never been written. The symptoms above are real,
-  but "MPLAB does not model it equivalently" is not established by them: a wrong register value, a
-  pin-table difference in the model, or a different interrupt-enable form would all look identical
-  from outside. The unchanged band-change timing also implies the timer tick *was* running, which
-  sits badly with a blanket non-equivalence claim.
-  **Superseded 2026-09-23: PIC18F47Q10 is the shipping target and the only device, and flash pressure
-  is addressed by the software levers under Remaining work.** This bullet is kept only as the record
-  of how a device-swap verdict must NOT be reached.
-- [HISTORY - superseded 2026-09-23; the port is done and the Q10 is the only device] PIC18F47Q10
-  PROVED VIABLE AFTER TWO WRONG VERDICTS IN ONE DAY (2026-09-22). Both retractions are
-  mine; the sequence is the lesson. (1) The bring-up wrote `T2CLKCON = 0x00` and *assumed* it meant
-  Fosc/4 - `firmware/src/main.c` already used `T2CLKCON = 0x01; /* Fosc/4 */`. With `0x01` the timer
-  counts (`T2TMR` `106` then `92`). (2) Interrupts appeared dead - two independent sources raised
-  and cleared their flags under polling with `GIE=1`, but `g_isr_any` stayed `0`. That was also
-  wrong: those builds left `IPEN = 0`. With `IPEN = 1` plus the source's priority bit
-  (`IPR4bits.TMR2IP = 1`) the ISR runs at once - `g_isr_any` and `g_tick` both `56 -> 172`, and the
-  polled counter drops to `6 -> 18` because the ISR consumes the flags first. Measured on the Q10:
-  PTT reaches the firmware, outputs toggle, Timer2 counts, interrupt-on-change works, interrupts are
-  dispatched. The two real differences from the PIC16F are that the Q10 needs the *priority*
-  interrupt form (`IPEN = 1` + `IPRx`, not a plain `GIE = 1`) and that the tick calibrates at
-  ~6,100-6,900 instructions against the harness's 8,000 for 1 ms. `OSCCON3.ORDY` reads `0` while the
-  timer demonstrably runs - never cite it about the clock. **Superseded 2026-09-23: the port was
-  done, PIC18F47Q10 is the only device in the project, and the 16F port has been removed.** Evidence:
-  `bugfixes.md` 2026-09-22; branch `spike/pic18f47q10-retest` holds the images.
 - The firmware is the single source of truth for which PIC we are using: PIC18F47Q10-I/P (40-pin PDIP), declared once in `cmake/My_Pic_Project/default/device.cmake` and emitted into `.generated/rule.cmake` as `-mcpu=18F47Q10` (mirrored in `.clangd`). If a document disagrees with the firmware about the target device, the firmware wins and the document is the bug.
 - Do NOT reintroduce schematic automation. Both attempts were abandoned outright and every trace of them has been removed. Gone for good: the EasyEDA generator/SVG-validation pipeline (`easyeda_pro_generator.py`, `svg_renderer.py`, `visual_validator.py`, `watch_and_render.py`, `pic_amp_control_full.yaml`, `out/picampcontrol_easyeda_*.json`, and the `easyeda-agent` / `easyeda-copilot` routes), the KiCad MCP `schematic-design` skill with its `generated/` `.kicad_sch` tree and `mcp-server-kicad`, all node/npm scaffolding (`package.json`, `node_modules`, `@jlceda`), the workflow documents that described them, and every KiCad symbol/toolchain reference in the docs. The user's instruction: EasyEDA "was a disaster and can be removed entirely", then "same for kicad stuff. Another disaster... it can all go". Do not add generators, MCP schematic servers, `.kicad_sch`/`.eext` tooling or node/npm back, and do not re-add tool-specific symbol references to the pin map. The schematic package at docs/hardware/project_schematic_package/ is deliberately static design inputs (block diagram, connection table, component list, wiring checklist), captured by hand end to end. Netlist-verification tooling (exporting the EDA netlist and diffing it against `connection_table.csv`) was offered as a lighter-weight alternative and has been declined as well, so this means no schematic automation of any kind - not drawing generation, not verification.
 - `PTT COMPLETE` is a hardware/firmware LCD state, not merely a graph label: show it only after RELAYS, TX_VCC, and TX_BIAS have all reached their configured active levels (active-low by default); keep it transient, then restore the user's saved home page.
-- Keep verified changes committed and pushed promptly; generated simulator CSVs belong in `_build/My_Pic_Project/sim/csv/` and graphs in `_build/My_Pic_Project/sim/graphs/`. Commit+push as soon as a step is verified green - the only valid reason to hold a commit is a verdict that is still running, and then you read that verdict from its log file and commit the moment it is green. Always pass explicit paths to `git add` (never `git add .`).
+- Generated simulator CSVs belong in `_build/My_Pic_Project/sim/csv/` and graphs in `_build/My_Pic_Project/sim/graphs/`.
 - WHERE A FACT LIVES (so this file does not drift, and so nothing is written twice):
   *the general standing rules* - the ones that apply to every task here (never write "Hmm", terse
   output, never judge a run from the terminal, every run through the watchdog, commit-and-push often,
@@ -283,36 +195,18 @@ were all deleted. Concretely, that means:
 - The standing process rule that produced the most friction last session: never judge a test run
   from terminal output. MDB emits megabytes of trace and a command that "returned no output" can
   still have passed - always redirect to a log file, append the exit code, and read the file.
-- Work landed in the 2026-09-22 session (all committed and pushed; details in `bugfixes.md`):
-  * `tools/simulate/platform_process.py` (new), with all four harnesses rewired through it - the
-    simulator workflow did not run on Windows at all before this. Five defects fixed.
-  * Timeouts re-sized for the slower platform: `run_mdb(timeout=1500)` as a last-resort net sitting
-    above the launcher's `--timeout 1200`. Do not shrink them back to macOS-sized numbers.
-  * `docs/hardware/PIC16F18875_pin_map.md`: every physical pin number was wrong and is now corrected
-    against the datasheet; the "RD2-RD7 are free" error and the phantom VREF+ pin are gone.
-  * The supply rail is stated explicitly as 5 V (the map had mislabelled it 3.3 V).
-  * SCL/stimulus claims corrected: MDB SCL is NOT usable here, so the frequency counter remains
-    verified only by injecting TMR1H/TMR1L.
-  * The PIC18F47Q10 spike was RUN on `spike/pic18f47q10` with the user's go-ahead. It produced TWO
-    wrong verdicts, both retracted the same day: first "no time base" (an assumed `T2CLKCON = 0x00`
-    where `firmware/src/main.c` uses `0x01`), then "no interrupt dispatch" (the builds left
-    `IPEN = 0`; with `IPEN = 1` plus `IPR4bits.TMR2IP = 1` the ISR runs immediately). The device does
-    the basics: PTT, outputs, Timer2, interrupt-on-change and interrupt dispatch all work. Remaining
-    real differences for a port: the priority interrupt form, and a tick that calibrates at
-    ~6,100-6,900 instructions rather than the harness's 8,000. Branch `spike/pic18f47q10-retest`
-    holds the images; `bugfixes.md` 2026-09-22 holds the evidence.
-  * The skill gained the Windows shell traps that silently no-op a build (nested `cmd /c` quoting, a
-    mangled multi-line call that returned exit 0 and compiled nothing) and the rule to look for DFPs
-    inside the MPLAB X install before concluding a device is unbuildable.
+- Earlier session history - the `platform_process.py` rewrite, the timeout re-sizing, the 16F pin-map
+  corrections, the device spike and its two retracted verdicts - is in `bugfixes.md` 2026-09-22 and the
+  skill. Not restated here.
 
 ## Simulator timing limitation (IMPORTANT)
 - The firmware uses Timer2 for the approximately 1 ms scheduler tick because MDB's Timer0 model stalled during earlier testing.
 - The simulator is still a debugger model, not a substitute for silicon timing. The suite validates state ordering, LCD lifecycle, trip latching, and recovery behavior; bench validation remains required for exact hardware timing.
-- **Timer1 external clock (T1CKI) is NOT modelled** - the simulator reports "W0106-SIM: This device only has partial support for TMR1 peripheral ... timer clock selection is not implemented". Verified 2026-09-21: with RD1 actively driven by an SCL stimulus (`stim <file.scl>`; `print pin RD1` = HIGH/Din) and T1CON correctly set to T1CKI with the 1:4 prescaler (0x27), TMR1L/TMR1H stayed at 0. So a true end-to-end RF frequency-counter test is IMPOSSIBLE in sim, and no stimulus mechanism can fix it - the peripheral model is missing. The suite therefore injects TMR1H/TMR1L directly, which covers the frequency maths, band classification, band-select outputs and TX lock, but not the T1CKI pin, PPS routing, prescaler, or Timer1 overflow path. Do not "fix" this by trying to clock the pin.
-- MDB SCL / `stim`: NOT USABLE - RE-TESTED 2026-09-22, and the earlier note here that claimed SCL was available is WRONG. `help stim` does document `stim <file>` ("Loads the specified SCL stimulus file into the simulator"), but this MDB build rejected two plausible SCL forms: the `configuration for "pic16f18875" is / end configuration;` block plus a named `testbench`/`process` gave `Error: syntax error`, `Error: stack underflow. aborting...` and `E0101-SIM: Failed to disassemble instruction (line 3)`; the same file with the configuration block removed failed at line 1. The working syntax was never recorded by whoever claimed it worked, and it could not be reconstructed from the help. Treat SCL as unavailable - do not cite it as a route to testing anything - until someone shows a file that actually loads. That also means the earlier `<=` vs `:=` syntax detail is unverified, and a stimulus that claims to drive a pin should be treated as undelivered until `print pin <name>` proves otherwise. Independently settled regardless: no stimulus of any kind can clock Timer1 from T1CKI, because the timer clock-source mux is not modelled (see the T1CKI note above). An SCL script that drives RC0 cannot test the frequency counter in any case - RC0 is INPUT_PTT in this design; T1CKI is RD1 via PPS.
+- **Timer1 external clock (T1CKI) is NOT modelled** (`W0106-SIM`), so the frequency counter cannot be proven end-to-end in simulation. The suite injects `TMR1H`/`TMR1L` instead, which covers the frequency maths, band classification, band-select outputs and TX lock, but not the T1CKI pin, the PPS routing, the 1:4 prescaler, or the overflow path. Do not try to clock the pin.
+- **MDB SCL / `stim` is NOT usable in this build** (re-tested 2026-09-22). No stimulus of any kind can clock Timer1 - the clock-source mux is not modelled - and an SCL script driving RC0 would prove nothing anyway, since RC0 is INPUT_PTT here (T1CKI is RD1 via PPS). Treat SCL as unavailable until someone shows a file that actually loads, and treat any stimulus that claims to drive a pin as undelivered until `print pin <name>` proves otherwise. The re-tests and their error output are in `TESTING.md`.
 
 ## Current design
-This repository is the active PIC16F18875-I/P linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
+This repository is the active PIC18F47Q10-I/P linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
 
 ## Firmware
 - **First-dit band switching is implemented** (docs/first-dit-band-detection.md). With no decoded
@@ -345,19 +239,14 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
   during bypass (relay open, band selection possibly moving) could latch a spurious STATE_TRIP
   during the very first dit. Hardware overcurrent, current, temperature, overdrive and drain trips
   remain ungated. The gate is applied once inside `update_protection_state()` for flash reasons.
-- **FLASH IS EFFECTIVELY FULL IN THE Debug/simulator BUILD.** The shared Debug image links at
-  8189/8192 words (100.0%, 3 words free) - up from 8135/8192 before the relay-ordering and
-  SWR-arming work. Release (the shipping budget) still has normal headroom, but the simulator build
-  has none, and the linker fails with `(1347) can't find 0xN words ... for psect` as soon as
-  anything is added. The failing psects are string literals (`STRCODE`), so the cheapest room is in
-  the LCD text. **Space was therefore freed on 2026-09-21** by shortening every `g_setting_menu_labels`
-  entry (e.g. `S1 SWR TRIP` -> `SWR1 TRIP`, `NTC B VALUE` -> `NTC B`, `CURRENT TRIP` -> `CURR TRIP`,
-  `TX-VCC DELAY` -> `TX-VCC DLY`, `TX-VCC ACTIVE` -> `TX-VCC POL`, `POWER DISPLAY` -> `POWER MODE`,
-  `PEAK HOLD` -> `PK HOLD`) and reducing the boot message to a single `Booting` line - about 60
-  words reclaimed. `tools/simulate/render_lcd_lifecycle_diagram.py` was updated to match, since its
-  SETTINGS_PANELS hard-code the on-screen labels. The budget rules and how to read the live figure
-  are in the skill's `## Flash space`; the current numbers are in the Device memory usage section
-  below.
+- **Flash is NOT tight on this device.** Measured 2026-09-24, Release: 11214/131072 bytes of program
+  flash used (8.6%). The "effectively full" claim here was a PIC16F18875 property (8192 words) and does
+  not apply to the Q10; the 2026-09-21 LCD-label shortening is therefore housekeeping, not a
+  constraint - the labels it shortened (`S1 SWR TRIP` -> `SWR1 TRIP`, `NTC B VALUE` -> `NTC B`,
+  `CURRENT TRIP` -> `CURR TRIP`, `TX-VCC DELAY` -> `TX-VCC DLY`, `TX-VCC ACTIVE` -> `TX-VCC POL`,
+  `POWER DISPLAY` -> `POWER MODE`, `PEAK HOLD` -> `PK HOLD`, boot message -> a single `Booting` line)
+  were matched in `tools/simulate/render_lcd_lifecycle_diagram.py`, whose SETTINGS_PANELS hard-code the
+  on-screen text. Policy and how to read the live figure: the skill's `## Flash space`.
 - **The remembered band is verified, not trusted (fold-back).** A first-dit engage taken from the
   band memory is a blind decision - at keydown the radio has not started transmitting, so there is
   nothing to measure yet. The remembered band is therefore re-checked against the first usable
@@ -367,7 +256,7 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
   then immediately change to 80m and key straight away" case safe: the amplifier never amplifies the
   whole first over through the wrong filter. Measured fold-back latency in the simulator: 23 ms.
   The relay selection is never moved while keyed (the verify step bypasses before it unlocks).
-- Direct ADC inputs monitor two forward/reflected SWR pairs, temperature, WCS1700 current, input power, and drain voltage. Which channel is which lives ONLY in docs/hardware/PIC16F18875_pin_map.md - never restate that list here.
+- Direct ADC inputs monitor two forward/reflected SWR pairs, temperature, WCS1700 current, input power, and drain voltage. Which channel is which lives ONLY in docs/hardware/PIC18F47Q10_pin_map_and_setup.md - never restate that list here.
 - ADC configuration (firmware/src/main.c adc_init): 10-bit, right-justified legacy format, VDD-referenced with the internal FVR off. Raw values are consumed directly as plain 0-1023 counts, so at a 5 V rail one count is about 4.88 mV.
 - Current-sensor scaling (firmware/src/main.c): zero at raw 512 (2.5 V mid-rail), +511 counts = +70 A, 0 counts = -70 A. The default positive current trip is 40 A (g_thresholds initialiser).
 - On PTT release the sequencer unwinds in order - TX off immediately, TX_VCC after the VCC delay, then TX_BIAS - and the band is released only once every TX output is confirmed inactive (release_band_if_cold()). An engage still in progress when PTT releases is therefore unwound, not completed; the old "engages complete, then unsequence" description is obsolete (see bugfixes.md 2026-09-21).
@@ -380,7 +269,7 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
   LCD data lines, so a port read-modify-write can clobber a relay latch from an unrelated write.
 - Hardware comparators combine at INPUT_HARD_FAULT for independent overdrive, drain-peak, and overcurrent protection.
 - The sequencer runs TX, TX_VCC, and TX_BIAS with two configurable inter-stage delays, defaulting to 20 ms.
-- The LCD is a 1602 driven in 4-bit parallel mode by firmware/src/lcd_parallel.c, with its interface header at firmware/include/lcd_parallel.h (renamed from lcd_i2c.h on 2026-09-22 - a prototype-era name that kept misleading readers; there is no I2C backpack and no I2C code). Internal EEPROM access lives in firmware/src/nvm.c + firmware/include/nvm.h, device-guarded so the PIC16F18875 keeps XC8's legacy eeprom helpers while the PIC18F-Q10 drives its own NVM block. Pin assignments: see the single-source-of-truth rule above.
+- The LCD is a 1602 driven in 4-bit parallel mode by firmware/src/lcd_parallel.c, with its interface header at firmware/include/lcd_parallel.h (renamed from lcd_i2c.h on 2026-09-22 - a prototype-era name that kept misleading readers; there is no I2C backpack and no I2C code). Internal EEPROM access lives in firmware/src/nvm.c + firmware/include/nvm.h, which drives the Q10 NVM block directly (NVMCON0/NVMCON1, with the 0x55/0xAA unlock into NVMCON2) - there is no 16F guard and no legacy eeprom helper left. Pin assignments: see the single-source-of-truth rule above.
 - Menu settings and the last display page are stored in the PIC's internal EEPROM in a versioned, checksummed record; no external EEPROM module is used.
 
 ## Display
@@ -389,54 +278,36 @@ This repository is the active PIC16F18875-I/P linear-amplifier protection contro
 - The PEP/temperature and current-meter pages use EEPROM-saved peak hold/decay settings: factory defaults are 1.2 s hold and 100 ms smooth decay interval.
 
 ## Simulation
-- Both build configurations link to the SAME `out/My_Pic_Project/default.elf`. After a Release build the debug ELF (and the symbols the harness reads with `print <var>`) is gone, and Ninja says "no work to do" for Debug, so delete the ELF and rebuild Debug before running the simulator tests: `rm -f out/My_Pic_Project/default.elf && cmake --build _build/My_Pic_Project/debug -j4`.
-- The firmware can be simulated instruction-accurately on the exact PIC16F18875 using MPLAB X's headless `mdb` debugger (gpsim does NOT support this device - its newest PIC16F1 parts are the 1788/1823/1825/1847 family, missing this chip's ADCC/CLC peripherals).
-- Cross-platform tooling: macOS uses `tools/simulate/*.sh`, Windows uses `tools/simulate/*.ps1` (same behaviour). `cmake/My_Pic_Project/default/.generated/toolchain.cmake` and `.generated/rule.cmake` auto-detect XC8/DFP pack locations per-OS (macOS: `$HOME/tools/microchip/...`; Windows: `C:/Program Files/Microchip/xc8/...` and `%USERPROFILE%/.mchp_packs`, since `$ENV{HOME}` isn't set on Windows) - no manual cache overrides needed on either OS.
-- The BASH scripts are not the whole story: the Python harnesses used to be POSIX-only. Since 2026-09-22 all platform differences live in `tools/simulate/platform_process.py` (`temp_dir`, `find_mdb`, `isolated_spawn_kwargs`, `pid_is_alive`, `terminate_tree`/`kill_tree`, `running_processes`), which every harness imports. Do not put `start_new_session`/`os.killpg`/`signal.SIGKILL`/`ps`/`/tmp` back into a harness - the first three raise `AttributeError` or are silently ignored on Windows, and `os.kill(pid, 0)` actually KILLS the process there. See bugfixes.md 2026-09-22.
-- Verified 2026-09-22: the full test workflow (configure, Debug build, both CTest tests including the first-dit proof) passes on Windows 10 with Python 3.14.7 / MPLAB X 6.35 / XC8 4.00, and the Debug image is bit-for-bit the same size as on macOS (8117/8192 words).
-- IMPORTANT build-flag fix (2026-09-15): `cmake/My_Pic_Project/default/user.cmake` used to unconditionally append `-Os`, which silently overrode the Debug preset's `-O0` (last `-O` flag wins) - so "debug" builds were actually optimized, breaking mdb breakpoints/symbols (tiny functions got inlined, statics got stripped). Now `-Os` only applies via `$<$<CONFIG:Release>:-Os>`. If mdb breakpoints on functions/statics mysteriously don't resolve again, check this file first.
-- macOS setup: `brew install --cask mplabx-ide mplab-xc8`.
-- Windows setup: install the full MPLAB X IDE (not just MPLAB IPE) so `mdb.bat` (under `mplab_platform/bin`) is present. The already-installed VS Code extensions `microchip.mplab-core-da` (Debug Adapter for MPLAB) and `microchip.mplab-data-visualizer` give a GUI debug/scope experience but both ultimately drive the same `mdb`/simulator engine, so scripted simulation doesn't require them.
-- `tools/simulate/build_firmware.sh` (macOS) / `build_firmware.ps1` (Windows) builds firmware locally into `_build/My_Pic_Project/sim` / `out/My_Pic_Project/default.hex`.
-- `tools/simulate/run_sim.sh` / `run_sim.ps1 [scenario.mdb]` builds, then launches `mdb` against device `PIC16F18875` with the hex programmed, filtering the benign `W0106-SIM` TMR1/3/5 warnings (see below) out of the output. With no argument it's an interactive `mdb` session; with a scenario file it runs those commands then exits. `write pin <name> high|low|<N>v` to drive inputs, `print pin <name>` to read outputs, `Stepi <count>` to single-step, `break <function>`/`break <file>:<line>` + `Run`/`Continue`/`Halt` for real breakpoint-based debugging, `Stopwatch [nror]` for real simulated elapsed time. Example scenarios: `tools/simulate/scenarios/boot_smoke.mdb`, `ptt_cycle.mdb`.
-- mdb command files do not support `;`/`#` comment lines - an invalid line aborts the rest of the script, so keep scenario files to plain commands only.
-- A VS Code GUI debug session (breakpoints/variables/watch/registers, no terminal) is available via `.vscode/launch.json`'s "Simulate PicAmpControl (Debug)" config, using `microchip.mplab-core-da` against `Simulator`/`PIC16F18875`. Requires `out/My_Pic_Project/default.elf` to exist (build first). Pin/register live-watch: add `PORTA`/`PORTB`/`PORTC`, `LATA`/`LATB`/`LATC`, `TRISA`/`TRISB`/`TRISC` (or bitfields like `PORTCbits.RC5`) to the Watch panel manually - there is no file-based way to pre-seed Watch expressions.
-- `main.c` explicitly clears `ANSELC` so RC0/RC3-RC7 operate as digital I/O; keep this initialization when changing the port map.
-- Benign, expected simulator noise: `W0106-SIM: This device only has partial support for TMR1/TMR3/TMR5 peripheral...` on every reset. Firmware never touches T1CON/T3CON/T5CON; this is just `mdb`'s partial clock-source-mux model for those timers at their POR default state, not a real firmware/silicon issue - safe to ignore (already filtered out by run_sim.sh/.ps1).
-- FIXED (2026-09-15, see bugfixes.md): the ADC ISR used to immediately re-arm the next conversion (with a blocking `__delay_us`) right after each conversion completed, entirely inside `timer0_isr()`. In simulation this created a back-to-back interrupt chain that fully starved the main loop - `update_tx_sequence()`/`update_protection_state()` never ran even once after 30+ simulated seconds. Fixed by only re-arming once per Timer0 tick (~1 ms) instead of immediately; verified main-loop breakpoints now hit normally. If future simulation runs show the CPU stuck at the interrupt vector address on every `Halt` with continuous `W0223-ADC` spam, that class of bug is back.
-- To simulate a steady-state-then-PTT-drop scenario without spurious protection faults, drive plausible idle ADC voltages before running: `write pin RA0/RA1/RA2/RA3 0v` (SWR fwd/ref, both pairs), `write pin RA5 2.5v` (temp), `write pin RB1/RB2/RB3 0v` (current/overdrive/drain), `write pin RB4 low` (hw overcurrent fault, active-high). PTT (`RC0`) is active-low; hold `high` for idle/steady-state, then `low` to assert. Without explicit stimulus, floating ADC inputs read as very low/high and spam `W0222/W0223-ADC` over/underflow warnings (cosmetic) but can also cause `swr_trip()` etc. to behave unpredictably.
-- The simulator suite runs eleven scenarios in one MDB session and emits per-scenario CSVs and graphs under `_build/My_Pic_Project/sim/csv/` and `_build/My_Pic_Project/sim/graphs/`. The first-dit proof is a separate session (`tools/simulate/test_first_dit.py`, `--csv` to dump its samples) and shares the band-selection invariant checks in `tools/simulate/first_dit_invariants.py` with the suite.
-- Injecting snoop RF only *before* PTT models a radio that is silent while transmitting. The tick resets TMR1 every 10 ms, so the injected measurement goes stale and the firmware correctly stays in bypass. Keep the band frequency injected for the whole keyed window (the suite does this for 40m now; see bugfixes.md 2026-09-21).
-- mdb cannot write a C variable by name in this version (`write g_x 1` fails with `For input string: "<addr> "`, and `print /a g_x` fails the same way). Fault injection into firmware state works via the address: read it from `out/My_Pic_Project/default.sym` (line format `_g_name <hexaddr> 0 BANKn <size>`, e.g. `_g_band_cache_idle_ms B4 0 BANK1 1`) and use `write /r 0x<addr> <lo> <hi>` for a 16-bit value (little-endian, one byte per word) or `write /r 0x<addr> <byte>` for a bool/enum. Addresses move on every rebuild, so parse the .sym at run time (test_first_dit.py does).
-- Run tests with `./run_tests.sh` (macOS) / `.\run_tests.ps1` (Windows), or `ctest --test-dir _build/My_Pic_Project/debug --output-on-failure > /tmp/pac_ctest.log 2>&1` (`*>` and `$env:TEMP` on Windows; see TESTING.md). A green run ends with `100% tests passed`; the suite prints `PTT suite passed: 11 scenarios in one MDB session` and the first-dit proof prints `FIRST-DIT PROOF PASSED: ...`. Roughly 3 minutes on macOS, ~7 minutes on Windows (MDB is ~2.4x slower there).
-- CTest registers two tests (cmake/My_Pic_Project/default/user.cmake): `PTT_SequencerAndTripSuite` (labels `sim;suite`, runs `run_suite_with_watchdog.py --timeout 1200`) and `FirstDit_BandDetectionAndHotSwitchGuards` (labels `sim;first-dit`, runs `tools/simulate/test_first_dit.py`). Select with `-R FirstDit`, `-R PTT_Sequencer`, or `-L sim`; never run the two concurrently (both own MDB, and the suite launcher kills stray MDB processes). The suite is Python 3 only and configuration now fails if the discovered interpreter is not Python 3; `PYTHON_EXECUTABLE` is cached, so clear it with `-U PYTHON_EXECUTABLE` when reconfiguring an existing build directory.
-- TIMEOUTS ARE SIZED FOR THE SLOWEST PLATFORM (2026-09-22): MDB is ~2.4x slower on Windows than macOS (suite 356 s vs ~150 s; first-dit ~55 s vs ~20 s). The old 280 s inner MDB timeout killed a perfectly healthy suite run on Windows while it was still printing progress. The budget is now `run_mdb(timeout=1500)` as a last-resort net, `run_suite_with_watchdog.py --timeout 1200` as the real budget, and matching CTest registration. Do not shrink them to macOS-sized numbers, and never read a timeout as a firmware regression - check the heartbeat log (`delta=0` and frozen `mdb_bytes` = hung; output still increasing = slow but healthy).
+**Method, traps, commands and timeout policy for the simulator live in
+`.github/skills/build-test/SKILL.md`** - see its `## Simulation method` and
+`## Timeout and platform policy` sections. Those cover the mdb command set, `run_sim.sh`/`.ps1`, the
+`.sym`-address fault injection, the idle-ADC stimulus recipe, `ANSELC`, `W0106-SIM`, the GUI debug
+session, the shared-ELF/rebuild trap, the `platform_process.py` ownership rule and the timeout budgets.
+Not restated here: this section had drifted to the PIC16F18875 and to its 8192-word memory map.
 
 ## References
-- Hardware source of truth: docs/hardware/PIC16F18875_pin_map.md
+- Hardware source of truth: docs/hardware/PIC18F47Q10_pin_map_and_setup.md
 - Architecture and safety behaviour: docs/project-architecture.md
 - Band-change detection (first-dit model, implemented): docs/first-dit-band-detection.md
 - Firmware entry point: firmware/src/main.c
 - Bug fixes log (update whenever a real bug is found): bugfixes.md
 
 ## CI / release
-- .github/workflows/firmware-build.yml builds on every push/PR to main on `ubuntu-latest` (installs XC8 v4.00 + DFP, Ninja) and packages `.hex`/`.elf`/`.map`/`.xml` plus the pin map (docs/hardware/PIC16F18875_pin_map.md) into a `firmware-<sha>` artifact. It compiles only - the simulator tests are not run in CI.
+- .github/workflows/firmware-build.yml builds on every push/PR to main on `ubuntu-latest` (installs XC8 v4.00 + the `PIC18F-Q_DFP` pack, Ninja) and packages `.hex`/`.elf`/`.map`/`.xml` plus the pin map (docs/hardware/PIC18F47Q10_pin_map_and_setup.md) into a `firmware-<sha>` artifact. It compiles only - the simulator tests are not run in CI.
 - .github/workflows/auto-release.yml runs after a successful main build, auto-increments a `v0.0.N` tag, and publishes that artifact as a GitHub Release. This is fully automatic - no manual step needed for a normal push to main.
 - .github/workflows/release-firmware.yml is the manual fallback (workflow_dispatch) to re-publish an older build's artifact under an existing tag.
 
 ## Device memory usage
-- `memoryfile.xml` (and `mem.map`) is regenerated by XC8 on every build and is always included in the latest release, so it always reflects the current firmware, not a stale snapshot.
-- To check current % free: download it from the latest release (`gh release download <tag> -p memoryfile.xml`) and read `<memory name="program">`/`<memory name="data">` `used`/`free`/`length` (program = flash words, data = RAM bytes).
-- FLASH IS TIGHT (2026-09-21): Release (shipping) uses ~6899/8192 words = ~84% used; the Debug build
-  that the simulator/tests load is the binding one - it was 8135/8192 (99.3%) at the start of this
-  session, peaked at 8189/8192 (100.0%, 3 words free) once the relay-ordering and SWR-arming guards
-  landed, and is now 8117/8192 = 99.1% used (75 words free) after the LCD label/boot-text shortening.
-  That is because user.cmake deliberately compiles Debug with -O1 (not -Os) so mdb can resolve
-  symbols and breakpoints. Budget new firmware features against the Release number, and expect the
-  Debug build to hit the 8192 limit first. Ask before adding code, and prefer table-driven logic
-  over long if/else chains. Budget rules and the exact way to read the live figure: the skill's
-  `## Flash space`.
-- As of v0.0.25 (commit 3a49285): program flash 54.2% free (4440/8192 words), data RAM 84.2% free (862/1024 bytes). Superseded by the 2026-09-21 numbers above.
+**Current figures are in the skill's `## Flash space`.** Flattened here: on the Q10 nothing is tight.
+Measure them, never quote them from memory:
+- Measured 2026-09-24, Release: program **11214/131072 bytes used (8.6%)**, data **368/3359 bytes
+  (11.0%)**. The PIC16F18875 map that used to be quoted here (8117/8192 words) was a property of the
+  old part, and "FLASH IS EFFECTIVELY FULL" was true only of that part.
+- `memoryfile.xml` (and `mem.map`) is regenerated by XC8 on every build and is always included in the
+  latest release, so it always reflects the current firmware, not a stale snapshot.
+- To check the current figures: read `<memory name="program">`/`<memory name="data">`
+  `used`/`free`/`length` from the build directory's `memoryfile.xml`, or from the latest release
+  (`gh release download <tag> -p memoryfile.xml`).
 
 ## Remaining work
 
@@ -470,25 +341,12 @@ re-derive it.
 
 The open work is hardware validation: final sensor calibration, comparator thresholds and polarity, ADC transient protection, TX timing, fan implementation, LCD/menu/internal EEPROM persistence testing, final PCB review, and CI validation. First-dit specifics to confirm on the bench: BAND_CACHE_IDLE_TIMEOUT_MS (60 s) against real band-change habits, BAND_SETTLE_MS (20 ms) against the fitted LPF relay's operate time, and BAND_VERIFY_MS (20 ms) - i.e. how long a wrong remembered band may stay engaged before fold-back, which is the one figure that trades amplifier protection against nuisance drop-outs on a noisy first dit.
 
-Flash space is the next constraint. Measure before you refactor - the earlier estimates here were
-guesses and at least one is probably wrong:
-
-1. Make `adjust_selected_setting()` in firmware/src/main.c table-driven ({min,max,step} rows instead
-   of the long if/else chain). **The earlier "est. 80-100 words" is suspect.** Most of those settings
-   are 16-bit, so a `{min,max,step}` row costs ~6 bytes and a table for all 20 pages is ~120 bytes
-   *plus* lookup code - likely MORE than the branch chain it replaces, whose branches are a handful
-   of words each. Measure the actual function size first; if the table does not win, say so and drop
-   the idea rather than implementing it for appearance.
-2. ~~Compile the translation units the harness does NOT read (`lcd_parallel.c`) at `-Os` in the Debug
-   build.~~ **MEASURED 2026-09-22: this reclaims NOTHING - do not retry it.** The per-source override
-   does apply and the file genuinely recompiled, but the Debug image stayed at 8117/8192 words exactly.
-   XC8's linker optimises at the `-O1` in the link rule, normalising the per-file level, so per-TU `-O`
-   overrides are the wrong layer. Detail and the reproduction: the skill's `## Flash space`.
-3. Compile the whole simulator/tests image `-Os` instead of `-O1` (user.cmake). Est. 1200 words off
-   the Debug number, but degrades mdb symbol/breakpoint resolution for the VS Code "Simulate
-   PicAmpControl (Debug)" session - the whole reason Debug is -O1 today. Needs explicit user consent.
-4. Bit-pack the menu metadata, shorten the remaining display strings, or use commented inline
-   assembly where a hot path justifies it (equivalent C must be in the comment).
-
-Do not start a structural one without asking; see the skill's `## Flash space` for the policy and the
-Device memory usage section above for the current numbers.
+Flash space is NOT the next constraint any more - the Q10 has 8.6% of program flash used, and the
+levers that used to be listed here were aimed at the PIC16F18875's full 8192-word map. The two
+measured lessons survive and are in the skill's `## Flash space`: table-driving `adjust_selected_setting()`
+was estimated at 80-100 words and is probably a loss, and compiling the harness-invisible translation
+units at `-Os` reclaims exactly nothing because XC8's linker normalises the per-file `-O` level.
+The one item that would still need explicit consent is compiling the whole simulator image `-Os`
+instead of `-O1`, because it degrades mdb symbol/breakpoint resolution for the VS Code debug session.
+If space ever does bind, the cheapest room is the LCD string literals (`STRCODE`), and commented
+inline assembly is allowed where a hot path justifies it (every block needs an equivalent-C comment).
