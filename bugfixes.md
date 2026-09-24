@@ -244,8 +244,10 @@ path, which is a narrow deviation to work around rather than evidence that inter
 unimplemented. So a port must set `IPEN = 1`, assign a priority per source via `IPRx`, and enable the
 matching global (`GIE`/`GIEH`, plus `PEIE`/`GIEL` for low priority) instead of the 16F's plain
 `GIE = 1`. The scoping of `W0106-SIM` to PPS/clock-source routing, and the explicit statement that
-the core and the interrupt controller are modelled, came from the user's `mistakes.md` and is
-recorded in the skill.
+the core and the interrupt controller are modelled, came from the user's `mistakes.md`. That file was
+never a mistake log - it was a single pasted paragraph - and it was folded into
+`.github/skills/build-test/SKILL.md` and deleted on 2026-09-24, which is where the scoping note now
+lives.
 
 `OSCCON3.ORDY` reads `0` throughout, even while the timer and the interrupt-on-change demonstrably
 run, so it must not be cited as evidence about the clock.

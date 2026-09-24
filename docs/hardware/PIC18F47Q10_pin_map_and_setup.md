@@ -289,8 +289,8 @@ through it with `tools/simulate/probe_q10_ptt_path.py` (extended to print `ADCON
    before judging the reading.
 
 Only treat "the simulator models the Q10 ADCC wrongly" as a hypothesis after 1–8 are each shown
-correct with a positive control, in line with the discipline in `mistakes.md` (two earlier Q10
-verdicts blamed the simulator for configuration that had never been written).
+correct with a positive control, in line with the discipline in `.github/skills/build-test/SKILL.md`
+(two earlier Q10 verdicts blamed the simulator for configuration that had never been written).
 
 ---
 

@@ -469,7 +469,7 @@ def build_script(trip_name=None) -> str:
 
 # Benign, expected MDB noise. The simulator has no clock-source mux for TMR1/TMR3/TMR5,
 # and this firmware never configures those timers, so the warning fires on every reset and
-# means nothing here (see Ai-Notes.txt). It is stripped from everything the harness shows or
+# means nothing here (see the build-test skill). It is stripped from everything the harness shows or
 # logs, because it otherwise buries the progress lines and turns up in the stderr tail of an
 # unrelated failure. run_sim.sh/.ps1 have filtered the same token for exactly this reason.
 #

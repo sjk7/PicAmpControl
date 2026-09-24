@@ -92,6 +92,19 @@ wait for the run. Run it *before* launching, never during.
 2026-09-23). Keep `.mdb` scripts comment-free and document them in the neighbouring `README.md`
 (`docs/hardware/q10-bringup/README.md` now carries the rate-probe method for exactly this reason).
 
+**What the simulator models - and what `W0106-SIM` is really about (2026-09-22; folded in from the
+user's `mistakes.md` on 2026-09-24, when that file was deleted).** The core CPU and the interrupt
+controller ARE modelled: a pending flag breaks execution and the ISR is entered. `W0106-SIM` is scoped
+strictly to **PPS / clock-source routing** - the model cannot route an external stimulus pin through
+the PPS mux to a peripheral clock input - and it says nothing about interrupts in general. So never
+report "interrupts do not work in the simulator"; that was claimed, and it was wrong. When a
+pin-routed clock source is the thing under test, bypass the PPS model rather than abandoning the test:
+drive the peripheral or flag register directly behind `#ifdef __MPLAB_DEBUGGER_SIMULATOR` and validate
+the ISR and everything downstream. In this project that is the T1CKI band-snoop path (`T1CKIPPS`) -
+hence the harnesses inject into `TMR1H`/`TMR1L` instead (see `tools/simulate/trace_ptt_sequence.py`
+and `docs/first-dit-band-detection.md`). The same warning fires on every reset for TMR1/TMR3/TMR5 and
+is stripped as noise by the harnesses and by `run_sim.sh`/`.ps1`.
+
 **Editor/language-server problems belong to a different skill.** If the Problems panel or IntelliSense
 misreports the firmware - `'xc.h' file not found`, undeclared registers such as `LATCbits`/`ADCON1`/
 `ADRES`/`PIR1bits`, `Unknown argument`/`Unsupported argument` for `-mdfp=`/`-mcpu=`, a stale

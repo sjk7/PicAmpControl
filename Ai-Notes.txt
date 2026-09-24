@@ -227,6 +227,14 @@ were all deleted. Concretely, that means:
   an always-on primitive would inject all of it into EVERY request (the "kitchen sink" anti-pattern).
   State stays here non-auto-loaded; the rules that must never be missed stay in the 48-line
   `copilot-instructions.md`. Do not "fix" the extension.
+- `mistakes.md` DELETED 2026-09-24 (user question: *"shouldn't the mistakes.md content be in the build
+  skill and mistakes.md deleted?"*). It was never a mistake log - it was ONE pasted paragraph (the file
+  had a single line, no newlines) from another agent correcting a false claim that interrupts are
+  unimplemented in MDB. The durable part - the core and the interrupt controller ARE modelled,
+  `W0106-SIM` is scoped strictly to PPS/clock-source routing, and the workaround is to poke the
+  peripheral/flag registers directly behind `#ifdef __MPLAB_DEBUGGER_SIMULATOR` - now lives in
+  `.github/skills/build-test/SKILL.md` with the rest of the simulator method. `blockers.txt` is the
+  same category of file and still awaits the same treatment.
   *state and user instructions* (what the firmware does now, what is in flight, what is left, the rules below) live
   in THIS file; *build/test/debug procedure* (toolchain paths, configure/build commands, the flash
   budget, mdb and harness techniques, test names and labels, failure triage) lives only in

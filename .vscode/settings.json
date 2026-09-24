@@ -15,7 +15,7 @@
     // Keep the simulator's benign per-reset warnings (W0106-SIM for TMR1/TMR3/TMR5, whose
     // clock-source mux the model does not implement) out of the debug console by giving the
     // MPLAB message channels their own Output channels. The firmware never configures those
-    // timers, so the warning means nothing here - see Ai-Notes.txt. The adapter exposes no
+    // timers, so the warning means nothing here - see the build-test skill. The adapter exposes no
     // true suppression option, so this is the output-routing lever, not a filter.
     "mplab.coreDebugger.categorizeOutputEvents": true,
     // Deliberately NOT pointing C_Cpp at compile_commands.json. When that property is set, the C/C++
