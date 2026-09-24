@@ -29,6 +29,9 @@ token is billed output, so the cheap answer is a silent analysis and then the re
 chain-of-thought, no "let me consider", no weighing options, no visible trace of any kind. The
 configured thinking level is a ceiling, not a target: if the harness exposes a thinking or
 effort parameter, use the least that still gets the job right. The user sees only the answer.
+**A prompt cannot stop a client configured to think from generating (and billing) reasoning tokens - it
+only stops the model writing them into the reply. Do not claim otherwise: if the thinking level in the
+client is high, the only lever that removes those tokens is that setting.**
 The one exception to "no documentation": if a skill was in use and one of its instructions or
 assumptions turned out wrong, fix that skill in the same piece of work, so the same wrong assumption
 cannot be made again.
