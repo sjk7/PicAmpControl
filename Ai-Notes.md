@@ -69,8 +69,7 @@ static, hand-captured design input. The user's words and the full list of what w
   editor reads, `_build/My_Pic_Project/sim` is where the tests run. The `q10_*` trees and the two Q10
   VS Code tasks are GONE - the Q10 is the default device, so it needs no build tree of its own.
   **Rule: never restate a rule in two files unless one is a pointer** - the copies drift, and whichever
-  a session reads first wins, which is how `TESTING.md` came to outrank `user.cmake`. Output style and
-  the general standing rules live in `.github/copilot-instructions.md` only, and are not repeated here.
+  a session reads first wins, which is how `TESTING.md` came to outrank `user.cmake`.
   **Where a fact lives:** *state and user instructions* (what the firmware does now, what is in flight,
   what is left, the rules above) live
   in THIS file; *build/test/debug procedure* (toolchain paths, configure/build commands, the flash
@@ -127,28 +126,16 @@ static, hand-captured design input. The user's words and the full list of what w
 This repository is the active PIC18F47Q10-I/P linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
 
 ## Firmware
-- **First-dit band switching is implemented** (docs/first-dit-band-detection.md). With no decoded
-  band, PTT is latched but the amplifier stays in bypass (STATE_BYPASS_SNOOP, g_snoop_active) while
-  the radio's first RF burst is decoded; the band is then remembered (g_band_cache_valid/
-  g_band_cache_band) so later PTT drops engage instantly, and the memory is dropped after
-  BAND_CACHE_IDLE_TIMEOUT_MS (60 s, needs bench confirmation) of inactivity. BAND_SETTLE_MS (20 ms,
-  needs bench confirmation) holds bypass after the decode so the amplifier is never keyed into a
-  relay that is still moving. apply_bypass()/release_band_if_cold() enforce the "relays only move
-  with the amplifier cold" rule, and g_band_established gates keying: the amplifier never keys
-  unless a band is backed by a real measurement or the first-dit memory for this transmission
-  (that is what stops it keying on the classifier's 160m no-signal default after a trip
-  recovery). New freq_counter API: freq_counter_restore_locked_band(),
-  freq_counter_band_confirmed(), freq_counter_measured_band().
-- **TWO mechanical relay groups in the RF path, and the order they switch in.** `OUTPUT_TX` (RC5,
-  labelled `RELAYS` by the harness) is the **T/R relay** that puts the amplifier into the path;
-  `K1-K6` (RD2-RD7) are the **LPF band relays**. The band relays must be settled *before* the T/R
-  relay closes, so the T/R relay can no longer be the first thing fired on PTT-low when the band is
-  not yet known (that is why first-dit bypass exists, and why the normal "relays first, wait, HT,
-  bias" order only holds once the band is known). The decode path holds BAND_SETTLE_MS after
-  commanding a new selection; the warm path now does the same whenever
-  `freq_counter_restore_locked_band()` reports the selection actually moved. The LPF filters are on
-  the **TX train only** - RX does not pass through them - so the rig never sees the band relays
-  change over while the T/R relay is open.
+- **First-dit band switching is implemented.** The model, its guards and its bench unknowns are in
+  docs/first-dit-band-detection.md; the firmware API is freq_counter_restore_locked_band(),
+  freq_counter_band_confirmed() and freq_counter_measured_band(). Bench-confirm BAND_SETTLE_MS (20 ms),
+  BAND_VERIFY_MS (20 ms) and BAND_CACHE_IDLE_TIMEOUT_MS (60 s); measured fold-back latency in the
+  simulator is 23 ms.
+- **Two relay groups in the RF path, and the order they switch in:** `OUTPUT_TX` (RC5, the T/R relay,
+  called `RELAYS` by the harness) and `K1-K6` (RD2-RD7, the LPF band relays). The band relays settle
+  before the T/R relay closes, which is why first-dit bypass exists; the LPF filters are on the TX
+  train only, so the rig never sees a band relay move while the T/R relay is open. Detail:
+  docs/first-dit-band-detection.md.
 - **The relay selection no longer follows silence.** `freq_counter_tick_10ms()` drives the band
   outputs only for a usable measurement; it used to follow the classifier's 160m no-signal default,
   which parked the relays on 160m after every over and made almost every warm re-key move them.
@@ -161,15 +148,10 @@ This repository is the active PIC18F47Q10-I/P linear-amplifier protection contro
   "effectively full" claim that used to sit here was a PIC16F18875 property (8192 words). One durable
   coupling survives: the LCD menu labels are hard-coded in `tools/simulate/render_lcd_lifecycle_diagram.py`'s
   `SETTINGS_PANELS`, so shortening or renaming a label means updating that script too.
-- **The remembered band is verified, not trusted (fold-back).** A first-dit engage taken from the
-  band memory is a blind decision - at keydown the radio has not started transmitting, so there is
-  nothing to measure yet. The remembered band is therefore re-checked against the first usable
-  measurement of that same transmission: if the measured band differs for BAND_VERIFY_MS (20 ms),
-  the firmware forces bypass FIRST, releases the band, and lets the snoop path re-select the band
-  actually being received cold before re-engaging. This is what makes the user's "FirstDit on 160m,
-  then immediately change to 80m and key straight away" case safe: the amplifier never amplifies the
-  whole first over through the wrong filter. Measured fold-back latency in the simulator: 23 ms.
-  The relay selection is never moved while keyed (the verify step bypasses before it unlocks).
+- **The remembered band is verified, not trusted (fold-back):** a first-dit engage from the band memory
+  is re-checked against the first usable measurement of that transmission, and a mismatch for
+  BAND_VERIFY_MS forces bypass first, re-selects cold, then re-engages. Where it matters and why:
+  docs/first-dit-band-detection.md.
 - Direct ADC inputs monitor two forward/reflected SWR pairs, temperature, WCS1700 current, input power, and drain voltage. Which channel is which lives ONLY in docs/hardware/PIC18F47Q10_pin_map_and_setup.md - never restate that list here.
 - ADC configuration (firmware/src/main.c adc_init): 10-bit, right-justified legacy format, VDD-referenced with the internal FVR off. Raw values are consumed directly as plain 0-1023 counts, so at a 5 V rail one count is about 4.88 mV.
 - Current-sensor scaling (firmware/src/main.c): zero at raw 512 (2.5 V mid-rail), +511 counts = +70 A, 0 counts = -70 A. The default positive current trip is 40 A (g_thresholds initialiser).
