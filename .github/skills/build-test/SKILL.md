@@ -235,6 +235,21 @@ Timer1 register-injection aliases with the firmware's 10 ms TMR1 reset, so the s
 asserting the injected band is REJECTED (current_band stays the band under test) rather than requiring
 an exact `frequency_khz` string match; or sample the injection window more finely.
 
+**2026-09-24: the same aliasing re-found, worse, and re-found AGAIN the same session.** After the
+band-coverage assertion was relaxed to `current_band == expected` (the right fix), the failure moved
+to `validate_freq_ctr`'s *lock* check, at a LATER band each run (80m once, then 15m). The added
+`FREQ_DEBUG ... lock_samples` trace is decisive: for the failing band every sample reads
+`(cache_valid=false, current_band=1, freq=0, locked=false, ptp=false, stage=0, establish=false,
+snoop=false, settle=false, verify=false)` - the classifier is parked on its 160m no-signal default
+with `freq=0`, so the band is never established and PTT never latches. The frequency injection is NOT
+reaching the classifier for later bands (not even an aliased 1740/1756 - a hard 0). This is the
+TMR1-10ms-tick aliasing from the 2026-09-22 note, but manifesting as total injection loss rather than
+an off-by-a-few-counts reading. It is a harness stimulus bug, not firmware. Do NOT widen the
+own-frequency hold window blindly or relax `validate_freq_ctr` - the injection itself must be fixed
+(see the single-band repro `repro_i5_15m_10m.py`); the 40->80->30->40 widening I made did not address
+it and masked the real symptom. The reliable repro is isolating ONE band with `BAND_TESTS`, not the
+full 11-scenario suite.
+
 **Harness note: sample settle/verify state when debugging band timing.** `STATE_VARS` in
 `trace_ptt_sequence.py` now carries `g_band_settle_active`, `g_band_settle_elapsed_ms`,
 `g_band_verify_active`, `g_band_verify_mismatch_ms`, and `first_dit_invariants.describe()` prints

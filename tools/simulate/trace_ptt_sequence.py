@@ -55,6 +55,7 @@ STATE_VARS = [
     "g_snoop_active", "g_band_established",
     "g_band_settle_active", "g_band_settle_elapsed_ms",
     "g_band_verify_active", "g_band_verify_mismatch_ms",
+    "g_band_cache_valid", "g_band_cache_band",
 ]
 # STATE_BYPASS_SNOOP in firmware/src/main.c (appended last so existing numbering is stable).
 STATE_BYPASS_SNOOP = 6
@@ -220,8 +221,16 @@ def build_script(trip_name=None) -> str:
         total_counts = int(round((freq_khz * 1000.0) / 400.0))
         if total_counts > 0xFFFF:
             raise ValueError(f"{freq_khz} kHz cannot be represented by a 16-bit Timer1 write")
+        # Atomic injection: halt Timer1, write both bytes, restart - so the firmware's 10 ms
+        # freq_counter_tick_10ms() cannot read a torn register (TMR1L new + TMR1H old) mid-write.
+        # The earlier two-write injection raced the running gate and produced garbage readings
+        # (freq=73/8/36), which kept stability_count below STABILITY_REQUIRED_TICKS and left
+        # current_band stuck - the "TX lock failed ... freq=0, band=1" bug. T1CON running value is
+        # 0x27 (ON+RD16+NOT_SYNC+CKPS=2, per freq_counter_init); stop is 0x26.
+        lines.append("write T1CON 0x26")
         lines.append(f"write TMR1L 0x{total_counts & 0xFF:02X}")
         lines.append(f"write TMR1H 0x{(total_counts >> 8) & 0xFF:02X}")
+        lines.append("write T1CON 0x27")
 
     def inject_step_hold(freq_khz, ms, chunk_ms=5):
         """Advance `ms` of simulated time with the snoop signal held present throughout.
@@ -241,17 +250,21 @@ def build_script(trip_name=None) -> str:
         band_tests = BAND_TESTS if all_bands else [("40m", 7000, 3)]
         for band_name, freq_khz, expected_band in band_tests:
             lines.append(f"# BAND PREFLIGHT: {band_name} @ {freq_khz} kHz (expected {expected_band})")
-            # 5 ms steps, not 10 ms: the firmware resets TMR1 on every 10 ms tick, and a 10 ms
-            # sample interval aliases with that tick. When it aliases badly *every* sample lands
-            # before the tick that consumes the injected count, so the reading is never observed
-            # and the assertion fails on a stimulus artefact rather than on firmware behaviour.
-            # At 5 ms every tick window contains at least one post-tick sample.
-            for _ in range(8):
+            # Inject the count then step a FULL 10 ms gate per iteration. The firmware reads-and-
+            # zeroes TMR1 on every freq_counter_tick_10ms(), so a 5 ms step + re-inject races the
+            # gate and flickers the measured frequency (1800 -> 16 -> 3600), which keeps
+            # stability_count below STABILITY_REQUIRED_TICKS=2 and current_band stuck at its reset
+            # value. Stepping the full gate lets each tick read a stable count so the band
+            # establishes. (This was the "80m/15m TX lock failed ... freq=0, band=1" bug.)
+            for _ in range(4):
                 write_tmr1_count(freq_khz)
-                lines.append(stepi(5))
+                lines.append(stepi(10))
                 sample()
         lines.append("# Restore 40m before scenario PTT stimulus")
         for _ in range(8):
+            write_tmr1_count(7000)
+            lines.append(stepi(5))
+            sample()
             write_tmr1_count(7000)
             lines.append(stepi(5))
             sample()
@@ -268,34 +281,32 @@ def build_script(trip_name=None) -> str:
         for band_name, freq_khz, expected_band in BAND_TESTS:
             injected_freq_khz = injected_frequency_for(freq_khz)
             lines.append(f"# TX BAND CHECK: {band_name} @ {freq_khz} kHz, inject {injected_freq_khz} kHz")
-            for _ in range(10):
+            for _ in range(5):
                 write_tmr1_count(freq_khz)
-                lines.append(stepi(5))
+                lines.append(stepi(10))
                 sample()
             lines.append("write pin RC0 0v")
-            for _ in range(12):
+            for _ in range(6):
                 write_tmr1_count(freq_khz)
-                lines.append(stepi(1))
+                lines.append(stepi(10))
                 sample()
-            # Hold the band's own frequency long enough for the engage to complete before the
-            # injected (different-band) signal starts. The engage can be delayed by a bypass-snoop
-            # decode plus a relay-settle window when the remembered band disagrees with the live
-            # measurement, so a 100 ms own-frequency window could end before the amplifier had
-            # keyed, leaving the injection to land outside the keyed window (measured on 80m,
-            # 2026-09-22: the keyed stage-3 window showed freq=0 throughout). 200 ms covers the
-            # decode + settle delay with margin.
+            # Hold the band's own frequency - full 10 ms gates - long enough for the engage to
+            # complete. Each gate read is stable so the classifier reaches STABILITY_REQUIRED_TICKS=2
+            # and establishes the band; a 5 ms step raced the gate and never let current_band settle
+            # (the "TX lock failed ... freq=0, band=1" bug). Keep enough gates for the remembered-
+            # band fold-back of later bands: decode + settle + verify + three 20 ms stages.
             for _ in range(40):
                 write_tmr1_count(freq_khz)
-                lines.append(stepi(5))
+                lines.append(stepi(10))
                 sample()
-            for _ in range(20):
+            for _ in range(15):
                 write_tmr1_count(injected_freq_khz)
-                lines.append(stepi(5))
+                lines.append(stepi(10))
                 sample()
             lines.append("write pin RC0 5v")
-            for _ in range(30):
+            for _ in range(20):
                 write_tmr1_count(freq_khz)
-                lines.append(stepi(5))
+                lines.append(stepi(10))
                 sample()
 
         lines.append("quit")
@@ -657,10 +668,16 @@ def validate_frequency_ready(samples, scenario_name="unknown") -> None:
 
 def validate_band_coverage(samples, scenario_name="unknown") -> None:
     for band_name, freq_khz, expected_band in BAND_TESTS:
+        # Assert the BAND was classified, not that the measured frequency reads exactly the
+        # injected kHz. The firmware resets TMR1 on its 10 ms tick, so the sampled frequency
+        # drifts a few counts from the injected value (25000 kHz reads 24985/25022) even though
+        # the classifier lands on the correct band. Requiring an exact `frequency_khz == 25000`
+        # match was why this failed on 10m while the band was in fact correctly classified (6).
+        # current_band == expected_band with a non-zero measured frequency is the real property.
         matches = [
             sample for sample in samples
-            if sample[2].get("g_fc_status.frequency_khz") == str(freq_khz)
-            and sample[2].get("g_fc_status.current_band") == str(expected_band)
+            if sample[2].get("g_fc_status.current_band") == str(expected_band)
+            and sample[2].get("g_fc_status.frequency_khz") not in ("", "0", None)
         ]
         if not matches:
             observed_pairs = sorted({
@@ -675,12 +692,12 @@ def validate_band_coverage(samples, scenario_name="unknown") -> None:
                  sample[2].get("g_ptt_active"),
                  sample[2].get("g_sequence_stage"))
                 for sample in samples
-                if sample[2].get("g_fc_status.frequency_khz") == str(freq_khz)
+                if sample[2].get("g_fc_status.frequency_khz") != ""
             ]
             print(f"FREQ_DEBUG scenario={scenario_name} samples={len(samples)}", flush=True)
             print(f"FREQ_DEBUG missing={band_name}@{freq_khz}kHz expected_band={expected_band}", flush=True)
             print(f"FREQ_DEBUG observed_pairs={observed_pairs}", flush=True)
-            print(f"FREQ_DEBUG matching_frequency_states={observed_frequency}", flush=True)
+            print(f"FREQ_DEBUG nonempty_frequency_states={observed_frequency}", flush=True)
             raise AssertionError(
                 f"{scenario_name}: {band_name} band was not classified at {freq_khz} kHz"
             )
@@ -753,6 +770,25 @@ def validate_freq_ctr(samples, scenario_name="FREQ_CTR") -> None:
             and sample[2].get("g_fc_status.frequency_khz") not in ("0", "", None)
         ]
         if not locked_injection:
+            # Emit the fold-back state of every sample around this band so the stall point is
+            # visible in one shot: remembered band vs live band, whether the verify/settle/snoop
+            # flags are held, and how far the sequence got. This is the same diagnostic idea as
+            # validate_trip's SWR_DEBUG recovery_trace.
+            stale = [
+                (sample[2].get("g_band_cache_valid"),
+                 sample[2].get("g_band_cache_band"),
+                 sample[2].get("g_ptt_active"),
+                 sample[2].get("g_fc_status.current_band"),
+                 sample[2].get("g_fc_status.frequency_khz"),
+                 sample[2].get("g_fc_status.band_locked"),
+                 sample[2].get("g_band_established"),
+                 sample[2].get("g_snoop_active"),
+                 sample[2].get("g_band_settle_active"),
+                 sample[2].get("g_band_verify_active"),
+                 sample[2].get("g_sequence_stage"))
+                for sample in samples
+            ]
+            print(f"FREQ_DEBUG {band_name} lock_samples={stale}", flush=True)
             raise AssertionError(
                 f"{band_name} TX lock failed: no keyed stage-3 sample held "
                 f"current_band={expected_band} with the band locked"
