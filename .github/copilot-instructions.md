@@ -24,7 +24,8 @@ rendered as well, so each such line costs what a reply costs. Work silently, spe
 **Narration is billed as output tokens like any other text, so every narrated line is money spent for
 nothing: do not write one.**
 This binds your reasoning traces: one clause per step, never a paragraph, and never weighing options
-aloud.
+aloud. **If you are in thinking mode, do not spew your thoughts at the user - every thought is billed
+like any other text and wastes tokens.**
 The one exception to "no documentation": if a skill was in use and one of its instructions or
 assumptions turned out wrong, fix that skill in the same piece of work, so the same wrong assumption
 cannot be made again.
