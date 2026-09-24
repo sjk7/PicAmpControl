@@ -10,14 +10,12 @@ between.** The PIC16F18875 port was removed on 2026-09-23: its `#if defined(__18
 paths, its `-DPICAMP_DEVICE=PIC16F18875` build option, its CI matrix entry, its `.vscode` defines
 and include paths, its `run_sim.sh`/`run_sim.ps1` default device, and its entries in these notes
 were all deleted. Concretely, that means:
-- Do not re-add a device guard, a per-device lookup table, or a second `PICAMP_DEVICE_*` fact block
-  "just in case". `cmake/My_Pic_Project/default/device.cmake` states one device, and each harness carries
-  its own single instruction-rate constant - **and the two constants disagree; see the REMINDER under
-  Remaining work. Do not unify them by picking the tidier number.**
+- **Do not make anything device-configurable again.** One device means one code path, one constant and
+  one block of facts - so no `#if defined(__18F47Q10__)` guards in the firmware, no lookup table keyed
+  by part name (the harnesses used to carry `{"PIC16F18875": 8000, "PIC18F47Q10": ...}`), and no
+  second per-device fact block in `device.cmake` "just in case".
 - Historical material about the 16F port, and the abandoned PIC16F18877 evaluation, now lives only
   in `prototype_reference/` and `bugfixes.md`. Do not restate it in `docs/`, `README.md` or here.
-- If a document, comment or test disagrees with `device.cmake` about the target part, `device.cmake`
-  wins and that document is the bug.
 - The one deliberate exception: `tools/setup/parameterise_device.py` still *pattern-matches* the 16F
   tokens, because MPLAB X emits them when it regenerates `.generated/rule.cmake` from the MPLAB
   project the tree was created from. Those are the generator's tokens, not our target - removing the
