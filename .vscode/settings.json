@@ -1,11 +1,11 @@
 {
     "clangd.arguments": [
         "--compile-commands-dir=${workspaceFolder}/_build/My_Pic_Project/release",
-        // Let clangd query the XC8 driver for its system includes. It needs this because it has no
-        // idea what `-mdfp=<pack>` means either - but xc8-cc does, so asking the compiler is how the
-        // pack's pic/include (and therefore <xc.h>) gets onto the search path. The glob keeps this
-        // machine-independent, which is the rule for .clangd; the same pattern matches on Windows.
-        "--query-driver=**/xc8-cc",
+        // No --query-driver here: clangd's system-include extraction cannot work with XC8. It runs
+        // the driver as `xc8-cc -E -v -x c -`, and XC8 refuses that with "(2042) no target device
+        // specified" because clangd does not forward the -mcpu=/-mdfp= flags it does not
+        // understand. The include paths come from the compile database instead (user.cmake adds
+        // them), which is also what keeps them machine-resolved. Added then removed 2026-09-23.
         "--header-insertion=never"
     ],
     "mplab.clangd.compileCommandsDir": "${workspaceFolder}/_build/My_Pic_Project/release",

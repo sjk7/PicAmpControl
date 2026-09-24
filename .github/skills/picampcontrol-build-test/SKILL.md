@@ -176,24 +176,19 @@ clangd's own check no longer produced. The extension needs a restart to drop the
 
 **Traps found 2026-09-23 (second batch) - each one cost a run or a wrong conclusion.**
 
-- **The editor needs help with XC8's driver flags, and there are TWO engines to fix.** XC8 passes
-  `-mdfp=<pack>` and `-mcpu=<part>`, neither of which clangd or the C/C++ extension understands, so
-  neither can find `<xc.h>` unaided - and a missing `<xc.h>` cascades into ~20 "undeclared
-  identifier" errors (`LATCbits`, `ADCON1`, `ADPCH`, `NVMCON1bits`...) that bury whatever real
-  diagnostic exists. Both fixes live in `.vscode/settings.json` and both are required:
-  * **clangd:** `--query-driver=**/xc8-cc` in `clangd.arguments`. clangd will not query an unknown
-    driver unless told to, and xc8-cc is precisely the thing that *does* understand `-mdfp`, so
-    asking the compiler is how the pack's `pic/include` (and therefore `<xc.h>`) reaches the search
-    path. The glob keeps it OS-independent, which is the rule for `.clangd`.
-  * **C/C++ extension:** do **not** set `C_Cpp.default.compileCommands`. When it is set the extension
+- **The editor/language-server cascade - read the section above** ("The language servers: what
+  actually makes XC8's headers parse") for all five causes, in the order the diagnostics mislead you.
+  Three corrections to what was written here first, each verified on 2026-09-23:
+  * **`--query-driver=**/xc8-cc` does NOT work with XC8** and was removed from `settings.json`.
+    clangd queries the driver as `xc8-cc -E -v -x c -`, which answers
+    `(2042) no target device specified`, so the include paths must come from the compile database.
+  * **`-mdfp=` IS removable now** - but only *after* those `-I` flags exist. Removing it first is
+    exactly what turned one diagnostic into the whole cascade.
+  * **C/C++ extension:** do not set `C_Cpp.default.compileCommands`. When it is set the extension
     IGNORES `includePath`/`defines` and parses the XC8 command line instead - where `-mdfp` means
-    nothing to it. Left unset, `c_cpp_properties.json`'s per-OS pack include path (Mac-XC8 /
-    Windows-XC8) is what resolves the device headers.
-  * `-mdfp=` must also stay in the compile flags (removing it to silence `Unknown argument` makes
-    things far worse - that diagnostic is the cheap side of the trade). Only `-mcpu=` is redundant:
-    the part reaches clangd as the `__18F47Q10__` define.
-  * Settings changes do not apply until the language server restarts / the window reloads - the
-    Problems panel keeps showing the old errors until then, which reads as "the fix did not work".
+    nothing to it. Unset, `c_cpp_properties.json`'s per-OS pack include path resolves the headers.
+  * `.clangd`/settings changes do not apply until the language server restarts; the panel keeps
+    showing the old errors until then, which reads as "the fix did not work" - it did, twice here.
 - **There are TWO build directories and only one holds the editor's compile database.** `.clangd` and
   `.vscode/settings.json` both point at `_build/My_Pic_Project/release`, while the Q10 build tasks
   also write `_build/My_Pic_Project/q10_release`. Building in one leaves the other's
