@@ -51,7 +51,7 @@ void __interrupt() isr(void) {
     }
 }
 
-void main(void) {
+int main(void) {
     unsigned char i;
 
     /* --- PTT on RC0, digital input with pull-up, exactly as main.c configures it --- */

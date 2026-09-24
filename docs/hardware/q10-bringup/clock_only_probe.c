@@ -41,7 +41,7 @@ void __interrupt() isr(void) {
     }
 }
 
-void main(void) {
+int main(void) {
     /* --- clock: 64 MHz internal HFINTOSC, written explicitly ---
      * On silicon the config word `RSTOSC = HFINTOSC_64MHZ` already selects this, which is why
      * firmware/src/main.c never writes these registers. The simulator was measured NOT to apply the
