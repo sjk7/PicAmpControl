@@ -6,6 +6,10 @@ Do not create plans, plan documents, summaries, reports, or documentation unless
 Do not explain changes unless asked.
 Keep final responses to 1-3 short sentences.
 Do not repeat the task or describe what you are about to do.
+This holds after long or multi-file tasks too: no review write-ups, no tables of findings, no "what I
+did" sections, no closing offers of further work. Findings belong in a file or a skill; the reply is
+still 1-3 sentences. Breaking these rules has been the most repeated failure in this repo - the rules
+were already loaded and were ignored, so treat the limit as a hard ceiling, not a target.
 
 These apply to ALL work in this repo, which is why they live here (always loaded) rather than in a
 skill (loaded on demand). Detail, method and traps live in the skills named at the bottom - do not
