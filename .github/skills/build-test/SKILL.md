@@ -273,32 +273,55 @@ own-frequency hold window blindly or relax `validate_freq_ctr` - the injection i
 it and masked the real symptom. The reliable repro is isolating ONE band with `BAND_TESTS`, not the
 full 11-scenario suite.
 
-**2026-09-24 (later): the FREQ_CTR failure is a STIMULUS CADENCE bug, and it must not be "fixed" by
-window nudging.** Root cause, proved with the per-sample dump: the firmware classifies a band only
-after `STABILITY_REQUIRED_TICKS = 2` consecutive 10 ms gates read the SAME band, and the harness's
-`write_tmr1_count` + `stepi(5)` cadence races the firmware's 10 ms `freq_counter_tick_10ms()` gate, so
-the measured frequency flickers (1800 -> 16 -> 3600 -> 0) and `current_band` never settles. The
-failure then moves to whichever band runs last (80m, 15m, 10m) and reads `freq=0, current_band=1,
+**2026-09-24 (later): the FREQ_CTR failure was a STIMULUS CADENCE bug, and the fix is the cadence,
+not the windows - SOLVED.** Root cause, proved with the per-sample dump: the firmware classifies a
+band only after `STABILITY_REQUIRED_TICKS = 2` consecutive 10 ms gates read the SAME band, and the
+harness's `write_tmr1_count` + `stepi(5)` cadence races the firmware's 10 ms `freq_counter_tick_10ms()`
+gate, so the measured frequency flickers (1800 -> 16 -> 3600 -> 0) and `current_band` never settles.
+The failure then moves to whichever band runs last (80m, 15m, 10m) and reads `freq=0, current_band=1,
 locked=false, stage=0` - the classifier parked on its 160m no-signal default, NOT a lock loss and NOT
 a firmware bug. Injecting with a FULL 10 ms gate per iteration reaches stability and the bands do
-lock - but **every attempt to do so traded the lock check for the I5 hot-switch invariant**
-(`band-select outputs changed while the amplifier was keyed`) because the longer/full-gate holds move
-the injected-frequency switch relative to the keyed window. Tested and rejected on 2026-09-24:
-widening the per-band windows (40/20/30 -> 80/30/40), full-gate PREFLIGHT (breaks the base PTT
-release - "release did not enter stage 5" - because the preflight is shared by every scenario),
-full-gate band-check holds (passes lock, fails I5), atomic T1CON stop/inject/restart (no effect on the
-lock bug), and an 800 ms trip re-arm window. **The scenario needs the injection redesigned so the
-classifier is stable AND the frequency only changes while the amplifier is unkeyed - not more window
-tuning.** Do the redesign with `repro_i5_15m_10m.py` (it runs the I5 and lock invariants together, so
-a fix that breaks one is caught immediately).
+lock - but **every full-gate variant traded the lock check for the I5 hot-switch invariant**
+(`band-select outputs changed while the amplifier was keyed`), because a longer hold moves the
+injected-frequency switch relative to the keyed window. Tested and rejected on 2026-09-24: widening
+the per-band windows (40/20/30 -> 80/30/40), full-gate PREFLIGHT (breaks the base PTT release -
+"release did not enter stage 5" - because the preflight is shared by every scenario), full-gate
+band-check holds (passes lock, fails I5), atomic T1CON stop/inject/restart (no effect on the lock
+bug), and an 800 ms trip re-arm window.
 
-**Open regression (2026-09-24): SWR1's trip re-arm fails on the committed tree.** `--trip SWR1`
-reports `SWR1 did not clear and re-enter TX after a PTT re-arm` on HEAD as well as on the FREQ_CTR work
-in progress, and widening the re-arm window (400 -> 800 ms) does not change it - so it is NOT the
-window and NOT caused by the FREQ_CTR edits. `de2ebe3` verified the same scenario passing earlier the
-same day; the failure appeared after `7d4c502`. Diagnose from the raw transcript (the fault clears in
-the firmware in the earlier runs; check whether `g_fault_latched` clears and how far the sequence
-gets), do not widen the window again.
+**The working design (verified green on the full 11-scenario suite, 2026-09-24):** a `hold_band`
+helper re-injects the Timer1 count every 5 ms (`write_tmr1_count(f); stepi(5); sample()`) and each
+band check is split into three phases that never change frequency while keyed:
+
+1. Phase A - `hold_band(f, 60)` (300 ms) UNKEYED: all relay movement for the band happens here.
+2. Phase B - `write pin RC0 0v` then `hold_band(f, 120)` (600 ms) keyed at the SAME frequency.
+3. Phase C - `write pin RC0 5v` then `hold_band(f, 40)` (200 ms).
+
+Two properties make it work and both are required: **5 ms chunks** re-inject faster than the 10 ms
+gate, so a fresh count is in TMR1 whatever the tick/step phase (the earlier 10 ms step assumed the
+injection landed inside the gate and drifted out of phase later in the run - it passed in isolation
+and failed at 20m in the suite); and **one constant frequency per phase** satisfies
+`STABILITY_REQUIRED_TICKS = 2` while guaranteeing no relay can move under the keyed amplifier.
+`validate_band_outputs` only needs `current_band == expected` plus the single band-change sample
+skipped, so the design is otherwise unchanged. Keep the whole-suite run as the verdict - this bug
+reproduces only in the suite, never in `repro_i5_15m_10m.py`.
+
+**Trap (2026-09-24): a key-down that lands inside the startup inhibit looks exactly like "PTT was
+never latched".** `FREQ_CTR_FAIL` keys at the end of a fixed idle, and at `105 x 10 ms` the keyed
+window (1.05-1.25 s of harness time) ended just as the inhibit cleared at ~1.25 s, so every keyed
+sample still read `g_state=5 STARTUP INHIBIT` and the assertion
+`PTT was not latched when the frequency counter had no signal` fired. The harness time axis is not
+firmware time (`INSTRUCTIONS_PER_MS = 1625` under-advances against the measured 1695), so the inhibit
+appears longer in harness samples than its 1100 ms nominal. Fixed by idling 130 x 10 ms before keying
+and holding the key 400 ms; the firmware has no snoop timeout, so a longer key-down cannot unlatch
+PTT. When a negative test asserts a latch, always confirm the key-down is clear of the inhibit in the
+written CSV (`freq_ctr_fail_trace.csv`, `block_reason` column) rather than trusting the sample count.
+
+**Resolved (2026-09-24):** the SWR1 trip re-arm "did not clear and re-enter TX" failure seen earlier
+the same day is gone on the committed tree - SWR1 passes with the 400-iteration re-arm window
+(`de2ebe3`) in the full 11-scenario run, so the 800 ms window experiment was unnecessary. The
+full-suite verdict on that run was 11/11 `SUITE_SCENARIO_PASS` with every I1-I6 band invariant PASS,
+including 0 I5 hot-switch violations and all 6 FREQ_CTR bands keyed-and-locked.
 
 **Harness note: sample settle/verify state when debugging band timing.** `STATE_VARS` in
 `trace_ptt_sequence.py` now carries `g_band_settle_active`, `g_band_settle_elapsed_ms`,
@@ -365,10 +388,8 @@ standing rule). What that touched, and what it caught:
   constants (1625 in `trace_ptt_sequence.py`/`first_dit_invariants.py`, 1887 in `test_first_dit.py`);
   1695 stands as the tighter *measurement*, not the value to run with. This is why the open
   first-dit clause (c) macOS failure must be read against the rate the harness actually uses, not the
-  probe's. Also note the merged suite also has a **separate, pre-existing FREQ_CTR failure** on the
-  10m band (25000 kHz injects as 24985/25022 via TMR1 tick aliasing, so `current_band` never settles
-  on 6) - not caused by any rate change, and reachable only in the full-suite run (it sits after all
-  the trip scenarios).
+  probe's. The 10m band (25000 kHz injects as 24985/25022 via TMR1 tick aliasing) is the one the old
+  cadence used to fail on last; the constant-frequency `hold_band` design above now passes it.
   **Do not use `TMR2` to measure time in the simulator.** It reads back a value that advances only
   ~16 counts per 300,000 steps (177 firmware-ms), which no Fosc/8-and-1:64 model can produce; the
   interrupt arrives on schedule but the model's timer *count* is not the datasheet count. `T2CON`

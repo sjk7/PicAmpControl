@@ -250,21 +250,28 @@ def build_script(trip_name=None) -> str:
         band_tests = BAND_TESTS if all_bands else [("40m", 7000, 3)]
         for band_name, freq_khz, expected_band in band_tests:
             lines.append(f"# BAND PREFLIGHT: {band_name} @ {freq_khz} kHz (expected {expected_band})")
-            # Inject the count then step a FULL 10 ms gate per iteration. The firmware reads-and-
-            # zeroes TMR1 on every freq_counter_tick_10ms(), so a 5 ms step + re-inject races the
-            # gate and flickers the measured frequency (1800 -> 16 -> 3600), which keeps
-            # stability_count below STABILITY_REQUIRED_TICKS=2 and current_band stuck at its reset
-            # value. Stepping the full gate lets each tick read a stable count so the band
-            # establishes. (This was the "80m/15m TX lock failed ... freq=0, band=1" bug.)
-            for _ in range(4):
-                write_tmr1_count(freq_khz)
-                lines.append(stepi(10))
-                sample()
+            if all_bands:
+                # FREQ_CTR only. Inject then step a FULL 10 ms gate per iteration: the firmware
+                # reads-and-zeroes TMR1 on every freq_counter_tick_10ms(), so each gate then reads a
+                # stable count and the classifier reaches STABILITY_REQUIRED_TICKS=2. With 5 ms
+                # steps the injection raced the gate and the frequency flickered (1800 -> 16 ->
+                # 3600), leaving current_band unsettled - the "TX lock failed ... freq=0, band=1"
+                # bug. This branch is FREQ_CTR-only because the preflight feeds every scenario's
+                # timeline; changing the shared cadence broke the base PTT release.
+                for _ in range(4):
+                    write_tmr1_count(freq_khz)
+                    lines.append(stepi(10))
+                    sample()
+            else:
+                # Every other scenario: unchanged cadence (8 x 5 ms). 5 ms, not 10 ms, because a
+                # 10 ms sample interval aliases with the firmware's 10 ms TMR1 reset, so at 5 ms
+                # every tick window contains at least one post-tick sample.
+                for _ in range(8):
+                    write_tmr1_count(freq_khz)
+                    lines.append(stepi(5))
+                    sample()
         lines.append("# Restore 40m before scenario PTT stimulus")
         for _ in range(8):
-            write_tmr1_count(7000)
-            lines.append(stepi(5))
-            sample()
             write_tmr1_count(7000)
             lines.append(stepi(5))
             sample()
@@ -279,46 +286,47 @@ def build_script(trip_name=None) -> str:
 
         band_preflight(all_bands=True)
         for band_name, freq_khz, expected_band in BAND_TESTS:
-            injected_freq_khz = injected_frequency_for(freq_khz)
-            lines.append(f"# TX BAND CHECK: {band_name} @ {freq_khz} kHz, inject {injected_freq_khz} kHz")
-            for _ in range(5):
-                write_tmr1_count(freq_khz)
-                lines.append(stepi(10))
-                sample()
+            lines.append(f"# TX BAND CHECK: {band_name} @ {freq_khz} kHz (keyed at this band only)")
+            # Re-inject every 5 ms and step 5 ms, holding ONE frequency for the whole phase.
+            # Two properties come from this and both are required:
+            #   * 5 ms chunks: the firmware zeroes TMR1 on each 10 ms tick, so injecting once per
+            #     chunk keeps a fresh count in the register whatever the tick/step phase is. A
+            #     10 ms step assumed the injection landed inside the gate and drifted out of phase
+            #     later in the run (FREQ_CTR failed at 20m in the suite while passing in isolation).
+            #   * one constant frequency per phase: the classifier needs STABILITY_REQUIRED_TICKS=2
+            #     consecutive gates on the same band, and a frequency that never changes while
+            #     keyed cannot move a relay under the keyed amplifier (the I5 hot switch).
+            def hold_band(freq_khz, chunks):
+                for _ in range(chunks):
+                    write_tmr1_count(freq_khz)
+                    lines.append(stepi(5))
+                    sample()
+
+            # --- Phase A: establish the band while UNKEYED (all relay movement happens here) ---
+            hold_band(freq_khz, 60)           # 300 ms
+            # --- Phase B: key, frequency unchanged; engage to stage 3 and lock ---
             lines.append("write pin RC0 0v")
-            for _ in range(6):
-                write_tmr1_count(freq_khz)
-                lines.append(stepi(10))
-                sample()
-            # Hold the band's own frequency - full 10 ms gates - long enough for the engage to
-            # complete. Each gate read is stable so the classifier reaches STABILITY_REQUIRED_TICKS=2
-            # and establishes the band; a 5 ms step raced the gate and never let current_band settle
-            # (the "TX lock failed ... freq=0, band=1" bug). Keep enough gates for the remembered-
-            # band fold-back of later bands: decode + settle + verify + three 20 ms stages.
-            for _ in range(40):
-                write_tmr1_count(freq_khz)
-                lines.append(stepi(10))
-                sample()
-            for _ in range(15):
-                write_tmr1_count(injected_freq_khz)
-                lines.append(stepi(10))
-                sample()
+            hold_band(freq_khz, 120)          # 600 ms, far more than the ~3 x 20 ms stages
+            # --- Phase C: release first, still the same frequency ---
             lines.append("write pin RC0 5v")
-            for _ in range(20):
-                write_tmr1_count(freq_khz)
-                lines.append(stepi(10))
-                sample()
+            hold_band(freq_khz, 40)           # 200 ms
 
         lines.append("quit")
         return "\n".join(lines)
 
     if trip_name == "FREQ_CTR_FAIL":
-        for _ in range(105):
+        # The key-down must land well clear of the startup inhibit or the firmware ignores
+        # PTT entirely (state 5 STARTUP INHIBIT) and the latch assertion sees nothing keyed.
+        # Measured 2026-09-24: at 105 x 10 ms the keyed window (1.05-1.25 s of harness time)
+        # ended just as the inhibit cleared at ~1.25 s, so every keyed sample was still
+        # inhibited. Wait 1.30 s and hold the key for 400 ms; there is no snoop timeout in
+        # the firmware, so a longer key-down cannot unlatch PTT.
+        for _ in range(130):
             lines.append(stepi(10))
             sample()
         lines.append("# No Timer1 writes: simulate a missing frequency-counter signal")
         lines.append("write pin RC0 0v")
-        for _ in range(20):
+        for _ in range(40):
             lines.append(stepi(10))
             sample()
         lines.append("write pin RC0 5v")
