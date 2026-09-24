@@ -346,6 +346,9 @@ standing rule). What that touched, and what it caught:
   counts (1695 per firmware-ms), and when a measurement is wanted, use a peripheral-free image like
   `clock_only_probe.c` so the rate is not blended with LCD/ADC work. This firmware has no PLL-lock
   wait (HFINTOSC is directly 64 MHz), so the usual `#ifndef SIMULATION` skip is not required.
+  **None of this invalidates the tests**: the firmware's time base is the Timer2 tick and every
+  assertion is tick-relative, so the model's absolute speed only changes the step-count-per-firmware-ms
+  (1695), which the harnesses already use - not the behaviour being asserted.
 - **`_XTAL_FREQ` must match the real 64 MHz core (fixed 2026-09-24 - it had been 32 MHz).** XC8
   compiles `__delay_us()`/`__delay_ms()` from it, and the firmware uses them for the LCD init sequence
   (50/5/2/1 ms), the page-clear settle and `ADC_ACQUISITION_US`. It now reads `64000000UL` in

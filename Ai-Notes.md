@@ -252,6 +252,10 @@ Scripted `mdb.sh` runs have no project, so the harnesses can't use it and stay o
 steps per firmware-ms; a 64 MHz simulation needs an MPLAB X project (or the VS Code MPLAB Simulate
 session) with Fcyc = 64 MHz.
 
+None of this affects test validity: the firmware's time base is the Timer2 tick and every harness
+assertion is tick-relative, so the model's absolute speed only changes the step count per firmware-ms
+(1695), which the harnesses already use.
+
 **FIXED 2026-09-24: `_XTAL_FREQ` was 32 MHz against the real 64 MHz core.** `__delay_us()`/
 `__delay_ms()` are computed by XC8 from `_XTAL_FREQ`, and this firmware uses them for real work: the
 LCD init sequence (50/5/2/1 ms), the page-clear settle, and the ADC acquisition delay - so a 32 MHz

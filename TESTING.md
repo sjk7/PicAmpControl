@@ -1,5 +1,15 @@
 # Testing Guide
 
+The simulator's clock is not the hardware's, and that does not invalidate these tests. MPLAB X
+`mdb` does not model the oscillator - it ignores the config bits and the oscillator registers - so it
+single-steps on its own fixed instruction timing (a ~4 MHz-equivalent core) rather than the part's
+64 MHz. The firmware's time base is the Timer2 interrupt, and every assertion below checks
+tick-relative sequencing, state and latches, which the model executes identically at any speed; the
+harnesses convert firmware-ms into single-step counts with the measured **1695 steps per firmware-ms**,
+so the sampling windows stay aligned to firmware time regardless of the model's absolute rate. What
+the simulator cannot prove - absolute wall-clock latency, and the peripherals it does not implement
+(T1CKI/PPS, the real ADC conversion rate, LCD bus timing) - is bench-only, and always was.
+
 Firmware behaviour is verified in the MPLAB X `mdb` simulator. CTest drives two Python
 harnesses against the built ELF, single-steps the firmware, samples pin state and firmware
 variables, and asserts the sequencing, band-detection, band-locking, and fault-protection
