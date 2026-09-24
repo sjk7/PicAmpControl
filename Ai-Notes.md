@@ -41,7 +41,11 @@ were all deleted. Concretely, that means:
 - FILE FOLLOWING AND LOG WATCHING: method in `.github/skills/build-test/SKILL.md` (`open_progress_log.py`,
   `run_detached.py`, the Log Viewer extension, the FileTail cost finding, the console-tail trap). The
   in-repo `tools/logfollower` follower was DELETED 2026-09-24 (it stole window focus); the marketplace
-  `berublan.vscode-log-viewer` replaces it.
+  `berublan.vscode-log-viewer` replaces it. **Never steal focus: run paths (watchdog, run_logged) must
+  NOT call `open_in_editor()` - `code -r` raises VS Code over the user's current work (2026-09-24).**
+- DO NOT HEDGE (2026-09-24): no "I can fix it -> actually -> wait -> or even..."; no "maybe/perhaps/
+  I think". State what you know and the next action, and act. Also: go with first instinct and prove it
+  with a quick test rather than re-deriving the same deduction in circles. Detail in the build-test skill.
 - Keep README.md and docs/ purely current-facing: no "old prototype was replaced by..." style historical narrative. Historical context belongs only in prototype_reference/.
 - docs/hardware/PIC18F47Q10_pin_map_and_setup.md is the SINGLE source of truth for MCU pin assignments. Never restate pin numbers or pin tables in README, architecture, schematic-package, or checklist docs - link to it instead. Keep it in sync with firmware/include/pin_map.h. The same rule applies to nets (project_schematic_package/connection_table.csv) and the BOM (component_list.csv).
 - Any new "remember this" instruction from the user must be added to this section, not just kept in assistant memory.
