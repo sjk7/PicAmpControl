@@ -5,9 +5,12 @@ skill (loaded on demand). Detail, method and traps live in the skills named at t
 restate them here, because this file is injected into every request and every line costs.
 
 ## Read first
-- **`Ai-Notes.txt`** at the repo root is the session launch point: the target device, current
-  design/firmware/display state, remaining work, and the user's standing instructions. Nothing forces
-  a session to open it, so treat it as step one.
+- **STEP ONE, EVERY SESSION, BEFORE ANY OTHER ACTION: read `Ai-Notes.txt` at the repo root.** It
+  carries the target device, current design/firmware/display state, remaining work and the user's
+  standing instructions. **Nothing loads it automatically** - it matches no VS Code convention, so it is
+  read only because this line says so. Do not "fix" its name to make it auto-load: at 499 lines it would
+  then be injected into every request. Read it, do not restate it.
+- Also read `deepseek-pic.md` (bare-metal PIC guardrail checklist - a cross-check, never project state).
 - The target is the **PIC18F47Q10, and nothing else**. There is no second device and no legacy part.
 
 ## Writing and cost
