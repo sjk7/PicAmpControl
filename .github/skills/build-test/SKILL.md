@@ -517,6 +517,15 @@ charging time per MDB command as well as per instruction. Consequences, all of w
   `ptt_active=false`. The startup phase is now 150 steps (1500 ms). Wait with real margin; never to
   the nominal figure.
 
+**Harness trap: a STATE_VARS entry that is not `g_`-prefixed voids the whole run.** `parse_trace()`
+recognises a printed variable with `VAR_NAME_RE = ^(g_[\w\.]+)=$`, so a register (e.g. `PORTC`) or
+any non-`g_` symbol never sets `awaiting_var`, never lands in `state_pending`, and no sample is ever
+emitted - the run dies as `error: no samples parsed from mdb output`, which names the harness rather
+than the one line that was wrong (cost a run on 2026-09-24, adding `PORTC`/`TRISC` to read the PTT
+pin). `parse_trace()` now refuses such a name up front with the offending entries listed. The
+diagnostic you want for "what is the firmware reading on this pin" is a `g_`-named firmware global or
+a value the harness already prints - not a register added to `STATE_VARS`.
+
 **Still open (2026-09-24): clause (c) does not pass, and the reason is NOT a clock threshold now.**
 Facts from the window dump:
 

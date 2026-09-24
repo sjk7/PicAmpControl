@@ -1030,6 +1030,19 @@ def parse_trace(output: str):
     """Walks the mdb transcript in order, tracking cumulative instruction count and
     each pin's/variable's most-recently-printed value, sampling a full snapshot every
     time all pins and state variables have been reprinted (i.e. once per Stepi block)."""
+    # Fail fast on a STATE_VARS entry the transcript grammar cannot recognise. VAR_NAME_RE only
+    # accepts `g_`-prefixed names, so anything else (a register such as PORTC, a non-prefixed
+    # global) never sets `awaiting_var`, never lands in state_pending, and therefore means NO
+    # sample is ever emitted - the run dies later as "no samples parsed from mdb output", which
+    # points at the harness rather than at the one line that was wrong. That cost a run on
+    # 2026-09-24, when PORTC/TRISC were added to STATE_VARS to read the PTT pin.
+    strays = [name for name in STATE_VARS if not VAR_NAME_RE.match(f"{name}=")]
+    if strays:
+        raise RuntimeError(
+            "parse_trace: STATE_VARS entries the transcript grammar cannot read: "
+            + ", ".join(strays)
+            + " - VAR_NAME_RE only matches `g_`-prefixed names, so no sample would ever be "
+              "emitted. Expose the value through a `g_`-named firmware global instead.")
     samples = []
     instr_count = 0
     pending = {}
