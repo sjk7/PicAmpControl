@@ -77,15 +77,6 @@ were all deleted. Concretely, that means:
   folder (skills) or filename (agents) IS the name - a skill file must be exactly `SKILL.md`, so its
   name can only live in the folder. A skill `name:` that does not match its folder fails SILENTLY, with
   no error anywhere; an agent with no `name:` takes its filename.
-- THIS FILE'S NAME IS DELIBERATELY NOT A CONVENTION (user question 2026-09-24). VS Code's primitives
-  are exactly: `.github/copilot-instructions.md` (== `AGENTS.md`; use ONE, never both),
-  `.github/instructions/*.instructions.md`, `.github/prompts/*.prompt.md`, `.github/agents/*.agent.md`,
-  `.github/skills/<name>/SKILL.md`. `Ai-Notes.txt` matches none of them, so **nothing loads it
-  automatically** - it is read only because `.github/copilot-instructions.md` names it first and the
-  user asks. That is the intent: this file is 499 lines / ~57 KB of session state, and renaming it to
-  an always-on primitive would inject all of it into EVERY request (the "kitchen sink" anti-pattern).
-  State stays here non-auto-loaded; the rules that must never be missed stay in the 48-line
-  `copilot-instructions.md`. Do not "fix" the extension.
 - DOC HYGIENE (2026-09-24). Canonical build directories: `_build/My_Pic_Project/release` is what the
   editor reads, `_build/My_Pic_Project/sim` is where the tests run. The `q10_*` trees and the two Q10
   VS Code tasks are GONE - the Q10 is the default device, so it needs no build tree of its own.
