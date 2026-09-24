@@ -55,6 +55,39 @@ end past or short of the event it is waiting for. Note also that `g_band_cache_i
 1 ms counter (it climbs ~4 counts per firmware-ms once it is running) and stays at 0 until the band
 cache exists, so it is the wrong counter to bracket.
 
+## tick_rate_probe.mdb - the tick rate, measured (2026-09-24)
+
+Run it with:
+
+```
+python tools/simulate/run_mdb_probe.py docs/hardware/q10-bringup/tick_rate_probe.mdb
+```
+
+`rate_probe_macos.mdb` above bracketed a *boolean* (`g_startup_inhibit`) and could only say the
+1000 ms boundary lay somewhere in a 250,000-step window. This probe brackets the firmware's own tick
+**counter** instead - `g_startup_elapsed_ms`, incremented once per Timer2 interrupt the main loop
+drains - so every reading is a tick count, not a yes/no.
+
+Result, macOS 2026-09-24, against `out/My_Pic_Project_18F47Q10/default.elf`:
+
+| Steps | `g_startup_elapsed_ms` | ticks in that block |
+|---|---|---|
+| 300,000 | 0 | tick not yet running (LCD boot precedes `timer0_init()`) |
+| 600,000 | 381 | 381 |
+| 900,000 | 559 | 178 |
+| 1,200,000 | 734 | 175 |
+| 1,500,000 | 912 | 178 |
+| 1,800,000 | 1000 (capped) | inhibit cleared |
+
+**531 ticks per 900,000 steps = 1694.9 `Stepi` steps per firmware millisecond** (~1695, ±1% block to
+block). `T2CON` read back `224` = `ON`, `CKPS = 6`, `OUTPS = 0`, so the tick really is 1.000 ms and
+the steps are the only unknown. This replaces both disputed constants: 1625 is ~4% low, 1887 ~11%
+high, and the 16.5M-step `BOOT_STEPS` in `probe_q10_ptt_path.py` is ~10x too large.
+
+**Do not use `TMR2` as a clock in the simulator.** It advanced only ~16 counts per 300,000 steps
+(177 firmware-ms) - impossible for the configured Fosc/8 and 1:64 - even though the overflow
+interrupt arrives on schedule. The interrupt count is trustworthy; the model's timer *count* is not.
+
 ## Why this exists
 
 The Q10 port had been through several rounds of "the simulator can't do it" verdicts, each of

@@ -283,6 +283,24 @@ standing rule). What that touched, and what it caught:
   both be right only if `Stepi` counts something other than one instruction. Nothing was changed in
   either place: settle it with a single measurement, because if the harness rate is wrong by 10x then
   every assertion window in both harnesses is wrong by 10x.**
+  **MEASURED 2026-09-24 on the current ELF, and it settles the argument: ~1695 `Stepi` steps per
+  firmware millisecond.** Method: let the firmware run, bracket its own tick counter
+  (`g_startup_elapsed_ms`, incremented once per Timer2 interrupt drained by the main loop) across
+  fixed `Stepi` blocks - `docs/hardware/q10-bringup/tick_rate_probe.mdb`, run through
+  `run_mdb_probe.py`. Readings: 381 -> 559 -> 734 -> 912 ticks over four 300,000-step blocks, so
+  531 ticks per 900,000 steps = **1694.9 steps/ms** (each single block agrees within ~1%: 1685, 1714,
+  1685). So **1625 is ~4% low, 1887 is ~11% high, and `BOOT_STEPS = 16_500_000` in
+  `probe_q10_ptt_path.py` is ~10x too large (the 1000 ms boundary is at ~1.70M steps) - replace that
+  one with ~1_695_000.** The startup window caps this counter at 1000 ticks, so it is the widest
+  clean span available; the ±1% per-block spread is the simulator's own jitter, not measurement
+  noise. **The harness constants were deliberately NOT changed in that pass**: moving them shifts
+  every window in both harnesses and interacts with the open first-dit clause (c) failure, so it is a
+  separate, test-affecting change.
+  **Do not use `TMR2` to measure time in the simulator.** It reads back a value that advances only
+  ~16 counts per 300,000 steps (177 firmware-ms), which no Fosc/8-and-1:64 model can produce; the
+  interrupt arrives on schedule but the model's timer *count* is not the datasheet count. `T2CON`
+  readback is trustworthy and confirms the configuration (`224` = `ON`, `CKPS = 6`, `OUTPS = 0`,
+  since `CKPS` is bits 6:4 and `ON` is bit 7).
 - **`_XTAL_FREQ` is 32 MHz while the core is 64 MHz, and that is probably a live bug (2026-09-24).**
   The oscillator is not at fault: `RSTOSC = HFINTOSC_64MHZ` is the internal HFINTOSC at its maximum,
   and the part has no higher internal setting. But XC8 computes `__delay_us()`/`__delay_ms()` from

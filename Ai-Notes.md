@@ -222,6 +222,14 @@ The open question is what MDB's `Stepi` actually counts - one instruction or som
 therefore which constant is right. One measurement settles it; do not "fix" it by picking the tidier
 number. Detail: the skill's instruction-rate block and `bugfixes.md` 2026-09-23/24.
 
+**MEASURED 2026-09-24: ~1695 steps per firmware millisecond** (531 Timer2-interrupt ticks per
+900,000 `Stepi` steps, from the firmware's own tick counter; probe and table in
+`docs/hardware/q10-bringup/tick_rate_probe.mdb` / its README). So 1625 is ~4% low, 1887 is ~11% high,
+and `BOOT_STEPS = 16_500_000` in `probe_q10_ptt_path.py` is ~10x too large (the 1000 ms boundary is
+at ~1.70M steps). **The harness constants have not been changed yet** - that shifts every assertion
+window and interacts with the open first-dit clause (c) failure, so it is a decision for the operator,
+not a tidy-up.
+
 **Same family, and probably a live bug (2026-09-24): `_XTAL_FREQ = 32000000UL` in `pin_map.h` while
 the core actually runs at 64 MHz.** `RSTOSC = HFINTOSC_64MHZ` is the internal HFINTOSC at its maximum
 - there is no higher internal setting - so the oscillator is not the problem. The mismatch is that
