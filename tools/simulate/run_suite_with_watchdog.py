@@ -35,6 +35,7 @@ SUITE = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/trace_ptt_sequenc
 FIRST_DIT = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/test_first_dit.py")]
 REPRO_20M = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/repro_first_dit_20m.py")]
 REPRO_RELEASE = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/repro_release_stage4.py")]
+REPRO_RELEASE_FINE = REPRO_RELEASE + ["--fine"]
 
 # Orphan signatures. The mdb entries have to match a leftover simulator without also
 # matching an unrelated `java.exe`, of which this machine has several (the MPLAB X IDE's
@@ -218,7 +219,8 @@ def main():
     parser.add_argument("--timeout", type=float, default=1200.0)
     parser.add_argument("--log", type=Path, default=DEFAULT_LOG)
     parser.add_argument("--test",
-                        choices=("suite", "first-dit", "repro-20m", "repro-release"),
+                        choices=("suite", "first-dit", "repro-20m", "repro-release",
+                                 "repro-release-fine"),
                         default="suite",
                         help="Which simulator test this watchdog wraps")
     parser.add_argument("--quick-bands", action="store_true",
@@ -269,6 +271,9 @@ def main():
     elif args.test == "repro-release":
         test_name = "Repro_ReleaseStage4"
         command = REPRO_RELEASE
+    elif args.test == "repro-release-fine":
+        test_name = "Repro_ReleaseStage4_Fine"
+        command = REPRO_RELEASE_FINE
     else:
         test_name = "FirstDit_BandDetectionAndHotSwitchGuards"
         command = FIRST_DIT

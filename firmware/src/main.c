@@ -186,7 +186,21 @@ static volatile bool g_ptt_complete_display_active = false;
 static volatile unsigned int g_ptt_complete_display_elapsed_ms = 0;
 static volatile bool g_menu_changed = true;
 static unsigned int g_sequence_elapsed_ms = 0;
-static unsigned char g_sequence_stage = 0;
+
+/* TX sequence stages. The NUMBERS are a contract with the simulator harnesses, which read
+   `g_sequence_stage` by number (tools/simulate/trace_ptt_sequence.py, test_first_dit.py), so keep
+   the values and the names aligned with `SEQ_STAGE_NAMES` in the build-test skill.
+
+   Engage - PTT falls low (key down):  0 -> 1 -> 2 -> 3
+   Release - PTT rises high (unkey):   3 or 2 -> 4 -> 5 -> 0 */
+#define SEQ_IDLE 0u            /* Not transmitting: TX path open, VCC and TX_BIAS off. */
+#define SEQ_TX_ON 1u           /* RELAYS closed (TX path connected); waiting tx_vcc_delay_ms. */
+#define SEQ_VCC_ON 2u          /* TX_VCC up; waiting tx_bias_delay_ms before the bias. */
+#define SEQ_BIAS_ON 3u         /* TX_BIAS up and sensed: transmitting, PTT COMPLETE displayed. */
+#define SEQ_RELEASE_RELAYS 4u  /* Unkey: RELAYS already opened, TX_VCC still up; waiting. */
+#define SEQ_RELEASE_VCC 5u     /* Unkey: TX_VCC removed, TX_BIAS still up; waiting, then -> IDLE. */
+
+static unsigned char g_sequence_stage = SEQ_IDLE;
 static unsigned int g_post_fwd_rms_w = 0;
 static unsigned int g_post_fwd_pep_w = 0;
 static unsigned int g_swr1_live_hundredths = 100;
@@ -1343,7 +1357,7 @@ void update_tx_sequence(void) {
     }
 
     if (g_ptt_active) {
-        if (g_sequence_stage == 0) {
+        if (g_sequence_stage == SEQ_IDLE) {
             if (!g_band_established) {
                 /* The relay selection is not backed by any measurement for this transmission
                    (with no RF the classifier reports its 160m no-signal default), so the
@@ -1357,15 +1371,15 @@ void update_tx_sequence(void) {
             freq_counter_lock_band();
             set_tx_output(true);
             g_sequence_elapsed_ms = 0;
-            g_sequence_stage = 1;
-        } else if (g_sequence_stage == 1) {
+            g_sequence_stage = SEQ_TX_ON;
+        } else if (g_sequence_stage == SEQ_TX_ON) {
             g_sequence_elapsed_ms++;
             if (g_sequence_elapsed_ms >= g_thresholds.tx_vcc_delay_ms) {
                 set_tx_vcc_output(true);
                 g_sequence_elapsed_ms = 0;
-                g_sequence_stage = 2;
+                g_sequence_stage = SEQ_VCC_ON;
             }
-        } else if (g_sequence_stage == 2) {
+        } else if (g_sequence_stage == SEQ_VCC_ON) {
             g_sequence_elapsed_ms++;
             if (g_sequence_elapsed_ms >= g_thresholds.tx_bias_delay_ms) {
                 set_tx_bias_output(true);
@@ -1374,7 +1388,7 @@ void update_tx_sequence(void) {
                 if (SENSE_TX == output_level(true, g_thresholds.tx_active_high) &&
                     SENSE_TX_VCC == output_level(true, g_thresholds.tx_vcc_active_high) &&
                     SENSE_TX_BIAS == output_level(true, g_thresholds.tx_bias_active_high)) {
-                    g_sequence_stage = 3;
+                    g_sequence_stage = SEQ_BIAS_ON;
                     g_ptt_complete_display_active = true;
                     g_ptt_complete_display_elapsed_ms = 0;
                     g_menu_changed = true;
@@ -1385,31 +1399,31 @@ void update_tx_sequence(void) {
     }
 
     // PTT released: open relays first, then remove VCC and bias in order.
-    if (g_sequence_stage == 3 || g_sequence_stage == 2) {
-        /* Stage 2 is TX + TX_VCC already up with the bias still ramping. It must unwind
-           through the same ordered path as stage 3, otherwise releasing PTT in that
+    if (g_sequence_stage == SEQ_BIAS_ON || g_sequence_stage == SEQ_VCC_ON) {
+        /* Stage 2 (SEQ_VCC_ON) is TX + TX_VCC already up with the bias still ramping. It must
+           unwind through the same ordered path as stage 3, otherwise releasing PTT in that
            20 ms window would leave TX_VCC asserted (and, before release_band_if_cold(),
            the band unlocked) for the rest of the receive period. */
         set_tx_output(false);
         g_sequence_elapsed_ms = 0;
-        g_sequence_stage = 4;
-    } else if (g_sequence_stage == 4) {
+        g_sequence_stage = SEQ_RELEASE_RELAYS;
+    } else if (g_sequence_stage == SEQ_RELEASE_RELAYS) {
         g_sequence_elapsed_ms++;
         if (g_sequence_elapsed_ms >= g_thresholds.tx_vcc_delay_ms) {
             set_tx_vcc_output(false);
             g_sequence_elapsed_ms = 0;
-            g_sequence_stage = 5;
+            g_sequence_stage = SEQ_RELEASE_VCC;
         }
-    } else if (g_sequence_stage == 5) {
+    } else if (g_sequence_stage == SEQ_RELEASE_VCC) {
         g_sequence_elapsed_ms++;
         if (g_sequence_elapsed_ms >= g_thresholds.tx_bias_delay_ms) {
             set_tx_bias_output(false);
-            g_sequence_stage = 0;
+            g_sequence_stage = SEQ_IDLE;
             release_band_if_cold();
         }
-    } else if (g_sequence_stage == 1) {
+    } else if (g_sequence_stage == SEQ_TX_ON) {
         set_tx_output(false);
-        g_sequence_stage = 0;
+        g_sequence_stage = SEQ_IDLE;
         release_band_if_cold();
     }
 }

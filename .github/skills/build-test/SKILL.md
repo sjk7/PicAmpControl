@@ -32,6 +32,26 @@ word-for-word statement is kept in `docs/steves-sequence.md`; read it before cha
 key-down path, and do NOT re-derive it. When a trace looks wrong, check the polarity first: a
 "PTT never latched" or "release never keyed" conclusion is usually RC0 read the wrong way round.
 
+**`g_sequence_stage` names (2026-09-25) - use these, never "stage 4" alone.** The numbers are the
+harness contract (traces and assertions read `g_sequence_stage` by number); `firmware/src/main.c`
+now carries the same names as `#define`s. Engage runs 0->1->2->3 on key-down; unkey runs 3 or 2 ->
+4 -> 5 -> 0.
+
+| # | firmware name | harness trace label | what the outputs are doing |
+|---|---|---|---|
+| 0 | `SEQ_IDLE` | idle | not transmitting: TX path open, TX_VCC and TX_BIAS off |
+| 1 | `SEQ_TX_ON` | tx-on | RELAYS closed; counting `tx_vcc_delay_ms` before TX_VCC |
+| 2 | `SEQ_VCC_ON` | vcc-on | TX_VCC up; counting `tx_bias_delay_ms` before TX_BIAS |
+| 3 | `SEQ_BIAS_ON` | bias-on / transmitting | TX_BIAS up and sensed; PTT COMPLETE shown |
+| 4 | `SEQ_RELEASE_RELAYS` | release-relays | unkey: RELAYS opened, TX_VCC STILL UP, counting |
+| 5 | `SEQ_RELEASE_VCC` | release-vcc | unkey: TX_VCC removed, TX_BIAS STILL UP, counting |
+
+So `release did not enter stage 4` = "the `SEQ_RELEASE_RELAYS` window (relays already open, TX_VCC
+still on) was never captured by a sample". Write the name beside the number in every report and in
+every annotation: a bare "stage 4" is unreadable, which is exactly the complaint that produced this
+table (user, 2026-09-25: *"It would be much more useful if you gave these 'stages' names. How can I
+know what stage 4 is ffs?"*).
+
 **Process traps re-hit the hard way on 2026-09-24 - read these before touching a run.**
 1. **The rule above was broken repeatedly and the terminal did wedge.** The damage is concrete: after
    one `grep` over a multi-megabyte MDB transcript, *every* later `run_in_terminal` call in that

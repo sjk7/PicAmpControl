@@ -19,6 +19,7 @@ Run through the watchdog (never directly, never judged from the terminal):
 Exit 0 when a stage-4 sample is observed after PTT release; exit 1 when it is not (the current
 failure); exit 2 when PTT never latched, i.e. the repro is not exercising the release at all.
 """
+import argparse
 import csv
 import os
 import sys
@@ -33,10 +34,13 @@ import platform_process as procutil  # noqa: E402
 
 FREQ_KHZ = 7000           # 40m - the band the base scenario establishes in its preflight
 COUNTS = FREQ_KHZ * 1000 // 400           # inverse of the firmware's pulses*2/5 scaling
-SETTLE_CHUNKS = 4         # 4 x 10 ms gates to clear the ~1000 ms startup inhibit and settle 40m
-PREFLIGHT_CHUNKS = 4      # 4 x 10 ms unkeyed gates to establish the band before keying
-KEY_CHUNKS = 40           # 40 x 5 ms  = 200 ms keyed (the stage 3 engage takes ~110 ms)
-RELEASE_CHUNKS = 40       # 40 x 1 ms  =  40 ms released, sampled finely enough to catch stage 4
+SETTLE_STEPS = 8          # 8 x 5 ms unkeyed gates to establish 40m, as band_preflight() does
+KEY_FINE_STEPS = 12       # the suite's first 12 keyed samples are 1 ms apart (SETTLE pulse)
+KEY_STEPS = 140           # then 5 ms steps: 40 + 100, matching the suite's keyed window exactly,
+                          # so the release starts on the SAME phase of the 5 ms sample grid
+RELEASE_STEPS = 40        # the suite's release loop: `for _ in range(40): stepi(5); sample()`
+RELEASE_STEP_MS = 5       # ...at 5 ms. Stage 4 is shorter than this, which is the whole bug.
+FINE_STEP_MS = 1          # --fine: 1 ms steps so a ~4 ms stage cannot fall between samples
 
 # Fewer prints per sample than the full harness: ADC pins are stimulus-only, so drop them, and
 # keep only the state the release can be judged from (mdb output is the run's wall-clock cost).
@@ -67,9 +71,11 @@ def inject_atomic() -> str:
     ])
 
 
-def hold(ms: int, count: int) -> str:
-    """`count` samples at `ms` apart, with the RF held present throughout."""
-    return "\n".join(f"{inject_atomic()}\n{t.stepi(ms)}\n{sample_lines()}" for _ in range(count))
+def hold(ms: int, count: int, inject: bool = True) -> str:
+    """`count` samples at `ms` apart, with the RF held present unless `inject` is False."""
+    if inject:
+        return "\n".join(f"{inject_atomic()}\n{t.stepi(ms)}\n{sample_lines()}" for _ in range(count))
+    return "\n".join(f"{t.stepi(ms)}\n{sample_lines()}" for _ in range(count))
 
 
 def write_csv(samples, path: Path) -> None:
@@ -90,7 +96,8 @@ def write_csv(samples, path: Path) -> None:
             ])
 
 
-def write_graph(samples, path: Path, release_at: int | None, stage4_seen: bool) -> bool:
+def write_graph(samples, path: Path, release_at: int | None, stage4_seen: bool,
+                mode: str) -> bool:
     """Render a timing diagram; shade the release window red when stage 4 is never sampled."""
     try:
         import matplotlib
@@ -135,8 +142,7 @@ def write_graph(samples, path: Path, release_at: int | None, stage4_seen: bool) 
             axes[1].axhline(stage, color="grey", linestyle=":", alpha=0.5)
 
     axes[-1].set_xlabel("time (ms, approx)")
-    fig.suptitle(f"repro_release_stage4: key then release on {FREQ_KHZ} kHz, 1 ms sampling",
-                 y=0.995)
+    fig.suptitle(f"repro_release_stage4 [{mode}]: key then release on {FREQ_KHZ} kHz", y=0.995)
     fig.tight_layout(rect=(0, 0, 1, 0.965))
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=120)
@@ -144,7 +150,12 @@ def write_graph(samples, path: Path, release_at: int | None, stage4_seen: bool) 
     return True
 
 
-def main() -> int:
+def main(fine: bool = False) -> int:
+    mode = "fine 1 ms" if fine else "suite-faithful 5 ms"
+    release_step = FINE_STEP_MS if fine else RELEASE_STEP_MS
+    # The suite's release loop does NOT re-inject the Timer1 count; --fine does, to isolate the
+    # sampling interval from the stimulus.
+    release_inject = fine
     script = "\n".join([
         f"device {t.DEVICE}", "hwtool sim", f"program {t.ELF_PATH}",
         # Safe idle stimulus (no SWR, mid-scale NTC, no current/overdrive/drain, encoder released).
@@ -152,17 +163,17 @@ def main() -> int:
         "write pin RA5 2.5v", "write pin RB1 0v", "write pin RB2 0v", "write pin RB3 0v",
         "write pin RB4 0v", "write pin RC2 5v", "write pin RB0 5v", "write pin RB6 5v",
         # Clear the ~1000 ms startup inhibit (PTT is ignored until it clears), then establish 40m
-        # while UNKEYED, exactly as the base scenario does.
+        # while UNKEYED, exactly as the base scenario's band_preflight() does.
         t.stepi(1200), sample_lines(),
         "write pin RC0 5v",          # PTT idle (active low)
-        hold(10, SETTLE_CHUNKS),
-        hold(10, PREFLIGHT_CHUNKS),
-        # Key: RF follows the key, so hold 40m present for the whole keyed window.
+        hold(5, SETTLE_STEPS),
+        # Key: PTT must FALL. RF follows the key, so hold 40m present for the whole keyed window.
         "write pin RC0 0v",
-        hold(5, KEY_CHUNKS),
-        # Release, still holding 40m present, and sample at 1 ms so a short stage cannot be missed.
+        hold(1, KEY_FINE_STEPS),
+        hold(5, KEY_STEPS),
+        # Release: PTT rises back to 5 V. This is the suite's own release loop, verbatim.
         "write pin RC0 5v",
-        hold(1, RELEASE_CHUNKS),
+        hold(release_step, RELEASE_STEPS, inject=release_inject),
         "quit",
     ])
 
@@ -177,8 +188,9 @@ def main() -> int:
         return 2
 
     sim_dir = ROOT / "_build" / "My_Pic_Project" / "sim"
-    csv_path = sim_dir / "csv" / "repro_release_stage4.csv"
-    graph_path = sim_dir / "graphs" / "repro_release_stage4.png"
+    suffix = "_fine" if fine else ""
+    csv_path = sim_dir / "csv" / f"repro_release_stage4{suffix}.csv"
+    graph_path = sim_dir / "graphs" / f"repro_release_stage4{suffix}.png"
     write_csv(samples, csv_path)
 
     keyed = [i for i, s in enumerate(samples) if s[2].get("g_ptt_active") == "true"]
@@ -196,9 +208,10 @@ def main() -> int:
             transitions.append(stage)
     stage4 = [s for s in release if s[2].get("g_sequence_stage") == "4"]
 
-    if write_graph(samples, graph_path, release_at, bool(stage4)):
+    if write_graph(samples, graph_path, release_at, bool(stage4), mode):
         print(f"repro: timing diagram -> {graph_path}")
     print(f"repro: trace csv      -> {csv_path}")
+    print(f"repro: mode = {mode}")
 
     if not keyed:
         print("repro: PTT never latched - the repro is not exercising the release")
@@ -221,4 +234,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--fine", action="store_true",
+                        help="sample the release at 1 ms with the RF held, to separate the sampling "
+                             "interval from the stimulus (default reproduces the suite: 5 ms, no "
+                             "re-injection)")
+    raise SystemExit(main(parser.parse_args().fine))
