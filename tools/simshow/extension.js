@@ -132,15 +132,11 @@ async function showRequestedLog() {
         preview: false,
       });
     }
-    // Put the operator back exactly where they were: same document, same group, focused.
-    if (before.uri) {
-      const original = await vscode.workspace.openTextDocument(before.uri);
-      await vscode.window.showTextDocument(original, {
-        viewColumn: before.group,
-        preserveFocus: false,
-        preview: false,
-      });
-    }
+    // NOTHING is focused afterwards. The earlier version "put the operator back" with
+    // showTextDocument(original, { preserveFocus: false }) - an explicit request to FOCUS that
+    // document - which is how the log tab took the focus again (user report, 2026-09-25: *"focus
+    // just got set to the log tab -- AGAIN!!!"*). Every call here uses preserveFocus: true, and the
+    // operator's active editor is never touched.
     writeReceipt({ shown: payload.path, column: String(column), preserved: true });
   } catch (err) {
     writeReceipt({ shown: payload.path, error: String(err) });

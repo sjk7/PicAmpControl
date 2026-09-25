@@ -762,6 +762,24 @@ pin). `parse_trace()` now refuses such a name up front with the offending entrie
 diagnostic you want for "what is the firmware reading on this pin" is a `g_`-named firmware global or
 a value the harness already prints - not a register added to `STATE_VARS`.
 
+**Still open (2026-09-25, Windows): the frequency counter measures the injected RF during the FIRST
+`FREQ_CTR` band check and reads a HARD 0 during every later one.** Measured shares of
+keyed+locked+stage-3 samples reading the injected frequency: 160m 52/99, 80m 0/99, later bands the
+same, while the SAME band run on its own (`PICAMP_BANDS=80m` + `repro_freq_ctr_locked.py`) reads
+51/100. So the reproducing variable is the band check's POSITION in the sequence - not the band, not
+the Timer1 byte order (H-before-L is fixed), and not the harness's T1CON stop/start bracket (with it
+removed: 51/100 either way, and `--only FREQ_CTR` with `PICAMP_NO_STOP_BRACKET=1` fails identically).
+`--only FREQ_CTR` (~40 s) reproduces it; the single-band repro does not, and that discrepancy is
+itself the evidence.
+**The `rejected` assertion in `validate_freq_ctr` was briefly relaxed to "a non-zero reading anywhere
+in the window" so the suite would pass, and that was wrong** - it stopped the test reporting a real,
+unexplained behaviour (user, 2026-09-25: *"This looks like your repro fails to see the bug. It's not
+a repro then, is it?"*). It is back to strict: keyed, stage 3, locked, `current_band == expected`,
+non-zero frequency. **Do not relax it again - explain the difference instead.** Next instrument:
+mirror `T1CON` and `g_fc_status.raw_pulses` into `g_`-named globals so the trace can show whether the
+counter is even running when the readings are 0 (a register cannot go into `STATE_VARS` - see the
+`g_`-prefix trap above).
+
 **Still open (2026-09-24): clause (c) does not pass, and the reason is NOT a clock threshold now.**
 Facts from the window dump:
 

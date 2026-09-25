@@ -867,25 +867,20 @@ def validate_freq_ctr(samples, scenario_name="FREQ_CTR") -> None:
         # current_band unchanged. The injected frequency classifies to a different band than the
         # one under test.
         #
-        # NOT required: a non-zero frequency reading while KEYED and locked. MEASURED 2026-09-25 and
-        # it is a simulator artefact, not a firmware property: the firmware stops, reads and zeroes
-        # TMR1 on every 10 ms gate, and a burst of drained Timer2 ticks (the main loop catches up
-        # after an LCD refresh) can run several gates between two 5 ms injections - each gate
-        # consumes the count and leaves zero, so the keyed window reads a hard 0 while the very same
-        # band's UNKEYED samples read the injected frequency (80m: 0 of 99 keyed+locked samples
-        # non-zero, 68 of 93 unkeyed samples exactly 3600 kHz). Requiring it made the scenario fail
-        # on whichever band the tick/injection phase happened to punish, which is why it moved
-        # between bands and platforms. `validate_band_coverage` already requires a non-zero reading
-        # that classified each band, which is the real "the counter was fed and measured it" check,
-        # and `locked_injection` above asserts the lock itself - the property under test.
+        # This requirement is DELIBERATELY strict and currently FAILS on the 2nd and later band
+        # checks (measured 2026-09-25: 160m 52 of 99 keyed+locked samples read the injected
+        # frequency, 80m 0 of 99, and the later bands degrade the same way). It must NOT be relaxed
+        # to "a non-zero reading anywhere in the window" - that is a change made to make the test
+        # pass, which is the failure mode this file keeps being caught by (user, 2026-09-25: *"This
+        # looks like your repro fails to see the bug. It's not a repro then, is it?"*). The open
+        # question is why the FIRST TX band check measures and the later ones do not; that is a
+        # harness/firmware interaction still to be explained, and the test stays red until it is.
         rejected = [
             sample for sample in samples
-            if sample[2].get("g_fc_status.band_locked") == "true"
+            if sample[2].get("g_ptt_active") == "true"
+            and sample[2].get("g_sequence_stage") == "3"
+            and sample[2].get("g_fc_status.band_locked") == "true"
             and sample[2].get("g_fc_status.current_band") == str(expected_band)
-            and sample[2].get("g_fc_status.frequency_khz") not in ("0", "", None)
-        ] or [
-            sample for sample in samples
-            if sample[2].get("g_fc_status.current_band") == str(expected_band)
             and sample[2].get("g_fc_status.frequency_khz") not in ("0", "", None)
         ]
         if not locked_injection:
