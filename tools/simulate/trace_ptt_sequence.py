@@ -370,17 +370,28 @@ def build_script(trip_name=None) -> str:
         "write pin RC2 5v", "write pin RB0 5v", "write pin RB6 5v"
     ]
 
-    def sample(release=False):
-        # `release=True` is the LEAN unkey sample (pins + RELEASE_SAMPLE_VARS), taken at 1 ms while the
-        # amplifier unwinds. See RELEASE_SAMPLE_VARS for why that window is the one that needs it.
+    def sample(release=False, adc=None):
+        """One sample of the firmware's pins and state.
+
+        `release=True` is the LEAN unkey sample (pins + RELEASE_SAMPLE_VARS), taken at 1 ms while the
+        amplifier unwinds - see RELEASE_SAMPLE_VARS for why that window needs it.
+
+        `adc=None` means "print the ADC pins only if this scenario asserts ADC readings". Every sample
+        costs one MDB command per printed item and the model charges SIMULATED time for each, so the
+        eight ADC pins are pure cost in a scenario whose assertions never look at them (base,
+        FREQ_CTR, FREQ_CTR_FAIL - they drive no bridge stimulus and read no ADC value).
+        """
+        if adc is None:
+            adc = trip_name not in (None, "FREQ_CTR", "FREQ_CTR_FAIL")
         for pin in PINS:
             lines.append(f"print pin {pin}")
         if release:
             for var in RELEASE_SAMPLE_VARS:
                 lines.append(f"print {var}")
             return
-        for pin in ADC_PINS:
-            lines.append(f"print pin {pin}")
+        if adc:
+            for pin in ADC_PINS:
+                lines.append(f"print pin {pin}")
         for var in STATE_VARS:
             lines.append(f"print {var}")
         if trip_name == "FREQ_CTR":
@@ -558,8 +569,13 @@ def build_script(trip_name=None) -> str:
         lines.append("write pin RC0 5v")
 
     # --- Finish the settle (startup inhibit) period: 1100ms total ---
-    for _ in range(105 if not temperature_trip else 110):
-        lines.append(stepi(10))  # 10 ms per print
+    # Stepped in a few big blocks instead of 105 ten-millisecond samples. Nothing inside this stretch
+    # is asserted - the "PTT is ignored during startup inhibit" check reads the prelude ABOVE - and
+    # every sample costs one MDB command per printed item, for which the model charges simulated time.
+    # MEASURED 2026-09-25 as one of the two biggest avoidable costs in the suite (105 samples = ~4700
+    # MDB commands per scenario, 11 scenarios).
+    for _ in range(5):
+        lines.append(stepi(210 if not temperature_trip else 220))
         sample()
     band_preflight()
     # --- Assert PTT (pull RC0 low), triggering SETTLE high for 10 ms ---
@@ -1496,8 +1512,7 @@ def parse_trace(output: str):
             if pin in ADC_PINS:
                 pending_adc[pin] = 1
                 pending_voltages[pin] = float(volts) if volts is not None else (5.0 if level == "HIGH" else 0.0)
-        if (len(pending) == len(PINS) + len(ADC_PINS) and
-            len(pending_adc) == len(ADC_PINS) and len(state_pending) == len(STATE_VARS)):
+        if (len(pending) >= len(PINS) and len(state_pending) == len(STATE_VARS)):
             emit()
     # A lean block at the very end of the transcript is closed by the end of input, not by the next
     # block's first pin print.
