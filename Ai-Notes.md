@@ -94,7 +94,7 @@ static, hand-captured design input. The user's words and the full list of what w
   command here - link to the skill.
 
 ## Date
-2026-09-24
+2026-09-25
 
 ## Session handoff (carry-over for a NEW session)
 - This is the ONLY AI carry-over file. `AI-HANDOFF.md` was deleted on 2026-09-21 (it duplicated
@@ -109,16 +109,36 @@ static, hand-captured design input. The user's words and the full list of what w
   MDB is ~2.4x slower on Windows: the merged suite is ~356 s there against ~150 s on macOS. All
   platform-specific harness code lives in `tools/simulate/platform_process.py`. Build/test procedure,
   the Windows gotchas and the timeout policy are in the skill - do not restate them here.
-- Last verified runs: Windows `100% tests passed, 0 tests failed out of 2`, `CTEST_EXIT=0`, 408 s;
-  macOS 2026-09-23 merged suite PASS twice (~110 s). **`FirstDit_BandDetectionAndHotSwitchGuards`
-  FAILS `clause (c)` on macOS only - OPEN**, with I1-I6 and clauses (a)/(b) passing first and a 20m
-  keyed run appearing later in the same session. Windows passes the same clause, so it is either a
-  macOS-only difference or a harness timing assumption macOS exposes. Evidence: `bugfixes.md`
-  2026-09-23 and the skill. See also the REMINDER at the top of Remaining work - a wrong
-  instruction-rate constant sits behind exactly this kind of clause.
-- Earlier session history - the `platform_process.py` rewrite, the timeout re-sizing, the 16F pin-map
-  corrections, the device spike and its two retracted verdicts - is in `bugfixes.md` 2026-09-22 and the
-  skill. Not restated here.
+- **Windows: the launcher never opens a tab for the run log, by design.** `code -r` makes the log the
+  ACTIVE editor tab (the operator's keystrokes then land in the log - that damaged a run on
+  2026-09-25) and un-minimises the window. `tools/simshow/` is a small in-repo VS Code helper that
+  shows the log in a NON-active editor group using the API's `preserveFocus`, driven by a request file
+  that `open_progress_log.py` writes; install it once (`tools/simshow/install.ps1`) and reload the
+  window. `LOG_TO_WATCH <path>` in the run log names the file to follow. Do not reintroduce a
+  CLI-based open, and see the skill's "How a run is watched".
+- **Every suite scenario can be run on its own through the suite's own code path:**
+  `run_suite_with_watchdog.py --test suite --only FREQ_CTR` (~40 s) or `--only base,SWR1`. The full
+  suite is the verdict, never the debugging instrument.
+- **A failed scenario's trace carries prose and the panel:** `scope_trace.py` writes
+  `_build/My_Pic_Project/sim/graphs/<scenario>_scope.png` with the ms timebase across the top, lanes
+  picked from the data, what the test was for / what the firmware did / the assertion as text, the
+  injected counter stimulus drawn over the frequency lane, and a reconstructed 16x2 LCD panel of the
+  state at failure. Render it offline from `suite_raw_mdb.log` rather than re-running the suite.
+- Last verified runs: Windows 2026-09-25 nine of eleven scenarios pass, then
+  **`80m TX injection lock not exercised` - OPEN**: the counter reports a hard 0 for every one of the
+  99 keyed+locked+stage-3 samples of the 80m phase even though the harness injects 3600 kHz every
+  5 ms (160m shows 52 of 99 non-zero, so it is band/phase dependent, not a dead counter). It is NOT
+  the Timer1 byte order (already fixed, H-before-L) and NOT the harness's T1CON stop/start bracket
+  (tested with it removed: 51 of 100 non-zero either way). Root cause as understood: the firmware
+  stops, reads and **zeroes `TMR1` on every 10 ms gate**, and in the model nothing else clocks it
+  (T1CKI/PPS unmodelled, `CS=00`), so a gate that lands before the next injection reads the reset
+  zero - the reading alternates value/0 instead of being steady. Run it alone in ~40 s with
+  `run_suite_with_watchdog.py --test suite --only FREQ_CTR`, or with
+  `--test repro-freq-ctr` (`PICAMP_BANDS`). Evidence and the anti-traps: `bugfixes.md` and the
+  build-test skill. Earlier session history - `platform_process.py`, timeouts, the 16F strip, the
+  device spike, **the SWR1 re-arm failure (FIXED 2026-09-25: the harness held PTT released for 50 ms
+  against a measured 54 ms firmware poll latency, so the release edge was never seen; the window is
+  now 200 ms)** - is in `bugfixes.md` 2026-09-22..24 and the skill. Not restated here.
 
 ## Simulator timing limitation (IMPORTANT)
 - The simulator is a debugger model, not silicon: it validates state ordering, LCD lifecycle, trip

@@ -119,13 +119,18 @@ line, so always send CTest output to a log file and read the verdict from there.
 |---|---|
 | `/tmp/pac_ctest.log` (`%TEMP%\pac_ctest.log` on Windows) | CTest verdict (one line per test, discovery, total time) |
 | `/tmp/picampcontrol_suite_progress.log` (`%TEMP%\...`) | Suite progress: START/CHILD, 10-second heartbeats, `END code=<n>` |
-| `/tmp/picampcontrol_mdb_progress.log` (`%TEMP%\...`) | Raw live MDB output |
+| `<run log name>.mdb_progress.log` beside the run log (`%TEMP%\...`) | Raw live MDB output |
 | `_build/My_Pic_Project/sim/csv/` | Per-scenario CSV sample dumps |
-| `_build/My_Pic_Project/sim/graphs/` | Per-scenario logic-analyzer PNG traces |
+| `_build/My_Pic_Project/sim/graphs/` | Per-scenario logic-analyzer PNG traces, plus `<scenario>_scope.png` for a failure |
 
 A successful run ends with `100% tests passed` and `CTEST_EXIT=0`; the suite log line
 `PTT suite passed: 11 scenarios in one MDB session` and the first-dit proof line
 `FIRST-DIT PROOF PASSED: ...` confirm that each harness ran to completion.
+
+**A failed scenario also writes `<scenario>_scope.png`** - a scope trace of the harness's own
+samples, with the lanes picked from the data and the trip / PTT-release / PTT-re-arm instants marked
+- and hands it to the editor without stealing focus. That is the artefact to look at first when a
+scenario fails (`tools/simulate/scope_trace.py`).
 
 ## Test suite
 
@@ -324,11 +329,24 @@ individual harness.
 [`tools/simulate/run_suite_with_watchdog.py`](tools/simulate/run_suite_with_watchdog.py)
 wraps that script: it starts it in a new session/process group, records the PID in
 `/tmp/picampcontrol_suite.pid`, cleans up stale runs, writes 10-second heartbeats to
-`/tmp/picampcontrol_suite_progress.log`, streams MDB output to
-`/tmp/picampcontrol_mdb_progress.log`, and kills the whole process group on timeout.
+`/tmp/picampcontrol_suite_progress.log`, streams MDB output to a `.mdb_progress.log` derived from
+the run log's own name (one run, one log - a fixed name made a second run fail to start), and kills
+the whole process group on timeout.
 
 Do not start a second suite while one is running. If a run looks stuck, read the PID file,
 terminate that process group, and remove the PID file before starting again.
+
+### Targeted repros
+
+When one scenario fails, do not re-run the whole suite to diagnose it - run the smallest harness that
+reproduces that scenario, then re-run the suite once as the verdict:
+
+| Repro | Command | What it isolates |
+|---|---|---|
+| SWR1 trip re-arm | `run_suite_with_watchdog.py --test repro-swr1-rearm` | the trip latch clearing and TX re-entering stage 3 after a PTT re-arm |
+| FREQ_CTR keyed reading | `run_suite_with_watchdog.py --test repro-freq-ctr` | the classifier's non-zero reading while a band is locked and keyed (`PICAMP_BANDS`, default `80m`) |
+| first-dit 20 m | `run_suite_with_watchdog.py --test repro-20m` | the Timer1 injection byte order for a 20 m count |
+| release stage 4 | `run_suite_with_watchdog.py --test repro-release` | the 5 ms `SEQ_RELEASE_RELAYS` window at 1 ms sampling |
 
 ## Generated artifacts
 

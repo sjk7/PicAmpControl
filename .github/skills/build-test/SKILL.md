@@ -124,10 +124,19 @@ in another window, and a `code -r <log>` call raises VS Code over what they are 
    deleting a file a watcher holds open kills the watcher.
 2. Launch the run with its output redirected into that log. `run_suite_with_watchdog.py` /
    `run_logged.py` write a `RUN_BEGIN` header and append the exit-code line at the end.
-3. **Do NOT call `open_progress_log.open_in_editor()` from a test/run path** - it runs `code -r` and
-   raises the window. The log is followed instead through the Log Viewer extension's Webview panel
-   (re-reads the file on an interval, no focus steal). `open_in_editor()` exists only for an explicit
-   user request to open a tab. `AppendLog` in `platform_process.py` is the heartbeat helper.
+3. **On Windows, NOTHING is opened for you - and that is deliberate.** VS Code's CLI has no
+   background-open: `code -r <log>` reveals the file as the ACTIVE EDITOR TAB and un-minimises the
+   window, and putting the window focus back afterwards does not undo the tab change. The user's
+   rule is "show the log, never move the focus, not even to the tab" (2026-09-25: *"I still want the
+   log shown, I just don't want it to have focus, that's all"*, then, after a `code -r` plus
+   focus-restore attempt, *"The log is still getting focus when shown. Leave the focus ALONE."*).
+   So `open_progress_log.open_in_editor()` opens on macOS (`open -g`, no activation, no tab change)
+   and returns False on Windows, printing the path instead; the launcher writes
+   `LOG_TO_WATCH <path>` into the run log's header so the file to follow is discoverable. The ways
+   to watch on Windows are the operator's own: a tab they already have open, or the **Log Viewer**
+   extension following the file (it re-reads inside its own webview and never touches a tab).
+   Do NOT "fix" this by calling `code -r` "just to be helpful" - that IS the complaint.
+   `AppendLog` in `platform_process.py` is the heartbeat helper.
 4. Which file is the moving one depends on how you launched it: **when you pass `--log <file>`, the
    heartbeat appends INTO that file** (verified 2026-09-23: the heartbeat process is spawned with
    `--log` pointing at the same path). Only when `--log` is
@@ -183,12 +192,47 @@ Wrapped entry points, and nothing else:
 |---|---|
 | The two registered tests | `ctest --test-dir _build/My_Pic_Project/release --output-on-failure` (both route through the watchdog - see `user.cmake`) |
 | One test on its own | `run_suite_with_watchdog.py --test suite`, `... --test first-dit` |
+| A minimal repro | `run_suite_with_watchdog.py --test repro-swr1-rearm` (`repro_swr1_rearm.py`), `--test repro-20m`, `--test repro-release` |
 | A probe / one-off MDB script | `python tools/simulate/run_mdb_probe.py <script.mdb> --log <log>` |
 
 Why it is not optional: a bare run has **no timeout**, **no heartbeat** (so the log tab the user is
 watching never moves - the harness's stdout is block-buffered and stays at zero bytes until exit),
 **no orphan clean-up**, and its verdict lines land **outside the run's log**, which is the one place
 the standing rules say a verdict may be read from.
+
+**Hard rule: NEVER POLL, SLEEP OR WAIT FOR A RUN - THE HARNESS TELLS YOU WHEN IT FINISHES** (user
+instruction, 2026-09-25: *"Note the run is finished. Don't wait there like an idiot!"*, then *"It's
+finished. Why you not realise?"*). A launch in the background terminal REPORTS ITS COMPLETION on the
+next turn, with the exit code, and the user is watching the same log. Sitting in `Start-Sleep` loops
+tailing the log is wrong three ways: it burns turns and tokens, it outlives the notification (the
+agent kept sleeping after the run had ended, twice), and it hides the one thing worth doing - real
+work on the fix in the meantime. So: launch, then spend the same turn on the next piece of real work
+(fix, harness, skill note). Verdicts still come from FILES, never from the terminal.
+
+**A LOG THAT LOOKS DEAD IS NOT EVIDENCE THAT THE RUN IS DEAD - READ THE BYTE DELTA (2026-09-25).**
+The user reported *"Your currently running test is producing no output"* about a repro run whose log
+was in fact complete: a short stdout burst from the harness, then `HEARTBEAT ... delta=0` and
+`MDB (no new output)` for the rest of a 30 s run. Three things made that log look dead:
+- The heartbeat writes `mdb_bytes=<n> delta=<n>` **and** a separate `MDB <line>`. When the MDB side
+  log has grown but holds no new COMPLETE line yet (MDB writes in bursts; the reader stops at the
+  last newline), the MDB line still says `(no new output)`. `delta` is the liveness field; `(no new
+  output)` means only "no whole new line to show". Never read the MDB line alone as "the run is
+  stuck".
+- A repro harness prints only on failure (or only a summary), so a *passing* repro is deliberately
+  quiet. That is the harness, not the run.
+- The heartbeat process outlives the child's last write by tens of seconds on Windows, so a tail of
+  nothing after the last output is normal.
+**The trap is the inference, not the log.** Before saying anything about a run's health, check the
+side log's size/mtime delta and the run log's content; if a log really is empty, that is a
+launcher/tooling bug (see the `PermissionError` note below) - never re-run blindly.
+
+**Only one run at a time, and a launch that fails fast says so.** The MDB progress log is now derived
+from the run log's own name, so a second concurrent run used to die in `unlink` with
+`PermissionError: [WinError 32] ... used by another process` before it started (2026-09-25 - a live
+suite blocked a repro run, which reads as a broken launcher rather than as "a run is already
+going"). The same situation also shows up as `cleanup_sim_processes.py` answering `REFUSING TO CLEAN
+UP: a run appears to be in progress` with the live PIDs listed - that refusal is CORRECT, and the
+answer is to wait for the run, not to force the sweep.
 
 Known gap, and the right way to close it: `run_mdb_probe.py`'s log has been seen to omit MDB's
 `print` values on macOS (2026-09-23 - a ~180-byte log for a probe that ran fine). Fix that log, do
@@ -211,6 +255,68 @@ what `run_tests.sh`/`.ps1` configure. **The `q10_*` trees are gone** - the Q10 i
 so it no longer needs a build tree, a `-DPICAMP_DEVICE` on every command, or its own VS Code tasks.
 A new build directory is a new place for a stale database and a stale ELF to hide, so do not add one
 without a reason that a single directory cannot serve.
+
+**A FAILED SCENARIO NOW WRITES AND OPENS ITS OWN SCOPE TRACE (2026-09-25, user instruction: *"When a
+run fails, make sure there is a scope trace with relevant variables shown. Then show it
+automagically in vscode."*).** `tools/simulate/scope_trace.py` renders `_build/My_Pic_Project/sim/
+graphs/<scenario>_scope.png` from the samples the harness already parsed, picks the lanes from the
+data (every signal that CHANGES, plus `RC0`/`g_ptt_active`/`g_fault_latched`/`g_sequence_stage`,
+which matter whether they move or not), and marks the trip / PTT-release / PTT-re-arm instants as
+labelled vertical lines. `trace_ptt_sequence.py` calls it from the `except` of both the suite's
+per-scenario validation and single-trip mode (`--trip SWR1`); a repro calls `scope_trace.on_failure()`
+itself. Traps found while building it, each of which produces a trace that looks fine and says
+nothing: **the firmware's bools print `true`/`false`**, so a naive `float()` conversion plots
+`g_ptt_active` and `g_fault_latched` as flat zero lines (map the words to 1/0); and **the events must
+be staggered vertically, inside the top lane**, or a release and the re-arm that follows it overprint
+each other into a smear (and, since 2026-09-25, the top lane also carries the ms time axis - labels
+above it collide with the tick labels).
+
+**A FAILURE TRACE MUST SAY IN WORDS WHAT FAILED AND WHAT WAS EXPECTED, AND SHOW THE LCD (user
+instruction, 2026-09-25: *"You still are not summarizing with text at the end of the graph why
+exactly it 'failed' and what it should have done instead (ie what you were testing for). Show the
+display you would send to the LCD, too, when failure detected."*).** Every failure trace therefore
+carries three prose blocks under the lanes - **WHAT THIS TEST IS FOR** (the expectation, from
+`SCENARIO_CHECKS` in `trace_ptt_sequence.py`), **WHAT THE FIRMWARE ACTUALLY DID** (counts read out of
+the samples: keyed samples, stage-3 samples, latched samples, how many released samples the firmware
+acknowledged, and for FREQ_CTR the per-band locked/non-zero counts), and **WHY THAT IS A FAILURE**
+(the assertion text) - plus a 16x2 **LCD panel reconstructed from the failure sample's state**
+(`scope_trace.lcd_screen()`, mirroring `show_menu_page()`'s precedence: trip > PTT COMPLETE > keyed
+stage > `SEQ <STAGE>` > home page; the raw `g_trip_reason` mask is named, never printed). The
+characters are NOT captured - the harness samples the TX and band pins, not the LCD bus - so the
+panel is labelled "reconstructed", and that distinction is part of the evidence. Three findings:
+- **Draw the prose as ONE text object.** Building it line by line and advancing a y position per
+  wrapped line spaced the lines by figure fraction, which on a tall trace left a hand's width
+  between them (seen and rejected in the first attempt).
+- **Never let the LCD panel fail silently** - the first version caught `ImportError` and returned
+  with no message, so a missing panel looked exactly like a panel deliberately left out.
+- **The panel's axes height must follow the LCD's own aspect** (16 characters x 2 rows in the
+  `render_lcd_lifecycle_diagram.lcd_panel` drawing space): a fixed fraction stretched it into a
+  shape that did not look like the hardware. Pass that helper an EMPTY note and caption below the
+  box yourself - its own note sits inside the dark bezel, where its dark-grey text is unreadable.
+  Render and inspect a failure trace OFFLINE from the last run's `suite_raw_mdb.log`
+  (`scope_trace.render_scope(..., **harness._failure_context(samples, scenario, exc))`) instead of
+  re-running the suite to look at a picture.
+
+**ROOT CAUSE of the Windows `SWR1 did not clear and re-enter TX after a PTT re-arm` failure
+(2026-09-25): the harness's PTT release was shorter than the firmware's PTT poll latency, so the
+release edge was never seen.** The trip itself was fine and the bridge was already back to a safe
+reading; the firmware simply never observed the release, so `handle_ptt_transition(false)` never ran,
+the re-key that followed was not an edge, and `clear_fault_latches()` was never reached - the latch
+stayed set for the whole 400 ms re-arm window (`g_ptt_active` `true` in every one of 451 samples,
+`g_fault_latched` `true`, `g_trip_reason` 1). **MEASURED 54.0 ms** from `write pin RC0 5v` to the
+first sample with `g_ptt_active=false`, against a release window of 10 x 5 ms = **50 ms**. It is a
+main-loop pass-length effect, not a trip effect: the LCD refresh runs `__delay_ms` loops compiled
+for the real 64 MHz core against a model ~8x slower, so a pass can straddle the whole release
+window. It is also PHASE-SENSITIVE, which is why it moved between platforms and looked
+intermittent - the repro only reproduces it when it mirrors the suite's phase, including the
+throwaway `assert PTT during startup, then release` prelude the suite emits.
+Repro: `tools/simulate/repro_swr1_rearm.py` (`--test repro-swr1-rearm`), which drives only this
+sequence and prints the measured release poll latency. Fix: the release window is now
+`40 x 5 ms = 200 ms` (~4x the measured latency, matching the base scenario's own release), in the
+`trip_inputs` branch of `trace_ptt_sequence.py`. **When a harness holds PTT released before a
+re-arm, size that window against the measured poll latency, never against what looks sensible** -
+any release shorter than ~60 ms can silently produce a "did not re-arm" failure with no firmware
+fault behind it.
 
 **Hard rule: never run the pre-flight cleanup while a run is live - it kills it.** User-visible
 symptom: the wrapper records `SUITE_EXIT=143` / `CTEST_EXIT=143` (SIGTERM) and the log stops
@@ -412,7 +518,8 @@ so no 5 ms sample can be guaranteed to land in it. `tx_vcc_delay_ms` is the stag
 before assuming a firmware bug. That the repro PASSES means it is evidence, not a repro: do not
 "fix" the firmware for this, and do not relax the assertion - make the release sampling fine enough
 to see a stage whose length it cannot exceed. The repro writes a CSV, a timing diagram and its log;
-open them with the focus-safe helper (`open_progress_log.open_in_editor`, which uses `open -g`), never
+open them with the focus-safe helper (`open_progress_log.open_in_editor`, which uses `open -g` on
+macOS and refuses to open at all on Windows unless the editor is already the foreground window), never
 by stealing focus into the tab.
 
 **Trap (2026-09-24): a key-down that lands inside the startup inhibit looks exactly like "PTT was
