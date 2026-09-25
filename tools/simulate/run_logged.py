@@ -19,6 +19,7 @@ entry points (it did: folding was added to one runner and not the other).
 """
 import subprocess
 import sys
+import os
 import threading
 import time
 from pathlib import Path
@@ -26,6 +27,7 @@ from pathlib import Path
 TOOLS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS_DIR))
 import platform_process as procutil  # noqa: E402
+import open_progress_log  # noqa: E402
 
 # Collapse a run of identical consecutive lines after this many copies.
 DEFAULT_MAX_REPEATS = 3
@@ -45,8 +47,10 @@ def run_logged(command, log, label="", interval=2.0, max_repeats=DEFAULT_MAX_REP
     # Write a delimited header BEFORE anything reads the log, so it has a line to show immediately.
     appender.write(f"RUN_BEGIN {time.strftime('%Y-%m-%dT%H:%M:%S%z')} "
                    f"{label or command[0]} :: {' '.join(str(c) for c in command)}")
-    # No auto-open: opening the log tab steals focus from the user. The file is followed through
-    # the Log Viewer extension instead. Callers that explicitly want a tab call open_in_editor().
+    # Open the log so the user can watch it, without raising VS Code (open_in_editor uses
+    # `open -g` on macOS). Best-effort by design.
+    if os.environ.get("PICAMP_NO_EDITOR_OPEN") != "1":
+        open_progress_log.open_in_editor([log], quiet=True)
 
     started = time.monotonic()
 

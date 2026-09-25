@@ -40,13 +40,34 @@ def resolve_cli() -> tuple:
 
 
 def open_in_editor(paths, quiet: bool = False) -> bool:
-    """Reuse the running editor window (`-r`) and open every path. Returns success."""
+    """Open every path in the running editor WITHOUT raising its window.
+
+    Focus must NOT move (user instruction, 2026-09-24): `code -r <file>` raises VS Code over
+    whatever the user is typing in, which is exactly the complaint. On macOS `open -g` adds the
+    file to the running VS Code in the background (no activation, no window raise); elsewhere
+    fall back to `code -r`, which on Windows does not steal foreground the same way.
+    """
     cli, how = resolve_cli()
-    if cli is None:
+    if cli is None and sys.platform != "darwin":
         if not quiet:
             print(f"open_progress_log: {how}; open the log manually to watch the run")
         return False
     targets = [str(Path(p)) for p in paths]
+    if sys.platform == "darwin":
+        app = ("Visual Studio Code - Insiders"
+               if how and "insiders" in how else "Visual Studio Code")
+        ok = True
+        for target in targets:
+            try:
+                subprocess.run(["open", "-g", "-a", app, target], check=True,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=30)
+            except (OSError, subprocess.SubprocessError) as exc:
+                if not quiet:
+                    print(f"open_progress_log: open -g -a '{app}' failed: {exc}")
+                ok = False
+        if ok and not quiet:
+            print(f"open_progress_log: opened {len(targets)} log(s) in {app} (background)")
+        return ok
     try:
         subprocess.run([cli, "-r", *targets], check=True,
                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=30)

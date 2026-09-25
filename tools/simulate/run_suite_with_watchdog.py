@@ -23,6 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import platform_process as procutil  # noqa: E402
+import open_progress_log  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PID_FILE = procutil.temp_dir() / "picampcontrol_suite.pid"
@@ -32,6 +33,7 @@ DEFAULT_LOG = procutil.temp_dir() / "picampcontrol_suite_progress.log"
 HEARTBEAT_INTERVAL = 5.0
 SUITE = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/trace_ptt_sequence.py"), "--suite"]
 FIRST_DIT = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/test_first_dit.py")]
+REPRO_20M = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/repro_first_dit_20m.py")]
 
 # Orphan signatures. The mdb entries have to match a leftover simulator without also
 # matching an unrelated `java.exe`, of which this machine has several (the MPLAB X IDE's
@@ -214,7 +216,7 @@ def main():
     # CTest registration in user.cmake passes the same figure explicitly.
     parser.add_argument("--timeout", type=float, default=1200.0)
     parser.add_argument("--log", type=Path, default=DEFAULT_LOG)
-    parser.add_argument("--test", choices=("suite", "first-dit"), default="suite",
+    parser.add_argument("--test", choices=("suite", "first-dit", "repro-20m"), default="suite",
                         help="Which simulator test this watchdog wraps")
     parser.add_argument("--quick-bands", action="store_true",
                         help="Run one valid 40m band plus the frequency-failure scenario")
@@ -258,6 +260,9 @@ def main():
     if args.test == "suite":
         test_name = "PTT_SequencerAndTripSuite"
         command = SUITE + (["--quick-bands"] if args.quick_bands else [])
+    elif args.test == "repro-20m":
+        test_name = "Repro_FirstDit_20m"
+        command = REPRO_20M
     else:
         test_name = "FirstDit_BandDetectionAndHotSwitchGuards"
         command = FIRST_DIT
@@ -276,10 +281,11 @@ def main():
     kill_previous(log)
     log.write(f"[{stamp()}] TEST_BEGIN name={test_name} timeout={args.timeout:.0f}s "
               f"command={' '.join(command)}")
-    # Do NOT open the log in an editor tab here: `code -r` raises the VS Code window and steals
-    # focus from whatever the user is doing (user instruction, 2026-09-24). The log stays visible
-    # through the Log Viewer extension's Webview panel (which re-reads the file without focusing
-    # anything). open_in_editor() remains available to callers that explicitly want a tab.
+    # Open the progress log so the user can watch it - but WITHOUT raising VS Code over whatever
+    # they are typing in (open_in_editor uses `open -g` on macOS, no activation). Best-effort: a
+    # headless host has no editor and that must not fail the run.
+    if os.environ.get("PICAMP_NO_EDITOR_OPEN") != "1":
+        open_progress_log.open_in_editor([args.log], quiet=True)
     _, child_log = log.open_for_child()
     env = os.environ.copy()
     env.setdefault("PICAMP_MDB_DEBUG_LOG", str(mdb_log))
