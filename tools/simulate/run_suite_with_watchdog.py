@@ -147,10 +147,26 @@ def last_mdb_line(mdb_log: Path, offset: dict, limit: int = 70, tail_bytes: int 
     # The first line is a fragment whenever the read started mid-log; drop it.
     if read_from != start:
         lines = lines[1:]
-    for line in reversed(lines):
-        collapsed = " ".join(line.split())
-        if collapsed and not _is_mdb_noise(collapsed) and any(c.isalnum() for c in collapsed):
-            return collapsed[-limit:]
+    for index in range(len(lines) - 1, -1, -1):
+        collapsed = " ".join(lines[index].split())
+        if not collapsed or _is_mdb_noise(collapsed) or not any(c.isalnum() for c in collapsed):
+            continue
+        # MDB reports a symbol's value as TWO lines - `g_fc_status.current_band=` and then `1` - so
+        # either half alone is useless to read, and a heartbeat that lands between them shows
+        # `...current_band=`, which the operator quite reasonably asked about (2026-09-25: *"Why are
+        # some outputs from MPLAB truncated?"*). Join them exactly as the transcript parser does: the
+        # value goes with the name, whichever half is newer.
+        following = (" ".join(lines[index + 1].split())
+                     if index + 1 < len(lines) else "")
+        if collapsed.endswith("=") and following and any(c.isalnum() for c in following) \
+                and not _is_mdb_noise(following):
+            return f"{collapsed}{following}"[-limit:]
+        if collapsed.endswith("="):
+            continue      # the value has not been written yet: show the previous complete line
+        previous = " ".join(lines[index - 1].split()) if index > 0 else ""
+        if previous.endswith("=") and not _is_mdb_noise(previous):
+            return f"{previous}{collapsed}"[-limit:]
+        return collapsed[-limit:]
     return ""
 
 
