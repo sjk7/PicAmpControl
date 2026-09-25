@@ -137,8 +137,10 @@ static, hand-captured design input. The user's words and the full list of what w
   on the panel as `STATE: UNDEFINED` plus the reason), opens the RF path and requires a fresh decode;
   the reason is held until the NEXT key-down. The HARNESS asserts that verdict instead of any keyed
   `frequency_khz` reading.
-- Last verified run: Windows 2026-09-25, `--only FREQ_CTR --bands 80m` green (full suite is the open
-  item - see the plan's "Where this got to"). Earlier session history - `platform_process.py`,
+- Last verified run: Windows **2026-09-25, the full 11-scenario suite GREEN (`TEST_END code=0`, 392 s)**
+  with the keyed self-test, the unkey check, the 1 ms lean release sampling and the end-of-log
+  `RUN PASSED` block all in. `--only <scenario>` or `--only FREQ_CTR --bands <band>` (40-80 s) is the
+  iteration tool; the full suite is the verdict. Earlier session history - `platform_process.py`,
   timeouts, the 16F strip, the
   device spike, **the SWR1 re-arm failure (FIXED 2026-09-25: the harness held PTT released for 50 ms
   against a measured 54 ms firmware poll latency, so the release edge was never seen; the window is

@@ -1,12 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-  Project descriptor for PicAmpControl.X (MPLAB X IDE v6.35, XC8 v4.00, PIC18F47Q10).
-
-  The source tree is the repository's own, referenced relatively (`../../firmware/...`), so there is
-  no second copy of the firmware to drift. Build options mirror the CMake debug configuration
-  (cmake/My_Pic_Project/default/.generated/rule.cmake): -O0, C99, `__18F47Q10__`, `__DEBUG=1`,
-  `XPRJ_default=default`, and the pack-matched device headers via PIC18F-Q_DFP 1.30.487.
--->
 <configurationDescriptor version="65">
   <logicalFolder name="root" displayName="root" projectFiles="true">
     <logicalFolder name="HeaderFiles"
@@ -21,7 +13,6 @@
                    displayName="Important Files"
                    projectFiles="true">
       <itemPath>Makefile</itemPath>
-      <itemPath>../README.md</itemPath>
     </logicalFolder>
     <logicalFolder name="SourceFiles"
                    displayName="Source Files"
@@ -48,6 +39,8 @@
       <packs>
         <pack name="PIC18F-Q_DFP" vendor="Microchip" version="1.30.487"/>
       </packs>
+      <ScriptingSettings>
+      </ScriptingSettings>
       <compileType>
         <linkerTool>
           <linkerLibItems>
@@ -73,22 +66,6 @@
         <makeCustomizationEnableLongLines>false</makeCustomizationEnableLongLines>
         <makeCustomizationNormalizeHexFile>false</makeCustomizationNormalizeHexFile>
       </makeCustomizationType>
-      <XC8>
-        <property key="code-model" value="default"/>
-        <property key="data-model" value="default"/>
-        <property key="optimization-level" value="-O0"/>
-        <property key="extra-include-directories" value="../../firmware/include"/>
-        <property key="preprocessor-macros" value="__18F47Q10__;__DEBUG=1;XPRJ_default=default"/>
-        <property key="enable-symbols" value="true"/>
-        <property key="legacy-libc" value="false"/>
-        <property key="generate-hex-file" value="true"/>
-      </XC8>
-      <itemList>
-        <itemPath>../../firmware/src/freq_counter.c</itemPath>
-        <itemPath>../../firmware/src/lcd_parallel.c</itemPath>
-        <itemPath>../../firmware/src/main.c</itemPath>
-        <itemPath>../../firmware/src/nvm.c</itemPath>
-      </itemList>
     </conf>
   </confs>
 </configurationDescriptor>

@@ -1,9 +1,9 @@
 # Plan: firmware TX self-test -> undefined/unkeyable state, with the reason on the LCD
 
-Status: **IN PROGRESS (2026-09-25)** - see "Where this got to" at the end for the live position,
-what is verified, what is left, and where the implementation deliberately differs from the plan
-below. Phases 1-3 and the 80m stimulus fix are done and the 80m slice passes; the full suite, the
-forced-failure path and the docs/skill/notes are still open.
+Status: **IMPLEMENTED AND VERIFIED (2026-09-25)** - the full 11-scenario suite is green (`TEST_END
+code=0`, 392 s) with the self-test, the unkey check and the end-of-log verdict block in place. See
+"Where this got to" at the end for what the implementation actually does, where it deliberately
+differs from the plan below, and what is left (bench confirmation).
 
 ## Goal
 
