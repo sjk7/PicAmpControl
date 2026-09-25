@@ -53,9 +53,29 @@ table (user, 2026-09-25: *"It would be much more useful if you gave these 'stage
 know what stage 4 is ffs?"*).
 
 **Fault names (`g_trip_reason`, an enum of bit flags).** Same rule: never report the raw mask.
-`trip_reason_name()` in `main.c` maps a mask to the highest-priority cause, and the LCD trip screen
-always prints a name (`FAULT: <NAME>`) - on the bench, with no harness attached, the panel is the
-only read-out there is (user, 2026-09-25).
+`trip_reason_name()` in `main.c` maps a mask to the highest-priority cause (**TEMPERATURE, SWR1,
+SWR2, CURRENT, OVERDRIVE, HARDWARE, DRAIN** - that is the firmware's own order, highest first, and it
+is NOT the bit order), and the LCD trip screen now writes that name on **line 0, always**, with the
+evidence on line 1 (`TRIP LATCHED` for HARDWARE/DRAIN/unknown, measured/limit for the rest) - on the
+bench, with no harness attached, the panel is the only read-out there is (user, 2026-09-25: *"LCD at
+failure is supposed to be showing the failure code/enum string."*). Before that change the screen put
+the measurement on line 0, left line 1 blank for TEMPERATURE/CURRENT/OVERDRIVE, and for one SWR1 case
+printed `FLTR?? CHECK LPF` with no fault name at all - a screen that named nothing. The panel pair is
+mirrored in `scope_trace.lcd_screen()` (and must stay in step with it), and the fixed panel set lives
+in `render_lcd_lifecycle_diagram.FAULT_PANELS`, which is COUPLED: changing a trip screen means
+updating that list too.
+
+| bit | firmware enum | name shown / harness `block_reason` |
+|---|---|---|
+| 0x01 | `TRIP_REASON_SWR1` | `SWR1` |
+| 0x02 | `TRIP_REASON_SWR2` | `SWR2` |
+| 0x04 | `TRIP_REASON_HWFAULT` | `HARDWARE` (`FAULT: HWFAULT` in the harness) |
+| 0x08 | `TRIP_REASON_CURRENT` | `CURRENT` |
+| 0x10 | `TRIP_REASON_TEMP` | `TEMPERATURE` |
+| 0x20 | `TRIP_REASON_OVERDRIVE` | `OVERDRIVE` |
+| 0x40 | `TRIP_REASON_DRAIN` | `DRAIN` |
+
+Mask 0, and any bit the table does not know, names as `UNKNOWN` - never blank.
 
 | bit | firmware enum | name shown / harness `block_reason` |
 |---|---|---|

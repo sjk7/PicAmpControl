@@ -41,26 +41,62 @@ LABELS = {"RC0": "PTT (RC0, 0=keyed)", "RC1": "SETTLE (RC1)", "RC5": "RELAYS (RC
 
 
 def draw_stimulus(ax, stimulus):
-    """Overlay the injected frequency on a frequency lane, so the reading can be read against it.
+    """Show the injected frequency ON the frequency lane, as a light overlay with a key.
 
-    The measured frequency alternates between the injected value and 0, because the firmware resets
-    TMR1 on every 10 ms gate and nothing else clocks it in the model; and in the band-walking
-    scenarios the injected value itself steps from band to band. Without the stimulus drawn beside
-    it the lane reads as a wildly unstable counter instead of what it is (user instruction,
-    2026-09-25: *"put which frequency you are inputting to the freq counter so I can see why its
-    changing so much. Or you can use a light selection on that trace, with a key just under the
-    trace."*).
+    The measured frequency alternates between the injected value and 0 (the firmware resets TMR1 on
+    every 10 ms gate, and nothing else clocks it in the model), and in the band-walking scenarios the
+    injected value itself steps from band to band. Without the stimulus drawn beside it the lane
+    reads as a wildly unstable counter instead of what it is (user instruction, 2026-09-25: *"put
+    which frequency you are inputting to the freq counter so I can see why its changing so much. Or
+    you can use a light selection on that trace, with a key just under the trace."*).
+
+    Two cases, because they need different pictures (user instruction, 2026-09-25: *"The graph is not
+    showing me whether you changed the frequency stimulus and what it was ... If there is only one
+    freq in the test, then that should be stated near or under the kHz trace."*):
+      * ONE injected frequency for the whole recording - a light dashed line at that level and the
+        value stated on the lane, because there is nothing to key;
+      * several - a light shaded band per constant-frequency stretch (colour keyed by frequency),
+        the step outline drawn over them, and a key with the kHz value of every swatch placed UNDER
+        the lane.
     """
     if not stimulus:
         return False
+    # Lazy, like the rest of this module: the harness must still run on a machine with no matplotlib.
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    frequencies = []
+    for _start, _end, freq_khz in stimulus:
+        if freq_khz not in frequencies:
+            frequencies.append(freq_khz)
+    if len(frequencies) == 1:
+        freq_khz = frequencies[0]
+        ax.axhline(freq_khz, color="#b71c1c", linewidth=0.9, linestyle="--", alpha=0.45)
+        ax.text(0.004, 0.94,
+                f"stimulus: {freq_khz} kHz held throughout "
+                f"({len(stimulus)} injections across the whole recording)",
+                transform=ax.transAxes, fontsize=6.5, va="top", color="#b71c1c")
+        return True
+    palette = ["#ef9a9a", "#90caf9", "#a5d6a7", "#ffe082", "#ce93d8", "#ffab91",
+               "#80cbc4", "#f48fb1", "#b0bec5", "#c5e1a5"]
+    colour_for = {freq_khz: palette[index % len(palette)]
+                  for index, freq_khz in enumerate(frequencies)}
+    for start_ms, end_ms, freq_khz in stimulus:
+        ax.axvspan(start_ms, end_ms, color=colour_for[freq_khz], alpha=0.35, linewidth=0)
     times, values = [], []
     for start_ms, end_ms, freq_khz in stimulus:
         times += [start_ms, end_ms]
         values += [freq_khz, freq_khz]
-    ax.plot(times, values, color="#e57373", linewidth=0.9, linestyle="--", alpha=0.9,
-            label="injected to the counter (stimulus)")
-    ax.plot([], [], color="#1f77b4", linewidth=1.0, label="measured (firmware)")
-    ax.legend(loc="upper right", fontsize=6.5, framealpha=0.85, ncol=2, handlelength=1.6)
+    ax.plot(times, values, color="#b71c1c", linewidth=0.8, linestyle="--", alpha=0.75)
+    handles = [Patch(facecolor=colour_for[freq_khz], alpha=0.45, label=f"{freq_khz} kHz")
+               for freq_khz in frequencies]
+    handles.append(Line2D([], [], color="#b71c1c", linestyle="--", linewidth=0.8,
+                          label="injected (stimulus)"))
+    # The key goes UNDER the lane, as asked: a key inside a busy lane covers the very waveform it is
+    # meant to explain.
+    ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.0, -0.28),
+              ncol=min(len(handles), 5), fontsize=6, framealpha=0.9, handlelength=1.4,
+              columnspacing=0.8, borderpad=0.4)
     return True
 
 
@@ -126,9 +162,47 @@ def _varies(values):
 # `g_trip_reason` is a bit-mask (main.c `TRIP_REASON_*`). The panel prints the highest-priority
 # NAME, never the raw mask, so a reconstructed screen must do the same - and 0 or an unknown bit
 # has to name as "UNKNOWN" rather than print nothing.
-TRIP_REASON_NAMES = [(0x01, "SWR1"), (0x02, "SWR2"), (0x04, "HARDWARE"), (0x08, "CURRENT"),
-                     (0x10, "TEMPERATURE"), (0x20, "OVERDRIVE"), (0x40, "DRAIN")]
+TRIP_REASON_NAMES = [(0x10, "TEMPERATURE"), (0x01, "SWR1"), (0x02, "SWR2"), (0x08, "CURRENT"),
+                     (0x20, "OVERDRIVE"), (0x04, "HARDWARE"), (0x40, "DRAIN")]
 BAND_NAMES = {1: "160m", 2: "80m", 3: "40m", 4: "20m", 5: "15m", 6: "10m"}
+
+
+# Firmware enum names for `g_trip_reason`, so the panel caption can quote the symbol a reader would
+# grep for in main.c as well as the bit and the name the panel prints.
+TRIP_REASON_ENUMS = [(0x01, "TRIP_REASON_SWR1"), (0x02, "TRIP_REASON_SWR2"),
+                     (0x04, "TRIP_REASON_HWFAULT"), (0x08, "TRIP_REASON_CURRENT"),
+                     (0x10, "TRIP_REASON_TEMP"), (0x20, "TRIP_REASON_OVERDRIVE"),
+                     (0x40, "TRIP_REASON_DRAIN")]
+
+
+def trip_reason_detail(mask) -> str:
+    """`0x04 -> HARDWARE (TRIP_REASON_HWFAULT)` for the panel caption; never blank."""
+    try:
+        value = int(str(mask).strip())
+    except (TypeError, ValueError):
+        value = 0
+    for bit, enum_name in TRIP_REASON_ENUMS:
+        if value & bit:
+            return f"0x{value:02X} -> {trip_reason_name(value)} ({enum_name})"
+    return f"0x{value:02X} -> UNKNOWN (no TRIP_REASON_* bit set)"
+
+
+def failure_lcd_state(samples):
+    """`(state, why)` for the panel: the TRIP if one latched, else the last sample.
+
+    The panel is supposed to show the FAILURE, not whatever the run happened to end on (user
+    instruction, 2026-09-25: *"LCD at failure is supposed to be showing the failure code/enum
+    string."*). A latched fault is that moment - the firmware's trip screen, which names the reason -
+    even if the harness kept stepping for another 400 ms afterwards; only when nothing latched is
+    the last sample the right instant.
+    """
+    if not samples:
+        return None, "no samples"
+    latched = next((sample for sample in samples
+                    if sample[2].get("g_fault_latched") == "true"), None)
+    if latched is not None:
+        return latched[2], f"first latched sample (t={latched[0] * SECONDS_PER_INSTRUCTION * 1000:.1f} ms)"
+    return samples[-1][2], "last sample of the failed window (no fault latched)"
 
 
 def trip_reason_name(mask) -> str:
@@ -160,7 +234,13 @@ def lcd_screen(state: dict) -> tuple:
     stage = harness.stage_name(state.get("g_sequence_stage"))
     stage_word = stage.split(" ", 1)[1] if " " in stage else stage
     if state.get("g_fault_latched") == "true":
-        return (f"FAULT: {trip_reason_name(state.get('g_trip_reason'))}", "TRIP LATCHED")
+        # Line 0 is the enumerator, line 1 the evidence - exactly what the firmware writes
+        # (main.c, STATE_TRIP branch). The numeric half of line 1 is NOT reconstructed here: it is
+        # derived from the live ADC readings and the configured limits, and inventing it would be
+        # worse than showing that it is missing.
+        name = trip_reason_name(state.get("g_trip_reason"))
+        evidence = "TRIP LATCHED" if name in ("HARDWARE", "DRAIN", "UNKNOWN") else "[value]/[limit]"
+        return (name, evidence)
     if state.get("g_ptt_complete_display_active") == "true":
         return ("PTT COMPLETE", f"TX {stage_word}")
     if state.get("g_ptt_active") == "true":
@@ -172,7 +252,7 @@ def lcd_screen(state: dict) -> tuple:
 
 
 def render_scope(samples, title, path, events=(), check=None, observed=None, why=None,
-                 lcd_state=None, stimulus=()):
+                 lcd_state=None, stimulus=(), lcd_caption=None):
     """Write a scope-trace PNG for `samples`; returns the path (or None if matplotlib is absent).
 
     `events` is a list of `(time_ms, label)`: the moments the failure is about (trip raised,
@@ -240,7 +320,7 @@ def render_scope(samples, title, path, events=(), check=None, observed=None, why
 
     if prose:
         fig.tight_layout(rect=(0, 0.34, 1, 0.98))
-        _draw_failure_notes(fig, plt, check, observed, why, lcd_state)
+        _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption)
     else:
         fig.tight_layout(rect=(0, 0, 1, 0.98))
     fig.suptitle(title, fontsize=10)
@@ -252,7 +332,7 @@ def render_scope(samples, title, path, events=(), check=None, observed=None, why
     return path
 
 
-def _draw_failure_notes(fig, plt, check, observed, why, lcd_state):
+def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=None):
     """The prose + the reconstructed 16x2 panel, in the band reserved under the lanes.
 
     The prose is ONE text object with the headings inline: drawing each wrapped line separately
@@ -299,11 +379,15 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state):
             print(f"scope_trace: LCD panel not drawn ({exc})")
             return
         # The caption goes BELOW the box, drawn here rather than passed in: the LCD module's own
-        # note sits inside the dark bezel, where its dark-grey text is unreadable.
+        # note sits inside the dark bezel, where its dark-grey text is unreadable. It carries the
+        # fault CODE as well as the screen, because "which fault" is the question the panel is
+        # asked (user instruction, 2026-09-25).
         lcd_panel(panel_ax, 0.2, 0.85, "LCD AT FAILURE (reconstructed)", line1, line2, "",
                   "#b71c1c")
-        panel_ax.text(3.8, 0.4, "16x2 as show_menu_page() would render this sampled state",
-                      ha="center", va="center", fontsize=7, color="#455a64")
+        caption = lcd_caption or "last sample of the failed window"
+        if lcd_state.get("g_fault_latched") == "true":
+            caption += f"   g_trip_reason={trip_reason_detail(lcd_state.get('g_trip_reason'))}"
+        panel_ax.text(3.8, 0.4, caption, ha="center", va="center", fontsize=7, color="#455a64")
 
 
 def show(path):
@@ -314,12 +398,13 @@ def show(path):
 
 
 def on_failure(samples, name, graph_dir, title, events=(), check=None, observed=None, why=None,
-               lcd_state=None, stimulus=()):
+               lcd_state=None, stimulus=(), lcd_caption=None):
     """Render and show the scope trace for a failure; the caller re-raises its own error."""
-    if lcd_state is None and samples:
-        lcd_state = samples[-1][2]
+    if lcd_state is None:
+        lcd_state, instant = failure_lcd_state(samples)
+        lcd_caption = lcd_caption or instant
     path = render_scope(samples, title, Path(graph_dir) / f"{name}_scope.png", events=events,
                         check=check, observed=observed, why=why, lcd_state=lcd_state,
-                        stimulus=stimulus)
+                        stimulus=stimulus, lcd_caption=lcd_caption)
     show(path)
     return path

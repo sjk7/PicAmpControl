@@ -585,6 +585,14 @@ void lcd_write_swr_right(unsigned char field_width, unsigned int swr_hundredths)
     lcd_write_unsigned_padded(fraction, 2);
 }
 
+void lcd_write_swr_value(unsigned int swr_hundredths) {
+    /* "x.xx" only. The trip screen shows measured/limit side by side ("2.34/2.00:1"), and the
+       "SWR=" prefix the meter pages use does not fit on one 16-column line twice. */
+    lcd_write_unsigned(swr_hundredths / 100U);
+    lcd_write_byte('.', true);
+    lcd_write_unsigned_padded(swr_hundredths % 100U, 2);
+}
+
 unsigned char settings_checksum(menu_page_t page, const protection_thresholds_t *settings) {
     const unsigned char *bytes = (const unsigned char *)settings;
     unsigned char checksum = (unsigned char)page;
@@ -684,50 +692,50 @@ void show_menu_page(void) {
         if (!screen_changed) {
             return;
         }
-        /* Line 0 ALWAYS carries the enumerated fault name for the latched mask. On the bench, with
-           no harness attached, the LCD is the only read-out there is, so no trip may ever leave a
-           blank or unnamed screen. Each cause then adds its measurement on line 1. */
+        /* Line 0 ALWAYS carries the enumerated fault name, and line 1 carries the evidence that
+           produced it. On the bench, with no harness attached, the LCD is the only read-out there
+           is, so no trip may ever leave a blank or unnamed screen - and the NAME must be the
+           enumerator itself, not a hint, or a reader cannot tell which protection operated. The
+           old screen put the measurement on line 0 and left line 1 empty for TEMP/CURRENT/OVERDRIVE,
+           and for one SWR1 case printed "FLTR?? CHECK LPF" with no fault name at all (user
+           instruction, 2026-09-25: *"LCD at failure is supposed to be showing the failure
+           code/enum string."*). Each name is <= 11 characters (TRIP_REASON_NAME_MAX), so it always
+           fits one 16-column line. */
         lcd_set_cursor(0, 0);
+        lcd_write_text(trip_reason_name(g_trip_reason));
+        lcd_set_cursor(1, 0);
         if (g_trip_reason & TRIP_REASON_TEMP) {
-            lcd_write_text(LCD_TEXT_TEMP);
             lcd_write_unsigned(g_live_temperature_c);
             lcd_write_byte('/', true);
             lcd_write_unsigned(g_thresholds.temp_trip_c);
             lcd_write_byte('C', true);
         } else if (g_trip_reason & TRIP_REASON_SWR1) {
             if (g_swr1_live_hundredths >= 1000) {
-                lcd_write_text("FLTR?? CHECK LPF");
+                lcd_write_text("CHECK LPF");
             } else {
-                lcd_write_text(LCD_TEXT_SWR1);
-                lcd_write_swr_right(11, g_swr1_live_hundredths);
-                lcd_set_cursor(1, 0);
-                lcd_write_text(LCD_TEXT_MAX);
-                lcd_write_swr_right(11, (unsigned int)g_thresholds.swr1_trip_tenths * 10U);
+                lcd_write_swr_value(g_swr1_live_hundredths);
+                lcd_write_byte('/', true);
+                lcd_write_swr_value((unsigned int)g_thresholds.swr1_trip_tenths * 10U);
+                lcd_write_text(":1");
             }
         } else if (g_trip_reason & TRIP_REASON_SWR2) {
-            lcd_write_text(LCD_TEXT_SWR2);
-            lcd_write_swr_right(11, g_swr2_live_hundredths);
-            lcd_set_cursor(1, 0);
-            lcd_write_text(LCD_TEXT_MAX);
-            lcd_write_swr_right(11, (unsigned int)g_thresholds.swr2_trip_tenths * 10U);
+            lcd_write_swr_value(g_swr2_live_hundredths);
+            lcd_write_byte('/', true);
+            lcd_write_swr_value((unsigned int)g_thresholds.swr2_trip_tenths * 10U);
+            lcd_write_text(":1");
         } else if (g_trip_reason & TRIP_REASON_CURRENT) {
-            lcd_write_text("CURRENT ");
             lcd_write_unsigned(g_live_current_a);
             lcd_write_byte('/', true);
             lcd_write_unsigned(g_thresholds.current_trip_a);
             lcd_write_byte('A', true);
         } else if (g_trip_reason & TRIP_REASON_OVERDRIVE) {
-            lcd_write_text("OVERDRIVE ");
             lcd_write_unsigned(g_live_overdrive_mw / 1000U);
             lcd_write_byte('/', true);
             lcd_write_unsigned((unsigned int)g_thresholds.overdrive_trip_tenths_w / 10U);
             lcd_write_byte('W', true);
         } else {
             /* HARDWARE, DRAIN, any combination the chain above does not name, or a zero mask:
-               `trip_reason_name()` always returns something printable. */
-            lcd_write_text("FAULT: ");
-            lcd_write_text(trip_reason_name(g_trip_reason));
-            lcd_set_cursor(1, 0);
+               the name is on line 0, so line 1 states the latch instead of leaving a blank screen. */
             lcd_write_text("TRIP LATCHED");
         }
         return;

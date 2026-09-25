@@ -317,6 +317,10 @@ def main():
     # tab for it (that would move the operator's focus - see open_progress_log.open_in_editor), so
     # the path has to be discoverable without asking the agent or reading a temp directory listing.
     log.write(f"[{stamp()}] LOG_TO_WATCH {args.log}")
+    # Also say it on stdout, at the START: the path has to be visible while the run is live, not only
+    # in the summary at the end (the operator asked "I don't see a log for it even if it is!"
+    # on 2026-09-25, having been handed a run whose log existed under a name he had not chosen).
+    print(f"watch: {args.log}")
     # Open the progress log so the user can watch it - but WITHOUT moving their focus (macOS uses
     # `open -g`; on Windows nothing is opened, see open_in_editor). Best-effort: a headless host has
     # no editor and that must not fail the run.

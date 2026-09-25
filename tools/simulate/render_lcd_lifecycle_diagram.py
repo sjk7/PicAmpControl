@@ -23,14 +23,15 @@ PANELS = [
     ("TEMP RECOVERY", "P=   0W ........", "TEMP  25C", "After hysteresis: comparator reset, then TX can sequence again"),
 ]
 FAULT_PANELS = [
-    ("TRIP: TEMPERATURE", "TEMP 101/100C   ", "MAX 100C        ", "Measured temperature / EEPROM trip limit"),
-    ("TRIP: SWR1", "FLTR?? CHECK LPF", "SWR1 > 10:1     ", "Extreme SWR1 suggests wrong output filter selection"),
-    ("TRIP: SWR2", "SWR2 2.1/2.0    ", "MAX 2.0:1       ", "Measured SWR2 / EEPROM trip limit"),
-    ("TRIP: HARDWARE", "FAULT:          ", "HWFLT           ", "Hardware comparator fault"),
-    ("TRIP: CURRENT", "AMPS 41/40A     ", "MAX 40A         ", "Measured current / EEPROM trip limit"),
-    ("TRIP: OVERDRIVE", "OVDR 11/10W     ", "MAX 10W         ", "Measured overdrive / EEPROM trip limit"),
-    ("TRIP: DRAIN", "DRN 151/150V    ", "MAX 150V        ", "Measured drain / EEPROM trip limit; ADC 5 V = 300 V"),
-    ("TRIP: ALL-FAULT EXAMPLE", "FAULT: ALL TRIPS", "S1 S2 HW A T O D ", "S1/S2/HW/AMPS/TEMP/OVDR/DRN shorthand"),
+    # Line 0 is ALWAYS the enumerated fault name, line 1 the evidence (main.c, STATE_TRIP branch).
+    ("TRIP: TEMPERATURE", "TEMPERATURE     ", "101/100C        ", "Measured temperature / EEPROM trip limit"),
+    ("TRIP: SWR1", "SWR1            ", "2.34/2.00:1     ", "Measured SWR1 / EEPROM trip limit"),
+    ("TRIP: SWR1 (filter hint)", "SWR1            ", "CHECK LPF       ", "An extreme ratio suggests the wrong output filter was selected"),
+    ("TRIP: SWR2", "SWR2            ", "2.10/2.00:1     ", "Measured SWR2 / EEPROM trip limit"),
+    ("TRIP: HARDWARE", "HARDWARE        ", "TRIP LATCHED    ", "Hardware comparator fault"),
+    ("TRIP: CURRENT", "CURRENT         ", "41/40A          ", "Measured current / EEPROM trip limit"),
+    ("TRIP: OVERDRIVE", "OVERDRIVE       ", "11/10W          ", "Measured overdrive / EEPROM trip limit"),
+    ("TRIP: DRAIN", "DRAIN           ", "TRIP LATCHED    ", "Drain-voltage trip; ADC 5 V = 300 V"),
 ]
 NORMAL_PANELS = [
     ("TX STATUS: PEP", "P=1125W SWR=1.23", "||||||||||||....", "3/4 of 1500 W full scale; STATUS shows post-filter SWR to hundredths"),
