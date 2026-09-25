@@ -210,6 +210,18 @@ static const char *const TX_SELFTEST_NAMES[] = {
     "REL_STUCK"  /* TX_SELFTEST_REL_STUCK  0x0100 */
 };
 
+/* The two remedies, split by cause (user instruction, 2026-09-25: *"re-instate a steady unkeyed
+   state, change the band (if valid) and key once more"*). A measurement-side check folds back: open
+   the RF path, re-select from the next valid measurement and key once more, because the band lock
+   lost its measurement and the next one is expected to be valid. A stuck-output check latches the
+   undefined/unkeyable state instead: the driver did not obey the command, so re-keying would
+   re-engage the same fault - the one case that can damage the LDMOS. */
+#define TX_SELFTEST_FOLDBACK_MASK \
+    (TX_SELFTEST_NO_RF | TX_SELFTEST_BAD_BAND | TX_SELFTEST_LOCK_LOST | \
+     TX_SELFTEST_BAND_CHG | TX_SELFTEST_NO_LOCK | TX_SELFTEST_NO_BAND)
+#define TX_SELFTEST_LATCH_MASK \
+    (TX_SELFTEST_TX_SENSE | TX_SELFTEST_STALLED | TX_SELFTEST_REL_STUCK)
+
 /* Append `text` to the NUL-terminated `buffer`, inserting a '+' first when it is not the first
    name, and never writing more than `limit` characters (the truncation marker is the caller's). */
 static bool tx_selftest_text_append(char *buffer, unsigned char *used, unsigned char limit, const char *text) {
@@ -374,6 +386,9 @@ void tx_selftest_reset(void) {
     g_selftest_reason = TX_SELFTEST_OK;
     g_lock_loss_ms = 0;
     g_selftest_unkey_ms = 0;
+    /* A new key-down also releases the stuck-output latch: the operator is explicitly re-keying,
+       so the previous undefined/unkeyable state is gone. */
+    g_unkeyable = false;
     for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
         g_selftest_hold[index] = 0;
     }
@@ -919,7 +934,7 @@ void show_menu_page(void) {
            check failed, never blank. */
         static char selftest_reason_text[17];
         lcd_set_cursor(0, 0);
-        lcd_write_text("STATE: UNDEFINED");
+        lcd_write_text("FAULT:");
         lcd_set_cursor(1, 0);
         tx_selftest_reason_text(g_selftest_reason, selftest_reason_text, sizeof selftest_reason_text);
         lcd_write_text(selftest_reason_text);
@@ -1589,7 +1604,7 @@ static unsigned int tx_selftest_unkey_window(void) {
 static void tx_selftest_apply(unsigned int failing) {
     unsigned char index;
     unsigned int longest = 0;
-    bool latched = false;
+    unsigned int latched_now = 0;
 
     for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
         unsigned int bit = (unsigned int)(1u << index);
@@ -1605,7 +1620,7 @@ static void tx_selftest_apply(unsigned int failing) {
             }
             if (g_selftest_hold[index] >= LOCK_LOSS_UNKEYABLE_MS) {
                 g_selftest_reason |= bit;
-                latched = true;
+                latched_now |= bit;
             }
         } else {
             g_selftest_hold[index] = 0;
@@ -1616,25 +1631,35 @@ static void tx_selftest_apply(unsigned int failing) {
     if (g_selftest_reason != TX_SELFTEST_OK) {
         g_selftest_failed = true;
     }
-    if (!latched) {
+    if (latched_now == 0) {
         return;
     }
 
-    /* THE ACTION. The amplifier is in a state it cannot vouch for - a keyed transmission whose band
-       lock has lost its measurement, or an unkey that will not finish - so it must not be left in it.
-       Open the RF path, unlock the band so the selection can follow live RF again, end the sequence,
-       and require a fresh decode before it will key again (user instruction, 2026-09-25: *"The
-       firmware should put us in an undefined, unkeyable state when the test fails."*). The reason
-       stays on the panel: see the LCD's fault-record branch. While the condition persists this
-       repeats once per window, which is harmless - the amplifier is already in bypass - and
-       g_unkeyable is cleared by a fresh decode, not by the action. */
-    g_unkeyable = true;
+    /* THE ACTION. The amplifier is in a state it cannot vouch for, so it must not be left in it.
+       Two remedies, split by cause (user instruction, 2026-09-25: *"re-instate a steady unkeyed
+       state, change the band (if valid) and key once more"*):
+       * a stuck-output check (TX_SENSE, STALLED, REL_STUCK) latches the undefined/unkeyable state.
+         The driver did not obey the command, so re-keying would re-engage the same fault - the one
+         case that can damage the LDMOS. The amplifier stays in bypass until the operator keys again.
+       * a measurement check folds back: open the RF path, unlock the band so the selection can follow
+         live RF again, then let the bypass-snoop path re-select the next valid measurement and key
+         once more. A condition that persists simply stays in bypass-snoop - the amplifier is already
+         cold, so it can never oscillate back into transmit on an unverified band. */
+    bool permanent = g_unkeyable || (latched_now & TX_SELFTEST_LATCH_MASK) != 0;
+
     apply_bypass();
     freq_counter_unlock_band();
     invalidate_established_band();
     g_sequence_stage = SEQ_IDLE;
     g_state = STATE_BYPASS_SNOOP;
-    g_snoop_active = true;
+
+    if (permanent) {
+        g_unkeyable = true;
+        g_snoop_active = false;
+    } else {
+        g_snoop_active = true;
+    }
+
     /* Restart every window: a condition that is still there must hold for another full window before
        it acts again, so the action cannot repeat faster than the window and the panel's reason mask is
        the only thing that accumulates. */
@@ -1868,6 +1893,13 @@ void update_tx_sequence(void) {
     }
 
     if (g_ptt_active) {
+        if (g_unkeyable) {
+            /* A stuck-output self-test failure latched the undefined/unkeyable state: the amplifier
+               must not re-engage until the operator keys again. Hold bypass, leave the sequence idle. */
+            apply_bypass();
+            g_sequence_stage = SEQ_IDLE;
+            return;
+        }
         if (g_sequence_stage == SEQ_IDLE) {
             if (!g_band_established) {
                 /* The relay selection is not backed by any measurement for this transmission
@@ -2079,7 +2111,7 @@ void update_protection_state(unsigned int temp_c,
 
     /* The snoop flag, not the enumerated state, is authoritative: this function runs every
        pass and would otherwise overwrite STATE_BYPASS_SNOOP with STATE_OPERATE. */
-    g_state = g_snoop_active ? STATE_BYPASS_SNOOP : STATE_OPERATE;
+    g_state = (g_snoop_active || g_unkeyable) ? STATE_BYPASS_SNOOP : STATE_OPERATE;
     set_trip_output(false);
 }
 

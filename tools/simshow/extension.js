@@ -55,6 +55,85 @@ function findOpenTab(uri) {
   return null;
 }
 
+// One follower per log file: the editor tab and the watcher that reveals its last line on every
+// change. Following is done HERE, not by the Log Viewer extension: that extension needs a
+// workspace-relative watch glob, but the run log lives in the OS temp dir, so its glob never
+// resolves and the log stops following (user instruction, 2026-09-25).
+const followers = new Map(); // fsPath -> { editor, watcher, timer }
+
+function disposeFollower(key) {
+  const entry = followers.get(key);
+  if (!entry) {
+    return;
+  }
+  if (entry.watcher) {
+    entry.watcher.dispose();
+  }
+  if (entry.timer) {
+    clearTimeout(entry.timer);
+  }
+  followers.delete(key);
+}
+
+async function followLog(uri) {
+  const key = uri.fsPath;
+  const doc = await vscode.workspace.openTextDocument(uri);
+
+  let entry = followers.get(key);
+  if (!entry) {
+    entry = { editor: null, watcher: null, timer: null };
+    followers.set(key, entry);
+  }
+
+  // Bring the tab to the front of its own group WITHOUT moving the global focus. `preserveFocus`
+  // is the whole point: the version that moved the focus put the operator's keystrokes into the
+  // log tab. Never a NEW group - a new group would split the editor, which the operator rejected.
+  if (!entry.editor || entry.editor.document.uri.toString() !== uri.toString()) {
+    entry.editor = await vscode.window.showTextDocument(doc, {
+      preview: false,
+      preserveFocus: true,
+    });
+  }
+
+  // One watcher per followed file, scoped to the file so the whole temp dir (multi-megabyte
+  // simulator logs) is never watched.
+  if (!entry.watcher) {
+    const dir = vscode.Uri.file(path.dirname(key));
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(dir, path.basename(key))
+    );
+    const revealTail = () => {
+      const editor = entry.editor;
+      if (!editor) {
+        return;
+      }
+      // Reveal the last line: this SCROLLS the tab to follow the output without moving the focus
+      // or the cursor - the only thing a "follow" is supposed to do.
+      const last = editor.document.lineCount - 1;
+      editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.Default);
+    };
+    // Reveal on a short throttle: a burst of writes scrolls once, not once per line. A run-start
+    // truncate lands here as one big change and scrolls back to the top correctly.
+    const scheduleReveal = () => {
+      if (entry.timer) {
+        clearTimeout(entry.timer);
+      }
+      entry.timer = setTimeout(() => {
+        entry.timer = null;
+        revealTail();
+      }, 150);
+    };
+    watcher.onDidChange(scheduleReveal);
+    watcher.onDidCreate(scheduleReveal);
+    watcher.onDidDelete(scheduleReveal);
+    entry.watcher = watcher;
+  }
+
+  // Reveal once now so an already-grown log shows its tail, not its top.
+  const last = doc.lineCount - 1;
+  entry.editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.Default);
+}
+
 async function showRequestedLog() {
   let payload;
   try {
@@ -72,50 +151,16 @@ async function showRequestedLog() {
   }
   const uri = vscode.Uri.file(payload.path);
   try {
-    // NOTHING is opened automatically. Both automatic routes are ruled out by the operator:
-    // making it the active tab in the one group takes their typing (it wrecked a run), and putting
-    // it in a second group SPLITS the editor, which is the "split screen" they do not want
-    // (2026-09-25: *"Ah well its the second editor group that I DO NOT WANT. That's what I meant by
-    // 'split-screen'"*). So: if it is already on screen, do nothing; otherwise offer it with a
-    // NON-MODAL notification whose buttons the operator clicks - their click, their choice, and the
-    // notification itself never takes focus.
-    if (findOpenTab(uri)) {
-      // Already on screen, but the operator asked (2026-09-25) that a new run re-shows it: a plain
-      // text tab keeps its scroll position, so an already-open log LOOKS frozen even though the file
-      // is growing. Bring it to the front of its own group WITHOUT moving focus - that is what
-      // preserveFocus is for - and without creating a second editor (same doc, no duplicate).
-      try {
-        const doc = await vscode.workspace.openTextDocument(uri);
-        await vscode.window.showTextDocument(doc, {
-          viewColumn: findOpenTab(uri).group.viewColumn ?? vscode.ViewColumn.One,
-          preview: false,
-          preserveFocus: true,
-        });
-        writeReceipt({ shown: payload.path, already_open: true, preserved: true });
-      } catch (err) {
-        writeReceipt({ shown: payload.path, already_open: true, error: String(err) });
-      }
+    if (payload.path.toLowerCase().endsWith(".png")) {
+      await vscode.commands.executeCommand("vscode.open", uri, {
+        preview: false,
+        preserveFocus: true,
+      });
+      writeReceipt({ shown: payload.path, opened: true, image: true, preserved: true });
       return;
     }
-    // OPEN IT, with `preserveFocus: true` - so the tab appears and keeps updating (the operator
-    // expects to see the run they just started: *"I expect to see the log followed now"*) while the
-    // focus stays exactly where it was. `preserveFocus` is the whole point: the version that moved
-    // the focus is what put their keystrokes into the log tab. The tab is opened in the ACTIVE group
-    // because creating a group would split the editor, which they have rejected outright.
-    try {
-      if (payload.path.toLowerCase().endsWith(".png")) {
-        await vscode.commands.executeCommand("vscode.open", uri, {
-          preview: false,
-          preserveFocus: true,
-        });
-      } else {
-        const doc = await vscode.workspace.openTextDocument(uri);
-        await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });
-      }
-      writeReceipt({ shown: payload.path, opened: true, preserved: true });
-    } catch (err) {
-      writeReceipt({ shown: payload.path, opened: false, error: String(err) });
-    }
+    await followLog(uri);
+    writeReceipt({ shown: payload.path, followed: true, preserved: true });
   } catch (err) {
     writeReceipt({ shown: payload.path, error: String(err) });
   }
@@ -134,6 +179,13 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand("picampcontrol.showLog", showRequestedLog)
   );
+  context.subscriptions.push({
+    dispose() {
+      for (const key of [...followers.keys()]) {
+        disposeFollower(key);
+      }
+    },
+  });
   // A request written while the window was starting must not be lost.
   void showRequestedLog();
 }

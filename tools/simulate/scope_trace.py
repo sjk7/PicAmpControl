@@ -196,6 +196,10 @@ def failure_lcd_state(samples):
                     if sample[2].get("g_fault_latched") == "true"), None)
     if latched is not None:
         return latched[2], f"first latched sample (t={latched[0] * SECONDS_PER_INSTRUCTION * 1000:.1f} ms)"
+    flagged = next((sample for sample in samples
+                    if sample[2].get("g_selftest_failed") == "true"), None)
+    if flagged is not None:
+        return flagged[2], f"first self-test flagged sample (t={flagged[0] * SECONDS_PER_INSTRUCTION * 1000:.1f} ms)"
     return samples[-1][2], "last sample of the failed window (no fault latched)"
 
 
@@ -236,10 +240,10 @@ def lcd_screen(state: dict) -> tuple:
         evidence = "TRIP LATCHED" if name in ("HARDWARE", "DRAIN", "UNKNOWN") else "[value]/[limit]"
         return (name, evidence)
     if state.get("g_unkeyable") == "true" or state.get("g_selftest_failed") == "true":
-        # STATE: UNDEFINED plus the firmware's OWN self-test reason (main.c, the g_unkeyable branch).
-        # The mask is named - '+'-joined when more than one check failed, never printed raw, never
-        # blank - by the same function the firmware's panel text is mirrored from.
-        return ("STATE: UNDEFINED", harness.selftest_reason_text(state.get("g_selftest_reason")))
+        # FAULT: plus the firmware's OWN self-test reason (main.c, the g_unkeyable branch). The mask
+        # is named - '+'-joined when more than one check failed, never printed raw, never blank - by
+        # the same function the firmware's panel text is mirrored from.
+        return ("FAULT:", harness.selftest_reason_text(state.get("g_selftest_reason")))
     if state.get("g_ptt_complete_display_active") == "true":
         return ("PTT COMPLETE", f"TX {stage_word}")
     if state.get("g_ptt_active") == "true":
@@ -432,9 +436,9 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
         # note sits inside the dark bezel, where its dark-grey text is unreadable. It carries the
         # fault CODE as well as the screen, because "which fault" is the question the panel is
         # asked (user instruction, 2026-09-25).
-        lcd_panel(panel_ax, 0.2, 0.85, "LCD AT FAILURE" + (" (no firmware fault latched)"
-                                                            if lcd_state.get("g_fault_latched") != "true"
-                                                            else ""),
+        lcd_panel(panel_ax, 0.2, 0.85, "LCD AT FAILURE" + ("" if lcd_state.get("g_fault_latched") == "true"
+                                                            else " (self-test flagged)" if lcd_state.get("g_selftest_failed") == "true"
+                                                            else " (no firmware fault latched)"),
                   line1, line2, "", "#b71c1c")
         caption = lcd_caption or "last sample of the failed window"
         if lcd_state.get("g_fault_latched") == "true":

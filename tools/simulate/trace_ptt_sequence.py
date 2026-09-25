@@ -89,6 +89,7 @@ SELFTEST_REASON_NAMES = [
     (0x20, "TX_SENSE"),
     (0x40, "STALLED"),
     (0x80, "NO_BAND"),
+    (0x100, "REL_STUCK"),
 ]
 # The panel is 16 columns wide, and the firmware's tx_selftest_reason_text() is written against that.
 SELFTEST_PANEL_COLUMNS = 16
@@ -382,7 +383,7 @@ def build_script(trip_name=None) -> str:
         FREQ_CTR, FREQ_CTR_FAIL - they drive no bridge stimulus and read no ADC value).
         """
         if adc is None:
-            adc = trip_name not in (None, "FREQ_CTR", "FREQ_CTR_FAIL")
+            adc = trip_name not in (None, "FREQ_CTR", "FREQ_CTR_FAIL") and trip_name not in SELFTEST_SCENARIOS
         for pin in PINS:
             lines.append(f"print pin {pin}")
         if release:
@@ -555,6 +556,58 @@ def build_script(trip_name=None) -> str:
             sample()
         lines.append("write pin RC0 5v")
         for _ in range(5):
+            lines.append(stepi(10))
+            sample()
+        lines.append("quit")
+        return "\n".join(lines)
+
+    if trip_name in SELFTEST_SCENARIOS:
+        # The UNHAPPY paths: establish a valid 40m measurement, key on it, then force the failure
+        # the scenario is named after. The firmware's own self-test must flag it, open the RF path
+        # and name it on the panel (asserted in validate_selftest). The prelude is skipped - the
+        # "PTT ignored during startup" check belongs to the base scenario only.
+        for _ in range(5):
+            lines.append(stepi(210))
+            sample()
+        band_preflight()      # 40m (7000 kHz) classified, relay on 40m
+
+        # Inject once per simulated millisecond INSIDE each 5 ms step (the hold_band pattern): the
+        # firmware zeroes TMR1 on every 10 ms gate, so a count has to be back in the register within
+        # a millisecond of every gate for the keyed window to see it (the 80m lock fix, 2026-09-25).
+        def hold(freq_khz, chunks):
+            for _ in range(chunks):
+                for _repeat in range(INJECTIONS_PER_CHUNK):
+                    write_tmr1_count(freq_khz)
+                    lines.append(stepi(1))
+                sample()
+
+        lines.append("# Key on 40m and let the engage reach BIAS-ON and lock")
+        lines.append("write pin RC0 0v")
+        hold(7000, 60)        # 300 ms
+
+        if trip_name == "SELFTEST_BAD_BAND":
+            # The counter degrades while keyed: pulses keep arriving but the frequency falls below
+            # the classifier's 1000 kHz floor (500 kHz here). raw>0 and freq<1000 -> BAD_BAND.
+            hold(500, 80)     # 400 ms out-of-spec while keyed
+        elif trip_name == "SELFTEST_TX_SENSE":
+            # A T/R driver that never came up: the model reads an output pin from its LAT, so make
+            # RC5 an input first (TRISC bit 5 set; the rest of the port untouched) and drive it high.
+            # SENSE_TX then reads not-asserted while the firmware holds it asserted -> TX_SENSE.
+            lines.append("write TRISC 0x25")
+            lines.append("write pin RC5 5v")
+            hold(7000, 80)    # 400 ms
+        else:  # SELFTEST_REL_STUCK
+            # A bias driver that sticks asserted after unkey: make RC7 an input (TRISC bit 7 set) and
+            # hold it low, then release. The firmware commands the bias off, but the pin stays
+            # asserted -> the idle output check raises REL_STUCK.
+            lines.append("write TRISC 0x85")
+            lines.append("write pin RC7 0v")
+            lines.append("write pin RC0 5v")
+            for _ in range(80):
+                lines.append(stepi(5))
+                sample()
+        lines.append("write pin RC0 5v")
+        for _ in range(10):
             lines.append(stepi(10))
             sample()
         lines.append("quit")
@@ -1058,6 +1111,64 @@ def validate_freq_ctr(samples, scenario_name="FREQ_CTR") -> None:
           "verified its lock or was flagged by the firmware's own self-test with a named reason")
 
 
+def validate_selftest(samples, scenario, expected_names) -> None:
+    """An UNHAPPY PATH: the firmware must protect the LDMOS and say why on the panel.
+
+    Three properties, and each is exactly what the operator asked to have tested (2026-09-25: *"we
+    need to make sure all scenarios protect the LDMOS"*):
+
+    1. The firmware's own self-test FLAGS the undefined/unkeyable state, and the reason mask carries
+       the names this scenario is driving it into (read from the firmware, never invented).
+    2. The LCD panel at that moment reads `STATE: UNDEFINED` plus those names - a fault condition
+       always displays, and the reason is never blank.
+    3. The RF path opens and the LDMOS is de-biased the instant the flag lands: within the aftermath
+       samples RELAYS, TX_VCC and TX_BIAS are all inactive and the sequence has left BIAS-ON.
+    """
+    flagged = [s for s in samples if s[2].get("g_selftest_failed") == "true"]
+    if not flagged:
+        raise AssertionError(
+            f"{scenario}: the firmware's self-test never flagged the undefined/unkeyable state")
+    first = flagged[0]
+    text = selftest_reason_text(first[2].get("g_selftest_reason"))
+    missing = [name for name in expected_names if name not in text]
+    if missing:
+        raise AssertionError(
+            f"{scenario}: panel reason {text!r} is missing {missing}; expected {expected_names}")
+    lcd = scope_trace.lcd_screen(first[2])
+    if lcd[0] != "FAULT:":
+        raise AssertionError(f"{scenario}: LCD line 0 is {lcd[0]!r}, not 'FAULT:'")
+    if lcd[1] != text:
+        raise AssertionError(f"{scenario}: LCD line 1 {lcd[1]!r} != panel reason {text!r}")
+    index = samples.index(first)
+    aftermath = samples[index:index + 4]
+    # The T/R relay (RC5) and TX_VCC (RC6) must always open. The bias (RC7) must too, EXCEPT in
+    # REL_STUCK, where the stuck bias IS the fault being proven - the firmware cannot open a pin a
+    # dead driver is holding asserted, and the protection is opening the RF path and latching.
+    must_open = ["RC5", "RC6"] if scenario == "SELFTEST_REL_STUCK" else ["RC5", "RC6", "RC7"]
+    protected = [s for s in aftermath
+                 if all(s[1].get(p) == 1 for p in must_open)
+                 and s[2].get("g_sequence_stage") != "3"]
+    if not protected:
+        outputs = [(s[1].get("RC5"), s[1].get("RC6"), s[1].get("RC7")) for s in aftermath]
+        raise AssertionError(
+            f"{scenario}: the self-test flagged {text!r} but the TX path did not open - the LDMOS "
+            f"was not protected (aftermath outputs {outputs})")
+    print(f"{scenario}: firmware flagged {text!r}, panel 'FAULT:' / {text}, "
+          f"TX path open within {len(aftermath)} samples")
+
+
+# One unhappy-path scenario per self-test reason the model can actually drive the firmware into.
+# Deliberately NOT here: a band that changes under the amplifier (BAND_CHG) - a rig cannot QSY in
+# 200 ms, so a test that injects an instantaneous band swap is testing the model's pacing, not a
+# real hazard (user instruction, 2026-09-25). NO_RF / NO_BAND / NO_LOCK are already covered by
+# FREQ_CTR_FAIL.
+SELFTEST_SCENARIOS = {
+    "SELFTEST_BAD_BAND": ["BAD_BAND"],
+    "SELFTEST_TX_SENSE": ["TX_SENSE"],
+    "SELFTEST_REL_STUCK": ["REL_STUCK"],
+}
+
+
 def validate_freq_ctr_failure(samples) -> None:
     """No decodable band must not key the amplifier (first-dit bypass snoop).
 
@@ -1312,6 +1423,16 @@ SCENARIO_CHECKS = {
     "FREQ_CTR_FAIL": ("With no RF at all: PTT must latch but the amplifier must stay in bypass - it "
                       "must never key on the classifier's no-signal default, and this negative test "
                       "must not be 'fixed' into a passing trip."),
+    "SELFTEST_BAD_BAND": ("The counter going out-of-spec while keyed (raw pulses present but the "
+                          "frequency outside the classifier's 1000-32000 kHz floor) must make the "
+                          "firmware declare the undefined/unkeyable state, open the RF path and show "
+                          "STATE: UNDEFINED / BAD_BAND on the panel."),
+    "SELFTEST_TX_SENSE": ("A TX output that does not reach the level its stage commands (a stuck "
+                          "driver) must make the firmware declare the undefined/unkeyable state, open "
+                          "the RF path and show STATE: UNDEFINED / TX_SENSE on the panel."),
+    "SELFTEST_REL_STUCK": ("An unkey whose bias output stays asserted (a stuck driver) must make the "
+                           "firmware declare the undefined/unkeyable state, keep the RF path open and "
+                           "show STATE: UNDEFINED / REL_STUCK on the panel."),
 }
 
 
@@ -1396,6 +1517,9 @@ def validate_scenario(scenario, samples) -> None:
         return
     if scenario == "FREQ_CTR_FAIL":
         validate_freq_ctr_failure(samples)
+        return
+    if scenario in SELFTEST_SCENARIOS:
+        validate_selftest(samples, scenario, SELFTEST_SCENARIOS[scenario])
         return
     validate_frequency_ready(samples, scenario)
     if scenario == "SWR1_1P5":
@@ -1786,7 +1910,8 @@ def main():
     if "--suite" in sys.argv[1:]:
         scenario_names = [None, "TEMPERATURE", "SWR1", "SWR2", "HWFAULT",
                           "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5", "FREQ_CTR",
-                          "FREQ_CTR_FAIL"]
+                          "FREQ_CTR_FAIL", "SELFTEST_BAD_BAND", "SELFTEST_TX_SENSE",
+                          "SELFTEST_REL_STUCK"]
         if "--quick-bands" in sys.argv[1:]:
             scenario_names = [None, "FREQ_CTR", "FREQ_CTR_FAIL"]
         # Debugging shortcut: run ONLY the named scenarios, in the written order, through exactly
@@ -1878,6 +2003,13 @@ def main():
         # switched before the T/R relay closes (never hot-switch the band relay).
         for scenario, (_, scenario_samples) in zip(scenario_names, groups):
             label = _scenario_label(scenario)
+            if scenario == "SELFTEST_REL_STUCK":
+                # This scenario deliberately holds a TX pin asserted to simulate a stuck driver, so
+                # the pin-level "keyed" proxy the band invariants use reads keyed long after the
+                # firmware has unkeyed (the stuck bias IS the fault). The band-switching safety is
+                # proven by the base/FREQ_CTR scenarios; the fault handling is asserted by
+                # validate_selftest. The band invariants are meaningless over a deliberately-stuck pin.
+                continue
             for line in invariants.validate_keyed_band_invariants(scenario_samples, label):
                 print(line)
             for line in invariants.validate_band_changes_are_cold(scenario_samples, label):
