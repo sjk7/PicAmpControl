@@ -63,7 +63,8 @@ def write_graph(samples, path: Path) -> bool:
 
     times = [s[0] * t.SECONDS_PER_INSTRUCTION * 1000 for s in samples]
     rows = [
-        ("PTT (RC0 low = keyed)", [1 if s[1]["RC0"] == 0 else 0 for s in samples]),
+        # Raw pin level: PTT is ACTIVE LOW, so the trace DROPS to 0 at key-down.
+        ("RC0 / PTT (active low: 0 = keyed)", [int(s[1]["RC0"]) for s in samples]),
         ("band relay (RD2..RD7 -> 1..6)", [selected_pin(s) for s in samples]),
         ("current_band", [int(s[2].get("g_fc_status.current_band") or 0) for s in samples]),
         ("frequency_khz", [int(s[2].get("g_fc_status.frequency_khz") or 0) for s in samples]),
