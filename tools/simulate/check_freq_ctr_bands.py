@@ -1,23 +1,19 @@
 #!/usr/bin/env python3
-"""Minimal repro: the FREQ_CTR keyed phase must show a NON-ZERO frequency reading.
+"""Band-slice CHECK for the FREQ_CTR scenario: one scenario, one band, in isolation.
 
-Fails exactly like the merged suite does on Windows:
+It is a CHECK, not a repro, and the evidence is why: it PASSES whether or not the suite does. The
+suite's 80m failure needs the whole session's pacing (the classifier reads a hard 0 while keyed and
+locked under the suite's tick/injection phase, and 68 of 93 UNKEYED samples of the same band read the
+injected 3600 kHz), so a scenario that fails in the suite need not fail here - reported as
+*"This looks like your repro fails to see the bug. It's not a repro then, is it?"*, which was right.
+**The repro for a suite failure is `run_suite_with_watchdog.py --test suite --only <scenario>`**,
+which runs that scenario through the suite's own code path.
 
-    AssertionError: 80m TX injection lock not exercised: the counter reported no non-zero
-    frequency while the band was locked and keyed, so the injected 1800 kHz signal was never
-    measured against the lock
-
-The suite reaches FREQ_CTR only after nine other scenarios, which makes it a bad debugging
-instrument. This harness builds and runs ONLY the FREQ_CTR scenario (`build_script(trip_name=
-"FREQ_CTR")`) - the same code path, the same validations - and restricts the band list so one band
-can be isolated.
-
-    python tools/simulate/run_suite_with_watchdog.py --test repro-freq-ctr --log <log>
+    python tools/simulate/run_suite_with_watchdog.py --test check-freq-ctr --log <log>
 
 `PICAMP_BANDS` chooses the bands to exercise (default `80m`, the band that failed); `--no-stop-bracket`
-drops the T1CON stop/start around the Timer1 injection, which is the harness's own suspect for the
-zero readings - the model charges simulated time per MDB command, so a stopped counter is read as
-zero by the firmware's next gate.
+drops the T1CON stop/start around the Timer1 injection, which was tried as the cause of the zero
+readings and RULED OUT (51 of 100 keyed+locked samples non-zero either way, in the suite too).
 """
 import argparse
 import os
