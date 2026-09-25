@@ -36,6 +36,8 @@ FIRST_DIT = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/test_first_di
 REPRO_20M = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/repro_first_dit_20m.py")]
 REPRO_RELEASE = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/repro_release_stage4.py")]
 REPRO_RELEASE_FINE = REPRO_RELEASE + ["--fine"]
+REPRO_SWR1_REARM = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/repro_swr1_rearm.py")]
+REPRO_FREQ_CTR = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/repro_freq_ctr_locked.py")]
 
 # Orphan signatures. The mdb entries have to match a leftover simulator without also
 # matching an unrelated `java.exe`, of which this machine has several (the MPLAB X IDE's
@@ -220,11 +222,14 @@ def main():
     parser.add_argument("--log", type=Path, default=DEFAULT_LOG)
     parser.add_argument("--test",
                         choices=("suite", "first-dit", "repro-20m", "repro-release",
-                                 "repro-release-fine"),
+                                 "repro-release-fine", "repro-swr1-rearm", "repro-freq-ctr"),
                         default="suite",
                         help="Which simulator test this watchdog wraps")
     parser.add_argument("--quick-bands", action="store_true",
                         help="Run one valid 40m band plus the frequency-failure scenario")
+    parser.add_argument("--only", default=None,
+                        help="Suite scenarios to run, comma-separated (debugging shortcut: "
+                             "`--only FREQ_CTR` runs just that scenario instead of all eleven)")
     parser.add_argument("--heartbeat", action="store_true",
                         help="Internal: run only the progress heartbeat (own process)")
     parser.add_argument("--label", default=None,
@@ -239,7 +244,13 @@ def main():
         heartbeat_loop(procutil.AppendLog(args.log), args.mdb_log, args.label or args.test,
                        args.timeout, args.started if args.started is not None else time.time())
         return 0
-    mdb_log = args.log.with_name("picampcontrol_mdb_progress.log")
+    # One MDB progress log PER RUN. Deriving it from the run log's own name matters: with a fixed
+    # name in the temp directory, any second run collided with the first on this file and died in
+    # `unlink` with `PermissionError: [WinError 32] ... used by another process` BEFORE it started
+    # (2026-09-25 - the suite was still live and a repro run could not launch at all, which reads
+    # as a broken launcher rather than as "a run is already going"). The heartbeat is handed the
+    # same path via --mdb-log, so the two stay in step.
+    mdb_log = args.log.with_name(args.log.name + ".mdb_progress.log")
     mdb_log.unlink(missing_ok=True)
 
     # A new run owns the log from line 1: start it fresh rather than appending to the previous
@@ -264,7 +275,11 @@ def main():
 
     if args.test == "suite":
         test_name = "PTT_SequencerAndTripSuite"
+        if args.only:
+            test_name = f"PTT_SequencerAndTripSuite[{'/'.join(args.only.split(','))}]"
         command = SUITE + (["--quick-bands"] if args.quick_bands else [])
+        if args.only:
+            command += ["--only", args.only]
     elif args.test == "repro-20m":
         test_name = "Repro_FirstDit_20m"
         command = REPRO_20M
@@ -274,6 +289,12 @@ def main():
     elif args.test == "repro-release-fine":
         test_name = "Repro_ReleaseStage4_Fine"
         command = REPRO_RELEASE_FINE
+    elif args.test == "repro-swr1-rearm":
+        test_name = "Repro_SWR1Rearm"
+        command = REPRO_SWR1_REARM
+    elif args.test == "repro-freq-ctr":
+        test_name = "Repro_FreqCtrLocked"
+        command = REPRO_FREQ_CTR
     else:
         test_name = "FirstDit_BandDetectionAndHotSwitchGuards"
         command = FIRST_DIT
@@ -292,9 +313,13 @@ def main():
     kill_previous(log)
     log.write(f"[{stamp()}] TEST_BEGIN name={test_name} timeout={args.timeout:.0f}s "
               f"command={' '.join(command)}")
-    # Open the progress log so the user can watch it - but WITHOUT raising VS Code over whatever
-    # they are typing in (open_in_editor uses `open -g` on macOS, no activation). Best-effort: a
-    # headless host has no editor and that must not fail the run.
+    # Name the watched file in the log itself. On Windows the launcher deliberately does NOT open a
+    # tab for it (that would move the operator's focus - see open_progress_log.open_in_editor), so
+    # the path has to be discoverable without asking the agent or reading a temp directory listing.
+    log.write(f"[{stamp()}] LOG_TO_WATCH {args.log}")
+    # Open the progress log so the user can watch it - but WITHOUT moving their focus (macOS uses
+    # `open -g`; on Windows nothing is opened, see open_in_editor). Best-effort: a headless host has
+    # no editor and that must not fail the run.
     if os.environ.get("PICAMP_NO_EDITOR_OPEN") != "1":
         open_progress_log.open_in_editor([args.log], quiet=True)
     _, child_log = log.open_for_child()

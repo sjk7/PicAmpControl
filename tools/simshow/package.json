@@ -1,0 +1,26 @@
+{
+  "name": "picampcontrol-simshow",
+  "displayName": "PicAmpControl Show Log (never takes focus)",
+  "description": "Shows a log file in a NON-active editor group when a request file appears, so a running simulator test can put its log in front of the operator without moving their focus or typing.",
+  "version": "1.0.0",
+  "publisher": "picampcontrol",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "picampcontrol.showLog",
+        "title": "PicAmpControl: show the requested log without taking focus"
+      }
+    ]
+  }
+}

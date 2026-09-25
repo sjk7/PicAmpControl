@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
-"""Open a log in the running VS Code so a human can watch a long run.
+"""Show a log in the running VS Code so a human can watch a long run - without ever touching
+that human's focus, active tab or window.
 
 User instruction (2026-09-22, restated after it was missed twice): **a log the user is
 expected to watch must be open in their editor for the whole operation.** Writing a useful
-progress file is not enough - a file nobody can see is the same as no log at all. The user
-had to say "I want to see logs during long ops in VS Code, Insiders or not. Always."
+progress file is not enough - a file nobody can see is the same as no log at all.
 
-Insiders is preferred but not assumed: resolve `code-insiders` first, then `code`, and do
-nothing quietly if neither exists - the failure mode this replaces was a silent no-op that
-looked like a fix.
+User instruction (2026-09-25, after a `code -r` put the log in the active tab and the operator's
+keystrokes went into it and wrecked a run): **show the tab, never give it focus.** The CLI cannot
+be asked for that, so on Windows the showing is done from INSIDE the editor by the small extension
+in `tools/simshow/` (installed with `tools/simshow/install.ps1`), which uses the API's
+`preserveFocus`. This module's job on Windows is therefore to drop the request file that extension
+watches; the extension opens the log in a NON-active editor group and restores the operator's
+document and group afterwards. On macOS `open -g` already does the right thing natively.
 
 Usage:
     python tools/simulate/open_progress_log.py <log-path> [more log paths...]
 """
+import json
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 CANDIDATES = ("code-insiders", "code")
@@ -23,6 +30,11 @@ WINDOWS_FALLBACKS = (
     r"%LOCALAPPDATA%\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd",
     r"%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code.cmd",
 )
+# Matches `tempfile.gettempdir()` here and `os.tmpdir()` in tools/simshow/extension.js, so the
+# extension and this module agree on the handshake file without either being told a path.
+REQUEST_FILE = Path(tempfile.gettempdir()) / "picampcontrol_show.request.json"
+RECEIPT_FILE = Path(tempfile.gettempdir()) / "picampcontrol_show.done.json"
+SHOW_EXTENSION = "picampcontrol-simshow"
 
 
 def resolve_cli() -> tuple:
@@ -31,7 +43,6 @@ def resolve_cli() -> tuple:
         found = shutil.which(name)
         if found:
             return found, name
-    import os
     for raw in WINDOWS_FALLBACKS:
         candidate = Path(os.path.expandvars(raw))
         if candidate.exists():
@@ -39,21 +50,59 @@ def resolve_cli() -> tuple:
     return None, "neither code-insiders nor code is on PATH"
 
 
-def open_in_editor(paths, quiet: bool = False) -> bool:
-    """Open every path in the running editor WITHOUT raising its window.
+def show_extension_installed() -> bool:
+    """True if `tools/simshow` has been installed for Insiders or stable on this machine."""
+    for folder in (".vscode-insiders", ".vscode"):
+        root = Path.home() / folder / "extensions"
+        try:
+            if any(child.name.startswith(SHOW_EXTENSION) for child in root.iterdir()):
+                return True
+        except OSError:
+            continue
+    return False
 
-    Focus must NOT move (user instruction, 2026-09-24): `code -r <file>` raises VS Code over
-    whatever the user is typing in, which is exactly the complaint. On macOS `open -g` adds the
-    file to the running VS Code in the background (no activation, no window raise); elsewhere
-    fall back to `code -r`, which on Windows does not steal foreground the same way.
+
+def request_show(paths, quiet: bool = False) -> bool:
+    """Ask the editor-side helper (tools/simshow) to show `paths`, focus untouched.
+
+    Signals the request through a file rather than the CLI: nothing outside the editor then asks
+    VS Code to raise a window or activate a tab, which is the only way to guarantee the operator's
+    typing stays where it was. The helper writes a receipt (`picampcontrol_show.done.json`) so a
+    caller - or a human - can confirm it acted.
+    """
+    targets = [str(Path(p)) for p in paths]
+    try:
+        REQUEST_FILE.write_text(json.dumps({"path": targets[-1], "paths": targets}),
+                                encoding="utf-8")
+    except OSError as exc:
+        if not quiet:
+            print(f"open_progress_log: could not write {REQUEST_FILE}: {exc}")
+        return False
+    if not show_extension_installed():
+        if not quiet:
+            print("open_progress_log: log shown only if the PicAmpControl show helper is installed "
+                  "- run tools/simshow/install.ps1, then reload the VS Code window once.\n  Watching: "
+                  + targets[-1])
+        return False
+    return True
+
+
+def open_in_editor(paths, quiet: bool = False) -> bool:
+    """Show a path in the running editor, without moving the operator's focus or active tab.
+
+    macOS: `open -g` hands the file to the running VS Code with no activation at all.
+    Windows: the request file is written and the in-editor helper does the showing with
+    `preserveFocus`; `code -r` is deliberately NOT used there, because it makes the log the ACTIVE
+    editor tab (the operator's keystrokes then land in the log - the bug this whole mechanism
+    exists to prevent) and un-minimises the window.
     """
     cli, how = resolve_cli()
-    if cli is None and sys.platform != "darwin":
-        if not quiet:
-            print(f"open_progress_log: {how}; open the log manually to watch the run")
-        return False
     targets = [str(Path(p)) for p in paths]
     if sys.platform == "darwin":
+        if cli is None:
+            if not quiet:
+                print(f"open_progress_log: {how}; open the log manually to watch the run")
+            return False
         app = ("Visual Studio Code - Insiders"
                if how and "insiders" in how else "Visual Studio Code")
         ok = True
@@ -68,16 +117,7 @@ def open_in_editor(paths, quiet: bool = False) -> bool:
         if ok and not quiet:
             print(f"open_progress_log: opened {len(targets)} log(s) in {app} (background)")
         return ok
-    try:
-        subprocess.run([cli, "-r", *targets], check=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=30)
-    except (OSError, subprocess.SubprocessError) as exc:
-        if not quiet:
-            print(f"open_progress_log: {how} failed: {exc}")
-        return False
-    if not quiet:
-        print(f"open_progress_log: opened {len(targets)} log(s) via {how}")
-    return True
+    return request_show(targets, quiet=quiet)
 
 
 def main() -> int:
@@ -85,7 +125,13 @@ def main() -> int:
         print(__doc__.strip().splitlines()[0])
         print("usage: open_progress_log.py <log-path> [more...]")
         return 2
-    return 0 if open_in_editor(sys.argv[1:]) else 1
+    ok = open_in_editor(sys.argv[1:])
+    if RECEIPT_FILE.exists():
+        try:
+            print(f"open_progress_log: helper receipt: {RECEIPT_FILE.read_text(encoding='utf-8')}")
+        except OSError:
+            pass
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
