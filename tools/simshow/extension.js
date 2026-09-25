@@ -55,10 +55,6 @@ function findOpenTab(uri) {
   return null;
 }
 
-// Files this window has already been offered. One notification per file per session: a new one for
-// every status update of every run would turn a helpful offer into noise.
-const offered = new Set();
-
 async function showRequestedLog() {
   let payload;
   try {
@@ -84,7 +80,21 @@ async function showRequestedLog() {
     // NON-MODAL notification whose buttons the operator clicks - their click, their choice, and the
     // notification itself never takes focus.
     if (findOpenTab(uri)) {
-      writeReceipt({ shown: payload.path, already_open: true, preserved: true });
+      // Already on screen, but the operator asked (2026-09-25) that a new run re-shows it: a plain
+      // text tab keeps its scroll position, so an already-open log LOOKS frozen even though the file
+      // is growing. Bring it to the front of its own group WITHOUT moving focus - that is what
+      // preserveFocus is for - and without creating a second editor (same doc, no duplicate).
+      try {
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc, {
+          viewColumn: findOpenTab(uri).group.viewColumn ?? vscode.ViewColumn.One,
+          preview: false,
+          preserveFocus: true,
+        });
+        writeReceipt({ shown: payload.path, already_open: true, preserved: true });
+      } catch (err) {
+        writeReceipt({ shown: payload.path, already_open: true, error: String(err) });
+      }
       return;
     }
     // OPEN IT, with `preserveFocus: true` - so the tab appears and keeps updating (the operator

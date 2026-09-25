@@ -445,6 +445,13 @@ def main():
     # `open -g`; on Windows nothing is opened, see open_in_editor). Best-effort: a headless host has
     # no editor and that must not fail the run.
     if os.environ.get("PICAMP_NO_EDITOR_OPEN") != "1":
+        # Reset the helper's state at the start of each run, so an already-open log is re-shown and
+        # re-followed rather than silently skipped because it happened to be on screen (2026-09-25:
+        # "Reset the user interaction disable when each run starts so it follows properly.").
+        try:
+            open_progress_log.RECEIPT_FILE.unlink(missing_ok=True)
+        except OSError:
+            pass
         open_progress_log.open_in_editor([args.log], quiet=True)
     _, child_log = log.open_for_child()
     env = os.environ.copy()
