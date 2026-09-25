@@ -725,7 +725,7 @@ def build_script(trip_name=None) -> str:
 # Stripping is display-only: these lines match no parser pattern, so removing them cannot
 # change a pin/variable reading. A chunk boundary could in principle split a token, which
 # would leave a harmless partial line - it can never corrupt a value the parser accepts.
-MDB_NOISE_TOKENS = ("W0106-SIM", "W9602-COMP")
+MDB_NOISE_TOKENS = ("W0106-SIM", "W9602-COMP", "W0223-ADC")
 
 
 def strip_mdb_noise(text: str) -> str:

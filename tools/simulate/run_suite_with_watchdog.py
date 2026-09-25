@@ -71,13 +71,17 @@ def stamp():
 # 2026-09-22: "I still do not see bytes (string) outputs since the last tick"). Skip them.
 MDB_NOISE_PREFIXES = ("MDB_OUTPUT", "MDB_OUTPUT_END", "MDB_START", "MDB_STDERR",
                       "MDB_TIMEOUT")
-# Benign simulator warnings that fire once per `program`/reset. They are not instrumentation and not
-# simulator output worth showing: the heartbeat reports "the most recent line of the simulator's OWN
-# output", and a per-reset warning is not that. The operator asked what one was (2026-09-25, having
-# seen the fragment `MDB e Source Peripheral not yet implemented to act as input to Comparator.` -
-# the tail of `W9602-COMP:DAC Voltage Source Peripheral not yet implemented to act as input to
-# Comparator.`, printed by every reset and matching neither the firmware nor anything it configures).
-MDB_NOISE_TOKENS = ("W0106-SIM", "W9602-COMP")
+# Benign simulator warnings that fire once per `program`/reset, or once per reading, and say nothing
+# about the firmware. They are not instrumentation and not simulator output worth showing: the
+# heartbeat reports "the most recent line of the simulator's OWN output", and a per-reset or per-pin
+# warning is not that.
+#   * `W0106-SIM` - no clock-source mux for TMR1/TMR3/TMR5.
+#   * `W9602-COMP` - the model cannot route the on-chip DAC into a comparator (nothing here uses it).
+#   * `W0223-ADC` - "ADC input voltage low. ADC output underflow". The harness deliberately drives
+#     SWR/current/overdrive pins to 0.0 V between phases, so this fires routinely and means "a pin is
+#     at 0 V", which is exactly what the test asked for (user instruction, 2026-09-25: *"If MDB W0223
+#     ... is not important, then do not show it in the watched log."*).
+MDB_NOISE_TOKENS = ("W0106-SIM", "W9602-COMP", "W0223-ADC")
 
 
 def _is_mdb_noise(line: str) -> bool:
