@@ -40,6 +40,26 @@ LABELS = {"RC0": "PTT (RC0, 0=keyed)", "RC1": "SETTLE (RC1)", "RC5": "RELAYS (RC
           "g_fc_status.frequency_khz": "freq (kHz)"}
 
 
+def stimulus_colours(stimulus):
+    """`{freq_khz: colour}` for the injected frequencies, in first-appearance order.
+
+    One colour per DISTINCT frequency, so a shaded span on the frequency lane says what the harness
+    was feeding the counter at that moment without any text over the waveform.
+    """
+    palette = ["#ef9a9a", "#90caf9", "#a5d6a7", "#ffe082", "#ce93d8", "#ffab91",
+               "#80cbc4", "#f48fb1", "#b0bec5", "#c5e1a5"]
+    colour_for = {}
+    for _start, _end, freq_khz in stimulus:
+        if freq_khz not in colour_for:
+            colour_for[freq_khz] = palette[len(colour_for) % len(palette)]
+    return colour_for
+
+
+def stimulus_key(stimulus):
+    """`[(freq_khz, colour)]` for the shaded spans, in first-appearance order."""
+    return list(stimulus_colours(stimulus).items())
+
+
 def draw_stimulus(ax, stimulus):
     """Show the injected frequency ON the frequency lane, as a light overlay with a key.
 
@@ -62,41 +82,15 @@ def draw_stimulus(ax, stimulus):
     if not stimulus:
         return False
     # Lazy, like the rest of this module: the harness must still run on a machine with no matplotlib.
-    from matplotlib.lines import Line2D
-    from matplotlib.patches import Patch
-
-    frequencies = []
-    for _start, _end, freq_khz in stimulus:
-        if freq_khz not in frequencies:
-            frequencies.append(freq_khz)
-    if len(frequencies) == 1:
-        freq_khz = frequencies[0]
-        ax.axhline(freq_khz, color="#b71c1c", linewidth=0.9, linestyle="--", alpha=0.45)
-        ax.text(0.004, 0.94,
-                f"stimulus: {freq_khz} kHz held throughout "
-                f"({len(stimulus)} injections across the whole recording)",
-                transform=ax.transAxes, fontsize=6.5, va="top", color="#b71c1c")
-        return True
-    palette = ["#ef9a9a", "#90caf9", "#a5d6a7", "#ffe082", "#ce93d8", "#ffab91",
-               "#80cbc4", "#f48fb1", "#b0bec5", "#c5e1a5"]
-    colour_for = {freq_khz: palette[index % len(palette)]
-                  for index, freq_khz in enumerate(frequencies)}
+    colour_for = stimulus_colours(stimulus)
+    frequencies = list(colour_for)
+    # SHADING is the annotation (user instruction, 2026-09-25: *"You are still not shading the freq
+    # khz trace with a color representing what freq was given to the counter -- your current
+    # annotation on that trace is useless and you can remove it."*). So: a light shaded span per
+    # constant-frequency stretch, a key drawn in the bottom band beside the LCD panel, and nothing
+    # drawn over the waveform itself - no step line, no in-lane text.
     for start_ms, end_ms, freq_khz in stimulus:
         ax.axvspan(start_ms, end_ms, color=colour_for[freq_khz], alpha=0.35, linewidth=0)
-    times, values = [], []
-    for start_ms, end_ms, freq_khz in stimulus:
-        times += [start_ms, end_ms]
-        values += [freq_khz, freq_khz]
-    ax.plot(times, values, color="#b71c1c", linewidth=0.8, linestyle="--", alpha=0.75)
-    handles = [Patch(facecolor=colour_for[freq_khz], alpha=0.45, label=f"{freq_khz} kHz")
-               for freq_khz in frequencies]
-    handles.append(Line2D([], [], color="#b71c1c", linestyle="--", linewidth=0.8,
-                          label="injected (stimulus)"))
-    # The key goes UNDER the lane, as asked: a key inside a busy lane covers the very waveform it is
-    # meant to explain.
-    ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.0, -0.28),
-              ncol=min(len(handles), 5), fontsize=6, framealpha=0.9, handlelength=1.4,
-              columnspacing=0.8, borderpad=0.4)
     return True
 
 
@@ -285,8 +279,13 @@ def render_scope(samples, title, path, events=(), check=None, observed=None, why
         return None
 
     prose = bool(check or observed or why or lcd_state is not None)
+    # The prose/key/panel band is reserved by arithmetic (a quarter of the figure), not by
+    # tight_layout(rect=...): with many lanes matplotlib cannot honour the rect and quietly lays the
+    # lanes OVER the text - which is exactly what the first attempt did (the block printed on top of
+    # the RD2-RD4 lanes).
+    band = 4.2 if prose else 0.0
     fig, axes = plt.subplots(len(chosen), 1, sharex=True,
-                             figsize=(12, max(4, 1.15 * len(chosen)) + (3.2 if prose else 0)))
+                             figsize=(12, max(4, 1.15 * len(chosen)) + band))
     axes = list(axes) if hasattr(axes, "__len__") else [axes]
     for ax, (key, values, analogue) in zip(axes, chosen):
         if analogue:
@@ -319,10 +318,12 @@ def render_scope(samples, title, path, events=(), check=None, observed=None, why
     axes[-1].set_xlim(times[0], times[-1])
 
     if prose:
-        fig.tight_layout(rect=(0, 0.34, 1, 0.98))
-        _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption)
+        band_fraction = band / fig.get_size_inches()[1]
+        fig.subplots_adjust(left=0.16, right=0.98, top=0.94, bottom=band_fraction, hspace=0.25)
+        _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption,
+                            stimulus_key(stimulus))
     else:
-        fig.tight_layout(rect=(0, 0, 1, 0.98))
+        fig.subplots_adjust(left=0.16, right=0.98, top=0.94, bottom=0.06, hspace=0.25)
     fig.suptitle(title, fontsize=10)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -332,7 +333,29 @@ def render_scope(samples, title, path, events=(), check=None, observed=None, why
     return path
 
 
-def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=None):
+def failure_prose(check, observed, why):
+    """The failure-prose block as ONE string, for the log as well as the graph.
+
+    The block on the trace is the thing a reader wants to quote, and a PNG cannot be copied into a
+    report (user instruction, 2026-09-25: *"The text at the bottom of the scope trace is excellent.
+    However, I cannot copy-paste it. So, when the test has exited, put this text in the log (at the
+    end) as well."*). Same words, so the log and the picture can never disagree.
+    """
+    import textwrap
+
+    blocks = []
+    if check:
+        blocks.append("WHAT THIS TEST IS FOR\n" + "\n".join(textwrap.wrap(str(check), 100)))
+    if observed:
+        blocks.append("WHAT THE FIRMWARE ACTUALLY DID\n"
+                      + "\n".join(textwrap.wrap(str(observed), 100)))
+    if why:
+        blocks.append("WHY THAT IS A FAILURE\n" + "\n".join(textwrap.wrap(str(why), 100)))
+    return "\n\n".join(blocks)
+
+
+def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=None,
+                        key_pairs=()):
     """The prose + the reconstructed 16x2 panel, in the band reserved under the lanes.
 
     The prose is ONE text object with the headings inline: drawing each wrapped line separately
@@ -352,7 +375,7 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
         body += ["WHY THAT IS A FAILURE",
                  *textwrap.wrap(str(why), 104)]
     if body:
-        note_ax = fig.add_axes([0.30, 0.02, 0.68, 0.30])
+        note_ax = fig.add_axes([0.30, 0.03, 0.66, 0.22])
         note_ax.axis("off")
         note_ax.text(0.0, 1.0, "\n".join(body), fontsize=8, color="#263238", va="top",
                      linespacing=1.5, transform=note_ax.transAxes)
@@ -366,6 +389,23 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
         width_fraction = 0.24
         height_fraction = ((width_fraction * fig_width) / (7.6 / 3.1)) / fig_height
         panel_ax = fig.add_axes([0.03, 0.04, width_fraction, height_fraction])
+        if key_pairs:
+            # The shading key, drawn as swatches in the same band as the panel: the frequency lane is
+            # shaded to show what was injected, so the colour has to be decodable somewhere, and
+            # under the lane is where the lanes are - it would cover the next waveform.
+            key_ax = fig.add_axes([0.03 + width_fraction + 0.02, 0.04,
+                                   0.22, max(height_fraction, 0.05)])
+            key_ax.set_xlim(0, 1)
+            key_ax.set_ylim(0, max(1, len(key_pairs)))
+            key_ax.axis("off")
+            key_ax.text(0.0, len(key_pairs), "injected (shaded):", fontsize=6.5,
+                        va="bottom", color="#455a64")
+            for index, (freq_khz, colour) in enumerate(key_pairs):
+                row = len(key_pairs) - 1 - index
+                key_ax.add_patch(plt.Rectangle((0.0, row + 0.15), 0.18, 0.7,
+                                               facecolor=colour, alpha=0.45, linewidth=0))
+                key_ax.text(0.24, row + 0.5, f"{freq_khz} kHz", fontsize=6.5, va="center",
+                            color="#263238")
         # Same coordinate space the LCD diagram module draws in, so the panel is the same object the
         # operator sees on the bench rather than a second, different-looking drawing of it.
         panel_ax.set_xlim(0, 7.6)
@@ -399,12 +439,30 @@ def show(path):
 
 def on_failure(samples, name, graph_dir, title, events=(), check=None, observed=None, why=None,
                lcd_state=None, stimulus=(), lcd_caption=None):
-    """Render and show the scope trace for a failure; the caller re-raises its own error."""
+    """Render the scope trace, echo its prose into the log, and return the path.
+
+    The prose is PRINTED as well as drawn: the harness's stdout is what the watchdog appends to the
+    run log, so a failed run ends with a copy-pasteable explanation instead of a picture that cannot
+    be quoted.
+    """
     if lcd_state is None:
         lcd_state, instant = failure_lcd_state(samples)
         lcd_caption = lcd_caption or instant
+    prose = failure_prose(check, observed, why)
+    if prose:
+        print("\n===== FAILURE SUMMARY (" + title + ") =====")
+        print(prose)
+        if lcd_state is not None:
+            line1, line2 = lcd_screen(lcd_state)
+            print("LCD AT FAILURE (reconstructed): " + repr(line1) + " / " + repr(line2))
+            if lcd_state.get("g_fault_latched") == "true":
+                print("g_trip_reason = " + trip_reason_detail(lcd_state.get("g_trip_reason")))
+            print("(" + (lcd_caption or "") + ")")
+        print("===== END FAILURE SUMMARY =====\n")
     path = render_scope(samples, title, Path(graph_dir) / f"{name}_scope.png", events=events,
                         check=check, observed=observed, why=why, lcd_state=lcd_state,
                         stimulus=stimulus, lcd_caption=lcd_caption)
+    if path is not None:
+        print(f"Scope trace: {path}")
     show(path)
     return path

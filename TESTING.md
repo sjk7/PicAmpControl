@@ -343,10 +343,19 @@ reproduces that scenario, then re-run the suite once as the verdict:
 
 | Repro | Command | What it isolates |
 |---|---|---|
-| SWR1 trip re-arm | `run_suite_with_watchdog.py --test repro-swr1-rearm` | the trip latch clearing and TX re-entering stage 3 after a PTT re-arm |
-| FREQ_CTR keyed reading | `run_suite_with_watchdog.py --test repro-freq-ctr` | the classifier's non-zero reading while a band is locked and keyed (`PICAMP_BANDS`, default `80m`) |
+| One suite scenario | `run_suite_with_watchdog.py --test suite --only FREQ_CTR` (or `--only base,SWR1`) | that scenario alone, through the suite's own code path (~40-80 s instead of ~350 s). **This is the repro for a suite failure** - a scenario that fails in the suite does not have to fail in isolation. |
+| SWR1 trip re-arm | `run_suite_with_watchdog.py --test repro-swr1-rearm` | the trip latch clearing and TX re-entering stage 3 after a PTT re-arm; `PICAMP_RELEASE_MS` sets the release window |
+| FREQ_CTR band slice | `run_suite_with_watchdog.py --test check-freq-ctr` | the classifier and band lock for one band (`PICAMP_BANDS`, default `80m`). A **check**, not a repro: it passes whether or not the suite fails. |
 | first-dit 20 m | `run_suite_with_watchdog.py --test repro-20m` | the Timer1 injection byte order for a 20 m count |
 | release stage 4 | `run_suite_with_watchdog.py --test repro-release` | the 5 ms `SEQ_RELEASE_RELAYS` window at 1 ms sampling |
+
+A failed run ends its log with a copy-pasteable `===== FAILURE SUMMARY =====` block - what the
+scenario was testing for, what the firmware actually did (counts read out of the samples), the
+assertion, and the reconstructed LCD panel plus the fault code. It is the same text drawn at the
+bottom of the scenario's `_scope.png`; the log carries it because a PNG cannot be quoted into a
+report. Files are opened in the editor only when `PICAMP_SHOW_FILES=1` is set: automatic opening
+could not be made focus-safe, and interrupting the operator's typing is worse than a path they can
+open themselves.
 
 ## Generated artifacts
 

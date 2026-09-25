@@ -88,14 +88,24 @@ def request_show(paths, quiet: bool = False) -> bool:
 
 
 def open_in_editor(paths, quiet: bool = False) -> bool:
-    """Show a path in the running editor, without moving the operator's focus or active tab.
+    """Show a path in the running editor - ONLY when explicitly asked to (PICAMP_SHOW_FILES=1).
 
-    macOS: `open -g` hands the file to the running VS Code with no activation at all.
-    Windows: the request file is written and the in-editor helper does the showing with
-    `preserveFocus`; `code -r` is deliberately NOT used there, because it makes the log the ACTIVE
-    editor tab (the operator's keystrokes then land in the log - the bug this whole mechanism
-    exists to prevent) and un-minimises the window.
+    **Nothing is opened by default** (user instruction, 2026-09-25: *"focus just got set to the log
+    tab -- AGAIN!!! You really need to straighten that out!"*). Every mechanism tried - `code -r`,
+    restoring the window focus afterwards, an in-editor helper using `preserveFocus`, reusing an
+    existing group - still ended with the operator's focus or active tab moving, and a run that
+    interrupts typing is worse than a run whose log they open themselves. So the default is: print
+    the path, open nothing; the harness writes the failure text INTO the run log, which is the file
+    the operator already has open.
+
+    Set `PICAMP_SHOW_FILES=1` to opt in to the tab-opening (macOS `open -g`, Windows via the
+    `tools/simshow` helper, which opens in an existing non-active group only and never splits).
     """
+    if os.environ.get("PICAMP_SHOW_FILES") != "1":
+        if not quiet:
+            print("open_progress_log: not opening (set PICAMP_SHOW_FILES=1 to opt in):\n  "
+                  + "\n  ".join(str(Path(p)) for p in paths))
+        return False
     cli, how = resolve_cli()
     targets = [str(Path(p)) for p in paths]
     if sys.platform == "darwin":

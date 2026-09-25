@@ -37,7 +37,7 @@ REPRO_20M = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/repro_first_d
 REPRO_RELEASE = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/repro_release_stage4.py")]
 REPRO_RELEASE_FINE = REPRO_RELEASE + ["--fine"]
 REPRO_SWR1_REARM = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/repro_swr1_rearm.py")]
-REPRO_FREQ_CTR = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/repro_freq_ctr_locked.py")]
+REPRO_FREQ_CTR = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/check_freq_ctr_bands.py")]
 
 # Orphan signatures. The mdb entries have to match a leftover simulator without also
 # matching an unrelated `java.exe`, of which this machine has several (the MPLAB X IDE's
@@ -222,7 +222,7 @@ def main():
     parser.add_argument("--log", type=Path, default=DEFAULT_LOG)
     parser.add_argument("--test",
                         choices=("suite", "first-dit", "repro-20m", "repro-release",
-                                 "repro-release-fine", "repro-swr1-rearm", "repro-freq-ctr"),
+                                 "repro-release-fine", "repro-swr1-rearm", "check-freq-ctr"),
                         default="suite",
                         help="Which simulator test this watchdog wraps")
     parser.add_argument("--quick-bands", action="store_true",
@@ -292,8 +292,11 @@ def main():
     elif args.test == "repro-swr1-rearm":
         test_name = "Repro_SWR1Rearm"
         command = REPRO_SWR1_REARM
-    elif args.test == "repro-freq-ctr":
-        test_name = "Repro_FreqCtrLocked"
+    elif args.test == "check-freq-ctr":
+        # A band-slice CHECK, not a repro: it drives one FREQ_CTR scenario in isolation and passes
+        # whether or not the suite fails, so it can never be the verdict (the suite's failure needs
+        # the full session's pacing). The repro for that scenario is `--test suite --only FREQ_CTR`.
+        test_name = "Check_FreqCtrBands"
         command = REPRO_FREQ_CTR
     else:
         test_name = "FirstDit_BandDetectionAndHotSwitchGuards"
