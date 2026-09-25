@@ -69,6 +69,13 @@ only read-out there is (user, 2026-09-25).
 
 Mask 0, and any bit the table does not know, names as `UNKNOWN` - never blank.
 
+**The LCD names both while the harness is absent** (user, 2026-09-25: *"if we get an unexpected
+sequence error, the LCD displays actually what went wrong in the sequence"*): the stage is shown as
+`TX <STAGE-NAME>` while keyed and on the PTT COMPLETE screen, the STATUS page shows `SEQ <STAGE-NAME>`
+whenever the sequence is not `SEQ_IDLE` (i.e. a release that never finished), and the trip screen
+always prints the fault name. So a stall and a trip are both readable off the panel with no harness
+attached, and a harness report should quote the same names.
+
 **Process traps re-hit the hard way on 2026-09-24 - read these before touching a run.**
 1. **The rule above was broken repeatedly and the terminal did wedge.** The damage is concrete: after
    one `grep` over a multi-megabyte MDB transcript, *every* later `run_in_terminal` call in that
