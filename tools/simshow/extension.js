@@ -59,6 +59,22 @@ function nonActiveColumn(activeColumn) {
 
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"];
 
+// Any tab that already shows `uri`, anywhere. Re-opening a file that is already on screen is how the
+// operator ended up with two follows of the same log side by side in a split editor, which is not
+// wanted (user instruction, 2026-09-25: *"I ended up with TWO log follows then, in split screen. I
+// don't want this."*).
+function findOpenTab(uri) {
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) {
+      const input = tab.input;
+      if (input && input.uri && input.uri.toString() === uri.toString()) {
+        return { group, tab };
+      }
+    }
+  }
+  return null;
+}
+
 async function showRequestedLog() {
   let payload;
   try {
@@ -77,9 +93,23 @@ async function showRequestedLog() {
   const before = activeGroupSnapshot();
   const uri = vscode.Uri.file(payload.path);
   try {
-    let column = nonActiveColumn(before.group);
+    const existing = findOpenTab(uri);
+    if (existing) {
+      // Already on screen. Revealing it would either move the focus or make it the ACTIVE tab, and
+      // opening it again produces the duplicate split view the operator rejected - so nothing is
+      // done, which is exactly right: the file is already in front of them.
+      writeReceipt({ shown: payload.path, already_open: true,
+                     group: String(existing.group.viewColumn), preserved: true });
+      return;
+    }
+    const column = nonActiveColumn(before.group);
     if (column === undefined) {
-      column = vscode.ViewColumn.Beside;
+      // ONE editor group, and the file is not open. There is nowhere to put it that is not the
+      // operator's own tab, and creating a group for it SPLITS their editor - which is the thing to
+      // avoid. So nothing is opened; the receipt says so, and the run log carries the path.
+      writeReceipt({ shown: payload.path, opened: false, preserved: true,
+                     reason: "only one editor group; not splitting the editor" });
+      return;
     }
     if (IMAGE_EXTENSIONS.some((ext) => payload.path.toLowerCase().endsWith(ext))) {
       // An IMAGE must go through the `vscode.open` command, not openTextDocument: the latter forces
