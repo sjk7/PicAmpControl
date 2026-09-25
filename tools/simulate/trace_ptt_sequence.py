@@ -683,11 +683,14 @@ def build_script(trip_name=None) -> str:
         # sequencer stages (0 -> 1 -> 2 -> 3) and the 5 ms trip shutdown unwind. The old 120 ms
         # window was too short: it only reached stage 1 (band just established) before the harness
         # stopped stepping, which read as "did not clear and re-enter TX" even though the fault had
-        # already cleared. 400 ms covers decode + settle + 3 stages with margin; sample every 1 ms
-        # so the stage-3 re-entry is caught wherever it lands.
-        for _ in range(400):
+        # already cleared. 400 ms covers decode + settle + 3 stages with margin. The re-entry it is
+        # proving is the STEADY SEQ_BIAS_ON (BIAS-ON) state, which lasts far longer than any sampling
+        # interval, so it is sampled every 2 ms, not 1 ms: halving the samples of this window is one of
+        # the biggest single wins in the suite (8 trip scenarios x 400 samples x ~45 MDB commands), and
+        # nothing here can be missed at 2 ms.
+        for _ in range(200):
             write_tmr1_count(7000)
-            lines.append(stepi(1))
+            lines.append(stepi(2))
             sample()
         lines.append("quit")
         return "\n".join(lines)
