@@ -130,7 +130,8 @@ static, hand-captured design input. The user's words and the full list of what w
   TMR1 reset. Injecting once per simulated millisecond INSIDE the step fixes it and `--only FREQ_CTR
   --bands 80m` now passes; the general trap and the method are in the build-test skill.
 - **A TX self-test is implemented (2026-09-25, IN FLIGHT - live position in
-  `docs/tx-self-test-plan.md`, design in `docs/tx-sequencer.md` §9)**: while keyed the firmware checks
+  `docs/tx-self-test-plan.md`, design in `docs/tx-sequencer.md` §9)**: while keyed, on the 10 ms
+  counter gate (never the 1 ms path - that starved the trip chain and broke SWR1), the firmware checks
   PTT, the running stage, that stage's outputs (via `SENSE_*`) and the measurement behind the band
   lock, ORs every check that has held for 200 ms into `g_selftest_reason` (bit flags, named together
   on the panel as `STATE: UNDEFINED` plus the reason), opens the RF path and requires a fresh decode;

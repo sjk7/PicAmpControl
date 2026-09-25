@@ -306,14 +306,21 @@ unsigned char tx_selftest_reason_text(unsigned char reason, char *buffer, unsign
    persist this long before the amplifier is folded back to bypass and re-engaged on the band
    actually being received. Confirm on the bench that this is short enough to be inaudible. */
 #define BAND_VERIFY_MS 20U
-/* How long a failing self-test check must HOLD before it is believed (tx_selftest_run(), evaluated
-   once per 1 ms update_tx_sequence() tick), and therefore the longest a keyed amplifier can carry a
-   condition it cannot vouch for. One window, one code path: the self-test and the
-   undefined/unkeyable action share it. Per-check consecutive counters (g_selftest_hold[]) do the
-   counting, so a single bad sample - a torn counter read, one empty gate window, one 1 ms tick with
-   the driver still slewing - can never flag, while a condition that is real is caught in 200 ms,
-   comfortably longer than a dit and far shorter than anything that could damage the LDMOS; confirm
-   on the bench. */
+/* The gate the self-test is evaluated on, in ms, and the amount its hold counters advance per
+   evaluation. It is the SAME 10 ms gate freq_counter_tick_10ms() samples TMR1 on, so a check can
+   never know more than the counter does, and the verdict costs one evaluation per gate instead of one
+   per millisecond. Measured 2026-09-25: running it every 1 ms lengthened every main-loop pass enough
+   to move the SWR1 scenario's trip window - the amplifier stayed keyed at BIAS-ON with the bridge
+   deliberately over-threshold and never tripped, and compiling the call out made the scenario pass
+   again. 1 ms was never needed: the counter it reads only changes every 10 ms. */
+#define TX_SELFTEST_TICK_MS 10U
+/* How long a failing self-test check must HOLD before it is believed, and therefore the longest a
+   keyed amplifier can carry a condition it cannot vouch for. One window, one code path: the self-test
+   and the undefined/unkeyable action share it. Per-check consecutive counters (g_selftest_hold[]) do
+   the counting in TX_SELFTEST_TICK_MS steps, so a single bad gate - a torn counter read, one empty
+   gate window, one gate with the driver still slewing - can never flag, while a condition that is real
+   is caught in 200 ms, comfortably longer than a dit and far shorter than anything that could damage
+   the LDMOS; confirm on the bench. */
 #define LOCK_LOSS_UNKEYABLE_MS 200U
 
 static volatile system_state_t g_state = STATE_STANDBY;
@@ -1561,19 +1568,19 @@ void update_current_peak(unsigned int current_a) {
 
 /* The keyed self-test: "is the firmware where the PTT and the sequencer say it should be?".
 
-   Runs once per 1 ms tick from update_tx_sequence() while PTT is down, and is the ONLY place that
-   decides the undefined/unkeyable state - one window, one code path, so a new check cannot invent a
-   second way to drop out of transmit.
+   Evaluated once per TX_SELFTEST_TICK_MS counter gate - the same place, and the same gate,
+   freq_counter_tick_10ms() samples TMR1 on - and it is the ONLY place that decides the
+   undefined/unkeyable state: one window, one code path, so a new check cannot invent a second way to
+   drop out of transmit.
 
    Deliberately NOT in an interrupt: freq_counter_tick_10ms() is where TMR1 is read and reset, so no
-   check can have better information than that 10 ms gate, and the action this leads to (bypass, band
-   unlock, a state change) is far too heavy for interrupt context.
+   check can know more than that gate, and the action it leads to (bypass, band unlock, a state change)
+   is far too heavy for interrupt context.
 
-   Returns true on the tick a check has held for LOCK_LOSS_UNKEYABLE_MS and the caller must act. A
-   passing check resets its own counter, so neither a single bad sample nor a single good one
-   decides anything, and the hold windows are restarted after an action so the same condition
-   cannot re-fire faster than the window itself. */
-bool tx_selftest_run(void) {
+   A passing check resets its own counter, so neither one bad gate nor one good one decides anything;
+   a check whose condition has held for LOCK_LOSS_UNKEYABLE_MS latches its bit, takes the action below,
+   and starts every window again, so the same condition cannot act faster than the window itself. */
+void tx_selftest_run(void) {
     freq_counter_status_t status;
     rf_band_t measured;
     unsigned char failing = TX_SELFTEST_OK;
@@ -1581,15 +1588,19 @@ bool tx_selftest_run(void) {
     unsigned int longest = 0;
     bool latched = false;
 
-    if (!g_ptt_active || g_sequence_stage > SEQ_BIAS_ON) {
-        /* Nothing is keyed (or the PTT-release ramp is unwinding), so there is nothing to verify and
-           no window may be carried into the next over. The REASON is deliberately left alone here:
-           it is held until the next key-down so the operator can still read it after unkeying. */
+    if (!g_ptt_active || g_sequence_stage > SEQ_BIAS_ON ||
+        g_startup_inhibit || g_comparator_reset_active || g_fault_latched) {
+        /* The sequencer is not in charge of a keyed transmission (not keyed, unwinding, inhibited, or
+           a trip is latched), so there is nothing to verify and no window may be carried into the
+           next over. A LATCHED TRIP is in this list on purpose: a tripped amplifier is not
+           transmitting, so its stage being forced idle is not a self-test failure. The REASON is
+           deliberately left alone here: it is held until the next key-down so the operator can still
+           read it after unkeying. */
         for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
             g_selftest_hold[index] = 0;
         }
         g_lock_loss_ms = 0;
-        return false;
+        return;
     }
 
     freq_counter_get_status(&status);
@@ -1642,7 +1653,10 @@ bool tx_selftest_run(void) {
         unsigned char bit = (unsigned char)(1u << index);
         if (failing & bit) {
             if (g_selftest_hold[index] < LOCK_LOSS_UNKEYABLE_MS) {
-                g_selftest_hold[index]++;
+                g_selftest_hold[index] += TX_SELFTEST_TICK_MS;
+                if (g_selftest_hold[index] > LOCK_LOSS_UNKEYABLE_MS) {
+                    g_selftest_hold[index] = LOCK_LOSS_UNKEYABLE_MS;
+                }
             }
             if (g_selftest_hold[index] > longest) {
                 longest = g_selftest_hold[index];
@@ -1661,6 +1675,21 @@ bool tx_selftest_run(void) {
         g_selftest_failed = true;
     }
     if (latched) {
+        /* THE ACTION. The amplifier is in a transmission it cannot vouch for - the T/R relay is closed
+           on a band whose only justification has gone - so it must not keep transmitting. Open the RF
+           path, unlock the band so the selection can follow live RF again, and require a fresh decode
+           before it will key again (user instruction, 2026-09-25: *"The firmware should put us in an
+           undefined, unkeyable state when the test fails."*). The reason stays on the panel: see the
+           LCD's g_unkeyable branch. While the condition persists this repeats once per window, which
+           is harmless - the amplifier is already in bypass - and g_unkeyable is cleared by a fresh
+           decode, not by the action. */
+        g_unkeyable = true;
+        apply_bypass();
+        freq_counter_unlock_band();
+        invalidate_established_band();
+        g_sequence_stage = SEQ_IDLE;
+        g_state = STATE_BYPASS_SNOOP;
+        g_snoop_active = true;
         /* Restart every window: a condition that is still there must hold for another full window
            before it acts again, so the action cannot repeat faster than the window and the panel's
            reason mask is the only thing that accumulates. */
@@ -1669,7 +1698,6 @@ bool tx_selftest_run(void) {
         }
         g_lock_loss_ms = 0;
     }
-    return latched;
 }
 
 void update_tx_sequence(void) {
@@ -1683,24 +1711,9 @@ void update_tx_sequence(void) {
         return;
     }
 
-    /* THE SELF-TEST COMES FIRST, before the snoop/verify/engage chain: the conditions it reports
-       (keyed with no band established, for instance) are exactly the ones those blocks are holding
-       the amplifier in, so it cannot be evaluated after them - the snoop block returns early and the
-       self-test would never see the keyed window at all. When it flags, the amplifier must not stay
-       in a transmission it cannot vouch for: open the RF path, unlock the band so the selection can
-       follow live RF again, and require a fresh decode before keying (user instruction, 2026-09-25:
-       *"The firmware should put us in an undefined, unkeyable state when the test fails."*). The
-       reason stays on the panel - see tx_selftest_run() and the LCD's g_unkeyable branch. */
-    if (tx_selftest_run()) {
-        g_unkeyable = true;
-        apply_bypass();
-        freq_counter_unlock_band();
-        invalidate_established_band();
-        g_sequence_stage = SEQ_IDLE;
-        g_state = STATE_BYPASS_SNOOP;
-        g_snoop_active = true;
-        return;
-    }
+    /* The self-test is NOT called here: it runs on the 10 ms counter gate beside
+       freq_counter_tick_10ms(), because its verdict is a property of the gate window and its work must
+       not lengthen this per-millisecond path (see TX_SELFTEST_TICK_MS). */
 
     if (g_snoop_active) {
         /* First-dit bypass snoop: the amplifier stays in bypass (all TX outputs inactive)
@@ -2196,6 +2209,10 @@ int main(void) {
             if (fc_tick_ms >= 10) {
                 fc_tick_ms = 0;
                 freq_counter_tick_10ms();
+                /* The keyed self-test rides the same gate: it reads exactly what that gate produced,
+                   and it must not add work to the per-millisecond path (see TX_SELFTEST_TICK_MS).
+                   It performs its own action, so the sequence picks the result up on the next tick. */
+                tx_selftest_run();
             }
 
             if (g_settings_save_delay_ms > 0) {

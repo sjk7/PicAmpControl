@@ -211,6 +211,57 @@ def kill_orphaned_processes(log):
             log.write(f"[{stamp()}] CLEANUP orphan_pid={pid} command={command}\n")
 
 
+def append_run_summary(log, since: float, code: int, test_name: str) -> None:
+    """Append the run's verdict, in words, to the END of the log.
+
+    The scope trace already writes its WHAT THIS TEST IS FOR / WHAT THE FIRMWARE ACTUALLY DID / WHY
+    THAT IS A FAILURE block into this log when it renders the picture - but the heartbeat and the
+    simulator keep writing after that, so by the time the run finishes the block sits thousands of
+    lines above the end, where nobody finds it. The operator said so outright (2026-09-25: *"You are
+    not writing that nice image failure description at the end of the log. Or if you do, I am not
+    seeing it. You should append it."*). So the launcher re-appends it here, AFTER `TEST_END` and after
+    the heartbeat writer has been stopped, which is the one place nothing else can land after. The
+    words come from the `<scenario>_failure.txt` that `scope_trace.on_failure()` wrote, never a
+    re-render, so the log and the picture can never disagree.
+
+    A PASSING run gets a block too (user instruction, 2026-09-25: *"If the run was successful, then
+    don't print nothing, print that it was successful in the log."*). A clean run otherwise ends on a
+    heartbeat line, which reads exactly like a run that stopped for no reason - the same trap as a
+    quiet log read as a dead one.
+    """
+    elapsed = time.time() - since
+    graphs = REPO_ROOT / "_build" / "My_Pic_Project" / "sim" / "graphs"
+    newest = None
+    if code != 0 and graphs.is_dir():
+        try:
+            candidates = [path for path in graphs.glob("*_failure.txt")
+                          if path.stat().st_mtime >= since - 1.0]
+        except OSError:
+            candidates = []
+        if candidates:
+            newest = max(candidates, key=lambda path: path.stat().st_mtime)
+
+    log.write("")
+    if newest is None:
+        verdict = "RUN PASSED" if code == 0 else f"RUN FAILED code={code}"
+        log.write(f"===== {verdict} name={test_name} elapsed={elapsed:.0f}s =====")
+        log.write("Every check in this run passed; no failure text to report." if code == 0 else
+                  "No failure text was written for this run (no scope trace was produced).")
+        log.write("===== END RUN SUMMARY =====")
+        return
+
+    try:
+        text = newest.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return
+    log.write(f"===== RUN FAILED code={code} name={test_name} elapsed={elapsed:.0f}s "
+              f"({newest.name}) =====")
+    for line in text.splitlines():
+        log.write(line)
+    log.write(f"Scope trace: {graphs / newest.name.replace('_failure.txt', '_scope.png')}")
+    log.write("===== END RUN SUMMARY =====")
+
+
 def main():
     parser = argparse.ArgumentParser()
     # The default is sized for the slowest supported host: MDB is ~2.8x slower on
@@ -337,6 +388,7 @@ def main():
     _, child_log = log.open_for_child()
     env = os.environ.copy()
     env.setdefault("PICAMP_MDB_DEBUG_LOG", str(mdb_log))
+    run_started = time.time()
     proc = subprocess.Popen(
         command,
         cwd=REPO_ROOT,
@@ -381,6 +433,9 @@ def main():
             procutil.terminate_tree(heartbeat_proc.pid)
         PID_FILE.unlink(missing_ok=True)
         log.write(f"[{stamp()}] TEST_END name={test_name} code={proc.returncode}")
+    # LAST, and after the heartbeat is gone, so it is the tail the reader sees (see
+    # append_run_summary): the verdict in words - the failure prose, or an explicit pass.
+    append_run_summary(log, run_started, code, test_name)
     print(f"SUITE_EXIT:{code}")
     print(f"LOG:{args.log}")
     return code

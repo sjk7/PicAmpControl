@@ -239,9 +239,10 @@ Protection is evaluated every pass and can override the sequencer at any point.
 
 ## 9. The TX self-test: the amplifier's own verdict
 
-While PTT is low the firmware tests **itself**, once per 1 ms tick (`tx_selftest_run()`, called from
-`update_tx_sequence()`), and reports its own verdict. It does not measure the RF chain; it answers one
-question: **is the firmware where the PTT and the sequencer say it should be?**
+While PTT is low the firmware tests **itself**, once per 10 ms counter gate (`tx_selftest_run()`, from
+the same place `freq_counter_tick_10ms()` samples TMR1), and reports its own verdict. It does not
+measure the RF chain; it answers one question: **is the firmware where the PTT and the sequencer say
+it should be?**
 
 - PTT is low and a stage claims to be running.
 - The outputs that stage says are asserted are actually asserted **on the pin** (`SENSE_*`, not the
@@ -271,19 +272,20 @@ numbers.
 The hold is `LOCK_LOSS_UNKEYABLE_MS` (200) in `firmware/src/main.c`. It is the only timing the
 self-test has, and it appears in exactly three places, all the same number on purpose:
 
-1. **The tick that counts it.** `update_tx_sequence()` runs once per 1 ms system tick drained by the
-   main loop and calls `tx_selftest_run()`. Each call evaluates every check against the state of that
-   instant and produces one `failing` mask of bits.
-2. **The per-check counters.** `g_selftest_hold[TX_SELFTEST_CHECK_COUNT]` is one consecutive-
-   millisecond counter per check, indexed by bit position. For every bit set in `failing` the matching
-   counter increments (capped at the window); for every bit clear that counter is **reset to 0**. So a
-   counter is not "how long since the last good sample" but "how long this condition has held without
-   a break", and each check resets only its own.
+1. **The tick that counts it.** `tx_selftest_run()` is evaluated on the 10 ms counter gate
+   (`TX_SELFTEST_TICK_MS`, beside `freq_counter_tick_10ms()`), so a check can never know more than the
+   counter window it is reading, and the verdict costs one evaluation per gate instead of one per
+   millisecond. Each evaluation produces one `failing` mask of bits.
+2. **The per-check counters.** `g_selftest_hold[TX_SELFTEST_CHECK_COUNT]` is one consecutive-ms counter
+   per check, indexed by bit position, advanced by `TX_SELFTEST_TICK_MS`. For every bit set in
+   `failing` the matching counter advances (capped at the window); for every bit clear that counter is
+   **reset to 0**. So a counter is not "how long since the last good gate" but "how long this condition
+   has held without a break", and each check resets only its own.
 3. **The expiry.** When a counter reaches 200, that check's bit is ORed into `g_selftest_reason`,
-   `g_selftest_failed` is set, and `tx_selftest_run()` returns true. The caller then takes the action
-   (bypass, band unlock, snoop). Every counter is zeroed on the way out, so a condition that is still
-   present must hold for another full 200 ms before it acts again - and re-acting is harmless, because
-   the amplifier is already in bypass by then.
+   `g_selftest_failed` is set, and `tx_selftest_run()` takes the action itself (bypass, band unlock,
+   snoop - the sequencer picks it up on its next tick). Every counter is zeroed on the way out, so a
+   condition that is still present must hold for another full 200 ms before it acts again - and
+   re-acting is harmless, because the amplifier is already in bypass by then.
 
 Consequences worth stating, because each one is a way to get this wrong:
 
@@ -294,12 +296,18 @@ Consequences worth stating, because each one is a way to get this wrong:
   delay between the expiry and the action.
 - `g_lock_loss_ms` only **publishes** the longest-holding failing check (milliseconds) for the test
   harness; it is not what makes the decision.
-- The hold is why a keyed amplifier does not drop out of transmit on one bad sample: a torn counter
-  read (`T1CON.nSYNC = 1` makes TMR1 genuinely asynchronous), one empty gate window, or one tick with
+- The hold is why a keyed amplifier does not drop out of transmit on one bad gate: a torn counter
+  read (`T1CON.nSYNC = 1` makes TMR1 genuinely asynchronous), one empty gate window, or one gate with
   a relay driver still slewing can all happen legitimately. 200 ms is the other side of the same
   trade - longer than a dit, far shorter than anything that could damage the LDMOS - and it is the
   same window the undefined/unkeyable state used before the self-test existed, so the bench figure
   still applies.
+- **Do not move this onto the per-millisecond path.** Measured 2026-09-25: evaluating the self-test
+  every 1 ms lengthened each main-loop pass enough that the SWR1 scenario's trip window was missed
+  (the amplifier sat keyed at BIAS-ON with the bridge deliberately over-threshold and never tripped);
+  compiling the call out made it pass, and moving it onto the 10 ms gate made it pass. The
+  protection chain is evaluated once per main-loop pass, so anything added to the per-millisecond path
+  starves it.
 - **Trips do not do this.** A protection trip latches on the sample that sees it; only the self-test
   waits, because "the firmware cannot vouch for this transmission" is a judgement that needs the
   condition to persist, not an event.
@@ -321,7 +329,6 @@ operator action. The **reason**, however, is held until the next key-down, so it
 after the amplifier has recovered. The check is deliberately not in an interrupt:
 `freq_counter_tick_10ms()` is where TMR1 is read and reset, so no check can know more than that 10 ms
 gate, and the action is far too heavy for ISR context.
-
 ## 10. How this is tested
 
 The machine is exercised in the simulator, and the invariants - not just the happy path - are

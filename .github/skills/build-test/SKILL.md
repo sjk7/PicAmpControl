@@ -565,15 +565,15 @@ the polling interval - do not bunch it at the interval's boundary.**
 
 **THE HARNESS NO LONGER ASSERTS ANY KEYED COUNTER READING - THE FIRMWARE'S OWN SELF-TEST VERDICT IS THE
 CONTRACT (2026-09-25, user instruction).** The firmware now tests itself while keyed (`main.c`
-`tx_selftest_run()`, once per 1 ms `update_tx_sequence()` tick, NOT in an ISR - `freq_counter_tick_10ms()`
-is where TMR1 is read and reset, so no check can know more than that 10 ms gate). It ORs every check
-that has held for `LOCK_LOSS_UNKEYABLE_MS` (200 ms) into `g_selftest_reason` - a bit mask, `+`-joined on
-the panel by `tx_selftest_reason_text()`, never blank - holds that reason until the NEXT key-down, and
-takes the undefined/unkeyable action (bypass, band unlock, snoop) when a check first latches. The
-harness `mirrors` the names (`SELFTEST_REASON_NAMES` / `selftest_reason_text()` in
-`trace_ptt_sequence.py`) and asserts: per band, either a verified keyed lock, or the firmware's own
-named reason. `--only`/`--bands` unchanged; `check_freq_ctr_bands.py` uses the same wording so a slice
-cannot pass where the suite fails. Two traps, both cost a wrong verdict if forgotten:
+`tx_selftest_run()`, once per 10 ms counter gate beside `freq_counter_tick_10ms()` - NOT in an ISR, and
+NOT on the 1 ms path, see the pass-length trap below). It ORs every check that has held for
+`LOCK_LOSS_UNKEYABLE_MS` (200 ms) into `g_selftest_reason` - a bit mask, `+`-joined on the panel by
+`tx_selftest_reason_text()`, never blank - holds that reason until the NEXT key-down, and takes the
+undefined/unkeyable action (bypass, band unlock, snoop) when a check first latches. The harness
+`mirrors` the names (`SELFTEST_REASON_NAMES` / `selftest_reason_text()` in `trace_ptt_sequence.py`) and
+asserts: per band, either a verified keyed lock, or the firmware's own named reason. `--only`/`--bands`
+unchanged; `check_freq_ctr_bands.py` uses the same wording so a slice cannot pass where the suite fails.
+Two traps, both cost a wrong verdict if forgotten:
 - **One good sample must not clear the interlock, and one bad sample must not set it.** Each check owns
   a consecutive-ms counter that only it resets, and the reason survives a recovery by design - so never
   "simplify" either into a single boolean or a single-sample test.
@@ -582,9 +582,28 @@ cannot pass where the suite fails. Two traps, both cost a wrong verdict if forgo
   keyed while the flag is set" is WRONG; the trace-stop rule (`truncate_at_unkeyable()` fires on the
   flag) is what bounds it.
 
-**`release did not enter stage 4` is a SAMPLING ALIAS, not a firmware fault (2026-09-25).** Once the
-injection above was fixed the base (plain PTT) scenario moved to
-`AssertionError: release did not enter stage 4`, and its own trace shows stage 3 -> 5 -> 0 with RC5 and
+**TRAP (2026-09-25): work added to the PER-MILLISECOND path starves the protection chain and makes a
+scenario's trip window disappear.** The first version of the self-test ran once per 1 ms
+`update_tx_sequence()` tick. `--only SWR1` then failed alone with `SWR1 trip was not reported`: 568
+keyed samples, 367 of them at BIAS-ON, RA0/RA1 held at the 3.4:1 bridge levels the harness writes, and
+`g_fault_latched` never set - the amplifier was keyed and correct in every visible way, and simply did
+not trip. Proven by A/B on the same tree: with the 1 ms call compiled out, `--only SWR1` PASSES; with
+it moved onto the 10 ms counter gate, `--only SWR1` PASSES. **The protection chain is evaluated once per
+main-loop pass, not once per tick**, so anything that lengthens a pass (one extra call per ms is
+enough) moves every window in which an ADC-fed trip can fire. Rule: keep per-1 ms work minimal; put
+periodic checks on the 10 ms gate beside `freq_counter_tick_10ms()`, which is also the only cadence the
+counter data changes on. Same lesson for a self-test as for the trip itself: **the verdict is only worth
+what the cadence it is evaluated on is worth.**
+
+**THE RUN'S VERDICT IS APPENDED TO THE END OF THE LOG, PASS OR FAIL (2026-09-25, user instruction:
+*"If the run was successful, then don't print nothing, print that it was successful in the log."*).**
+`run_suite_with_watchdog.append_run_summary()` runs after `TEST_END` and after the heartbeat writer has
+been stopped, so nothing can land after it: `===== RUN PASSED name=... elapsed=... =====` with "every
+check passed", or `===== RUN FAILED code=... =====` followed by the failure prose copied from the
+`<scenario>_failure.txt` the scope trace wrote, the path to the PNG, and `===== END RUN SUMMARY =====`.
+Before this, the prose was written at failure time and then buried under thousands of heartbeat/MDB
+lines, which is exactly why the operator reported not seeing it; a passing run ended on a heartbeat
+line, which reads like a run that died.
 RC6 both rising inside one 5 ms sample. `tools/simulate/repro_release_stage4.py` (watchdog
 `--test repro-release`) reproduces the same release path at **1 ms** sampling and PASSES: stage 4 is
 present and lasts ~4 ms (measured 1513-1516 ms), i.e. shorter than the suite's 5 ms release sample,

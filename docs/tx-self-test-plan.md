@@ -226,13 +226,30 @@ that broke the FREQ_CTR check.
   **15096/131072 bytes (11.5%)**, up 1210 B from 13886.
 - `run_suite_with_watchdog.py --test suite --only FREQ_CTR --bands 80m` -> `SUITE_EXIT:0`,
   `TEST_END ... code=0`, 80m keyed run 1480..1940 ms on RD3 with the band locked, I1-I6 all PASS.
+- `--only SWR1` -> PASS (after the cadence fix below).
+
+**Found while running the full suite, and fixed: the self-test must not run on the per-millisecond
+path.** The first full-suite run failed at `SWR1 trip was not reported`: 568 keyed samples, 367 at
+BIAS-ON, RA0/RA1 held at the over-threshold bridge levels, and `g_fault_latched` never set - the
+amplifier was keyed and correct in every visible way and simply did not trip. It reproduced with
+`--only SWR1` alone (so it was not suite phase), and an A/B settled it on one tree: with the 1 ms
+`tx_selftest_run()` call compiled out, `--only SWR1` PASSED; with the self-test moved onto the 10 ms
+counter gate (`TX_SELFTEST_TICK_MS`, beside `freq_counter_tick_10ms()`), `--only SWR1` PASSED. The
+protection chain is evaluated once per main-loop pass, so an extra call per millisecond is enough to
+move every trip window - and the counter the self-test reads only changes every 10 ms, so 1 ms was
+never worth having. Recorded in the build-test skill and in docs/tx-sequencer.md §9.
+
+**Also added, on the operator's instruction:** `run_suite_with_watchdog.append_run_summary()` now
+appends the run's verdict to the END of the log after `TEST_END` and after the heartbeat writer has
+stopped - the failure prose (copied from `<scenario>_failure.txt`) plus the scope-trace path, or an
+explicit `===== RUN PASSED ... =====`. Before this the prose was buried thousands of lines above the
+end, and a passing run ended on a heartbeat line.
 
 **Still open**
-1. Full suite (~356 s on Windows) - the verdict run.
-2. The forced-failure path: confirm the latch, the truncated trace, the `STATE: UNDEFINED` panel and
-   the reason in the failure prose.
-3. `docs/tx-sequencer.md`, `Ai-Notes.md`, `TESTING.md` and the `build-test` skill (the new contract,
-   and the trap that one good sample must not clear the interlock).
+1. Full suite (~356 s on Windows) - the verdict run; one is in flight as this was written.
+2. The forced-failure path, end to end: the latch, the truncated trace, the `STATE: UNDEFINED` panel,
+   the reason in the failure prose, and the new end-of-log summary block.
+3. `TESTING.md` wording is in; the remaining doc item is the bench section.
 4. Bench: an out-of-band signal must show the undefined state with its reason and open the RF path.
 3. **Any direct keyed `g_fc_status` check left in the harness?** The recommendation is no: the firmware's
    reason code is the contract, and a simulator-pacing property is not a firmware property.

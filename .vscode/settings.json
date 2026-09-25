@@ -50,6 +50,20 @@
         "gdbtarget",
         "mplab-core-da"
     ],
+    // Watch a simulator run as it happens. A PLAIN editor tab never follows a growing file - it keeps
+    // its scroll position - so a live run log looks frozen in one. Following is the Log Viewer
+    // extension's job (berublan.vscode-log-viewer): its panel re-reads the file on an interval and
+    // keeps the tail in view. `followTailMode: auto` is that behaviour; the watch entry is the
+    // launcher's default progress log (the one the wrapper prints after `watch:`). If the glob does
+    // not resolve (the file lives in the OS temp dir, outside the workspace), add it once from the
+    // Log Viewer panel - see the "How a run is watched" section of the build-test skill.
+    "logViewer.followTailMode": "auto",
+    "logViewer.watch": [
+        {
+            "title": "PicAmpControl suite progress",
+            "pattern": "**/picampcontrol_suite_progress.log"
+        }
+    ],
     "chat.tools.terminal.autoApprove": {
         "/^(python3?|py) tools/simulate/trace_ptt_sequence\\.py --suite$/": {
             "approve": true,
