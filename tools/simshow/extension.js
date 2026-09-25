@@ -57,6 +57,8 @@ function nonActiveColumn(activeColumn) {
   return undefined;
 }
 
+const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"];
+
 async function showRequestedLog() {
   let payload;
   try {
@@ -75,17 +77,29 @@ async function showRequestedLog() {
   const before = activeGroupSnapshot();
   const uri = vscode.Uri.file(payload.path);
   try {
-    const doc = await vscode.workspace.openTextDocument(uri);
     let column = nonActiveColumn(before.group);
-    const options = { preview: false, preserveFocus: true };
     if (column === undefined) {
-      // No second group yet: make one (Beside), which is the only way to have somewhere the log
-      // can live that is not the operator's tab.
-      options.viewColumn = vscode.ViewColumn.Beside;
-    } else {
-      options.viewColumn = column;
+      column = vscode.ViewColumn.Beside;
     }
-    await vscode.window.showTextDocument(doc, options);
+    if (IMAGE_EXTENSIONS.some((ext) => payload.path.toLowerCase().endsWith(ext))) {
+      // An IMAGE must go through the `vscode.open` command, not openTextDocument: the latter forces
+      // the text editor, which shows a PNG as an unreadable binary placeholder instead of the
+      // picture (and a picture in a normal editor tab is what the operator wants, so it can be
+      // copied into other software). `preview: false` makes it a real, pinned tab rather than a
+      // preview tab that the next click replaces.
+      await vscode.commands.executeCommand("vscode.open", uri, {
+        viewColumn: column,
+        preserveFocus: true,
+        preview: false,
+      });
+    } else {
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc, {
+        viewColumn: column,
+        preserveFocus: true,
+        preview: false,
+      });
+    }
     // Put the operator back exactly where they were: same document, same group, focused.
     if (before.uri) {
       const original = await vscode.workspace.openTextDocument(before.uri);
@@ -95,7 +109,7 @@ async function showRequestedLog() {
         preview: false,
       });
     }
-    writeReceipt({ shown: payload.path, column: options.viewColumn, preserved: true });
+    writeReceipt({ shown: payload.path, column: String(column), preserved: true });
   } catch (err) {
     writeReceipt({ shown: payload.path, error: String(err) });
   }
