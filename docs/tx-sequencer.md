@@ -263,10 +263,46 @@ question: **is the firmware where the PTT and the sequencer say it should be?**
 | 0x40 | `STALLED` | the band IS established, but the sequence has not reached BIAS-ON |
 | 0x80 | `NO_BAND` | keyed and nothing has decoded - correctly still in bypass, but it cannot say where it is |
 
-**A check must HOLD to count.** Each check owns a consecutive-millisecond counter that only it resets,
-and nothing is flagged until its condition has held for `LOCK_LOSS_UNKEYABLE_MS` (200 ms). One torn
-counter read, one empty gate window or one tick with a driver still slewing can therefore never flag
-the amplifier - and equally, one good sample can never clear it.
+**A check must HOLD to count** - see the next subsection for the mechanism, the counters and the
+numbers.
+
+### The 200 ms hold, precisely
+
+The hold is `LOCK_LOSS_UNKEYABLE_MS` (200) in `firmware/src/main.c`. It is the only timing the
+self-test has, and it appears in exactly three places, all the same number on purpose:
+
+1. **The tick that counts it.** `update_tx_sequence()` runs once per 1 ms system tick drained by the
+   main loop and calls `tx_selftest_run()`. Each call evaluates every check against the state of that
+   instant and produces one `failing` mask of bits.
+2. **The per-check counters.** `g_selftest_hold[TX_SELFTEST_CHECK_COUNT]` is one consecutive-
+   millisecond counter per check, indexed by bit position. For every bit set in `failing` the matching
+   counter increments (capped at the window); for every bit clear that counter is **reset to 0**. So a
+   counter is not "how long since the last good sample" but "how long this condition has held without
+   a break", and each check resets only its own.
+3. **The expiry.** When a counter reaches 200, that check's bit is ORed into `g_selftest_reason`,
+   `g_selftest_failed` is set, and `tx_selftest_run()` returns true. The caller then takes the action
+   (bypass, band unlock, snoop). Every counter is zeroed on the way out, so a condition that is still
+   present must hold for another full 200 ms before it acts again - and re-acting is harmless, because
+   the amplifier is already in bypass by then.
+
+Consequences worth stating, because each one is a way to get this wrong:
+
+- A check that fails for 199 ms and then passes **never flags**; a check that passes for any length of
+  time **never clears a reason that has already latched**. The reason is held until the next key-down
+  (`tx_selftest_reset()`), not until the next good sample.
+- Nothing else in the self-test is timed. There is no second window, no per-check timeout and no
+  delay between the expiry and the action.
+- `g_lock_loss_ms` only **publishes** the longest-holding failing check (milliseconds) for the test
+  harness; it is not what makes the decision.
+- The hold is why a keyed amplifier does not drop out of transmit on one bad sample: a torn counter
+  read (`T1CON.nSYNC = 1` makes TMR1 genuinely asynchronous), one empty gate window, or one tick with
+  a relay driver still slewing can all happen legitimately. 200 ms is the other side of the same
+  trade - longer than a dit, far shorter than anything that could damage the LDMOS - and it is the
+  same window the undefined/unkeyable state used before the self-test existed, so the bench figure
+  still applies.
+- **Trips do not do this.** A protection trip latches on the sample that sees it; only the self-test
+  waits, because "the firmware cannot vouch for this transmission" is a judgement that needs the
+  condition to persist, not an event.
 
 **The action, and the panel.** When a check first latches, the amplifier is in a transmission it cannot
 vouch for: the T/R relay is closed on a band whose only justification has gone. The firmware opens the

@@ -306,13 +306,14 @@ unsigned char tx_selftest_reason_text(unsigned char reason, char *buffer, unsign
    persist this long before the amplifier is folded back to bypass and re-engaged on the band
    actually being received. Confirm on the bench that this is short enough to be inaudible. */
 #define BAND_VERIFY_MS 20U
-/* How long a failing self-test check must HOLD before it is believed (tx_selftest_run()), and
-   therefore the longest a keyed amplifier can carry a condition it cannot vouch for. One window,
-   one code path: the self-test and the undefined/unkeyable action share it. A check's condition is
-   evaluated every 1 ms, so a single bad sample - a torn counter read, one empty gate window, one
-   1 ms tick with the driver still slewing - can never flag, while a condition that is real is
-   caught in 200 ms, comfortably longer than a dit and far shorter than anything that could damage
-   the LDMOS; confirm on the bench. */
+/* How long a failing self-test check must HOLD before it is believed (tx_selftest_run(), evaluated
+   once per 1 ms update_tx_sequence() tick), and therefore the longest a keyed amplifier can carry a
+   condition it cannot vouch for. One window, one code path: the self-test and the
+   undefined/unkeyable action share it. Per-check consecutive counters (g_selftest_hold[]) do the
+   counting, so a single bad sample - a torn counter read, one empty gate window, one 1 ms tick with
+   the driver still slewing - can never flag, while a condition that is real is caught in 200 ms,
+   comfortably longer than a dit and far shorter than anything that could damage the LDMOS; confirm
+   on the bench. */
 #define LOCK_LOSS_UNKEYABLE_MS 200U
 
 static volatile system_state_t g_state = STATE_STANDBY;
