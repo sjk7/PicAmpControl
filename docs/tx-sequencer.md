@@ -263,6 +263,7 @@ it should be?**
 | 0x20 | `TX_SENSE` | an output the stage claims is asserted is not reading back asserted |
 | 0x40 | `STALLED` | the band IS established, but the sequence has not reached BIAS-ON |
 | 0x80 | `NO_BAND` | keyed and nothing has decoded - correctly still in bypass, but it cannot say where it is |
+| 0x100 | `REL_STUCK` | the unkey did not finish in window, the bias was dropped while TX_VCC was still on, or an output is still asserted once the sequence reports idle |
 
 **A check must HOLD to count** - see the next subsection for the mechanism, the counters and the
 numbers.
@@ -314,12 +315,14 @@ Consequences worth stating, because each one is a way to get this wrong:
 
 **The action, and the panel.** When a check first latches, the amplifier is in a transmission it cannot
 vouch for. The remedy is split by cause (user instruction, 2026-09-25):
-- a **measurement-side** check (`NO_RF`, `BAD_BAND`, `LOCK_LOST`, `BAND_CHG`, `NO_LOCK`, `NO_BAND`)
-  folds back: the firmware opens the RF path (bypass), unlocks the band so the selection can follow
-  live RF again, and the bypass-snoop path re-selects the next valid measurement and keys once more.
-- a **stuck-output** check (`TX_SENSE`, `STALLED`, `REL_STUCK`) latches the undefined/unkeyable state:
-  the driver did not obey the command, so re-keying would re-engage the same fault - the one case that
-  can damage the LDMOS. The amplifier stays in bypass until the operator keys again.
+- a **fatal** check (`BAD_BAND`, `TX_SENSE`, `STALLED`, `REL_STUCK`) latches the undefined/unkeyable
+  state: an out-of-spec measurement or an output that did not obey its command must not be re-keyed
+  into, because re-keying would re-engage the same fault - the one case that can damage the LDMOS. The
+  amplifier stays in bypass until the operator keys again.
+- a **recoverable** check (`NO_RF`, `LOCK_LOST`, `BAND_CHG`, `NO_LOCK`, `NO_BAND`) folds back: the
+  firmware opens the RF path (bypass), unlocks the band so the selection can follow live RF again, and
+  the bypass-snoop path re-selects the next valid measurement and keys once more - a rig that moved to
+  a different KNOWN band (`BAND_CHG`), or a first-dit measurement still settling.
 
 The panel then reads:
 

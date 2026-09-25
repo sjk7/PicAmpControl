@@ -134,12 +134,12 @@ static, hand-captured design input. The user's words and the full list of what w
   counter gate (never the 1 ms path - that starved the trip chain and broke SWR1), the firmware checks
   PTT, the running stage, that stage's outputs (via `SENSE_*`) and the measurement behind the band
   lock, ORs every check that has held for 200 ms into `g_selftest_reason` (bit flags). The remedy is
-  split by cause (user instruction, 2026-09-25): a measurement-side check folds back (open the RF
-  path, re-select from the next valid measurement, key once more), while a stuck-output check
-  (TX_SENSE, STALLED, REL_STUCK) latches the undefined/unkeyable state until the operator keys again.
-  The panel reads `FAULT:` plus the `+`-joined reason, never a PWR/SWR page. The HARNESS asserts that
-  verdict instead of any keyed `frequency_khz` reading.
-- Last verified run: Windows **2026-09-25, the full 14-scenario suite GREEN (`TEST_END code=0`, 305 s)**
+  split by cause (user instruction, 2026-09-25): a FATAL check (BAD_BAND, TX_SENSE, STALLED,
+  REL_STUCK) latches the undefined/unkeyable state until the operator keys again, while a recoverable
+  check (NO_RF, LOCK_LOST, BAND_CHG, NO_LOCK, NO_BAND) folds back (open the RF path, re-select from
+  the next valid measurement, key once more). The panel reads `FAULT:` plus the `+`-joined reason,
+  never a PWR/SWR page. The HARNESS asserts that verdict instead of any keyed `frequency_khz` reading.
+- Last verified run: Windows **2026-09-25, the full 14-scenario suite GREEN (`TEST_END code=0`, 310 s)**
   with the keyed self-test, the unkey check, the 1 ms lean release sampling and the end-of-log
   `RUN PASSED` block all in. `--only <scenario>` or `--only FREQ_CTR --bands <band>` (40-80 s) is the
   iteration tool; the full suite is the verdict. Earlier session history - `platform_process.py`,
@@ -168,8 +168,8 @@ This repository is the active PIC18F47Q10-I/P linear-amplifier protection contro
 ## Firmware
 - **The keyed TX self-test is implemented**: what it checks, the 200 ms hold, the reason mask and the
   action are in docs/tx-sequencer.md §9; the plan and its live position are in
-  docs/tx-self-test-plan.md. The panel shows `FAULT:` plus the `+`-joined reason; measurement failures
-  fold back, stuck outputs latch.
+  docs/tx-self-test-plan.md. The panel shows `FAULT:` plus the `+`-joined reason; fatal checks
+  (BAD_BAND, TX_SENSE, STALLED, REL_STUCK) latch, recoverable checks fold back and re-key.
 - **First-dit band switching is implemented.** The model, its guards and its bench unknowns are in
   docs/first-dit-band-detection.md; the firmware API is freq_counter_restore_locked_band(),
   freq_counter_band_confirmed() and freq_counter_measured_band(). Bench-confirm BAND_SETTLE_MS (20 ms),
