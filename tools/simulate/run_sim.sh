@@ -34,6 +34,8 @@ trap 'rm -f "$PREAMBLE"' EXIT
     fi
 } > "$PREAMBLE"
 
-# W0106-SIM TMR1/3/5 warnings are benign simulator-model noise (see the build-test skill); filter them out
-# (`|| true` avoids pipefail tripping if grep -v ever finds no non-matching lines)
-"$MDB_SH" "$PREAMBLE" 2>&1 | { grep -v 'W0106-SIM' || true; }
+# W0106-SIM (TMR1/3/5 clock source) and W9602-COMP (DAC as a comparator input) are benign
+# simulator-model noise: each fires once per program/reset and refers to a peripheral this firmware
+# never configures (see the build-test skill); filter them out
+# (`|| true` avoids pipefail tripping if grep ever finds no non-matching lines)
+"$MDB_SH" "$PREAMBLE" 2>&1 | { grep -Ev 'W0106-SIM|W9602-COMP' || true; }

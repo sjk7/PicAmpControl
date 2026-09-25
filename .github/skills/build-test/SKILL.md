@@ -362,8 +362,16 @@ pin-routed clock source is the thing under test, bypass the PPS model rather tha
 drive the peripheral or flag register directly behind `#ifdef __MPLAB_DEBUGGER_SIMULATOR` and validate
 the ISR and everything downstream. In this project that is the T1CKI band-snoop path (`T1CKIPPS`) -
 hence the harnesses inject into `TMR1H`/`TMR1L` instead (see `tools/simulate/trace_ptt_sequence.py`
-and `docs/first-dit-band-detection.md`). The same warning fires on every reset for TMR1/TMR3/TMR5 and
-is stripped as noise by the harnesses and by `run_sim.sh`/`.ps1`.
+and `docs/first-dit-band-detection.md`). Those warnings fire on every reset and are stripped as noise by
+the harnesses and by `run_sim.sh`/`.ps1`. **`W9602-COMP` is the same class and is stripped alongside
+them** (added 2026-09-25, after the operator asked what it was): `W9602-COMP:DAC Voltage Source
+Peripheral not yet implemented to act as input to Comparator.` - the model cannot route the on-chip DAC
+into a comparator, and this design uses neither: the comparators that combine into `INPUT_HARD_FAULT`
+are EXTERNAL hardware, and the firmware touches no `CMxCON`/DAC register at all (it drives only the
+latch-reset line). In the heartbeat it can appear as a fragment (`e Source Peripheral not yet
+implemented to act as input to Comparator`): the heartbeat reports the newest line it can read out of
+the side log, so a mid-line start shows the tail of a message whose beginning is above it - a fragment
+is a reading artefact, never a message of its own.
 
 **Editor/language-server problems belong to a different skill.** If the Problems panel or IntelliSense
 misreports the firmware - `'xc.h' file not found`, undeclared registers such as `LATCbits`/`ADCON1`/

@@ -71,19 +71,29 @@ def stamp():
 # 2026-09-22: "I still do not see bytes (string) outputs since the last tick"). Skip them.
 MDB_NOISE_PREFIXES = ("MDB_OUTPUT", "MDB_OUTPUT_END", "MDB_START", "MDB_STDERR",
                       "MDB_TIMEOUT")
+# Benign simulator warnings that fire once per `program`/reset. They are not instrumentation and not
+# simulator output worth showing: the heartbeat reports "the most recent line of the simulator's OWN
+# output", and a per-reset warning is not that. The operator asked what one was (2026-09-25, having
+# seen the fragment `MDB e Source Peripheral not yet implemented to act as input to Comparator.` -
+# the tail of `W9602-COMP:DAC Voltage Source Peripheral not yet implemented to act as input to
+# Comparator.`, printed by every reset and matching neither the firmware nor anything it configures).
+MDB_NOISE_TOKENS = ("W0106-SIM", "W9602-COMP")
 
 
 def _is_mdb_noise(line: str) -> bool:
-    """True for the test's own instrumentation lines, including its timestamped forms.
+    """True for lines the heartbeat must not report as progress.
 
-    The test stamps them as `[2026-09-22T11:49:20+0100] MDB_OUTPUT ...`, so a prefix test alone
-    misses them; the marker can sit after one `] ` group.
+    Two kinds: the test's own instrumentation (`MDB_OUTPUT ...`), and the benign per-reset simulator
+    warnings in MDB_NOISE_TOKENS. The test stamps the former as `[2026-09-22T11:49:20+0100] MDB_OUTPUT
+    ...`, so a prefix test alone misses them; the marker can sit after one `] ` group.
     """
     body = line
     if body.startswith("["):
         close = body.find("]")
         if close != -1:
             body = body[close + 1:].lstrip()
+    if any(token in body for token in MDB_NOISE_TOKENS):
+        return True
     return body.startswith(MDB_NOISE_PREFIXES)
 
 

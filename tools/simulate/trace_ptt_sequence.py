@@ -671,14 +671,19 @@ def build_script(trip_name=None) -> str:
 
 # Benign, expected MDB noise. The simulator has no clock-source mux for TMR1/TMR3/TMR5,
 # and this firmware never configures those timers, so the warning fires on every reset and
-# means nothing here (see the build-test skill). It is stripped from everything the harness shows or
-# logs, because it otherwise buries the progress lines and turns up in the stderr tail of an
-# unrelated failure. run_sim.sh/.ps1 have filtered the same token for exactly this reason.
+# means nothing here (see the build-test skill). `W9602-COMP` is the same kind of message for the
+# COMPARATOR peripheral: "DAC Voltage Source Peripheral not yet implemented to act as input to
+# Comparator" - the on-chip DAC cannot be routed into a comparator in the model, and this design
+# does not use either: the comparators that combine into INPUT_HARD_FAULT are EXTERNAL hardware, and
+# the firmware touches no CMxCON/DAC register at all (it only drives the latch-reset line). Both
+# fire once per `program`/reset, so they are stripped from everything the harness shows or logs -
+# they otherwise bury the progress lines and turn up in the stderr tail of an unrelated failure.
+# run_sim.sh/.ps1 have filtered the same tokens for exactly this reason.
 #
 # Stripping is display-only: these lines match no parser pattern, so removing them cannot
-# change a pin/variable reading. A chunk boundary could in principle split the token, which
+# change a pin/variable reading. A chunk boundary could in principle split a token, which
 # would leave a harmless partial line - it can never corrupt a value the parser accepts.
-MDB_NOISE_TOKENS = ("W0106-SIM",)
+MDB_NOISE_TOKENS = ("W0106-SIM", "W9602-COMP")
 
 
 def strip_mdb_noise(text: str) -> str:

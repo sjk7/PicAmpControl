@@ -34,9 +34,11 @@ try {
     }
     Set-Content -Path $Preamble.FullName -Value $Lines
 
-    # W0106-SIM TMR1/3/5 warnings are benign simulator-model noise (see the build-test skill); filter them out.
+    # W0106-SIM (TMR1/3/5 clock source) and W9602-COMP (DAC as a comparator input) are benign
+    # simulator-model noise, fired once per program/reset and referring to peripherals this firmware
+    # never configures (see the build-test skill); filter them out.
     # Merge stderr via cmd.exe (not PowerShell's 2>&1) so lines aren't wrapped as terminating ErrorRecords.
-    cmd /c "`"$($MdbBat.FullName)`" `"$($Preamble.FullName)`" 2>&1" | Where-Object { $_ -notmatch "W0106-SIM" }
+    cmd /c "`"$($MdbBat.FullName)`" `"$($Preamble.FullName)`" 2>&1" | Where-Object { $_ -notmatch "W0106-SIM|W9602-COMP" }
 }
 finally {
     Remove-Item $Preamble.FullName -ErrorAction SilentlyContinue
