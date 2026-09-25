@@ -43,6 +43,67 @@ def inject_atomic() -> str:
     ])
 
 
+def selected_pin(sample) -> int:
+    """Index of the single high band-select pin (1..6), or 0 when none is selected."""
+    for index, pin in enumerate(t.BAND_PINS, 1):
+        if sample[1][pin] == 1:
+            return index
+    return 0
+
+
+def write_graph(samples, path: Path) -> bool:
+    """Render a timing diagram; shade the injection window red where the failure is detected."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("repro: matplotlib not installed; skipping the timing diagram")
+        return False
+
+    times = [s[0] * t.SECONDS_PER_INSTRUCTION * 1000 for s in samples]
+    rows = [
+        ("PTT (RC0 low = keyed)", [1 if s[1]["RC0"] == 0 else 0 for s in samples]),
+        ("band relay (RD2..RD7 -> 1..6)", [selected_pin(s) for s in samples]),
+        ("current_band", [int(s[2].get("g_fc_status.current_band") or 0) for s in samples]),
+        ("frequency_khz", [int(s[2].get("g_fc_status.frequency_khz") or 0) for s in samples]),
+        ("bypass snoop", [1 if s[2].get("g_snoop_active") == "true" else 0 for s in samples]),
+        ("sequence stage", [int(s[2].get("g_sequence_stage") or 0) for s in samples]),
+    ]
+    fig, axes = plt.subplots(len(rows), 1, sharex=True, figsize=(11, 9))
+    for ax, (label, values) in zip(axes, rows):
+        ax.step(times, values, where="post", color="#1e88e5")
+        ax.set_ylabel(label, rotation=0, ha="right", va="center", fontsize=8)
+        ax.grid(True, alpha=0.3)
+    axes[3].axhline(FREQ_KHZ, color="green", linestyle=":", alpha=0.7)
+    axes[3].annotate(f"injected {FREQ_KHZ}", (times[len(times) // 2], FREQ_KHZ),
+                     xytext=(0, 4), textcoords="offset points", fontsize=7, color="green")
+
+    # The injection window: every keyed sample. This is where the 14000 kHz should be measured and
+    # 20m (band 4) selected - it is not, so shade it RED and label the observed failure.
+    keyed = [i for i, s in enumerate(samples) if s[2].get("g_ptt_active") == "true"]
+    if keyed:
+        start, end = times[keyed[0]], times[keyed[-1]]
+        for ax in axes:
+            ax.axvspan(start, end, color="red", alpha=0.15)
+        seen = sorted({s[2].get("g_fc_status.frequency_khz") for s in samples[keyed[0]:]})
+        last_band = samples[-1][2].get("g_fc_status.current_band")
+        axes[0].annotate(
+            f"FAIL (red): injected {FREQ_KHZ} kHz but freq_khz read {seen}, "
+            f"current_band={last_band} (never {EXPECTED_BAND})",
+            xy=(start, 1), xytext=(6, 34), textcoords="offset points",
+            fontsize=8, color="red", fontweight="bold",
+            arrowprops=dict(arrowstyle="->", color="red"))
+
+    axes[-1].set_xlabel("time (ms, approx)")
+    fig.suptitle("repro_first_dit_20m: key down + inject 14000 kHz (20m)", y=0.995)
+    fig.tight_layout(rect=(0, 0, 1, 0.965))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return True
+
+
 def main() -> int:
     script = "\n".join([
         f"device {t.DEVICE}", "hwtool sim", f"program {t.ELF_PATH}",
@@ -71,6 +132,10 @@ def main() -> int:
         print("repro: raw tail follows")
         print(raw[-1500:])
         return 2
+
+    graph_path = ROOT / "_build" / "My_Pic_Project" / "sim" / "graphs" / "repro_first_dit_20m.png"
+    if write_graph(samples, graph_path):
+        print(f"repro: timing diagram -> {graph_path}")
 
     last = samples[-1]
     band = last[2].get("g_fc_status.current_band")
