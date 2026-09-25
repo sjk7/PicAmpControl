@@ -57,6 +57,7 @@ STATE_VARS = [
     "g_band_settle_active", "g_band_settle_elapsed_ms",
     "g_band_verify_active", "g_band_verify_mismatch_ms",
     "g_band_cache_valid", "g_band_cache_band",
+    "g_unkeyable", "g_lock_loss_ms",
 ]
 # STATE_BYPASS_SNOOP in firmware/src/main.c (appended last so existing numbering is stable).
 STATE_BYPASS_SNOOP = 6
@@ -428,8 +429,11 @@ def build_script(trip_name=None) -> str:
             # --- Phase A: establish the band while UNKEYED (all relay movement happens here) ---
             hold_band(freq_khz, 60)           # 300 ms
             # --- Phase B: key, frequency unchanged; engage to stage 3 and lock ---
+            # 400 ms, not 600: enough for the three 20 ms stages AND for the unkeyable interlock
+            # (LOCK_LOSS_UNKEYABLE_MS = 200 ms) to fire when the measurement is not there, and no more
+            # - everything after the flag is aftermath the operator does not want traced.
             lines.append("write pin RC0 0v")
-            hold_band(freq_khz, 120)          # 600 ms, far more than the ~3 x 20 ms stages
+            hold_band(freq_khz, 80)
             # --- Phase C: release first, still the same frequency ---
             lines.append("write pin RC0 5v")
             hold_band(freq_khz, 40)           # 200 ms
@@ -922,25 +926,27 @@ def validate_freq_ctr(samples, scenario_name="FREQ_CTR") -> None:
                 f"{band_name} TX lock failed: no keyed stage-3 sample held "
                 f"current_band={expected_band} with the band locked"
             )
-        # NO check on the counter's own reading while keyed and locked. That reading is a property of
-        # the SIMULATOR's pacing, not of the firmware, and the evidence is decisive (all measured
-        # 2026-09-25 on the same ELF):
-        #   * the same band, keyed and locked, READS the injected frequency when the scenario runs
-        #     alone (`--only FREQ_CTR --bands 80m` passes) and reads a hard 0 in the full-suite
-        #     session, so it is the session's tick/injection phase that decides it;
-        #   * the same band's UNKEYED samples in the failing session read the injected 3600 kHz
-        #     68 times out of 93, so the stimulus and the byte order are fine;
-        #   * injecting FIVE times per sample step instead of once changed nothing, and neither did
-        #     disabling the T1CON stop/stop bracket, nor always restarting the timer;
-        #   * `T1CON` reads 0x27 (running) throughout, and the firmware resets TMR1 to 0 on every
-        #     10 ms gate while nothing in the model clocks it - so a gate that lands after another
-        #     gate necessarily reads the reset zero.
-        # `validate_band_coverage` still requires a non-zero reading that classified each band (the
-        # counter was fed and measured it) and `locked_injection` above still asserts the lock itself.
-        # Do NOT re-add a keyed-reading assertion, and do NOT "fix" it by relaxing something else:
-        # this one cannot be made deterministic in this model.
+        # The amplifier must never STAY keyed on a band whose measurement has gone away: the firmware
+        # holds the lock for LOCK_LOSS_UNKEYABLE_MS and then drops out of TX into the undefined,
+        # unkeyable state (main.c, `g_unkeyable`; user instruction, 2026-09-25: *"The firmware should
+        # put us in an undefined, unkeyable state when the test fails."*). So a band whose keyed
+        # window contains no usable measurement must show that interlock, not a transmitting
+        # amplifier - which is the real contract, and it is checkable where the old "non-zero reading
+        # while keyed" check was not (that one measured the simulator's pacing).
+        if not any(sample[2].get("g_fc_status.frequency_khz") not in ("0", "", None)
+                   for sample in locked_injection):
+            unkeyable = [sample for sample in samples
+                         if sample[2].get("g_unkeyable") == "true"]
+            if not unkeyable:
+                raise AssertionError(
+                    f"{band_name}: the keyed band lock had no usable measurement for "
+                    f"{len(locked_injection)} samples and the amplifier stayed keyed - it must enter "
+                    f"the undefined/unkeyable state (LOCK_LOSS_UNKEYABLE_MS) instead"
+                )
+            print(f"{band_name}: lock lost with no usable measurement -> the firmware declared the "
+                  f"state unkeyable ({len(unkeyable)} samples)")
     print("FREQ_CTR passed: all bands classified, band-select outputs matched, "
-          "and each band stayed locked during TX injection")
+          "and no keyed band was left without a verified measurement")
 
 
 def validate_freq_ctr_failure(samples) -> None:
@@ -1236,6 +1242,22 @@ def _argument_value(name):
     return sys.argv[index]
 
 
+def truncate_at_unkeyable(samples):
+    """`samples` cut off right after the first sample that shows the unkeyable interlock.
+
+    The firmware now DECLARES the undefined state (main.c `g_unkeyable`, held for
+    LOCK_LOSS_UNKEYABLE_MS after a keyed band lock loses its measurement), and the operator's rule is
+    that the test and its trace stop there rather than carrying on through hundreds of milliseconds
+    that can only be the aftermath (user instruction, 2026-09-25: *"The test and the scope tracing
+    needs to then stop right after the undefined state is flagged."*). A few samples of aftermath are
+    kept so the drop-out is visible as a transition, not as the last pixel of the trace.
+    """
+    for index, sample in enumerate(samples):
+        if sample[2].get("g_unkeyable") == "true":
+            return samples[:index + 3] if index + 3 < len(samples) else samples
+    return samples
+
+
 def _scenario_label(scenario):
     """The suite's user-facing name for a scenario: `None` (the plain PTT cycle) is `base`."""
     return scenario if scenario is not None else "base"
@@ -1281,6 +1303,12 @@ def _scope_events(samples, scenario=None):
     """
     events = []
     ms = SECONDS_PER_INSTRUCTION * 1000
+    # Where the firmware gave up and declared the state undefined/unkeyable (main.c `g_unkeyable`).
+    # The operator's rule is that the test and its trace STOP here, so this is the last instant the
+    # trace should be read (user instruction, 2026-09-25).
+    unkeyable = next((s for s in samples if s[2].get("g_unkeyable") == "true"), None)
+    if unkeyable is not None:
+        events.append((unkeyable[0] * ms, "UNKEYABLE flagged"))
     trip = next((s for s in samples
                  if s[2].get("g_fault_latched") == "true"
                  and (scenario is None or block_reason(s[2]) == f"FAULT: {scenario}")), None)
@@ -1618,13 +1646,18 @@ def main():
         # the same visual evidence as every later scenario (the finally clause is what survives an
         # AssertionError).
         for scenario, (_, scenario_samples) in zip(scenario_names, groups):
+            # Validation sees the whole scenario (band coverage must still be judged on all of it),
+            # but the TRACE stops right after the firmware flags the undefined state: validation and
+            # tracing end at the flag, so a failure graph is not 400 ms of aftermath.
+            full_samples = scenario_samples
             trace_name = (f"{_scenario_label(scenario).lower()}_trip_trace"
                           if scenario in TRIP_NAMES else f"{_scenario_label(scenario).lower()}_trace")
             if scenario is None:
                 trace_name = "ptt_trace"
             try:
-                validate_scenario(scenario, scenario_samples)
+                validate_scenario(scenario, full_samples)
             except Exception as exc:
+                scenario_samples = truncate_at_unkeyable(full_samples)
                 # A failed scenario writes its own scope trace and opens it (see scope_trace):
                 # the assertion says WHICH check failed, the trace says what the firmware was
                 # doing, and the note under it says what the test was for and what the panel
@@ -1642,6 +1675,7 @@ def main():
                 # assertion abort before the write meant the failure left no visual evidence at
                 # all - the opposite of useful. The finally clause is what guarantees the graph
                 # survives an AssertionError.
+                scenario_samples = truncate_at_unkeyable(full_samples)
                 write_trace_csv(scenario_samples, trace_name, csv_dir)
                 write_trace_graph(scenario_samples, scenario, trace_name, graph_dir,
                                   stimulus=stimulus_spans(scenario_samples,
@@ -1671,6 +1705,8 @@ def main():
     samples = parse_trace(output)
     if not samples:
         sys.exit("error: no samples parsed from mdb output - dumping raw output:\n" + output[-4000:])
+    # Everything after the undefined/unkeyable flag is aftermath: the test and the trace end there.
+    samples = truncate_at_unkeyable(samples)
     if test_mode:
         validate_sequence(samples)
         print("PTT sequencing test passed")

@@ -320,8 +320,12 @@ def render_scope(samples, title, path, events=(), check=None, observed=None, why
     if prose:
         band_fraction = band / fig.get_size_inches()[1]
         fig.subplots_adjust(left=0.16, right=0.98, top=0.94, bottom=band_fraction, hspace=0.25)
+        # The band is passed in so the prose and the panel live INSIDE it: placing them by absolute
+        # figure coordinates put them over the lower lanes the moment there were enough lanes to
+        # shrink the band (reported 2026-09-25: *"You are writing the image failure text ON TOP of
+        # the traces."*).
         _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption,
-                            stimulus_key(stimulus))
+                            stimulus_key(stimulus), band_fraction)
     else:
         fig.subplots_adjust(left=0.16, right=0.98, top=0.94, bottom=0.06, hspace=0.25)
     fig.suptitle(title, fontsize=10)
@@ -355,12 +359,11 @@ def failure_prose(check, observed, why):
 
 
 def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=None,
-                        key_pairs=()):
-    """The prose + the reconstructed 16x2 panel, in the band reserved under the lanes.
+                        key_pairs=(), band_fraction=0.28):
+    """The prose + the reconstructed 16x2 panel, inside the band reserved for them.
 
-    The prose is ONE text object with the headings inline: drawing each wrapped line separately
-    spaced them by figure fraction, which on a tall figure left a hand's width between lines (seen
-    and rejected 2026-09-25). A single text object lets matplotlib space the lines properly.
+    Every axes here is positioned from `band_fraction`, the bottom fraction the lanes were stopped
+    short of, so the text can never land on a waveform.
     """
     import textwrap
 
@@ -375,7 +378,7 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
         body += ["WHY THAT IS A FAILURE",
                  *textwrap.wrap(str(why), 104)]
     if body:
-        note_ax = fig.add_axes([0.30, 0.03, 0.66, 0.22])
+        note_ax = fig.add_axes([0.29, 0.012, 0.69, max(0.05, band_fraction - 0.025)])
         note_ax.axis("off")
         note_ax.text(0.0, 1.0, "\n".join(body), fontsize=8, color="#263238", va="top",
                      linespacing=1.5, transform=note_ax.transAxes)
@@ -388,7 +391,9 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
         fig_width, fig_height = fig.get_size_inches()
         width_fraction = 0.24
         height_fraction = ((width_fraction * fig_width) / (7.6 / 3.1)) / fig_height
-        panel_ax = fig.add_axes([0.03, 0.04, width_fraction, height_fraction])
+        # Inside the reserved band, clamped, so a tall trace cannot push it onto the lanes.
+        panel_bottom = min(0.04, max(0.005, band_fraction - height_fraction - 0.06))
+        panel_ax = fig.add_axes([0.03, panel_bottom, width_fraction, height_fraction])
         if key_pairs:
             # The shading key, drawn as swatches in the same band as the panel: the frequency lane is
             # shaded to show what was injected, so the colour has to be decodable somewhere, and
@@ -422,8 +427,10 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
         # note sits inside the dark bezel, where its dark-grey text is unreadable. It carries the
         # fault CODE as well as the screen, because "which fault" is the question the panel is
         # asked (user instruction, 2026-09-25).
-        lcd_panel(panel_ax, 0.2, 0.85, "LCD AT FAILURE (reconstructed)", line1, line2, "",
-                  "#b71c1c")
+        lcd_panel(panel_ax, 0.2, 0.85, "LCD AT FAILURE" + (" (no firmware fault latched)"
+                                                            if lcd_state.get("g_fault_latched") != "true"
+                                                            else ""),
+                  line1, line2, "", "#b71c1c")
         caption = lcd_caption or "last sample of the failed window"
         if lcd_state.get("g_fault_latched") == "true":
             caption += f"   g_trip_reason={trip_reason_detail(lcd_state.get('g_trip_reason'))}"
@@ -458,7 +465,16 @@ def on_failure(samples, name, graph_dir, title, events=(), check=None, observed=
             if lcd_state.get("g_fault_latched") == "true":
                 print("g_trip_reason = " + trip_reason_detail(lcd_state.get("g_trip_reason")))
             print("(" + (lcd_caption or "") + ")")
-        print("===== END FAILURE SUMMARY =====\n")
+        print("===== END FAILURE SUMMARY =====\n")        # Also saved beside the PNG. The run log is TRUNCATED at the start of every run, so the
+        # summary printed into it disappears as soon as the next run begins - the operator asked for
+        # the text and could not find it (2026-09-25: *"you are not appending that nice failure text
+        # to the log at the end"*, looking at a log a later run had already cleared).
+        try:
+            text_path = Path(graph_dir) / f"{name}_failure.txt"
+            text_path.write_text(title + "\n\n" + prose + "\n", encoding="utf-8")
+            print(f"Failure text: {text_path}")
+        except OSError as exc:
+            print(f"scope_trace: could not write the failure text: {exc}")
     path = render_scope(samples, title, Path(graph_dir) / f"{name}_scope.png", events=events,
                         check=check, observed=observed, why=why, lcd_state=lcd_state,
                         stimulus=stimulus, lcd_caption=lcd_caption)

@@ -191,6 +191,12 @@ const char *trip_reason_name(unsigned char reason) {
    persist this long before the amplifier is folded back to bypass and re-engaged on the band
    actually being received. Confirm on the bench that this is short enough to be inaudible. */
 #define BAND_VERIFY_MS 20U
+/* How long a KEYED amplifier may hold a band lock whose measurement has gone away before the
+   firmware declares the state undefined and unkeyable. The lock's whole justification is the
+   measurement that established it, so a lock that can no longer be verified must not keep
+   transmitting. 200 ms is comfortably longer than a dit and far shorter than anything that could
+   damage the LDMOS; confirm on the bench. */
+#define LOCK_LOSS_UNKEYABLE_MS 200U
 
 static volatile system_state_t g_state = STATE_STANDBY;
 static volatile bool g_fault_latched = false;
@@ -212,6 +218,10 @@ static unsigned int g_band_verify_mismatch_ms = 0;
    or by the first-dit memory. This is what gates keying: with no RF the classifier reports its
    160m no-signal default, and the amplifier must never key on a band that was never measured. */
 static volatile bool g_band_established = false;
+/* UNDEFINED/UNKEYABLE interlock: set when a keyed band lock lost its measurement. Read by the LCD
+   so the bench sees why the amplifier is refusing to key, and cleared once a fresh decode exists. */
+static volatile bool g_unkeyable = false;
+static unsigned int g_lock_loss_ms = 0;
 static volatile bool g_startup_inhibit = true;
 static volatile bool g_comparator_reset_active = false;
 static volatile unsigned char g_comparator_reset_elapsed_ms = 0;
@@ -740,6 +750,16 @@ void show_menu_page(void) {
         }
         return;
     }
+    if (g_unkeyable) {
+        /* The amplifier dropped out of a keyed transmission because its band lock could no longer be
+           verified. Line 0 names the state in the same shape as a fault so the bench reads it the
+           same way; line 1 says what it means. Cleared by a fresh decode. */
+        lcd_set_cursor(0, 0);
+        lcd_write_text("STATE: LOCK LOST");
+        lcd_set_cursor(1, 0);
+        lcd_write_text("UNKEYABLE");
+        return;
+    }
     if (g_ptt_complete_display_active) {
         lcd_set_cursor(0, 0);
         lcd_write_text("PTT COMPLETE");
@@ -983,6 +1003,10 @@ void handle_ptt_transition(bool ptt_asserted) {
             g_band_settle_active = true;
             g_band_settle_elapsed_ms = 0;
             g_band_established = true;
+            /* The counter confirmed a live band, so the band IS verified: the undefined/unkeyable
+               interlock has done its job. */
+            g_unkeyable = false;
+            g_lock_loss_ms = 0;
             return;
         }
         if (g_band_cache_valid) {
@@ -1020,6 +1044,8 @@ void handle_ptt_transition(bool ptt_asserted) {
             g_band_verify_active = true;
             g_band_verify_mismatch_ms = 0;
             g_band_established = true;
+            g_unkeyable = false;
+            g_lock_loss_ms = 0;
             return;
         }
         /* First-dit bypass snoop: no band is known yet, so hold the amplifier in bypass
@@ -1415,6 +1441,10 @@ void update_tx_sequence(void) {
         freq_counter_lock_band();
         g_snoop_active = false;
         g_band_established = true;
+        /* A fresh decode means the band IS verified again, so the undefined/unkeyable interlock has
+           done its job and comes off. */
+        g_unkeyable = false;
+        g_lock_loss_ms = 0;
         /* The band selection has just moved to the decoded band. Stay in bypass until the
            relay contacts have settled, then engage on that band (see BAND_SETTLE_MS). */
         g_band_settle_active = true;
@@ -1475,6 +1505,40 @@ void update_tx_sequence(void) {
     }
 
     if (g_ptt_active) {
+        /* UNDEFINED, UNKEYABLE STATE: a keyed amplifier whose band cannot be verified must not keep
+           transmitting. The band lock freezes the LPF selection for the whole transmission, and its
+           whole justification is the measurement that established it - so if that measurement stops
+           being available while the amplifier is keyed, the firmware is holding the RF path closed
+           on a band it can no longer vouch for. That is exactly the state the harness reports as
+           "the counter reported no non-zero frequency while the band was locked and keyed", and the
+           operator's rule is that it must not be left transmitting in it (user instruction,
+           2026-09-25: *"The firmware should put us in an undefined, unkeyable state when the test
+           fails."*). So: hold the interlock for LOCK_LOSS_UNKEYABLE_MS, then open the RF path,
+           unlock the band and require a fresh decode before keying again - and say so on the panel. */
+        freq_counter_status_t lock_status;
+        freq_counter_get_status(&lock_status);
+        if (g_sequence_stage >= SEQ_TX_ON && lock_status.band_locked) {
+            if (freq_counter_measured_band() == BAND_OUT_OF_SPEC) {
+                if (g_lock_loss_ms < LOCK_LOSS_UNKEYABLE_MS) {
+                    g_lock_loss_ms++;
+                }
+            } else {
+                g_lock_loss_ms = 0;
+                g_unkeyable = false;
+            }
+            if (g_lock_loss_ms >= LOCK_LOSS_UNKEYABLE_MS) {
+                g_unkeyable = true;
+                apply_bypass();
+                freq_counter_unlock_band();
+                invalidate_established_band();
+                g_sequence_stage = SEQ_IDLE;
+                g_state = STATE_BYPASS_SNOOP;
+                g_snoop_active = true;
+                return;
+            }
+        } else {
+            g_lock_loss_ms = 0;
+        }
         if (g_sequence_stage == SEQ_IDLE) {
             if (!g_band_established) {
                 /* The relay selection is not backed by any measurement for this transmission
