@@ -47,14 +47,16 @@ function activeGroupSnapshot() {
   return { group: group ? group.viewColumn : undefined, uri: tab && tab.input && tab.input.uri };
 }
 
-// Find a group that is NOT the one the operator is typing in. Creating one is the last resort:
-// a new group can itself become active, which is why the snapshot above is restored afterwards.
+// Find a group that is NOT the one the operator is typing in. Creating one is never acceptable: a
+// new group SPLITS their editor, which is exactly what the operator objected to ("I ended up with
+// TWO log follows in split screen"). Only a real, already-existing group counts - and only one with
+// a positive column number, because VS Code reports the pseudo-columns -1 (Active) and -2 (Beside)
+// for group-like values, and passing -2 to an open call is a request to MAKE a group.
 function nonActiveColumn(activeColumn) {
-  const other = vscode.window.tabGroups.all.find((group) => group.viewColumn !== activeColumn);
-  if (other) {
-    return other.viewColumn;
-  }
-  return undefined;
+  const other = vscode.window.tabGroups.all.find(
+    (group) => group.viewColumn !== activeColumn && group.viewColumn > 0
+  );
+  return other ? other.viewColumn : undefined;
 }
 
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"];
