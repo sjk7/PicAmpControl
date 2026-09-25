@@ -181,31 +181,33 @@ const char *trip_reason_name(unsigned char reason) {
    tools/simulate/trace_ptt_sequence.py) - keep the bit positions, the names and their ORDER aligned
    with that table. */
 typedef enum {
-    TX_SELFTEST_OK = 0x00,
-    TX_SELFTEST_NO_RF = 0x01,
-    TX_SELFTEST_BAD_BAND = 0x02,
-    TX_SELFTEST_LOCK_LOST = 0x04,
-    TX_SELFTEST_BAND_CHG = 0x08,
-    TX_SELFTEST_NO_LOCK = 0x10,
-    TX_SELFTEST_TX_SENSE = 0x20,
-    TX_SELFTEST_STALLED = 0x40,
-    TX_SELFTEST_NO_BAND = 0x80
+    TX_SELFTEST_OK = 0x0000,
+    TX_SELFTEST_NO_RF = 0x0001,
+    TX_SELFTEST_BAD_BAND = 0x0002,
+    TX_SELFTEST_LOCK_LOST = 0x0004,
+    TX_SELFTEST_BAND_CHG = 0x0008,
+    TX_SELFTEST_NO_LOCK = 0x0010,
+    TX_SELFTEST_TX_SENSE = 0x0020,
+    TX_SELFTEST_STALLED = 0x0040,
+    TX_SELFTEST_NO_BAND = 0x0080,
+    TX_SELFTEST_REL_STUCK = 0x0100
 } tx_selftest_reason_t;
 
 /* One name per cause, indexed by bit position, so this array and the enum must stay in the same
    order. Deliberately short: the panel has ONE 16-column line for the WHOLE combined reason, and
    with '+' separators two names have to fit in it. */
 #define TX_SELFTEST_NAME_MAX 11
-#define TX_SELFTEST_CHECK_COUNT 8
+#define TX_SELFTEST_CHECK_COUNT 9
 static const char *const TX_SELFTEST_NAMES[] = {
-    "NO_RF",     /* TX_SELFTEST_NO_RF     0x01 */
-    "BAD_BAND",  /* TX_SELFTEST_BAD_BAND  0x02 */
-    "LOCK_LOST", /* TX_SELFTEST_LOCK_LOST 0x04 */
-    "BAND_CHG",  /* TX_SELFTEST_BAND_CHG  0x08 */
-    "NO_LOCK",   /* TX_SELFTEST_NO_LOCK   0x10 */
-    "TX_SENSE",  /* TX_SELFTEST_TX_SENSE  0x20 */
-    "STALLED",   /* TX_SELFTEST_STALLED   0x40 */
-    "NO_BAND"    /* TX_SELFTEST_NO_BAND   0x80 */
+    "NO_RF",     /* TX_SELFTEST_NO_RF      0x0001 */
+    "BAD_BAND",  /* TX_SELFTEST_BAD_BAND   0x0002 */
+    "LOCK_LOST", /* TX_SELFTEST_LOCK_LOST  0x0004 */
+    "BAND_CHG",  /* TX_SELFTEST_BAND_CHG   0x0008 */
+    "NO_LOCK",   /* TX_SELFTEST_NO_LOCK    0x0010 */
+    "TX_SENSE",  /* TX_SELFTEST_TX_SENSE   0x0020 */
+    "STALLED",   /* TX_SELFTEST_STALLED    0x0040 */
+    "NO_BAND",   /* TX_SELFTEST_NO_BAND    0x0080 */
+    "REL_STUCK"  /* TX_SELFTEST_REL_STUCK  0x0100 */
 };
 
 /* Append `text` to the NUL-terminated `buffer`, inserting a '+' first when it is not the first
@@ -240,7 +242,7 @@ static bool tx_selftest_text_append(char *buffer, unsigned char *used, unsigned 
 
    Mirrored by selftest_reason_text() in tools/simulate/trace_ptt_sequence.py: keep the two in step,
    including the truncation rule. */
-unsigned char tx_selftest_reason_text(unsigned char reason, char *buffer, unsigned char size) {
+unsigned char tx_selftest_reason_text(unsigned int reason, char *buffer, unsigned char size) {
     unsigned char used = 0;
     unsigned char index;
     unsigned char limit;
@@ -257,7 +259,7 @@ unsigned char tx_selftest_reason_text(unsigned char reason, char *buffer, unsign
     limit = (unsigned char)(size - 2);   /* the last column is the truncation marker's */
 
     for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
-        if ((reason & (unsigned char)(1u << index)) == 0) {
+        if ((reason & (unsigned int)(1u << index)) == 0) {
             continue;
         }
         if (!tx_selftest_text_append(buffer, &used, limit, TX_SELFTEST_NAMES[index])) {
@@ -356,10 +358,12 @@ static unsigned int g_lock_loss_ms = 0;
    (tx_selftest_reset()), never by a recovery: that is what keeps the last reason readable on the
    panel after the amplifier has gone back to working (user instruction, 2026-09-25). */
 static volatile bool g_selftest_failed = false;
-static volatile unsigned char g_selftest_reason = TX_SELFTEST_OK;
+static volatile unsigned int g_selftest_reason = TX_SELFTEST_OK;
 /* Consecutive-ms counters, one per check bit, indexed by bit position: a check that passes resets
    its own count, so only a condition that HOLDS for the whole window can flag. */
 static unsigned int g_selftest_hold[TX_SELFTEST_CHECK_COUNT] = { 0 };
+/* How long the current unkey has been unwinding, in ms: TX_SELFTEST_REL_STUCK's window. */
+static unsigned int g_selftest_unkey_ms = 0;
 
 /* A new key-down starts a new verdict. This is the ONLY place the reason is cleared, which is what
    keeps the previous reason on the panel until the operator keys again (tx_selftest_run() clears
@@ -369,6 +373,7 @@ void tx_selftest_reset(void) {
     g_selftest_failed = false;
     g_selftest_reason = TX_SELFTEST_OK;
     g_lock_loss_ms = 0;
+    g_selftest_unkey_ms = 0;
     for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
         g_selftest_hold[index] = 0;
     }
@@ -902,12 +907,16 @@ void show_menu_page(void) {
         }
         return;
     }
-    if (g_unkeyable) {
-        /* The amplifier dropped out of a keyed transmission because its own self-test could not
-           vouch for it. Line 0 names the state in the same shape as a latched fault so the bench
-           reads both the same way; line 1 is the self-test's OWN reason, with '+' when more than
-           one check failed, and never blank. Cleared by a fresh decode - the reason itself is held
-           until the next key-down, so it can still be read after the amplifier has recovered. */
+    if (g_unkeyable || g_selftest_failed) {
+        /* A FAULT RECORD IS ALWAYS ON THE PANEL. Two sources, one screen: the amplifier dropped out of
+           a transmission it could not vouch for (`g_unkeyable`, live), or the self-test recorded a
+           fault during this key-down (`g_selftest_failed`, held) - and the record is what makes the
+           screen last. The operator's rule (2026-09-25): a fault condition always displays on the LCD,
+           and is cleared at the next key-down, so the reason can still be read after the amplifier has
+           recovered - an unkey that would not finish, or a band lock that had lost its measurement,
+           must not vanish off the panel the moment it stops being true. Line 0 names the state in the
+           same shape as a latched fault; line 1 is the self-test's OWN reason, '+' when more than one
+           check failed, never blank. */
         static char selftest_reason_text[17];
         lcd_set_cursor(0, 0);
         lcd_write_text("STATE: UNDEFINED");
@@ -1566,6 +1575,75 @@ void update_current_peak(unsigned int current_a) {
     }
 }
 
+/* How long an unkey may take before it counts as stuck. The two release stages are the configured VCC
+   and bias delays, so the window is twice their sum, plus a margin for a relay that is still moving
+   and for the TX_SELFTEST_TICK_MS granularity this check rides on. */
+static unsigned int tx_selftest_unkey_window(void) {
+    return ((unsigned int)g_thresholds.tx_vcc_delay_ms + g_thresholds.tx_bias_delay_ms) * 2U + 20U;
+}
+
+/* Advance the hold counters for the checks failing on this evaluation, latch the ones that have held
+   for LOCK_LOSS_UNKEYABLE_MS, and take the undefined/unkeyable action when anything latches. Shared
+   by the keyed checks and the unkey check, so there is exactly one window, one latch and one action
+   no matter which half of the process noticed the fault. */
+static void tx_selftest_apply(unsigned int failing) {
+    unsigned char index;
+    unsigned int longest = 0;
+    bool latched = false;
+
+    for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
+        unsigned int bit = (unsigned int)(1u << index);
+        if (failing & bit) {
+            if (g_selftest_hold[index] < LOCK_LOSS_UNKEYABLE_MS) {
+                g_selftest_hold[index] += TX_SELFTEST_TICK_MS;
+                if (g_selftest_hold[index] > LOCK_LOSS_UNKEYABLE_MS) {
+                    g_selftest_hold[index] = LOCK_LOSS_UNKEYABLE_MS;
+                }
+            }
+            if (g_selftest_hold[index] > longest) {
+                longest = g_selftest_hold[index];
+            }
+            if (g_selftest_hold[index] >= LOCK_LOSS_UNKEYABLE_MS) {
+                g_selftest_reason |= bit;
+                latched = true;
+            }
+        } else {
+            g_selftest_hold[index] = 0;
+        }
+    }
+    g_lock_loss_ms = longest;
+
+    if (g_selftest_reason != TX_SELFTEST_OK) {
+        g_selftest_failed = true;
+    }
+    if (!latched) {
+        return;
+    }
+
+    /* THE ACTION. The amplifier is in a state it cannot vouch for - a keyed transmission whose band
+       lock has lost its measurement, or an unkey that will not finish - so it must not be left in it.
+       Open the RF path, unlock the band so the selection can follow live RF again, end the sequence,
+       and require a fresh decode before it will key again (user instruction, 2026-09-25: *"The
+       firmware should put us in an undefined, unkeyable state when the test fails."*). The reason
+       stays on the panel: see the LCD's fault-record branch. While the condition persists this
+       repeats once per window, which is harmless - the amplifier is already in bypass - and
+       g_unkeyable is cleared by a fresh decode, not by the action. */
+    g_unkeyable = true;
+    apply_bypass();
+    freq_counter_unlock_band();
+    invalidate_established_band();
+    g_sequence_stage = SEQ_IDLE;
+    g_state = STATE_BYPASS_SNOOP;
+    g_snoop_active = true;
+    /* Restart every window: a condition that is still there must hold for another full window before
+       it acts again, so the action cannot repeat faster than the window and the panel's reason mask is
+       the only thing that accumulates. */
+    for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
+        g_selftest_hold[index] = 0;
+    }
+    g_lock_loss_ms = 0;
+}
+
 /* The keyed self-test: "is the firmware where the PTT and the sequencer say it should be?".
 
    Evaluated once per TX_SELFTEST_TICK_MS counter gate - the same place, and the same gate,
@@ -1583,25 +1661,61 @@ void update_current_peak(unsigned int current_a) {
 void tx_selftest_run(void) {
     freq_counter_status_t status;
     rf_band_t measured;
-    unsigned char failing = TX_SELFTEST_OK;
+    unsigned int failing = TX_SELFTEST_OK;
     unsigned char index;
-    unsigned int longest = 0;
-    bool latched = false;
 
-    if (!g_ptt_active || g_sequence_stage > SEQ_BIAS_ON ||
-        g_startup_inhibit || g_comparator_reset_active || g_fault_latched) {
-        /* The sequencer is not in charge of a keyed transmission (not keyed, unwinding, inhibited, or
-           a trip is latched), so there is nothing to verify and no window may be carried into the
-           next over. A LATCHED TRIP is in this list on purpose: a tripped amplifier is not
-           transmitting, so its stage being forced idle is not a self-test failure. The REASON is
-           deliberately left alone here: it is held until the next key-down so the operator can still
-           read it after unkeying. */
+    if (g_startup_inhibit || g_comparator_reset_active || g_fault_latched) {
+        /* Nothing this self-test is about is running (still coming up, in the comparator-reset window,
+           or a trip is latched). A LATCHED TRIP is in this list on purpose: a tripped amplifier is not
+           transmitting, so its stage being forced idle is not a self-test failure - the trip has its
+           own screen. The REASON is deliberately left alone here: it is held until the next key-down
+           so the operator can still read it after unkeying. */
         for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
             g_selftest_hold[index] = 0;
         }
         g_lock_loss_ms = 0;
+        g_selftest_unkey_ms = 0;
         return;
     }
+
+    if (!g_ptt_active) {
+        /* THE UNKEY. A release is part of the keying process, and it is the half the operator can
+           least afford to be lied to about: the amplifier must unwind in order and end cold. So the
+           same self-test covers it - `TX_SELFTEST_REL_STUCK` is raised when the unwind does not
+           finish inside the window, when the bias is dropped while TX_VCC is still asserted (the one
+           order that must never happen), or when the sequence reports idle with an output still
+           asserted on the pin. */
+        if (g_sequence_stage == SEQ_RELEASE_RELAYS || g_sequence_stage == SEQ_RELEASE_VCC) {
+            if (g_selftest_unkey_ms < 0xFFFFU) {
+                g_selftest_unkey_ms += TX_SELFTEST_TICK_MS;
+            }
+            if (g_selftest_unkey_ms > tx_selftest_unkey_window()) {
+                failing |= TX_SELFTEST_REL_STUCK;   /* the unwind never finished */
+            }
+            if (SENSE_TX_VCC == output_level(false, g_thresholds.tx_vcc_active_high) &&
+                SENSE_TX_BIAS != output_level(false, g_thresholds.tx_bias_active_high)) {
+                failing |= TX_SELFTEST_REL_STUCK;   /* bias dropped while TX_VCC was still on */
+            }
+        } else {
+            g_selftest_unkey_ms = 0;
+            if (g_sequence_stage == SEQ_IDLE &&
+                (SENSE_TX != output_level(false, g_thresholds.tx_active_high) ||
+                 SENSE_TX_VCC != output_level(false, g_thresholds.tx_vcc_active_high) ||
+                 SENSE_TX_BIAS != output_level(false, g_thresholds.tx_bias_active_high))) {
+                failing |= TX_SELFTEST_REL_STUCK;   /* idle, yet an output is still asserted */
+            }
+        }
+        tx_selftest_apply(failing);
+        return;
+    }
+
+    if (g_sequence_stage > SEQ_BIAS_ON) {
+        /* Keyed while the release stages are somehow still running: nothing coherent to verify. */
+        tx_selftest_apply(TX_SELFTEST_OK);
+        return;
+    }
+
+    g_selftest_unkey_ms = 0;
 
     freq_counter_get_status(&status);
     measured = freq_counter_measured_band();
@@ -1649,55 +1763,7 @@ void tx_selftest_run(void) {
         failing |= g_band_established ? TX_SELFTEST_STALLED : TX_SELFTEST_NO_BAND;
     }
 
-    for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
-        unsigned char bit = (unsigned char)(1u << index);
-        if (failing & bit) {
-            if (g_selftest_hold[index] < LOCK_LOSS_UNKEYABLE_MS) {
-                g_selftest_hold[index] += TX_SELFTEST_TICK_MS;
-                if (g_selftest_hold[index] > LOCK_LOSS_UNKEYABLE_MS) {
-                    g_selftest_hold[index] = LOCK_LOSS_UNKEYABLE_MS;
-                }
-            }
-            if (g_selftest_hold[index] > longest) {
-                longest = g_selftest_hold[index];
-            }
-            if (g_selftest_hold[index] >= LOCK_LOSS_UNKEYABLE_MS) {
-                g_selftest_reason = (unsigned char)(g_selftest_reason | bit);
-                latched = true;
-            }
-        } else {
-            g_selftest_hold[index] = 0;
-        }
-    }
-    g_lock_loss_ms = longest;
-
-    if (g_selftest_reason != TX_SELFTEST_OK) {
-        g_selftest_failed = true;
-    }
-    if (latched) {
-        /* THE ACTION. The amplifier is in a transmission it cannot vouch for - the T/R relay is closed
-           on a band whose only justification has gone - so it must not keep transmitting. Open the RF
-           path, unlock the band so the selection can follow live RF again, and require a fresh decode
-           before it will key again (user instruction, 2026-09-25: *"The firmware should put us in an
-           undefined, unkeyable state when the test fails."*). The reason stays on the panel: see the
-           LCD's g_unkeyable branch. While the condition persists this repeats once per window, which
-           is harmless - the amplifier is already in bypass - and g_unkeyable is cleared by a fresh
-           decode, not by the action. */
-        g_unkeyable = true;
-        apply_bypass();
-        freq_counter_unlock_band();
-        invalidate_established_band();
-        g_sequence_stage = SEQ_IDLE;
-        g_state = STATE_BYPASS_SNOOP;
-        g_snoop_active = true;
-        /* Restart every window: a condition that is still there must hold for another full window
-           before it acts again, so the action cannot repeat faster than the window and the panel's
-           reason mask is the only thing that accumulates. */
-        for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
-            g_selftest_hold[index] = 0;
-        }
-        g_lock_loss_ms = 0;
-    }
+    tx_selftest_apply(failing);
 }
 
 void update_tx_sequence(void) {

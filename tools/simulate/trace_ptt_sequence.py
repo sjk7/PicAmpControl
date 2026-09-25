@@ -24,6 +24,7 @@ import sys
 import tempfile
 import threading
 import time
+from enum import IntEnum
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -62,6 +63,16 @@ STATE_VARS = [
     # undefined/unkeyable state during this key-down, and WHICH checks it failed on. This is the
     # contract the harness asserts - the firmware decides, the harness only reads the verdict.
     "g_selftest_failed", "g_selftest_reason",
+]
+# The vars a sample of the UNKEY window needs: the pins prove the ordered unwind, and these carry the
+# state the release checks read. Deliberately a few instead of all of STATE_VARS (2026-09-25): the
+# unwind is where the firmware can collapse a whole 20 ms stage into one main-loop pass, because
+# `g_sequence_elapsed_ms` advances once per DRAINED Timer2 tick and the model charges simulated time
+# for MDB commands - so the release has to be sampled at 1 ms to be provable at all, and a full
+# ~45-command sample at that rate would be adding to the very backlog it is trying to see through.
+RELEASE_SAMPLE_VARS = [
+    "g_startup_inhibit", "g_ptt_active", "g_sequence_stage", "g_ptt_complete_display_active",
+    "g_fault_latched", "g_snoop_active", "g_fc_status.current_band", "g_fc_status.band_locked",
 ]
 # STATE_BYPASS_SNOOP in firmware/src/main.c (appended last so existing numbering is stable).
 STATE_BYPASS_SNOOP = 6
@@ -188,11 +199,32 @@ PHASES = [
 # RD2-RD7 are the per-band LPF select outputs. Sampling them lets the tests assert the
 # relay selection itself, not just the firmware's internal current_band variable.
 BAND_PINS = ["RD2", "RD3", "RD4", "RD5", "RD6", "RD7"]
-# `g_sequence_stage` names. Mirrors `sequence_stage_t` / `sequence_stage_name()` in
-# firmware/src/main.c: engage runs 0->1->2->3 on key-down, unkey runs 3 or 2 -> 4 -> 5 -> 0.
+# `g_sequence_stage` values. Mirrors `sequence_stage_t` in firmware/src/main.c: engage runs
+# SEQ_IDLE -> SEQ_TX_ON -> SEQ_VCC_ON -> SEQ_BIAS_ON on key-down, and unkey runs SEQ_BIAS_ON (or
+# SEQ_VCC_ON) -> SEQ_RELEASE_RELAYS -> SEQ_RELEASE_VCC -> SEQ_IDLE.
+#
+# These are ENUMS with string lookups (`stage_name()`), and every assertion, message and trace
+# annotation must use the NAME rather than the raw number (skill rule; restated by the operator
+# 2026-09-25: *"Stages should be enums, and there should be string lookups for those enums"*, after a
+# failure whose only text was `release did not enter stage 5` - which tells a reader nothing).
+class SequenceStage(IntEnum):
+    SEQ_IDLE = 0
+    SEQ_TX_ON = 1
+    SEQ_VCC_ON = 2
+    SEQ_BIAS_ON = 3
+    SEQ_RELEASE_RELAYS = 4
+    SEQ_RELEASE_VCC = 5
+
+
+# Short names for the traces, kept IDENTICAL to the firmware's own `SEQUENCE_STAGE_NAMES[]` - the
+# panel and the trace must call a stage the same thing, or a reader has to translate between them.
 SEQ_STAGE_NAMES = {
-    0: "IDLE", 1: "TX-ON", 2: "VCC-ON", 3: "BIAS-ON",
-    4: "UNKEY-RELAYS", 5: "UNKEY-VCC",
+    int(SequenceStage.SEQ_IDLE): "IDLE",
+    int(SequenceStage.SEQ_TX_ON): "TX-ON",
+    int(SequenceStage.SEQ_VCC_ON): "VCC-ON",
+    int(SequenceStage.SEQ_BIAS_ON): "BIAS-ON",
+    int(SequenceStage.SEQ_RELEASE_RELAYS): "UNKEY-RELAYS",
+    int(SequenceStage.SEQ_RELEASE_VCC): "UNKEY-VCC",
 }
 
 BAND_PIN_FOR = {1: "RD2", 2: "RD3", 3: "RD4", 4: "RD5", 5: "RD6", 6: "RD7"}
@@ -337,9 +369,15 @@ def build_script(trip_name=None) -> str:
         "write pin RC2 5v", "write pin RB0 5v", "write pin RB6 5v"
     ]
 
-    def sample():
+    def sample(release=False):
+        # `release=True` is the LEAN unkey sample (pins + RELEASE_SAMPLE_VARS), taken at 1 ms while the
+        # amplifier unwinds. See RELEASE_SAMPLE_VARS for why that window is the one that needs it.
         for pin in PINS:
             lines.append(f"print pin {pin}")
+        if release:
+            for var in RELEASE_SAMPLE_VARS:
+                lines.append(f"print {var}")
+            return
         for pin in ADC_PINS:
             lines.append(f"print pin {pin}")
         for var in STATE_VARS:
@@ -617,10 +655,10 @@ def build_script(trip_name=None) -> str:
         # cause is the main-loop pass length, not the trip: the LCD refresh runs `__delay_ms`
         # loops compiled for the real 64 MHz core against a model ~8x slower). 200 ms gives the
         # poll ~4x the measured latency and matches the base scenario's own release window.
-        for _ in range(40):
+        for _ in range(200):
             write_tmr1_count(7000)
-            lines.append(stepi(5))
-            sample()
+            lines.append(stepi(1))
+            sample(release=True)
         lines.append("write pin RC0 0v")
         # Re-arm: the trip must clear and the TX sequence must run back to stage 3 with every TX
         # output active-low. That is the 10 ms comparator-reset pulse, the band re-establish
@@ -662,10 +700,13 @@ def build_script(trip_name=None) -> str:
         lines.append("quit")
         return "\n".join(lines)
     # --- Release PTT (RC0 back high): relays open, then VCC, then bias ---
+    # Sampled every 1 ms with the LEAN release sample set: the unwind is 20 ms per stage and the
+    # firmware can collapse a stage into one main-loop pass, so the ordered release is only provable
+    # at this resolution (see RELEASE_SAMPLE_VARS and validate_sequence).
     lines.append("write pin RC0 5v")
-    for _ in range(40):  # 5 ms steps, 40x5 = 200 ms
-        lines.append(stepi(5))
-        sample()
+    for _ in range(200):  # 1 ms steps, 200 ms of unkey
+        lines.append(stepi(1))
+        sample(release=True)
     lines.append("quit")
     return "\n".join(lines)
 
@@ -1057,18 +1098,22 @@ def validate_sequence(samples) -> None:
         raise AssertionError("PTT was not ignored during startup inhibit")
 
     active_samples = [sample for sample in samples
-                      if sample[2]["g_ptt_active"] == "true" and sample[2]["g_sequence_stage"] == "3"]
+                      if sample[2]["g_ptt_active"] == "true" and sample[2]["g_sequence_stage"] == str(int(SequenceStage.SEQ_BIAS_ON))]
     if not active_samples:
-        raise AssertionError("PTT active sequence did not reach stage 3")
+        raise AssertionError(f"PTT active sequence did not reach {SequenceStage.SEQ_BIAS_ON.name} "
+                             f"({stage_name(str(int(SequenceStage.SEQ_BIAS_ON)))}) - the amplifier "
+                             f"never completed the engage")
     active = active_samples[0][1]
     if (active["RC5"], active["RC6"], active["RC7"]) != (0, 0, 0):
         raise AssertionError("active sequence did not drive RELAYS, TX_VCC, TX_BIAS low")
 
-    # Verify that frequency counter locked the band during stage 3 transmit
+    # Verify that frequency counter locked the band during the transmitting stage
     band_locked_samples = [sample for sample in active_samples
                            if sample[2].get("g_fc_status.band_locked") == "true"]
     if not band_locked_samples:
-        raise AssertionError("Frequency counter band was not locked during transmit stage 3")
+        raise AssertionError(
+            f"Frequency counter band was not locked during {SequenceStage.SEQ_BIAS_ON.name}"
+            f" ({stage_name(str(int(SequenceStage.SEQ_BIAS_ON)))}, transmitting)")
 
     complete_display = next((sample for sample in samples
                              if sample[2]["g_ptt_complete_display_active"] == "true"), None)
@@ -1076,44 +1121,47 @@ def validate_sequence(samples) -> None:
         raise AssertionError("PTT COMPLETE was displayed before all TX outputs went low")
 
     release_samples = [sample for sample in samples if sample[2]["g_ptt_active"] == "false"]
-    release_stage4 = next((sample for sample in release_samples if sample[2]["g_sequence_stage"] == "4"), None)
-    release_stage5 = next((sample for sample in release_samples if sample[2]["g_sequence_stage"] == "5"), None)
-    release_done = next((sample for sample in release_samples if sample[2]["g_sequence_stage"] == "0"
-                         and sample[1]["RC5"] == 1 and sample[1]["RC6"] == 1 and sample[1]["RC7"] == 1), None)
-    if release_stage4 is None:
-        raise AssertionError("release did not enter stage 4")
-    if release_stage5 is None:
-        raise AssertionError("release did not enter stage 5")
+    release_done = next((sample for sample in release_samples
+                         if sample[2]["g_sequence_stage"] == str(int(SequenceStage.SEQ_IDLE))
+                         and sample[1]["RC5"] == 1 and sample[1]["RC6"] == 1
+                         and sample[1]["RC7"] == 1), None)
     if release_done is None:
-        raise AssertionError("release did not raise TX_BIAS last")
+        raise AssertionError(
+            f"release did not reach {SequenceStage.SEQ_IDLE.name} with RELAYS, TX_VCC and TX_BIAS "
+            f"all inactive")
 
-    # The release order is RELAYS, then TX_VCC, then TX_BIAS - and what must be asserted is the
-    # ORDER, not a single-sample snapshot of it.
+    # The release STAGES are deliberately NOT asserted by membership any more (2026-09-25). It used
+    # to require a sample inside SEQ_RELEASE_RELAYS and inside SEQ_RELEASE_VCC, and that is a
+    # statement about the simulator's pacing, not about the firmware: `g_sequence_elapsed_ms`
+    # advances once per DRAINED Timer2 tick, and MDB's own `print`/`write` commands advance simulated
+    # time, so ticks pile up while the CPU is not executing and a whole 20 ms stage then collapses
+    # into one main-loop pass. Measured on the base scenario of the 2026-09-25 suite run: the release
+    # went SEQ_BIAS_ON -> SEQ_RELEASE_RELAYS -> SEQ_IDLE between two 5 ms samples, with
+    # SEQ_RELEASE_VCC never sampled, and the run failed with `release did not enter stage 5` on an
+    # amplifier that had just released correctly. What IS asserted is the part that cannot be
+    # aliased: the pins come down monotonically in the documented order, and the sequence ends at
+    # SEQ_IDLE with every output inactive (above).
     #
-    # This used to demand that the first stage-4 sample read exactly (RC5,RC6,RC7) = (1,0,0), i.e.
-    # that the harness happened to catch the transient window where RELAYS was up alone. At a 5 ms
-    # sample interval that window can be missed entirely: on the Q10 run of 2026-09-22 the first
-    # stage-4 sample already had TX_VCC up too, so the assertion reported "release did not raise
-    # RELAYS first" even though the trace shows RELAYS rising at 1.897 s, TX_VCC at 1.912 s and
-    # TX_BIAS at 1.927 s - the correct order, just not observed alone. A phase-dependent test that
-    # fails on a correct waveform is a broken test, not a finding.
-    #
-    # Monotonic ordering is the property that actually matters and cannot be aliased: TX_VCC must
-    # never be high while RELAYS is low, and TX_BIAS must never be high unless both others are. If
-    # those hold over the whole release, the order was right regardless of sampling phase.
+    # Monotonic ordering is the property that matters and cannot be aliased: TX_VCC must never be up
+    # while RELAYS is low, and TX_BIAS must never be up unless both others are. If those hold over the
+    # whole release, the order was right regardless of sampling phase.
     release_window = [sample for sample in release_samples
-                      if sample[2]["g_sequence_stage"] in ("4", "5", "0")]
+                      if sample[2]["g_sequence_stage"] in (
+                          str(int(SequenceStage.SEQ_RELEASE_RELAYS)),
+                          str(int(SequenceStage.SEQ_RELEASE_VCC)),
+                          str(int(SequenceStage.SEQ_IDLE)))]
     for sample in release_window:
         pins = sample[1]
+        stage = stage_name(sample[2]["g_sequence_stage"])
+        when = f"t={sample[0] * SECONDS_PER_INSTRUCTION:.4f}s, stage {stage}"
         if pins["RC6"] == 1 and pins["RC5"] == 0:
             raise AssertionError(
-                "release raised TX_VCC while RELAYS was still low "
-                f"(t={sample[0] * SECONDS_PER_INSTRUCTION:.4f}s) - that is the wrong order")
+                f"release raised TX_VCC while RELAYS was still low ({when}) - that is the wrong "
+                f"order")
         if pins["RC7"] == 1 and (pins["RC5"] == 0 or pins["RC6"] == 0):
             raise AssertionError(
-                "release raised TX_BIAS before RELAYS and TX_VCC were both up "
-                f"(t={sample[0] * SECONDS_PER_INSTRUCTION:.4f}s) - that is the wrong order")
-
+                f"release raised TX_BIAS before RELAYS and TX_VCC were both up ({when}) - that is "
+                f"the wrong order")
 
     # Verify that frequency counter unlocked after TX sequence completes (stage 0)
     if release_done[2].get("g_fc_status.band_locked") == "true":
@@ -1224,11 +1272,11 @@ SCENARIO_CHECKS = {
            "before the band is released."),
     "TEMPERATURE": ("A temperature trip must latch with the outputs shut down, then clear itself "
                     "once the reading falls below the trip point minus the recovery hysteresis, and "
-                    "re-enter TX (stage 3) on a re-established band."),
+                    "re-enter TX at SEQ_BIAS_ON on a re-established band."),
     "SWR1": ("An SWR1 trip while transmitting must latch with the output shutdown order, and a PTT "
-             "re-arm must clear the latch and run the sequence back up to stage 3 (BIAS-ON)."),
+             "re-arm must clear the latch and run the sequence back up to SEQ_BIAS_ON."),
     "SWR2": ("An SWR2 trip while transmitting must latch, and a PTT re-arm must clear it and "
-             "re-enter TX at stage 3."),
+             "re-enter TX at SEQ_BIAS_ON."),
     "HWFAULT": ("A hardware comparator fault (INPUT_HARD_FAULT) must latch and hold the amplifier "
                 "off; a PTT re-arm must NOT clear it while the fault input is still asserted."),
     "CURRENT": ("A current trip at the configured limit must latch, and the re-arm must run back to "
@@ -1403,6 +1451,21 @@ def parse_trace(output: str):
     pending_voltages = {}
     state_pending = {}
     awaiting_var = None
+
+    def emit():
+        """Take the accumulated prints as one sample and start the next one empty.
+
+        Two shapes are emitted. A FULL sample carries every pin (PINS + ADC_PINS) and every
+        STATE_VARS entry; a LEAN one - the unkey window, see RELEASE_SAMPLE_VARS - carries PINS and
+        just the state vars it needs. Both are complete in the sense that matters: nothing that
+        belongs to the sample is still arriving.
+        """
+        samples.append((instr_count, dict(pending), dict(state_pending), dict(pending_voltages)))
+        pending.clear()
+        pending_adc.clear()
+        pending_voltages.clear()
+        state_pending.clear()
+
     for raw_line in output.splitlines():
         line = raw_line.strip()
         m_stepi = STEPI_RE.match(line)
@@ -1421,17 +1484,22 @@ def parse_trace(output: str):
         m = PRINT_RE.match(line)
         if m:
             pin, level, volts = m.groups()
+            # A pin block always begins at PINS[0], so seeing it again means the previous block's
+            # prints are all in and its state block has ended - that is the boundary a LEAN sample
+            # needs, because it never reaches the full STATE_VARS count.
+            if pin == PINS[0] and pending and state_pending:
+                emit()
             pending[pin] = 1 if level == "HIGH" or (volts is not None and float(volts) >= 2.5) else 0
             if pin in ADC_PINS:
                 pending_adc[pin] = 1
                 pending_voltages[pin] = float(volts) if volts is not None else (5.0 if level == "HIGH" else 0.0)
         if (len(pending) == len(PINS) + len(ADC_PINS) and
             len(pending_adc) == len(ADC_PINS) and len(state_pending) == len(STATE_VARS)):
-            samples.append((instr_count, dict(pending), dict(state_pending), dict(pending_voltages)))
-            pending.clear()
-            pending_adc.clear()
-            pending_voltages.clear()
-            state_pending.clear()
+            emit()
+    # A lean block at the very end of the transcript is closed by the end of input, not by the next
+    # block's first pin print.
+    if pending and state_pending and len(pending) >= len(PINS):
+        emit()
     return samples
 
 
