@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import trace_ptt_sequence as t  # noqa: E402  (stage names live with the harness that records them)
 CSV_PATH = ROOT / "_build" / "My_Pic_Project" / "sim" / "csv" / "ptt_trace.csv"
 OUT_PATH = ROOT / "_build" / "My_Pic_Project" / "sim" / "graphs" / "ptt_trace_from_keydown.png"
 
@@ -64,9 +66,14 @@ def main() -> int:
     fig, axes = plt.subplots(len(LANES), 1, sharex=True, figsize=(13, 10))
     t0 = times[keydown]
     for ax, (label, key) in zip(axes, LANES):
-        ax.step([t - t0 for t in times], values[key], where="post", color="#1565c0")
+        ax.step([t_ - t0 for t_ in times], values[key], where="post", color="#1565c0")
         ax.set_ylabel(label, rotation=0, ha="right", va="center", fontsize=8)
         ax.grid(True, alpha=0.3)
+    # Name the stage axis `<number> <NAME>`, so the number the assertions use and the readable
+    # name are both on the trace (user, 2026-09-25).
+    stage_axis = axes[-1]
+    stage_axis.set_yticks(sorted(t.SEQ_STAGE_NAMES))
+    stage_axis.set_yticklabels([t.stage_name(v) for v in sorted(t.SEQ_STAGE_NAMES)], fontsize=7)
     axes[0].set_xlim(-20, times[-1] - t0)
     axes[-1].set_xlabel(f"ms since PTT fell low (t={t0:.1f} ms)")
 
@@ -77,20 +84,20 @@ def main() -> int:
             transitions.append(stage)
     seen4 = 4 in transitions
     axes[6].annotate(
-        ("PASS: stage 4 observed during the release" if seen4 else
-         "FAIL (red): stage 4 NEVER sampled during the release"),
+        ("PASS: stage 4 UNKEY-RELAYS observed during the release" if seen4 else
+         "FAIL (red): 4 UNKEY-RELAYS NEVER sampled during the release"),
         xy=(times[keydown] - t0, 4), xytext=(8, 42), textcoords="offset points",
         fontsize=9, fontweight="bold", color="green" if seen4 else "red",
         arrowprops=dict(arrowstyle="->", color="green" if seen4 else "red"))
     fig.suptitle("base scenario from PTT falling low (keyed) - stage sequence: "
-                 + " -> ".join(str(s) for s in transitions), y=0.995)
+                 + " -> ".join(t.stage_name(s) for s in transitions), y=0.995)
     fig.tight_layout(rect=(0, 0, 1, 0.965))
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT_PATH, dpi=120)
     plt.close(fig)
     print(f"keyed graph -> {OUT_PATH}")
     print(f"keydown at t={t0:.1f} ms; stages after the release: "
-          + " -> ".join(str(s) for s in transitions))
+          + " -> ".join(t.stage_name(s) for s in transitions))
     return 0 if seen4 else 1
 
 

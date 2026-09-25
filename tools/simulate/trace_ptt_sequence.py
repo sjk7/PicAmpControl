@@ -119,6 +119,13 @@ PHASES = [
 # RD2-RD7 are the per-band LPF select outputs. Sampling them lets the tests assert the
 # relay selection itself, not just the firmware's internal current_band variable.
 BAND_PINS = ["RD2", "RD3", "RD4", "RD5", "RD6", "RD7"]
+# `g_sequence_stage` names. Mirrors `sequence_stage_t` / `sequence_stage_name()` in
+# firmware/src/main.c: engage runs 0->1->2->3 on key-down, unkey runs 3 or 2 -> 4 -> 5 -> 0.
+SEQ_STAGE_NAMES = {
+    0: "IDLE", 1: "TX-ON", 2: "VCC-ON", 3: "BIAS-ON",
+    4: "UNKEY-RELAYS", 5: "UNKEY-VCC",
+}
+
 BAND_PIN_FOR = {1: "RD2", 2: "RD3", 3: "RD4", 4: "RD5", 5: "RD6", 6: "RD7"}
 BAND_OUT_OF_SPEC = 7
 PINS = ["RC1", "RC0", "RC5", "RC6", "RC7"] + BAND_PINS
@@ -1086,18 +1093,35 @@ def parse_trace(output: str):
     return samples
 
 
+def stage_name(value) -> str:
+    """`<number> <NAME>` for a `g_sequence_stage` reading - the number AND the name, both.
+
+    The number is what the firmware enum and the assertions use, the name is what makes it
+    readable; a trace that shows only one of them is either unreadable or unmatchable (user,
+    2026-09-25: *"I want to see its number (4) but also the name"*). Mirrors `sequence_stage_t`
+    and `sequence_stage_name()` in firmware/src/main.c - keep in step with those (see the stage
+    table in the build-test skill).
+    """
+    try:
+        index = int(str(value).strip())
+    except (TypeError, ValueError):
+        return f"?({value})"
+    return f"{index} {SEQ_STAGE_NAMES.get(index, '?')}"
+
+
 def write_trace_csv(samples, trace_name, csv_dir):
     csv_path = csv_dir / f"{trace_name}.csv"
     with open(csv_path, "w") as f:
         f.write("time_s," + ",".join(PIN_LABELS[p] for p in PINS) +
                 "," + ",".join(f"ADC_{pin}_V" for pin in ADC_PINS) +
-                ",g_ptt_active,g_sequence_stage,g_state,block_reason\n")
+                ",g_ptt_active,g_sequence_stage,stage_name,g_state,block_reason\n")
         for instr_count, vals, state, adc_voltages in samples:
             t = instr_count * SECONDS_PER_INSTRUCTION
             reason = block_reason(state) or ""
+            stage = state['g_sequence_stage']
             f.write(f"{t:.6f}," + ",".join(str(vals[p]) for p in PINS) +
                     "," + ",".join(f"{adc_voltages[pin]:.3f}" for pin in ADC_PINS) +
-                    f",{state['g_ptt_active']},{state['g_sequence_stage']},{state['g_state']},{reason}\n")
+                    f",{state['g_ptt_active']},{stage},{stage_name(stage)},{state['g_state']},{reason}\n")
     return csv_path
 
 
@@ -1152,7 +1176,8 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir):
         return None
     times = [sample[0] * SECONDS_PER_INSTRUCTION * 1000 for sample in samples]
     graph_adc_pins = TRIP_ADC_PINS.get(trip_name, []) if trip_name else []
-    graph_rows = [("digital", pin) for pin in PINS] + [("adc", pin) for pin in graph_adc_pins]
+    graph_rows = ([("digital", pin) for pin in PINS] + [("adc", pin) for pin in graph_adc_pins]
+                  + [("stage", None)])
     fig, axes = plt.subplots(len(graph_rows), 1, sharex=True,
                              figsize=(10, max(6, len(graph_rows) * 1.25)))
     axes = list(axes) if hasattr(axes, "__len__") else [axes]
@@ -1187,6 +1212,15 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir):
             ax.set_ylim(-0.2, 1.2)
             ax.set_yticks([0, 1])
             label = PIN_LABELS[pin]
+        elif kind == "stage":
+            # The TX state machine, as `<number> <NAME>` ticks: the number is what the assertions
+            # and enum use, the name is what makes it readable.
+            ax.step(times, [int(sample[2]["g_sequence_stage"]) for sample in samples],
+                    where="post")
+            ax.set_ylim(-0.2, 5.2)
+            ax.set_yticks(sorted(SEQ_STAGE_NAMES))
+            ax.set_yticklabels([stage_name(v) for v in sorted(SEQ_STAGE_NAMES)], fontsize=7)
+            label = "g_sequence_stage"
         else:
             values = [sample[3][pin] for sample in samples]
             ax.plot(times, values, drawstyle="steps-post")
@@ -1195,7 +1229,7 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir):
             if trip_index is not None:
                 ax.annotate(f"{values[trip_index]:.3f} V", (times[trip_index], values[trip_index]),
                             xytext=(8, 4), textcoords="offset points", fontsize=8)
-        ax.set_ylabel(f"{pin}\n{label}", rotation=0, labelpad=42, va="center")
+        ax.set_ylabel(f"{pin or 'stage'}\n{label}", rotation=0, labelpad=42, va="center")
         ax.grid(True, alpha=0.3)
     reasons = [block_reason(sample[2]) for sample in samples]
     span_start = 0
@@ -1355,13 +1389,14 @@ def main():
     with open(csv_path, "w") as f:
         f.write("time_s," + ",".join(PIN_LABELS[p] for p in PINS) +
             "," + ",".join(f"ADC_{pin}_V" for pin in ADC_PINS) +
-            ",g_ptt_active,g_sequence_stage,g_state,block_reason\n")
+            ",g_ptt_active,g_sequence_stage,stage_name,g_state,block_reason\n")
         for instr_count, vals, state, adc_voltages in samples:
             t = instr_count * SECONDS_PER_INSTRUCTION
             reason = block_reason(state) or ""
+            stage = state['g_sequence_stage']
             f.write(f"{t:.6f}," + ",".join(str(vals[p]) for p in PINS) +
                 "," + ",".join(f"{adc_voltages[pin]:.3f}" for pin in ADC_PINS) +
-                f",{state['g_ptt_active']},{state['g_sequence_stage']},{state['g_state']},{reason}\n")
+                f",{state['g_ptt_active']},{stage},{stage_name(stage)},{state['g_state']},{reason}\n")
     print(f"Wrote {csv_path} ({len(samples)} samples)")
 
     # Print console FAULT/blocking-reason transitions so "why can't PTT key up" is obvious
@@ -1396,7 +1431,8 @@ def main():
         block_spans.append((span_start, times[-1], span_reason))
 
     graph_adc_pins = TRIP_ADC_PINS.get(trip_name, []) if trip_name else []
-    graph_rows = [("digital", pin) for pin in PINS] + [("adc", pin) for pin in graph_adc_pins]
+    graph_rows = ([("digital", pin) for pin in PINS] + [("adc", pin) for pin in graph_adc_pins]
+                  + [("stage", None)])
     fig, axes = plt.subplots(len(graph_rows), 1, sharex=True,
                              figsize=(10, max(6, len(graph_rows) * 1.25)))
     axes = list(axes) if hasattr(axes, "__len__") else [axes]
@@ -1434,6 +1470,12 @@ def main():
             ax.set_ylim(-0.2, 1.2)
             ax.set_yticks([0, 1])
             label = PIN_LABELS[pin]
+        elif kind == "stage":
+            ax.step(times, [int(s[2]["g_sequence_stage"]) for s in samples], where="post")
+            ax.set_ylim(-0.2, 5.2)
+            ax.set_yticks(sorted(SEQ_STAGE_NAMES))
+            ax.set_yticklabels([stage_name(v) for v in sorted(SEQ_STAGE_NAMES)], fontsize=7)
+            label = "g_sequence_stage"
         else:
             values = [s[3][pin] for s in samples]
             ax.plot(times, values, drawstyle="steps-post")
@@ -1442,7 +1484,7 @@ def main():
             if trip_index is not None:
                 ax.annotate(f"{values[trip_index]:.3f} V", (trip_time, values[trip_index]),
                             xytext=(8, 4), textcoords="offset points", fontsize=8)
-        ax.set_ylabel(f"{pin}\n{label}", rotation=0, labelpad=42, va="center")
+        ax.set_ylabel(f"{pin or 'stage'}\n{label}", rotation=0, labelpad=42, va="center")
         ax.grid(True, alpha=0.3)
         for start, end, reason in block_spans:
             ax.axvspan(start, end, color="red", alpha=0.12)
