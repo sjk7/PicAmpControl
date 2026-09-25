@@ -88,22 +88,22 @@ def request_show(paths, quiet: bool = False) -> bool:
 
 
 def open_in_editor(paths, quiet: bool = False) -> bool:
-    """Show a path in the running editor - ONLY when explicitly asked to (PICAMP_SHOW_FILES=1).
+    """Show a path in the running editor. ON by default, and focus-inert by construction.
 
-    **Nothing is opened by default** (user instruction, 2026-09-25: *"focus just got set to the log
-    tab -- AGAIN!!! You really need to straighten that out!"*). Every mechanism tried - `code -r`,
-    restoring the window focus afterwards, an in-editor helper using `preserveFocus`, reusing an
-    existing group - still ended with the operator's focus or active tab moving, and a run that
-    interrupts typing is worse than a run whose log they open themselves. So the default is: print
-    the path, open nothing; the harness writes the failure text INTO the run log, which is the file
-    the operator already has open.
+    History, because this has been got wrong repeatedly. Every attempt that OPENED something moved
+    the operator's focus in the end - `code -r`, restoring the window focus, an in-editor helper,
+    reusing an existing group - so opening was briefly made opt-in and the operator then asked the
+    obvious question (*"I should be seeing the log in VSCODE. why am i not seeing it?"*). The
+    resolution is the helper in `tools/simshow/`, which now cannot move the focus: it opens with
+    `preserveFocus`, never re-shows the operator's document, never creates a group (no split), and
+    does nothing at all when the file is already on screen. That is why showing is the default
+    again; `PICAMP_SHOW_FILES=0` turns it off.
 
-    Set `PICAMP_SHOW_FILES=1` to opt in to the tab-opening (macOS `open -g`, Windows via the
-    `tools/simshow` helper, which opens in an existing non-active group only and never splits).
+    macOS uses `open -g` (no activation); Windows drops the request file the helper watches.
     """
-    if os.environ.get("PICAMP_SHOW_FILES") != "1":
+    if os.environ.get("PICAMP_SHOW_FILES") == "0":
         if not quiet:
-            print("open_progress_log: not opening (set PICAMP_SHOW_FILES=1 to opt in):\n  "
+            print("open_progress_log: not opening (PICAMP_SHOW_FILES=0):\n  "
                   + "\n  ".join(str(Path(p)) for p in paths))
         return False
     cli, how = resolve_cli()

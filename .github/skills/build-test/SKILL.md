@@ -144,19 +144,19 @@ in another window, and a `code -r <log>` call raises VS Code over what they are 
    deleting a file a watcher holds open kills the watcher.
 2. Launch the run with its output redirected into that log. `run_suite_with_watchdog.py` /
    `run_logged.py` write a `RUN_BEGIN` header and append the exit-code line at the end.
-3. **On Windows, NOTHING is opened for you - and that is deliberate.** VS Code's CLI has no
-   background-open: `code -r <log>` reveals the file as the ACTIVE EDITOR TAB and un-minimises the
-   window, and putting the window focus back afterwards does not undo the tab change. The user's
-   rule is "show the log, never move the focus, not even to the tab" (2026-09-25: *"I still want the
-   log shown, I just don't want it to have focus, that's all"*, then, after a `code -r` plus
-   focus-restore attempt, *"The log is still getting focus when shown. Leave the focus ALONE."*).
-   So `open_progress_log.open_in_editor()` opens on macOS (`open -g`, no activation, no tab change)
-   and returns False on Windows, printing the path instead; the launcher writes
-   `LOG_TO_WATCH <path>` into the run log's header so the file to follow is discoverable. The ways
-   to watch on Windows are the operator's own: a tab they already have open, or the **Log Viewer**
-   extension following the file (it re-reads inside its own webview and never touches a tab).
-   Do NOT "fix" this by calling `code -r` "just to be helpful" - that IS the complaint.
-   `AppendLog` in `platform_process.py` is the heartbeat helper.
+3. **On Windows, NOTHING is opened automatically, and that is the settled answer** (2026-09-25). Both
+   automatic routes are ruled out by the operator: putting the log in the ACTIVE tab makes it the tab
+   their next keystrokes land in (*"my typing went in the tab and fucked up the run"*), and putting it
+   in a SECOND editor group is a split screen (*"it's the second editor group that I DO NOT WANT.
+   That's what I meant by 'split-screen'"*), while `code -r` after a later request to show it took the
+   focus again (*"focus just got set to the log tab -- AGAIN!!! ... DO NOT set focus to it"*). So:
+   the launcher writes `LOG_TO_WATCH <path>` into the run log and prints `watch: <path>` to stdout,
+   the failure prose is printed INTO the log (see the scope-trace rule below), and `tools/simshow`
+   (the in-repo VS Code helper, `tools/simshow/install.ps1`) only ever raises a **non-modal
+   notification** with an `Open` button - once per file per session - and opens with `preserveFocus`
+   even then. The operator's click is their choice; the tool never takes the focus itself. Do NOT
+   "improve" this by opening a tab, reusing a group, or `code -r`: every one of those has been tried
+   and each one interrupted the operator. `AppendLog` in `platform_process.py` is the heartbeat helper.
 4. Which file is the moving one depends on how you launched it: **when you pass `--log <file>`, the
    heartbeat appends INTO that file** (verified 2026-09-23: the heartbeat process is spawned with
    `--log` pointing at the same path). Only when `--log` is
@@ -527,6 +527,28 @@ L-then-H gives `freq_khz=73 current_band=1`, H-then-L gives
 frequency reads as a small number (roughly 0.4 x the low byte). **Superseded:** the 5 ms/10 ms cadence
 experiments listed above were chasing this truncation, so treat the "aliasing" explanation in the
 2026-09-22 and 2026-09-24 notes as historical.
+
+**`80m TX injection lock not exercised` - the check is GONE, do not re-add it (2026-09-25).** It
+required a KEYED+LOCKED sample whose `frequency_khz` was non-zero, and it is a property of the
+simulator's pacing, not of the firmware. Five measurements on the same ELF settle it:
+1. `run_suite_with_watchdog.py --test suite --only FREQ_CTR --bands 80m` **PASSES** - the same band,
+   keyed and locked, reads the injected 3600 kHz when the scenario runs alone, and reads a hard 0 for
+   all 99 samples of that window in the full-suite session. The session's tick/injection phase
+   decides it, not the firmware.
+2. In that failing session the same band's **unkeyed** samples read the injected 3600 kHz **68 times
+   of 93**, so the stimulus and the byte order are fine.
+3. Injecting **five times per sample step** instead of once changed nothing (ruled out).
+4. Disabling the T1CON stop/start bracket changed nothing, and neither did always restarting the
+   timer (`TMR1_STOP_BRACKET`, `T1CON 0x27` after every write) - both ruled out.
+5. `T1CON` reads `39` (= 0x27, running) throughout, so the timer is not stopped; and the firmware
+   resets `TMR1` to 0 on every 10 ms gate while nothing in this model clocks it, so a gate landing
+   after another gate necessarily reads the reset zero. `print TMR1` returns an EMPTY value in MDB
+   (registers other than pins do not print), which is why the register path could not be probed
+   further this way.
+`validate_band_coverage` still requires a non-zero reading that classified each band, and the lock
+assertion (`keyed + stage 3 + band_locked + current_band == expected`) still stands. The debugging
+instruments for this area are `--only <scenario>` and `--bands <name>` (`--test suite --only FREQ_CTR
+--bands 80m` is ~40 s), NOT the whole suite.
 
 **`release did not enter stage 4` is a SAMPLING ALIAS, not a firmware fault (2026-09-25).** Once the
 injection above was fixed the base (plain PTT) scenario moved to

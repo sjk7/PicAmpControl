@@ -39,28 +39,6 @@ function writeReceipt(payload) {
   }
 }
 
-// The group the operator is working in, and the document inside it. Both are restored after the
-// log has been shown, because the point is that nothing about their editing session moves.
-function activeGroupSnapshot() {
-  const group = vscode.window.tabGroups.activeTabGroup;
-  const tab = group && group.activeTab;
-  return { group: group ? group.viewColumn : undefined, uri: tab && tab.input && tab.input.uri };
-}
-
-// Find a group that is NOT the one the operator is typing in. Creating one is never acceptable: a
-// new group SPLITS their editor, which is exactly what the operator objected to ("I ended up with
-// TWO log follows in split screen"). Only a real, already-existing group counts - and only one with
-// a positive column number, because VS Code reports the pseudo-columns -1 (Active) and -2 (Beside)
-// for group-like values, and passing -2 to an open call is a request to MAKE a group.
-function nonActiveColumn(activeColumn) {
-  const other = vscode.window.tabGroups.all.find(
-    (group) => group.viewColumn !== activeColumn && group.viewColumn > 0
-  );
-  return other ? other.viewColumn : undefined;
-}
-
-const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"];
-
 // Any tab that already shows `uri`, anywhere. Re-opening a file that is already on screen is how the
 // operator ended up with two follows of the same log side by side in a split editor, which is not
 // wanted (user instruction, 2026-09-25: *"I ended up with TWO log follows then, in split screen. I
@@ -77,6 +55,10 @@ function findOpenTab(uri) {
   return null;
 }
 
+// Files this window has already been offered. One notification per file per session: a new one for
+// every status update of every run would turn a helpful offer into noise.
+const offered = new Set();
+
 async function showRequestedLog() {
   let payload;
   try {
@@ -92,52 +74,38 @@ async function showRequestedLog() {
   } catch (err) {
     // If it cannot be removed it will simply be handled again on the next change.
   }
-  const before = activeGroupSnapshot();
   const uri = vscode.Uri.file(payload.path);
   try {
-    const existing = findOpenTab(uri);
-    if (existing) {
-      // Already on screen. Revealing it would either move the focus or make it the ACTIVE tab, and
-      // opening it again produces the duplicate split view the operator rejected - so nothing is
-      // done, which is exactly right: the file is already in front of them.
-      writeReceipt({ shown: payload.path, already_open: true,
-                     group: String(existing.group.viewColumn), preserved: true });
+    // NOTHING is opened automatically. Both automatic routes are ruled out by the operator:
+    // making it the active tab in the one group takes their typing (it wrecked a run), and putting
+    // it in a second group SPLITS the editor, which is the "split screen" they do not want
+    // (2026-09-25: *"Ah well its the second editor group that I DO NOT WANT. That's what I meant by
+    // 'split-screen'"*). So: if it is already on screen, do nothing; otherwise offer it with a
+    // NON-MODAL notification whose buttons the operator clicks - their click, their choice, and the
+    // notification itself never takes focus.
+    if (findOpenTab(uri)) {
+      writeReceipt({ shown: payload.path, already_open: true, preserved: true });
       return;
     }
-    const column = nonActiveColumn(before.group);
-    if (column === undefined) {
-      // ONE editor group, and the file is not open. There is nowhere to put it that is not the
-      // operator's own tab, and creating a group for it SPLITS their editor - which is the thing to
-      // avoid. So nothing is opened; the receipt says so, and the run log carries the path.
-      writeReceipt({ shown: payload.path, opened: false, preserved: true,
-                     reason: "only one editor group; not splitting the editor" });
-      return;
+    // OPEN IT, with `preserveFocus: true` - so the tab appears and keeps updating (the operator
+    // expects to see the run they just started: *"I expect to see the log followed now"*) while the
+    // focus stays exactly where it was. `preserveFocus` is the whole point: the version that moved
+    // the focus is what put their keystrokes into the log tab. The tab is opened in the ACTIVE group
+    // because creating a group would split the editor, which they have rejected outright.
+    try {
+      if (payload.path.toLowerCase().endsWith(".png")) {
+        await vscode.commands.executeCommand("vscode.open", uri, {
+          preview: false,
+          preserveFocus: true,
+        });
+      } else {
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });
+      }
+      writeReceipt({ shown: payload.path, opened: true, preserved: true });
+    } catch (err) {
+      writeReceipt({ shown: payload.path, opened: false, error: String(err) });
     }
-    if (IMAGE_EXTENSIONS.some((ext) => payload.path.toLowerCase().endsWith(ext))) {
-      // An IMAGE must go through the `vscode.open` command, not openTextDocument: the latter forces
-      // the text editor, which shows a PNG as an unreadable binary placeholder instead of the
-      // picture (and a picture in a normal editor tab is what the operator wants, so it can be
-      // copied into other software). `preview: false` makes it a real, pinned tab rather than a
-      // preview tab that the next click replaces.
-      await vscode.commands.executeCommand("vscode.open", uri, {
-        viewColumn: column,
-        preserveFocus: true,
-        preview: false,
-      });
-    } else {
-      const doc = await vscode.workspace.openTextDocument(uri);
-      await vscode.window.showTextDocument(doc, {
-        viewColumn: column,
-        preserveFocus: true,
-        preview: false,
-      });
-    }
-    // NOTHING is focused afterwards. The earlier version "put the operator back" with
-    // showTextDocument(original, { preserveFocus: false }) - an explicit request to FOCUS that
-    // document - which is how the log tab took the focus again (user report, 2026-09-25: *"focus
-    // just got set to the log tab -- AGAIN!!!"*). Every call here uses preserveFocus: true, and the
-    // operator's active editor is never touched.
-    writeReceipt({ shown: payload.path, column: String(column), preserved: true });
   } catch (err) {
     writeReceipt({ shown: payload.path, error: String(err) });
   }

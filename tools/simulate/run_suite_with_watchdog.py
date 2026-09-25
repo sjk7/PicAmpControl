@@ -230,6 +230,9 @@ def main():
     parser.add_argument("--only", default=None,
                         help="Suite scenarios to run, comma-separated (debugging shortcut: "
                              "`--only FREQ_CTR` runs just that scenario instead of all eleven)")
+    parser.add_argument("--bands", default=None,
+                        help="Restrict the run to bands, comma-separated (e.g. `--only FREQ_CTR "
+                             "--bands 80m` boots and goes straight to that band's check)")
     parser.add_argument("--heartbeat", action="store_true",
                         help="Internal: run only the progress heartbeat (own process)")
     parser.add_argument("--label", default=None,
@@ -280,6 +283,8 @@ def main():
         command = SUITE + (["--quick-bands"] if args.quick_bands else [])
         if args.only:
             command += ["--only", args.only]
+        if args.bands:
+            command += ["--bands", args.bands]
     elif args.test == "repro-20m":
         test_name = "Repro_FirstDit_20m"
         command = REPRO_20M
