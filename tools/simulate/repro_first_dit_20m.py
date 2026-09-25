@@ -23,6 +23,8 @@ import platform_process as procutil  # noqa: E402
 FREQ_KHZ = 14000          # 20m
 EXPECTED_BAND = "4"       # BAND_20M
 COUNTS = FREQ_KHZ * 1000 // 400   # inverse of the firmware's pulses*2/5 scaling
+DETECT_GATES = 15         # 15 x 10 ms gates = 150 ms of RF present, >> the 20 ms detect window
+DETECT_WINDOW_MS = 20     # the firmware must report a frequency within this window of key-down
 
 # Fewer prints per sample than the full harness: ADC pins are stimulus-only, so drop them.
 t.ADC_PINS = []
@@ -34,11 +36,17 @@ def sample_lines() -> str:
 
 
 def inject_atomic() -> str:
-    """Halt Timer1, write both bytes, restart - the merged suite's write_tmr1_count pattern."""
+    """Halt Timer1, write both bytes, restart - the merged suite's write_tmr1_count pattern.
+
+    Byte ORDER matters: T1CON 0x27 leaves RD16 (16-bit read/write) enabled, so a write to TMR1H
+    is buffered and only committed when TMR1L is written. Writing L then H therefore drops the
+    high byte (0x88B8 injected -> 0x00B8 read -> 73 kHz), which is why 20m - the only band whose
+    count exceeds 0x7FFF - never classified. Write H first.
+    """
     return "\n".join([
         "write T1CON 0x26",
-        f"write TMR1L 0x{COUNTS & 0xFF:02X}",
         f"write TMR1H 0x{(COUNTS >> 8) & 0xFF:02X}",
+        f"write TMR1L 0x{COUNTS & 0xFF:02X}",
         "write T1CON 0x27",
     ])
 
@@ -76,6 +84,14 @@ def write_graph(samples, path: Path) -> bool:
         ax.step(times, values, where="post", color="#1e88e5")
         ax.set_ylabel(label, rotation=0, ha="right", va="center", fontsize=8)
         ax.grid(True, alpha=0.3)
+
+    # Zoom to the keyed region: the 1200 ms startup wait would otherwise squash all the detail
+    # into a sliver. Key-down is where the RC0 pin drops from 1 to 0.
+    keydown = next((i for i in range(1, len(samples))
+                    if samples[i - 1][1]["RC0"] == 1 and samples[i][1]["RC0"] == 0), None)
+    if keydown is not None:
+        axes[-1].set_xlim(times[keydown - 1] - 20, times[-1] + 20)
+
     axes[3].axhline(FREQ_KHZ, color="green", linestyle=":", alpha=0.7)
     axes[3].annotate(f"injected {FREQ_KHZ}", (times[len(times) // 2], FREQ_KHZ),
                      xytext=(0, 4), textcoords="offset points", fontsize=7, color="green")
@@ -90,8 +106,9 @@ def write_graph(samples, path: Path) -> bool:
         seen = sorted({s[2].get("g_fc_status.frequency_khz") for s in samples[keyed[0]:]})
         last_band = samples[-1][2].get("g_fc_status.current_band")
         axes[0].annotate(
-            f"FAIL (red): injected {FREQ_KHZ} kHz but freq_khz read {seen}, "
-            f"current_band={last_band} (never {EXPECTED_BAND})",
+            f"FAIL (red): {FREQ_KHZ} kHz held for the whole window but freq_khz read {seen} "
+            f"(no detection within {DETECT_WINDOW_MS} ms), current_band={last_band} "
+            f"(never {EXPECTED_BAND})",
             xy=(start, 1), xytext=(6, 34), textcoords="offset points",
             fontsize=8, color="red", fontweight="bold",
             arrowprops=dict(arrowstyle="->", color="red"))
@@ -114,13 +131,13 @@ def main() -> int:
         "write pin RB4 0v", "write pin RC2 5v", "write pin RB0 5v", "write pin RB6 5v",
         # Wait out the 1000 ms startup inhibit (PTT is ignored until it clears).
         t.stepi(1200), sample_lines(),
-        "write pin RC0 0v",          # PTT asserted (active low)
-        t.stepi(100), sample_lines(),   # let the main loop latch PTT (and clear the comp reset)
-        # Hold the injected 20m across the firmware's 10 ms gate, sampling after each gate.
-        f"{inject_atomic()}\n{t.stepi(10)}\n{sample_lines()}",
-        f"{inject_atomic()}\n{t.stepi(10)}\n{sample_lines()}",
-        f"{inject_atomic()}\n{t.stepi(10)}\n{sample_lines()}",
-        f"{inject_atomic()}\n{t.stepi(10)}\n{sample_lines()}",
+        "write pin RC0 0v",          # STIMULUS: PTT asserted (active low) = key down
+        # The radio's RF follows the key. Hold 20m present and WAIT for the counter to detect it:
+        # inject + a full 10 ms gate, repeated - 15 gates = 150 ms, well beyond the 20 ms window in
+        # which a detection is expected. The firmware must produce a frequency inside that window;
+        # only if it never does may the run fail.
+    ] + [f"{inject_atomic()}\n{t.stepi(10)}\n{sample_lines()}"
+         for _ in range(DETECT_GATES)] + [
         "quit",
     ])
 
@@ -143,18 +160,36 @@ def main() -> int:
     freq = last[2].get("g_fc_status.frequency_khz")
     locked = last[2].get("g_fc_status.band_locked")
     ptt = last[2].get("g_ptt_active")
-    seen = sorted({s[2].get("g_fc_status.frequency_khz") for s in samples
-                   if s[2].get("g_ptt_active") == "true"})
+    keyed = [s for s in samples if s[2].get("g_ptt_active") == "true"]
+    seen = sorted({s[2].get("g_fc_status.frequency_khz") for s in keyed})
+    # The counter must report a frequency within the detect window of key-down; only a window that
+    # stays silent the whole time is a failure.
+    detected = next((s for s in keyed
+                     if (s[2].get("g_fc_status.frequency_khz") or "0") not in ("0", "")), None)
     print(f"repro_first_dit_20m: injected {FREQ_KHZ} kHz -> freq_khz={freq} "
           f"current_band={band} locked={locked} ptt_active={ptt} (expected band {EXPECTED_BAND})")
     print(f"repro: frequencies seen while PTT active: {seen}")
+    print("repro: per-gate freq_khz: " +
+          " ".join(str(s[2].get("g_fc_status.frequency_khz") or 0) for s in samples))
+    print("repro: per-gate band:     " +
+          " ".join(str(s[2].get("g_fc_status.current_band") or 0) for s in samples))
+    print("repro: per-gate ptt:      " +
+          " ".join("1" if s[2].get("g_ptt_active") == "true" else "0" for s in samples))
+    print(f"repro: detect window = {DETECT_WINDOW_MS} ms after key-down "
+          f"({len(keyed)} keyed gates observed)")
     if ptt != "true":
         print("repro: PTT did not latch - the repro is not exercising the classifier")
         return 2
+    if detected is None:
+        print(f"repro: FAIL - no frequency reported anywhere in the window "
+              f"(the {FREQ_KHZ} kHz burst was never measured)")
+        return 1
     if band == EXPECTED_BAND:
-        print("repro: PASS - 20m classified")
+        print(f"repro: PASS - {FREQ_KHZ} kHz detected "
+              f"(freq_khz={detected[2]['g_fc_status.frequency_khz']}) and 20m classified")
         return 0
-    print(f"repro: FAIL - the {FREQ_KHZ} kHz burst did not classify as 20m")
+    print(f"repro: FAIL - a frequency was detected but the band classified {band}, not "
+          f"{EXPECTED_BAND}")
     return 1
 
 

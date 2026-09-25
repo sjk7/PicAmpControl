@@ -17,6 +17,21 @@ output - MDB emits megabytes, the capture wedges the shell, and "the terminal sh
 nothing at all about the run. The terminal is for launching and for short bounded process checks
 only.
 
+**Hard rule: the PTT line is ACTIVE LOW - `RC0` HIGH is RX (idle), and it must FALL LOW for TX.**
+(user instruction, 2026-09-25, after the agent drew conclusions from traces while getting this
+backwards - *"You are making a fundamental error here. What's more you do not seem to know you are
+doing it."*) So in every harness level, every trace annotation and every diagram lane:
+`write pin RC0 5v` = RX/idle/unkeyed, `write pin RC0 0v` = key down / TX asserted, and `print pin RC0`
+reading **0** means the operator is keying. Never describe a HIGH RC0 as "keyed" or "active".
+The second half of the rule is what the key-down means: **on the falling edge of PTT the firmware
+must WAIT for a valid frequency detection before it continues the rest of the sequence** - refusing
+to transmit only if no frequency can be detected. It is not a fixed delay, and it is not immediate:
+the key produces three jobs (band relays switch immediately, the frequency counter is sniffed and its
+band confirmed against the relay output, then the TX path is enabled) in that order. The user's own
+word-for-word statement is kept in `docs/steves-sequence.md`; read it before changing or judging the
+key-down path, and do NOT re-derive it. When a trace looks wrong, check the polarity first: a
+"PTT never latched" or "release never keyed" conclusion is usually RC0 read the wrong way round.
+
 **Process traps re-hit the hard way on 2026-09-24 - read these before touching a run.**
 1. **The rule above was broken repeatedly and the terminal did wedge.** The damage is concrete: after
    one `grep` over a multi-megabyte MDB transcript, *every* later `run_in_terminal` call in that
@@ -325,6 +340,36 @@ and failed at 20m in the suite); and **one constant frequency per phase** satisf
 `validate_band_outputs` only needs `current_band == expected` plus the single band-change sample
 skipped, so the design is otherwise unchanged. Keep the whole-suite run as the verdict - this bug
 reproduces only in the suite, never in `repro_i5_15m_10m.py`.
+
+**ROOT CAUSE of every "injection lost / freq=0 / freq=73" symptom above (2026-09-25): the Timer1
+injection wrote `TMR1L` BEFORE `TMR1H`.** With `RD16` set (`T1CON` running value `0x27`), a write to
+`TMR1H` is buffered and only committed when `TMR1L` is written, so L-then-H silently DROPS the high
+byte: the count is truncated to its low byte. 14000 kHz injects as `0x88B8` -> read back `0x00B8` =
+184 pulses = **73 kHz** (band 1), which is the exact `freq=73` this skill had been attributing to
+"aliasing with the 10 ms TMR1 reset". 7000 kHz (`0x445C`) truncated the same way to `0x005C` = 92
+counts = 37 kHz (band 1, the no-signal default), so the base PTT scenario's "40m" preflight was never
+band 3 either. Every injected band read as roughly 0.4 x its own low byte, which is why the failures
+looked like "fails at a later band each run".
+**Fix: always write `TMR1H` first, then `TMR1L`**, and if a torn read is still feared, bracket with
+`T1CON 0x26` / `0x27` as before. Proved with the minimal repro `tools/simulate/repro_first_dit_20m.py`:
+L-then-H gives `freq_khz=73 current_band=1`, H-then-L gives
+`freq_khz=14000 current_band=4 locked=true` (PASS). Check byte order FIRST whenever an injected
+frequency reads as a small number (roughly 0.4 x the low byte). **Superseded:** the 5 ms/10 ms cadence
+experiments listed above were chasing this truncation, so treat the "aliasing" explanation in the
+2026-09-22 and 2026-09-24 notes as historical.
+
+**`release did not enter stage 4` is a SAMPLING ALIAS, not a firmware fault (2026-09-25).** Once the
+injection above was fixed the base (plain PTT) scenario moved to
+`AssertionError: release did not enter stage 4`, and its own trace shows stage 3 -> 5 -> 0 with RC5 and
+RC6 both rising inside one 5 ms sample. `tools/simulate/repro_release_stage4.py` (watchdog
+`--test repro-release`) reproduces the same release path at **1 ms** sampling and PASSES: stage 4 is
+present and lasts ~4 ms (measured 1513-1516 ms), i.e. shorter than the suite's 5 ms release sample,
+so no 5 ms sample can be guaranteed to land in it. `tx_vcc_delay_ms` is the stage-4 length - check it
+before assuming a firmware bug. That the repro PASSES means it is evidence, not a repro: do not
+"fix" the firmware for this, and do not relax the assertion - make the release sampling fine enough
+to see a stage whose length it cannot exceed. The repro writes a CSV, a timing diagram and its log;
+open them with the focus-safe helper (`open_progress_log.open_in_editor`, which uses `open -g`), never
+by stealing focus into the tab.
 
 **Trap (2026-09-24): a key-down that lands inside the startup inhibit looks exactly like "PTT was
 never latched".** `FREQ_CTR_FAIL` keys at the end of a fixed idle, and at `105 x 10 ms` the keyed

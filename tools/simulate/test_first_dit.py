@@ -152,9 +152,12 @@ class Builder:
             self._sample()
 
     def inject(self, freq_khz):
+        # RD16 is enabled (T1CON 0x27), so a write to TMR1H is buffered and only committed when
+        # TMR1L is written: the HIGH byte must go first or the count is truncated to 8 bits
+        # (0x88B8 -> 0x00B8 -> 73 kHz, which is why 20m never classified).
         counts = int(round((freq_khz * 1000.0) / 400.0))
-        self.lines.append(f"write TMR1L 0x{counts & 0xFF:02X}")
         self.lines.append(f"write TMR1H 0x{(counts >> 8) & 0xFF:02X}")
+        self.lines.append(f"write TMR1L 0x{counts & 0xFF:02X}")
 
     def inject_step(self, freq_khz, count, ms=10):
         for _ in range(count):

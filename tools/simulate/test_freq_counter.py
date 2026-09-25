@@ -82,20 +82,22 @@ def build_script() -> str:
     # each step, matching the FREQ_CTR scenario in trace_ptt_sequence.py:
     #   0x444C = 17484 pulses -> 6993 kHz (BAND_40M)
     #   0x88A8 = 34984 pulses -> 13993 kHz (BAND_20M)
+    # RD16 is enabled, so the HIGH byte must be written first: TMR1H is buffered and only
+    # committed when TMR1L is written. L-then-H truncates the count to 8 bits.
     def write_tmr1_40m():
-        lines.append("write TMR1L 0x4C")
         lines.append("write TMR1H 0x44")
+        lines.append("write TMR1L 0x4C")
 
     def write_tmr1_20m():
-        lines.append("write TMR1L 0xA8")
         lines.append("write TMR1H 0x88")
+        lines.append("write TMR1L 0xA8")
 
     def write_tmr1_count(freq_khz):
         total_counts = int(round((freq_khz * 1000.0) / 400.0))
         if total_counts > 0xFFFF:
             raise ValueError(f"{freq_khz} kHz cannot be represented by a 16-bit Timer1 write")
-        lines.append(f"write TMR1L 0x{total_counts & 0xFF:02X}")
         lines.append(f"write TMR1H 0x{(total_counts >> 8) & 0xFF:02X}")
+        lines.append(f"write TMR1L 0x{total_counts & 0xFF:02X}")
 
     for phase_name, ptt_level, step_count, step_size in PHASES:
         if phase_name == "steady_coarse":
@@ -111,8 +113,8 @@ def build_script() -> str:
                 total_counts = int(round((freq_khz * 1000.0) / 400.0))
                 lines.append(f"# BAND CHECK: {band_name} @ {freq_khz} kHz (expected {expected_band})")
                 for _ in range(10):
-                    lines.append(f"write TMR1L 0x{total_counts & 0xFF:02X}")
                     lines.append(f"write TMR1H 0x{(total_counts >> 8) & 0xFF:02X}")
+                    lines.append(f"write TMR1L 0x{total_counts & 0xFF:02X}")
                     lines.append("Stepi 80000")
                     sample()
                 lines.append("# Restore 40m before TX lock scenario")

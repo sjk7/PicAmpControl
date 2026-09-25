@@ -34,6 +34,7 @@ HEARTBEAT_INTERVAL = 5.0
 SUITE = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/trace_ptt_sequence.py"), "--suite"]
 FIRST_DIT = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/test_first_dit.py")]
 REPRO_20M = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/repro_first_dit_20m.py")]
+REPRO_RELEASE = [sys.executable, "-u", str(REPO_ROOT / "tools/simulate/repro_release_stage4.py")]
 
 # Orphan signatures. The mdb entries have to match a leftover simulator without also
 # matching an unrelated `java.exe`, of which this machine has several (the MPLAB X IDE's
@@ -216,7 +217,9 @@ def main():
     # CTest registration in user.cmake passes the same figure explicitly.
     parser.add_argument("--timeout", type=float, default=1200.0)
     parser.add_argument("--log", type=Path, default=DEFAULT_LOG)
-    parser.add_argument("--test", choices=("suite", "first-dit", "repro-20m"), default="suite",
+    parser.add_argument("--test",
+                        choices=("suite", "first-dit", "repro-20m", "repro-release"),
+                        default="suite",
                         help="Which simulator test this watchdog wraps")
     parser.add_argument("--quick-bands", action="store_true",
                         help="Run one valid 40m band plus the frequency-failure scenario")
@@ -263,6 +266,9 @@ def main():
     elif args.test == "repro-20m":
         test_name = "Repro_FirstDit_20m"
         command = REPRO_20M
+    elif args.test == "repro-release":
+        test_name = "Repro_ReleaseStage4"
+        command = REPRO_RELEASE
     else:
         test_name = "FirstDit_BandDetectionAndHotSwitchGuards"
         command = FIRST_DIT

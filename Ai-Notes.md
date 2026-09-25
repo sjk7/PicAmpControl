@@ -128,6 +128,11 @@ static, hand-captured design input. The user's words and the full list of what w
   `TMR1H`/`TMR1L` instead, which covers the maths, band classification, band-select outputs and TX lock
   but not the pin, the PPS routing, the prescaler or the overflow path. Do not try to clock the pin.
   Traps and the re-tests: `.github/skills/build-test/SKILL.md` and `TESTING.md`.
+- **Injecting the count: write `TMR1H` FIRST, then `TMR1L`.** `RD16` is set, so a `TMR1H` write is
+  buffered until `TMR1L` is written; the old L-then-H order dropped the high byte and truncated the
+  count (14000 kHz / `0x88B8` read back as `0x00B8` = 73 kHz), which is the real cause of the "20m
+  never classified" blocker, not injection aliasing. Proved with
+  `tools/simulate/repro_first_dit_20m.py`.
 
 ## Current design
 This repository is the active PIC18F47Q10-I/P linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.

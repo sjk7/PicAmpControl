@@ -223,13 +223,17 @@ def build_script(trip_name=None) -> str:
             raise ValueError(f"{freq_khz} kHz cannot be represented by a 16-bit Timer1 write")
         # Atomic injection: halt Timer1, write both bytes, restart - so the firmware's 10 ms
         # freq_counter_tick_10ms() cannot read a torn register (TMR1L new + TMR1H old) mid-write.
-        # The earlier two-write injection raced the running gate and produced garbage readings
-        # (freq=73/8/36), which kept stability_count below STABILITY_REQUIRED_TICKS and left
-        # current_band stuck - the "TX lock failed ... freq=0, band=1" bug. T1CON running value is
-        # 0x27 (ON+RD16+NOT_SYNC+CKPS=2, per freq_counter_init); stop is 0x26.
+        # BYTE ORDER (root cause of the 20m blocker): T1CON 0x27 has RD16 set, so a write to TMR1H
+        # is buffered and only committed when TMR1L is written. Writing L before H therefore drops
+        # the high byte, so only counts <= 0xFF survived: 7000 kHz (0x445C) truncated to 0x005C =
+        # 92 pulses = 37 kHz (band 1, the no-signal default) and 14000 kHz (0x88B8) to 0x00B8 =
+        # 184 pulses = 73 kHz, so no injected band above ~100 kHz ever classified. Write TMR1H FIRST.
+        # This truncation is also what produced the "garbage readings" (freq=73/8/36) once blamed on
+        # a race with the running gate.
+        # T1CON running value is 0x27 (ON+RD16+NOT_SYNC+CKPS=2, per freq_counter_init); stop is 0x26.
         lines.append("write T1CON 0x26")
-        lines.append(f"write TMR1L 0x{total_counts & 0xFF:02X}")
         lines.append(f"write TMR1H 0x{(total_counts >> 8) & 0xFF:02X}")
+        lines.append(f"write TMR1L 0x{total_counts & 0xFF:02X}")
         lines.append("write T1CON 0x27")
 
     def inject_step_hold(freq_khz, ms, chunk_ms=5):
