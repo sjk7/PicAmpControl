@@ -1691,7 +1691,8 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir, stimulus=()):
             ax.set_yticklabels([stage_name(v) for v in sorted(SEQ_STAGE_NAMES)], fontsize=7)
             label = "g_sequence_stage"
         else:
-            values = [sample[3][pin] for sample in samples]
+            # A lean (unkey) sample has no ADC prints: plot a gap rather than crashing on the key.
+            values = [sample[3].get(pin, float("nan")) for sample in samples]
             ax.plot(times, values, drawstyle="steps-post")
             ax.set_ylim(-0.2, 5.2)
             label = f"ADC {ADC_LABELS[pin]}"

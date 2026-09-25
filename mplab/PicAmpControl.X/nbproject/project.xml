@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  MPLAB X IDE v6.35 project for the PicAmpControl firmware.
+
+  Hand-written, and checked to be loadable and buildable by the tool MPLAB itself uses
+  (`mplab_platform/bin/prjMakefilesGenerator`), because the IDE cannot be driven from a script.
+  The SOURCES ARE THE REPOSITORY'S OWN (`../../firmware/src` and `../../firmware/include`): this
+  project references them, it does not copy them, so MPLAB and the CMake build can never drift
+  apart. See mplab/README.md.
+
+  Device and toolchain facts (one source of truth each, both mirrored here):
+    * device    PIC18F47Q10-I/P  - cmake/My_Pic_Project/default/device.cmake
+    * toolchain MPLAB XC8 v4.00  - C:\Program Files\Microchip\xc8\v4.00
+    * pack      PIC18F-Q_DFP 1.30.487
+-->
+<project xmlns="http://www.netbeans.org/ns/project/1">
+    <type>com.microchip.mplab.nbide.embedded.makeproject</type>
+    <configuration>
+        <data xmlns="http://www.netbeans.org/ns/make-project/1">
+            <name>PicAmpControl</name>
+            <creation-uuid>b7c1f0b5-9d1e-4b3a-9f2c-7a5e6d4c3b21</creation-uuid>
+            <make-project-type>0</make-project-type>
+            <c-extensions>c</c-extensions>
+            <cpp-extensions/>
+            <header-extensions>h</header-extensions>
+            <sourceEncoding>UTF-8</sourceEncoding>
+            <asminc-extensions/>
+            <make-dep-projects/>
+            <sourceRootList>
+                <sourceRootElem>../../firmware/src</sourceRootElem>
+                <sourceRootElem>../../firmware/include</sourceRootElem>
+            </sourceRootList>
+            <confList>
+                <confElem>
+                    <name>default</name>
+                    <type>2</type>
+                </confElem>
+            </confList>
+            <formatting>
+                <project-formatting-style>false</project-formatting-style>
+            </formatting>
+        </data>
+    </configuration>
+</project>
