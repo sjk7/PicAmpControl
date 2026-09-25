@@ -24,6 +24,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from enum import IntEnum
 from pathlib import Path
 
@@ -1368,6 +1369,8 @@ def validate_scenario(scenario, samples) -> None:
     One function for every scenario, so the suite and `--only <scenario>` cannot drift apart and a
     scenario's checks are declared in exactly one place.
     """
+    global LAST_SCENARIO
+    LAST_SCENARIO = scenario
     if scenario is None:
         validate_sequence(samples)
         validate_frequency_ready(samples, None)
@@ -1500,7 +1503,49 @@ def parse_trace(output: str):
     # block's first pin print.
     if pending and state_pending and len(pending) >= len(PINS):
         emit()
+    LAST_SAMPLES.clear()
+    LAST_SAMPLES.extend(samples)
     return samples
+
+
+# What the last parse/validation looked at, so an unexpected exception can still write a failure text
+# that names the scenario and says what the firmware was doing when the harness fell over.
+LAST_SCENARIO = None
+LAST_SAMPLES = []
+
+
+def write_crash_report(exc: BaseException) -> Path:
+    """Write the prose failure text for a run that CRASHED, not one that failed an assertion.
+
+    Two separate holes showed up on 2026-09-25, both reported by the operator: an uncaught harness
+    exception (`KeyError: 'RA0'` out of the trace CSV writer) produced NO failure text at all, so the
+    run ended with `TEST_END code=1` and nothing that explained it; and the failure text is exactly
+    what the launcher appends to the END of the log (and what the scope trace mirrors), so without a
+    file there was no failure text to append either. So anything that raises now leaves a text with
+    the same three prose blocks as a real failure, plus the traceback.
+    """
+    graphs = REPO_ROOT / "_build" / "My_Pic_Project" / "sim" / "graphs"
+    try:
+        graphs.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return graphs / "crash_failure.txt"
+    path = graphs / f"{_scenario_label(LAST_SCENARIO).lower()}_failure.txt"
+    check = SCENARIO_CHECKS.get(LAST_SCENARIO, SCENARIO_CHECKS[None])
+    observed = (_observed_summary(LAST_SAMPLES, LAST_SCENARIO) if LAST_SAMPLES
+                else "no samples were parsed before the crash")
+    text = (f"FAILED: {_scenario_label(LAST_SCENARIO)} - THE TEST HARNESS ITSELF RAISED\n\n"
+            f"WHAT THIS TEST IS FOR\n{check}\n\n"
+            f"WHAT THE FIRMWARE ACTUALLY DID\n{observed}\n\n"
+            f"WHY THAT IS A FAILURE\nThe harness raised {type(exc).__name__}: {exc}\n"
+            f"It stopped before its assertions completed, so this is a defect in the TEST until it is\n"
+            f"shown to be a firmware fault.\n\n"
+            f"TRACEBACK\n{traceback.format_exc()}")
+    try:
+        path.write_text(text, encoding="utf-8")
+    except OSError:
+        pass
+    print(text, flush=True)
+    return path
 
 
 def stage_name(value) -> str:
@@ -1520,6 +1565,9 @@ def stage_name(value) -> str:
 
 
 def write_trace_csv(samples, trace_name, csv_dir):
+    """The CSV half of a trace. A LEAN (unkey) sample has no ADC prints and no full state block, so
+    its ADC columns are left EMPTY and its state lookups go through `.get` - a bare index here crashed
+    the run with `KeyError: 'RA0'` the first time lean release samples existed (2026-09-25)."""
     csv_path = csv_dir / f"{trace_name}.csv"
     with open(csv_path, "w") as f:
         f.write("time_s," + ",".join(PIN_LABELS[p] for p in PINS) +
@@ -1528,10 +1576,12 @@ def write_trace_csv(samples, trace_name, csv_dir):
         for instr_count, vals, state, adc_voltages in samples:
             t = instr_count * SECONDS_PER_INSTRUCTION
             reason = block_reason(state) or ""
-            stage = state['g_sequence_stage']
-            f.write(f"{t:.6f}," + ",".join(str(vals[p]) for p in PINS) +
-                    "," + ",".join(f"{adc_voltages[pin]:.3f}" for pin in ADC_PINS) +
-                    f",{state['g_ptt_active']},{stage},{stage_name(stage)},{state['g_state']},{reason}\n")
+            stage = state.get('g_sequence_stage', "")
+            f.write(f"{t:.6f}," + ",".join(str(vals.get(pin, "")) for pin in PINS) +
+                    "," + ",".join(f"{adc_voltages[pin]:.3f}" if pin in adc_voltages else ""
+                                   for pin in ADC_PINS) +
+                    f",{state.get('g_ptt_active', '')},{stage},{stage_name(stage)},"
+                    f"{state.get('g_state', '')},{reason}\n")
     return csv_path
 
 
@@ -1601,17 +1651,18 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir, stimulus=()):
                                          sample[1]["RC6"] == 1 and
                                          sample[1]["RC7"] == 1), trip_index)] if trip_index is not None else None
     complete_index = next((index for index, sample in enumerate(samples)
-                           if sample[2]["g_ptt_complete_display_active"] == "true" and
+                           if sample[2].get("g_ptt_complete_display_active") == "true" and
                            (sample[1]["RC5"], sample[1]["RC6"], sample[1]["RC7"]) == (0, 0, 0)), None)
     lifecycle = [(times[0], "LCD: STARTUP")]
-    ptt_index = next((index for index, sample in enumerate(samples) if sample[2]["g_ptt_active"] == "true"), None)
+    ptt_index = next((index for index, sample in enumerate(samples)
+                      if sample[2].get("g_ptt_active") == "true"), None)
     if ptt_index is not None:
         lifecycle.append((times[ptt_index], "LCD: PTT REQ"))
     if complete_index is not None:
         lifecycle.append((times[complete_index], "LCD: PTT_COMPLETE"))
         restored_index = next((index for index, sample in enumerate(samples)
                                if index > complete_index and
-                               sample[2]["g_transient_menu_display"] == "false"), None)
+                               sample[2].get("g_transient_menu_display") == "false"), None)
         if restored_index is not None:
             lifecycle.append((times[restored_index], "LCD: RESTORED USER PAGE"))
     if trip_time is not None:
@@ -1633,7 +1684,7 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir, stimulus=()):
         elif kind == "stage":
             # The TX state machine, as `<number> <NAME>` ticks: the number is what the assertions
             # and enum use, the name is what makes it readable.
-            ax.step(times, [int(sample[2]["g_sequence_stage"]) for sample in samples],
+            ax.step(times, [int(sample[2].get("g_sequence_stage") or 0) for sample in samples],
                     where="post")
             ax.set_ylim(-0.2, 5.2)
             ax.set_yticks(sorted(SEQ_STAGE_NAMES))
@@ -1861,10 +1912,12 @@ def main():
         for instr_count, vals, state, adc_voltages in samples:
             t = instr_count * SECONDS_PER_INSTRUCTION
             reason = block_reason(state) or ""
-            stage = state['g_sequence_stage']
-            f.write(f"{t:.6f}," + ",".join(str(vals[p]) for p in PINS) +
-                "," + ",".join(f"{adc_voltages[pin]:.3f}" for pin in ADC_PINS) +
-                f",{state['g_ptt_active']},{stage},{stage_name(stage)},{state['g_state']},{reason}\n")
+            stage = state.get('g_sequence_stage', "")
+            f.write(f"{t:.6f}," + ",".join(str(vals.get(pin, "")) for pin in PINS) +
+                "," + ",".join(f"{adc_voltages[pin]:.3f}" if pin in adc_voltages else ""
+                                for pin in ADC_PINS) +
+                f",{state.get('g_ptt_active', '')},{stage},{stage_name(stage)},"
+                f"{state.get('g_state', '')},{reason}\n")
     print(f"Wrote {csv_path} ({len(samples)} samples)")
 
     # Print console FAULT/blocking-reason transitions so "why can't PTT key up" is obvious
@@ -1912,15 +1965,15 @@ def main():
                           if block_reason(sample[2]) == f"FAULT: {trip_name}")
         trip_time = times[trip_index]
         shutdown_complete_time = times[next(index for index, sample in enumerate(samples)
-                                            if sample[2]["g_trip_shutdown_active"] == "false" and
+                                            if sample[2].get("g_trip_shutdown_active") == "false" and
                                             block_reason(sample[2]) == f"FAULT: {trip_name}")]
     lifecycle = [(times[0], "LCD: STARTUP")]
     ptt_index = next((index for index, sample in enumerate(samples)
-                      if sample[2]["g_ptt_active"] == "true"), None)
+                      if sample[2].get("g_ptt_active") == "true"), None)
     if ptt_index is not None:
         lifecycle.append((times[ptt_index], "LCD: PTT REQ"))
     complete_index = next((index for index, sample in enumerate(samples)
-                           if sample[2]["g_ptt_complete_display_active"] == "true" and
+                           if sample[2].get("g_ptt_complete_display_active") == "true" and
                            (sample[1]["RC5"], sample[1]["RC6"], sample[1]["RC7"]) == (0, 0, 0)), None)
     if complete_index is not None:
         lifecycle.append((times[complete_index], "LCD: PTT_COMPLETE"))
@@ -1928,7 +1981,7 @@ def main():
         lifecycle.append((trip_time, f"LCD: TRIP {trip_name}"))
     restored_index = next((index for index, sample in enumerate(samples)
                            if complete_index is not None and index > complete_index and
-                           sample[2]["g_transient_menu_display"] == "false"), None)
+                           sample[2].get("g_transient_menu_display") == "false"), None)
     if restored_index is not None:
         lifecycle.append((times[restored_index], "LCD: RESTORED USER PAGE"))
     for ax, (kind, pin) in zip(axes, graph_rows):
@@ -1939,13 +1992,14 @@ def main():
             ax.set_yticks([0, 1])
             label = PIN_LABELS[pin]
         elif kind == "stage":
-            ax.step(times, [int(s[2]["g_sequence_stage"]) for s in samples], where="post")
+            ax.step(times, [int(s[2].get("g_sequence_stage") or 0) for s in samples], where="post")
             ax.set_ylim(-0.2, 5.2)
             ax.set_yticks(sorted(SEQ_STAGE_NAMES))
             ax.set_yticklabels([stage_name(v) for v in sorted(SEQ_STAGE_NAMES)], fontsize=7)
             label = "g_sequence_stage"
         else:
-            values = [s[3][pin] for s in samples]
+            # A lean (unkey) sample has no ADC prints: plot a gap rather than crashing on the key.
+            values = [s[3].get(pin, float("nan")) for s in samples]
             ax.plot(times, values, drawstyle="steps-post")
             ax.set_ylim(-0.2, 5.2)
             label = f"ADC {ADC_LABELS[pin]}"
@@ -1982,5 +2036,9 @@ def main():
     fig.savefig(png_path, dpi=120)
     print(f"Wrote {png_path}")
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:      # noqa: BLE001 - anything at all must leave a failure text behind
+        write_crash_report(exc)
+        raise
 

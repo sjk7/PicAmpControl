@@ -221,7 +221,23 @@ def kill_orphaned_processes(log):
             log.write(f"[{stamp()}] CLEANUP orphan_pid={pid} command={command}\n")
 
 
-def append_run_summary(log, since: float, code: int, test_name: str) -> None:
+def tail_lines(path: Path, count: int = 25, max_bytes: int = 16384) -> list:
+    """The last `count` lines of the file at `path`, reading at most `max_bytes` of it.
+
+    Bounded on purpose: the run log can be tens of megabytes (every MDB line lands in it), and the
+    only thing wanted is the tail that says how the run ended.
+    """
+    try:
+        size = path.stat().st_size
+        with path.open("rb") as handle:
+            handle.seek(max(0, size - max_bytes))
+            chunk = handle.read().decode("utf-8", "replace")
+    except OSError:
+        return []
+    return chunk.splitlines()[-count:]
+
+
+def append_run_summary(log, since: float, code: int, test_name: str, path: Path) -> None:
     """Append the run's verdict, in words, to the END of the log.
 
     The scope trace already writes its WHAT THIS TEST IS FOR / WHAT THE FIRMWARE ACTUALLY DID / WHY
@@ -234,29 +250,44 @@ def append_run_summary(log, since: float, code: int, test_name: str) -> None:
     words come from the `<scenario>_failure.txt` that `scope_trace.on_failure()` wrote, never a
     re-render, so the log and the picture can never disagree.
 
+    A FAILED run with no failure text gets the run's OWN TAIL instead of a shrug (2026-09-25, user
+    report: *"It failed with no trace? INCORRECT!!"*). A crash in the test - before any waveform can
+    be rendered - is still a failure, and the traceback a few lines above `TEST_END` is what explains
+    it; saying "no failure text was written" and stopping there told the operator nothing.
+
     A PASSING run gets a block too (user instruction, 2026-09-25: *"If the run was successful, then
     don't print nothing, print that it was successful in the log."*). A clean run otherwise ends on a
     heartbeat line, which reads exactly like a run that stopped for no reason - the same trap as a
     quiet log read as a dead one.
     """
     elapsed = time.time() - since
+    # Read the tail BEFORE writing anything, so the summary cannot quote itself.
+    tail = tail_lines(path) if code != 0 else []
     graphs = REPO_ROOT / "_build" / "My_Pic_Project" / "sim" / "graphs"
     newest = None
     if code != 0 and graphs.is_dir():
         try:
-            candidates = [path for path in graphs.glob("*_failure.txt")
-                          if path.stat().st_mtime >= since - 1.0]
+            candidates = [candidate for candidate in graphs.glob("*_failure.txt")
+                          if candidate.stat().st_mtime >= since - 1.0]
         except OSError:
             candidates = []
         if candidates:
-            newest = max(candidates, key=lambda path: path.stat().st_mtime)
+            newest = max(candidates, key=lambda candidate: candidate.stat().st_mtime)
 
     log.write("")
+    if newest is None and code == 0:
+        log.write(f"===== RUN PASSED name={test_name} elapsed={elapsed:.0f}s =====")
+        log.write("Every check in this run passed; no failure text to report.")
+        log.write("===== END RUN SUMMARY =====")
+        return
     if newest is None:
-        verdict = "RUN PASSED" if code == 0 else f"RUN FAILED code={code}"
-        log.write(f"===== {verdict} name={test_name} elapsed={elapsed:.0f}s =====")
-        log.write("Every check in this run passed; no failure text to report." if code == 0 else
-                  "No failure text was written for this run (no scope trace was produced).")
+        log.write(f"===== RUN FAILED code={code} name={test_name} elapsed={elapsed:.0f}s =====")
+        log.write("No scope trace was produced: the test did not reach a waveform. Its last lines are "
+                  "the reason, and they are repeated here so the end of the log explains itself.")
+        for line in tail:
+            if line.startswith("=====") or line.startswith("Scope trace:"):
+                continue      # a summary from an earlier run in this same file, not this failure
+            log.write(line)
         log.write("===== END RUN SUMMARY =====")
         return
 
@@ -445,7 +476,7 @@ def main():
         log.write(f"[{stamp()}] TEST_END name={test_name} code={proc.returncode}")
     # LAST, and after the heartbeat is gone, so it is the tail the reader sees (see
     # append_run_summary): the verdict in words - the failure prose, or an explicit pass.
-    append_run_summary(log, run_started, code, test_name)
+    append_run_summary(log, run_started, code, test_name, args.log)
     print(f"SUITE_EXIT:{code}")
     print(f"LOG:{args.log}")
     return code
