@@ -211,16 +211,15 @@ static const char *const TX_SELFTEST_NAMES[] = {
 };
 
 /* The two remedies, split by cause (user instruction, 2026-09-25: *"re-instate a steady unkeyed
-   state, change the band (if valid) and key once more"*). A measurement-side check folds back: open
-   the RF path, re-select from the next valid measurement and key once more, because the band lock
-   lost its measurement and the next one is expected to be valid. A stuck-output check latches the
-   undefined/unkeyable state instead: the driver did not obey the command, so re-keying would
-   re-engage the same fault - the one case that can damage the LDMOS. */
-#define TX_SELFTEST_FOLDBACK_MASK \
-    (TX_SELFTEST_NO_RF | TX_SELFTEST_BAD_BAND | TX_SELFTEST_LOCK_LOST | \
-     TX_SELFTEST_BAND_CHG | TX_SELFTEST_NO_LOCK | TX_SELFTEST_NO_BAND)
+   state, change the band (if valid) and key once more"*). A FATAL check latches the
+   undefined/unkeyable state - an unknown/out-of-spec measurement (BAD_BAND) or an output that did
+   not obey its command (TX_SENSE, STALLED, REL_STUCK) must not be re-keyed into, because re-keying
+   would re-engage the same fault, the one case that can damage the LDMOS. Every other check folds
+   back (open the RF path and let the bypass-snoop path re-select the next valid measurement and key
+   once more): a rig that moved to a different KNOWN band (BAND_CHG), or a first-dit measurement that
+   has not settled yet (NO_RF, LOCK_LOST, NO_LOCK, NO_BAND). */
 #define TX_SELFTEST_LATCH_MASK \
-    (TX_SELFTEST_TX_SENSE | TX_SELFTEST_STALLED | TX_SELFTEST_REL_STUCK)
+    (TX_SELFTEST_BAD_BAND | TX_SELFTEST_TX_SENSE | TX_SELFTEST_STALLED | TX_SELFTEST_REL_STUCK)
 
 /* Append `text` to the NUL-terminated `buffer`, inserting a '+' first when it is not the first
    name, and never writing more than `limit` characters (the truncation marker is the caller's). */
@@ -923,15 +922,9 @@ void show_menu_page(void) {
         return;
     }
     if (g_unkeyable || g_selftest_failed) {
-        /* A FAULT RECORD IS ALWAYS ON THE PANEL. Two sources, one screen: the amplifier dropped out of
-           a transmission it could not vouch for (`g_unkeyable`, live), or the self-test recorded a
-           fault during this key-down (`g_selftest_failed`, held) - and the record is what makes the
-           screen last. The operator's rule (2026-09-25): a fault condition always displays on the LCD,
-           and is cleared at the next key-down, so the reason can still be read after the amplifier has
-           recovered - an unkey that would not finish, or a band lock that had lost its measurement,
-           must not vanish off the panel the moment it stops being true. Line 0 names the state in the
-           same shape as a latched fault; line 1 is the self-test's OWN reason, '+' when more than one
-           check failed, never blank. */
+        /* A FAULT RECORD IS ALWAYS ON THE PANEL. Line 0 reads FAULT:, never a PWR/SWR page; line 1 is
+           the self-test's OWN reason, '+' when more than one check failed, and never blank. Cleared
+           at the next key-down, so the reason can still be read after the amplifier has recovered. */
         static char selftest_reason_text[17];
         lcd_set_cursor(0, 0);
         lcd_write_text("FAULT:");
@@ -1590,17 +1583,16 @@ void update_current_peak(unsigned int current_a) {
     }
 }
 
-/* How long an unkey may take before it counts as stuck. The two release stages are the configured VCC
-   and bias delays, so the window is twice their sum, plus a margin for a relay that is still moving
-   and for the TX_SELFTEST_TICK_MS granularity this check rides on. */
+/* How long an unkey may take before it counts as stuck. The two release stages are the configured
+   VCC and bias delays, so the window is twice their sum, plus a margin for a relay that is still
+   moving and for the TX_SELFTEST_TICK_MS granularity this check rides on. */
 static unsigned int tx_selftest_unkey_window(void) {
     return ((unsigned int)g_thresholds.tx_vcc_delay_ms + g_thresholds.tx_bias_delay_ms) * 2U + 20U;
 }
 
 /* Advance the hold counters for the checks failing on this evaluation, latch the ones that have held
-   for LOCK_LOSS_UNKEYABLE_MS, and take the undefined/unkeyable action when anything latches. Shared
-   by the keyed checks and the unkey check, so there is exactly one window, one latch and one action
-   no matter which half of the process noticed the fault. */
+   for LOCK_LOSS_UNKEYABLE_MS, and take the remedy. Shared by the keyed checks and the unkey check,
+   so there is exactly one window, one latch and one action no matter which half noticed the fault. */
 static void tx_selftest_apply(unsigned int failing) {
     unsigned char index;
     unsigned int longest = 0;
@@ -1635,16 +1627,15 @@ static void tx_selftest_apply(unsigned int failing) {
         return;
     }
 
-    /* THE ACTION. The amplifier is in a state it cannot vouch for, so it must not be left in it.
-       Two remedies, split by cause (user instruction, 2026-09-25: *"re-instate a steady unkeyed
-       state, change the band (if valid) and key once more"*):
-       * a stuck-output check (TX_SENSE, STALLED, REL_STUCK) latches the undefined/unkeyable state.
-         The driver did not obey the command, so re-keying would re-engage the same fault - the one
-         case that can damage the LDMOS. The amplifier stays in bypass until the operator keys again.
-       * a measurement check folds back: open the RF path, unlock the band so the selection can follow
-         live RF again, then let the bypass-snoop path re-select the next valid measurement and key
-         once more. A condition that persists simply stays in bypass-snoop - the amplifier is already
-         cold, so it can never oscillate back into transmit on an unverified band. */
+    /* THE ACTION, split by cause (user instruction, 2026-09-25):
+       * a FATAL check latches the undefined/unkeyable state - an unknown/out-of-spec measurement
+         (BAD_BAND) or an output that did not obey its command (TX_SENSE, STALLED, REL_STUCK) must
+         not be re-keyed into, because re-keying would re-engage the same fault, the one case that can
+         damage the LDMOS. The amplifier stays in bypass until the operator keys again.
+       * a recoverable check folds back: open the RF path, unlock the band so the selection can follow
+         live RF again, and let the bypass-snoop path re-select the next valid measurement and key
+         once more (a rig that moved to a different KNOWN band, or a first-dit measurement still
+         settling). */
     bool permanent = g_unkeyable || (latched_now & TX_SELFTEST_LATCH_MASK) != 0;
 
     apply_bypass();
@@ -1692,9 +1683,9 @@ void tx_selftest_run(void) {
     if (g_startup_inhibit || g_comparator_reset_active || g_fault_latched) {
         /* Nothing this self-test is about is running (still coming up, in the comparator-reset window,
            or a trip is latched). A LATCHED TRIP is in this list on purpose: a tripped amplifier is not
-           transmitting, so its stage being forced idle is not a self-test failure - the trip has its
-           own screen. The REASON is deliberately left alone here: it is held until the next key-down
-           so the operator can still read it after unkeying. */
+           transmitting, so its stage being forced idle is not a self-test failure. The REASON is
+           deliberately left alone here: it is held until the next key-down so the operator can still
+           read it after unkeying. */
         for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
             g_selftest_hold[index] = 0;
         }
@@ -1704,22 +1695,20 @@ void tx_selftest_run(void) {
     }
 
     if (!g_ptt_active) {
-        /* THE UNKEY. A release is part of the keying process, and it is the half the operator can
-           least afford to be lied to about: the amplifier must unwind in order and end cold. So the
-           same self-test covers it - `TX_SELFTEST_REL_STUCK` is raised when the unwind does not
-           finish inside the window, when the bias is dropped while TX_VCC is still asserted (the one
-           order that must never happen), or when the sequence reports idle with an output still
-           asserted on the pin. */
+        /* THE UNKEY. A release is the half the operator can least afford to be lied to about: the
+           amplifier must unwind in order and end cold. REL_STUCK is raised when the unwind does not
+           finish in the window, when the bias is dropped while TX_VCC is still asserted, or when the
+           sequence reports idle with an output still asserted on the pin. */
         if (g_sequence_stage == SEQ_RELEASE_RELAYS || g_sequence_stage == SEQ_RELEASE_VCC) {
             if (g_selftest_unkey_ms < 0xFFFFU) {
                 g_selftest_unkey_ms += TX_SELFTEST_TICK_MS;
             }
             if (g_selftest_unkey_ms > tx_selftest_unkey_window()) {
-                failing |= TX_SELFTEST_REL_STUCK;   /* the unwind never finished */
+                failing |= TX_SELFTEST_REL_STUCK;
             }
             if (SENSE_TX_VCC == output_level(false, g_thresholds.tx_vcc_active_high) &&
                 SENSE_TX_BIAS != output_level(false, g_thresholds.tx_bias_active_high)) {
-                failing |= TX_SELFTEST_REL_STUCK;   /* bias dropped while TX_VCC was still on */
+                failing |= TX_SELFTEST_REL_STUCK;
             }
         } else {
             g_selftest_unkey_ms = 0;
@@ -1727,7 +1716,7 @@ void tx_selftest_run(void) {
                 (SENSE_TX != output_level(false, g_thresholds.tx_active_high) ||
                  SENSE_TX_VCC != output_level(false, g_thresholds.tx_vcc_active_high) ||
                  SENSE_TX_BIAS != output_level(false, g_thresholds.tx_bias_active_high))) {
-                failing |= TX_SELFTEST_REL_STUCK;   /* idle, yet an output is still asserted */
+                failing |= TX_SELFTEST_REL_STUCK;
             }
         }
         tx_selftest_apply(failing);
@@ -1894,8 +1883,8 @@ void update_tx_sequence(void) {
 
     if (g_ptt_active) {
         if (g_unkeyable) {
-            /* A stuck-output self-test failure latched the undefined/unkeyable state: the amplifier
-               must not re-engage until the operator keys again. Hold bypass, leave the sequence idle. */
+            /* A fatal self-test check latched the undefined/unkeyable state: the amplifier must not
+               re-engage until the operator keys again. Hold bypass, leave the sequence idle. */
             apply_bypass();
             g_sequence_stage = SEQ_IDLE;
             return;

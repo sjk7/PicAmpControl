@@ -1997,6 +1997,22 @@ def main():
                                   stimulus=stimulus_spans(scenario_samples,
                                                           scenario_stimuli[scenario]))
             print(f"SUITE_SCENARIO_PASS {_scenario_label(scenario)}", flush=True)
+            if scenario in SELFTEST_SCENARIOS:
+                # A fatal fault: render the scope trace WITH the reconstructed FAULT: panel and open
+                # it, so the operator sees both what happened and what the LCD would be showing when
+                # the amplifier unkeys itself (user instruction, 2026-09-25).
+                flagged = [s for s in scenario_samples if s[2].get("g_selftest_failed") == "true"]
+                if flagged:
+                    panel_path = scope_trace.render_scope(
+                        scenario_samples,
+                        f"{_scenario_label(scenario)}: fatal fault, RF path opened",
+                        graph_dir / f"{trace_name}_scope.png",
+                        events=_scope_events(scenario_samples, scenario),
+                        lcd_state=flagged[0][2],
+                        stimulus=stimulus_spans(scenario_samples, scenario_stimuli[scenario]),
+                        lcd_caption="first self-test flagged sample",
+                    )
+                    scope_trace.show(panel_path)
         # Band-selection safety invariants (docs/first-dit-band-detection.md) over every
         # scenario: the LPF relays must never move while the amplifier is keyed, the amplifier
         # must never be keyed on a band that is not locked, and the band relays must always be

@@ -313,19 +313,24 @@ Consequences worth stating, because each one is a way to get this wrong:
   condition to persist, not an event.
 
 **The action, and the panel.** When a check first latches, the amplifier is in a transmission it cannot
-vouch for: the T/R relay is closed on a band whose only justification has gone. The firmware opens the
-RF path (bypass), unlocks the band so the selection can follow live RF again, and requires a fresh
-decode before it will key. The panel then reads:
+vouch for. The remedy is split by cause (user instruction, 2026-09-25):
+- a **measurement-side** check (`NO_RF`, `BAD_BAND`, `LOCK_LOST`, `BAND_CHG`, `NO_LOCK`, `NO_BAND`)
+  folds back: the firmware opens the RF path (bypass), unlocks the band so the selection can follow
+  live RF again, and the bypass-snoop path re-selects the next valid measurement and keys once more.
+- a **stuck-output** check (`TX_SENSE`, `STALLED`, `REL_STUCK`) latches the undefined/unkeyable state:
+  the driver did not obey the command, so re-keying would re-engage the same fault - the one case that
+  can damage the LDMOS. The amplifier stays in bypass until the operator keys again.
+
+The panel then reads:
 
 ```
-STATE: UNDEFINED
+FAULT:
 LOCK_LOST+NO_RF
 ```
 
 Line 1 is the `+`-joined reason mask (truncated to the 16 columns with a trailing `+`), and it is never
-blank - `OK` when nothing failed, `UNKNOWN` for a code the table does not know. This is **not** a
-latched trip: it clears itself as soon as a fresh decode verifies a band, and unlike a trip it needs no
-operator action. The **reason**, however, is held until the next key-down, so it can still be read
+blank - `OK` when nothing failed, `UNKNOWN` for a code the table does not know. Line 0 is `FAULT:`,
+never a power/SWR page. The **reason** is held until the next key-down, so it can still be read
 after the amplifier has recovered. The check is deliberately not in an interrupt:
 `freq_counter_tick_10ms()` is where TMR1 is read and reset, so no check can know more than that 10 ms
 gate, and the action is far too heavy for ISR context.
