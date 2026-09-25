@@ -18,7 +18,7 @@ PANELS = [
     ("HOME PAGE: TEMP", "P=   0W ........", "TEMP  25C", "Other selectable home page example"),
     ("PTT LOW REQUEST", "P=   0W SWR=1.00", "................", "Firmware saves the selected home page; no fault text"),
     ("PTT RESET PULSE", "P=   0W SWR=1.00", "................", "RC1/SETTLE pulses LOW for 10 ms; LCD page is unchanged"),
-    ("PTT_COMPLETE", "PTT COMPLETE    ", "TX ACTIVE       ", "Shown only after RELAYS, TX_VCC, and TX_BIAS are all active"),
+    ("PTT_COMPLETE", "PTT COMPLETE    ", "TX BIAS-ON      ", "Shown only after RELAYS, TX_VCC, and TX_BIAS are all active"),
     ("HOME PAGE RESTORED", "P=   0W ........", "TEMP  25C", "Restored 500 ms after PTT_COMPLETE"),
     ("TEMP RECOVERY", "P=   0W ........", "TEMP  25C", "After hysteresis: comparator reset, then TX can sequence again"),
 ]
@@ -38,7 +38,7 @@ NORMAL_PANELS = [
     ("PEP / TEMPERATURE", "P=1125W ||||||..", "TEMP  50C       ", "Peak hold and decay are user settings saved in EEPROM"),
     ("SWR METER", "SWR1   SWR=1.74", "SWR2   SWR=1.23", "SWR readouts use the firmware's two-decimal display resolution"),
     ("CURRENT METER", "A= 30A PK= 30A  ", "||||||||||||....", "Peak holds for 1.2 s, then decays smoothly with the configured peak interval"),
-    ("PTT_COMPLETE", "PTT COMPLETE    ", "TX ACTIVE       ", "Transient normal TX confirmation; no trip is latched"),
+    ("PTT_COMPLETE", "PTT COMPLETE    ", "TX BIAS-ON      ", "Transient normal TX confirmation; no trip is latched"),
 ]
 SETTINGS_PANELS = [
     ("01 PRESS", "SWR1 TRIP      ", "3.0:1           ", "Rotate changes SWR1 trip threshold"),

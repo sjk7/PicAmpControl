@@ -242,8 +242,8 @@ typedef enum {
 
 static unsigned char g_sequence_stage = SEQ_IDLE;
 
-/* Text for a stage, for the LCD/debug read-out and for matching a trace line to the state machine.
-   Indexed directly by the enum value, so the two must stay in the same order. */
+/* Text for a sequence stage, for the LCD/debug read-out and for matching a trace line to the state
+   machine. Indexed directly by the enum value, so the two must stay in the same order. */
 static const char *const SEQUENCE_STAGE_NAMES[] = {
     "IDLE",         /* SEQ_IDLE           */
     "TX-ON",        /* SEQ_TX_ON          */
@@ -258,6 +258,21 @@ const char *sequence_stage_name(unsigned char stage) {
         return "?";
     }
     return SEQUENCE_STAGE_NAMES[stage];
+}
+
+/* Text for a measured band, for the LCD. Note BAND_UNKNOWN is an alias of BAND_160M, so 160m is
+   also what "no measurement yet" reads as - which is exactly what the operator needs to see. */
+const char *band_name(rf_band_t band) {
+    switch (band) {
+        case BAND_80M: return "80m";
+        case BAND_40M: return "40m";
+        case BAND_20M: return "20m";
+        case BAND_15M: return "15m";
+        case BAND_10M: return "10m";
+        case BAND_OUT_OF_SPEC: return "OOS";
+        case BAND_160M:
+        default: return "160m";
+    }
 }
 
 /* Current stage as text. Refreshed once per main-loop pass so it can be used by the LCD debug
@@ -721,7 +736,26 @@ void show_menu_page(void) {
         lcd_set_cursor(0, 0);
         lcd_write_text("PTT COMPLETE");
         lcd_set_cursor(1, 0);
-        lcd_write_text("TX ACTIVE");
+        /* The stage name, not a bare "TX ACTIVE": if the sequence ever fails to sit in BIAS-ON
+           while keyed, the panel says which stage it is actually in. */
+        lcd_write_text("TX ");
+        lcd_write_text(sequence_stage_name(g_sequence_stage));
+        return;
+    }
+    if (g_ptt_active) {
+        /* Keyed but not yet complete: name the stage being executed, so a sequence that stalls on
+           the bench (never reaching BIAS-ON, or sitting in a UNKEY stage after release) is read off
+           the panel with no harness attached. Refreshed by the 100 ms live-page redraw. */
+        freq_counter_status_t fc;
+        freq_counter_get_status(&fc);
+        lcd_set_cursor(0, 0);
+        lcd_write_text("TX ");
+        lcd_write_text(sequence_stage_name(g_sequence_stage));
+        lcd_set_cursor(1, 0);
+        lcd_write_text(band_name(fc.current_band));
+        lcd_write_byte(' ', true);
+        lcd_write_unsigned(fc.frequency_khz);
+        lcd_write_text("kHz");
         return;
     }
     if (g_menu_page == MENU_PAGE_STATUS) {
@@ -736,7 +770,14 @@ void show_menu_page(void) {
         lcd_write_byte('W', true);
         lcd_write_swr_right(9, g_swr2_live_hundredths);
         lcd_set_cursor(1, 0);
-        lcd_write_power_bar(power_w, g_thresholds.swr2_fwd_full_scale_w, 16);
+        if (g_sequence_stage != SEQ_IDLE) {
+            /* Unkeyed but not idle: the release never finished, so show which stage it is stuck in
+               instead of the power bar. */
+            lcd_write_text("SEQ ");
+            lcd_write_text(sequence_stage_name(g_sequence_stage));
+        } else {
+            lcd_write_power_bar(power_w, g_thresholds.swr2_fwd_full_scale_w, 16);
+        }
         return;
     }
     if (g_menu_page == MENU_PAGE_POWER_TEMPERATURE) {
