@@ -95,7 +95,7 @@ def selftest_reason_text(mask) -> str:
         value = int(str(mask).strip())
     except (TypeError, ValueError):
         return "UNKNOWN"
-    limit = SELFTEST_PANEL_COLUMNS - 2   # the last column is the truncation marker's
+    limit = SELFTEST_PANEL_COLUMNS - 1   # the last column is the truncation marker's
     used = ""
     for bit, name in SELFTEST_REASON_NAMES:
         if not value & bit:

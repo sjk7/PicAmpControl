@@ -237,7 +237,56 @@ Protection is evaluated every pass and can override the sequencer at any point.
 - The sequencer does not read the band-select outputs back; it reads back only the three TX outputs,
   and those only at the two points where a safety decision depends on it.
 
-## 9. How this is tested
+## 9. The TX self-test: the amplifier's own verdict
+
+While PTT is low the firmware tests **itself**, once per 1 ms tick (`tx_selftest_run()`, called from
+`update_tx_sequence()`), and reports its own verdict. It does not measure the RF chain; it answers one
+question: **is the firmware where the PTT and the sequencer say it should be?**
+
+- PTT is low and a stage claims to be running.
+- The outputs that stage says are asserted are actually asserted **on the pin** (`SENSE_*`, not the
+  latch) - the same rule the PTT-COMPLETE confirmation follows.
+- The band lock is still backed by a measurement. That is not an extra frequency test: the lock is the
+  sequencer's own justification for holding the T/R relay closed.
+
+**Granular, and reported together.** Every failing check is a bit in `g_selftest_reason`
+(`tx_selftest_reason_t` in `main.c`), and several failures are reported at once, ORed:
+
+| bit | name on the panel | what it means while keyed |
+| --- | --- | --- |
+| 0x01 | `NO_RF` | the counter saw no pulses at all in the gate window |
+| 0x02 | `BAD_BAND` | pulses, but the frequency is outside the classifier's 1000-32000 kHz range |
+| 0x04 | `LOCK_LOST` | pulses in range, but no stable measurement backs the frozen band selection |
+| 0x08 | `BAND_CHG` | a usable measurement on a DIFFERENT band: the rig moved while keyed |
+| 0x10 | `NO_LOCK` | keyed with no band lock held at all |
+| 0x20 | `TX_SENSE` | an output the stage claims is asserted is not reading back asserted |
+| 0x40 | `STALLED` | the band IS established, but the sequence has not reached BIAS-ON |
+| 0x80 | `NO_BAND` | keyed and nothing has decoded - correctly still in bypass, but it cannot say where it is |
+
+**A check must HOLD to count.** Each check owns a consecutive-millisecond counter that only it resets,
+and nothing is flagged until its condition has held for `LOCK_LOSS_UNKEYABLE_MS` (200 ms). One torn
+counter read, one empty gate window or one tick with a driver still slewing can therefore never flag
+the amplifier - and equally, one good sample can never clear it.
+
+**The action, and the panel.** When a check first latches, the amplifier is in a transmission it cannot
+vouch for: the T/R relay is closed on a band whose only justification has gone. The firmware opens the
+RF path (bypass), unlocks the band so the selection can follow live RF again, and requires a fresh
+decode before it will key. The panel then reads:
+
+```
+STATE: UNDEFINED
+LOCK_LOST+NO_RF
+```
+
+Line 1 is the `+`-joined reason mask (truncated to the 16 columns with a trailing `+`), and it is never
+blank - `OK` when nothing failed, `UNKNOWN` for a code the table does not know. This is **not** a
+latched trip: it clears itself as soon as a fresh decode verifies a band, and unlike a trip it needs no
+operator action. The **reason**, however, is held until the next key-down, so it can still be read
+after the amplifier has recovered. The check is deliberately not in an interrupt:
+`freq_counter_tick_10ms()` is where TMR1 is read and reset, so no check can know more than that 10 ms
+gate, and the action is far too heavy for ISR context.
+
+## 10. How this is tested
 
 The machine is exercised in the simulator, and the invariants - not just the happy path - are
 asserted (`tools/simulate/trace_ptt_sequence.py`):
@@ -248,6 +297,13 @@ asserted (`tools/simulate/trace_ptt_sequence.py`):
 - the T/R relay must close only after the band relay has settled;
 - no keying on an unlocked band;
 - every trip path raises the outputs in the shutdown order and latches.
+
+Every scenario reads the **firmware's own verdict** (`g_selftest_failed` / `g_selftest_reason`) rather
+than re-deriving it from the model: for each band either the keyed band lock is verified, or the
+firmware named the reason it refused to key (and a flag with no name is a failure in its own right -
+the panel is the only read-out on the bench). No **keyed** `g_fc_status.frequency_khz` reading is
+asserted: the firmware resets TMR1 on every 10 ms gate and nothing in the simulator clocks it, so that
+reading measures the model's pacing, not the firmware (2026-09-25).
 
 This document describes intended behaviour. The firmware is the source of truth; if the two ever
 disagree, the firmware is right and this file is the bug. Related reading:

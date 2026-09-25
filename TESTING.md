@@ -193,12 +193,20 @@ single-stepping rather than per-scenario overhead.
 | 7 | `OVERDRIVE` | Overdrive trip |
 | 8 | `DRAIN` | Drain-peak trip |
 | 9 | `SWR1_1P5` | SWR1 at 1.5:1 and 2 kW must **not** trip |
-| 10 | `FREQ_CTR` | Frequency counter classifies all six nominal bands in RX and keeps each band locked through TX injection. Each band is engaged from its own live measurement, which wins over the remembered band (see the design doc) |
-| 11 | `FREQ_CTR_FAIL` | Negative test: with no Timer1 signal, PTT is latched but held in bypass-snoop — no band is locked, no TX stage advances, and every TX output stays inactive |
+| 10 | `FREQ_CTR` | Frequency counter classifies all six nominal bands in RX and keeps each band locked through TX injection. Each band is engaged from its own live measurement, which wins over the remembered band (see the design doc). The firmware's own keyed self-test is what the scenario asserts: per band, either the keyed band lock is verified, or the firmware named the reason it refused to key |
+| 11 | `FREQ_CTR_FAIL` | Negative test: with no Timer1 signal, PTT is latched but held in bypass-snoop - no band is locked, no TX stage advances, every TX output stays inactive, and the firmware's self-test names why (`NO_BAND`/`NO_LOCK`) |
 
 Each scenario also validates output pin sequencing, fault latching and re-arm behaviour, LCD
-status state, and startup-inhibit timing. `FREQ_CTR_FAIL` is intentionally a negative test —
+status state, and startup-inhibit timing. `FREQ_CTR_FAIL` is intentionally a negative test -
 it must never be "fixed" into a passing trip.
+
+**The firmware's verdict is the contract, not a counter reading.** While keyed the firmware tests
+itself (`tx_selftest_run()`; `docs/tx-sequencer.md` §9), and every scenario reads that verdict from
+`g_selftest_failed` / `g_selftest_reason` instead of re-deriving it from the model. A check must hold
+for 200 ms to count, several failures are reported together as `+`-joined names, and the reason is
+held on the panel until the next key-down. In particular no **keyed** `frequency_khz` reading is
+asserted: the firmware resets TMR1 on every 10 ms gate and nothing in the simulator clocks it, so such
+a reading measures the simulator's pacing rather than the firmware.
 
 Every scenario additionally has the band-selection safety invariants checked on its samples
 (relay selection frozen while keyed, never keyed with an unlocked band, and every relay move

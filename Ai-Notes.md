@@ -124,18 +124,21 @@ static, hand-captured design input. The user's words and the full list of what w
   picked from the data, what the test was for / what the firmware did / the assertion as text, the
   injected counter stimulus drawn over the frequency lane, and a reconstructed 16x2 LCD panel of the
   state at failure. Render it offline from `suite_raw_mdb.log` rather than re-running the suite.
-- Last verified runs: Windows 2026-09-25 nine of eleven scenarios pass, then
-  **`80m TX injection lock not exercised` - OPEN**: the counter reports a hard 0 for every one of the
-  99 keyed+locked+stage-3 samples of the 80m phase even though the harness injects 3600 kHz every
-  5 ms (160m shows 52 of 99 non-zero, so it is band/phase dependent, not a dead counter). It is NOT
-  the Timer1 byte order (already fixed, H-before-L) and NOT the harness's T1CON stop/start bracket
-  (tested with it removed: 51 of 100 non-zero either way). Root cause as understood: the firmware
-  stops, reads and **zeroes `TMR1` on every 10 ms gate**, and in the model nothing else clocks it
-  (T1CKI/PPS unmodelled, `CS=00`), so a gate that lands before the next injection reads the reset
-  zero - the reading alternates value/0 instead of being steady. Run it alone in ~40 s with
-  `run_suite_with_watchdog.py --test suite --only FREQ_CTR`, or with
-  `--test repro-freq-ctr` (`PICAMP_BANDS`). Evidence and the anti-traps: `bugfixes.md` and the
-  build-test skill. Earlier session history - `platform_process.py`, timeouts, the 16F strip, the
+- **`80m TX injection lock not exercised` - FIXED 2026-09-25, and it was the harness, not the
+  firmware**: `hold_band()` wrote all five Timer1 counts at the START of each 5 ms sample step, so
+  they landed ahead of that chunk's first 10 ms gate and every later gate read the firmware's own
+  TMR1 reset. Injecting once per simulated millisecond INSIDE the step fixes it and `--only FREQ_CTR
+  --bands 80m` now passes; the general trap and the method are in the build-test skill.
+- **A TX self-test is implemented (2026-09-25, IN FLIGHT - live position in
+  `docs/tx-self-test-plan.md`, design in `docs/tx-sequencer.md` §9)**: while keyed the firmware checks
+  PTT, the running stage, that stage's outputs (via `SENSE_*`) and the measurement behind the band
+  lock, ORs every check that has held for 200 ms into `g_selftest_reason` (bit flags, named together
+  on the panel as `STATE: UNDEFINED` plus the reason), opens the RF path and requires a fresh decode;
+  the reason is held until the NEXT key-down. The HARNESS asserts that verdict instead of any keyed
+  `frequency_khz` reading.
+- Last verified run: Windows 2026-09-25, `--only FREQ_CTR --bands 80m` green (full suite is the open
+  item - see the plan's "Where this got to"). Earlier session history - `platform_process.py`,
+  timeouts, the 16F strip, the
   device spike, **the SWR1 re-arm failure (FIXED 2026-09-25: the harness held PTT released for 50 ms
   against a measured 54 ms firmware poll latency, so the release edge was never seen; the window is
   now 200 ms)** - is in `bugfixes.md` 2026-09-22..24 and the skill. Not restated here.
@@ -158,6 +161,9 @@ static, hand-captured design input. The user's words and the full list of what w
 This repository is the active PIC18F47Q10-I/P linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
 
 ## Firmware
+- **The keyed TX self-test is implemented**: what it checks, the 200 ms hold, the reason mask and the
+  action are in docs/tx-sequencer.md §9; the plan and its live position are in
+  docs/tx-self-test-plan.md. The panel shows `STATE: UNDEFINED` plus the `+`-joined reason.
 - **First-dit band switching is implemented.** The model, its guards and its bench unknowns are in
   docs/first-dit-band-detection.md; the firmware API is freq_counter_restore_locked_band(),
   freq_counter_band_confirmed() and freq_counter_measured_band(). Bench-confirm BAND_SETTLE_MS (20 ms),
