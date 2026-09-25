@@ -61,6 +61,10 @@ cannot be made again.
   is part of doing the job, not a courtesy.
 
 ## Working style
+- **After every successful build or test increment: commit and push it promptly to `origin/main`.**
+  This is a hard rule, not a preference - the operator restated it on 2026-09-25 when a new session
+  failed to do it, because the wording had been living in machine-local memory instead of here.
+  Pass explicit paths to `git add` (never `git add .`), and check with `git --no-pager status --short`.
 - Do not ask permission to overwrite or edit a file whose change was already agreed - just do it.
 - Commit and push small verified increments promptly to `origin/main`. Always pass explicit paths to
   `git add` (never `git add .`), and use `git --no-pager status --short`.
