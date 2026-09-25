@@ -117,13 +117,51 @@ typedef struct {
 #define MENU_SETTING_U16 1
 #define MENU_SETTING_BOOL 2
 
-#define TRIP_REASON_SWR1 0x01
-#define TRIP_REASON_SWR2 0x02
-#define TRIP_REASON_HWFAULT 0x04
-#define TRIP_REASON_CURRENT 0x08
-#define TRIP_REASON_TEMP 0x10
-#define TRIP_REASON_OVERDRIVE 0x20
-#define TRIP_REASON_DRAIN 0x40
+/* Trip causes. Bit flags, one per protection, and the VALUES are a contract with the simulator
+   harnesses (TRIP_REASON_BITS in tools/simulate/trace_ptt_sequence.py) - keep both the bit
+   positions and the names aligned with the fault-name table in the build-test skill. */
+typedef enum {
+    TRIP_REASON_NONE = 0x00,
+    TRIP_REASON_SWR1 = 0x01,
+    TRIP_REASON_SWR2 = 0x02,
+    TRIP_REASON_HWFAULT = 0x04,
+    TRIP_REASON_CURRENT = 0x08,
+    TRIP_REASON_TEMP = 0x10,
+    TRIP_REASON_OVERDRIVE = 0x20,
+    TRIP_REASON_DRAIN = 0x40
+} trip_reason_t;
+
+/* One name per cause, and the one the LCD shows. Indexed by bit position, so this array and the
+   enum must stay in the same order. Kept to <= 11 characters so a name always fits on one 16-column
+   LCD line beside a short prefix. */
+#define TRIP_REASON_NAME_MAX 11
+static const char *const TRIP_REASON_NAMES[] = {
+    "SWR1",        /* TRIP_REASON_SWR1      0x01 */
+    "SWR2",        /* TRIP_REASON_SWR2      0x02 */
+    "HARDWARE",    /* TRIP_REASON_HWFAULT   0x04 */
+    "CURRENT",     /* TRIP_REASON_CURRENT   0x08 */
+    "TEMPERATURE", /* TRIP_REASON_TEMP      0x10 */
+    "OVERDRIVE",   /* TRIP_REASON_OVERDRIVE 0x20 */
+    "DRAIN"        /* TRIP_REASON_DRAIN     0x40 */
+};
+
+/* The cause to name for a latched trip mask: the highest-priority set bit, in the same order the
+   LCD's trip screen tests them. Returns "UNKNOWN" for 0 and for any bit this table does not know,
+   so the panel can never show a blank cause - outside the harness the LCD is the only read-out
+   there is (user, 2026-09-25). */
+const char *trip_reason_name(unsigned char reason) {
+    /* Bit positions, most severe first, in the same order the trip screen tests causes in:
+       TEMP, SWR1, SWR2, CURRENT, OVERDRIVE, HWFAULT, DRAIN. `reason & (1u << bit)` uses the enum
+       values as the bit positions they are, so a typo here cannot silently name the wrong fault. */
+    static const unsigned char priority_bits[] = { 4u, 0u, 1u, 3u, 5u, 2u, 6u };
+    unsigned char index;
+    for (index = 0; index < (unsigned char)(sizeof priority_bits / sizeof priority_bits[0]); index++) {
+        if (reason & (unsigned char)(1u << priority_bits[index])) {
+            return TRIP_REASON_NAMES[priority_bits[index]];
+        }
+    }
+    return "UNKNOWN";
+}
 
 #define MENU_IDLE_TIMEOUT_MS 8000
 #define TEMPERATURE_RECOVERY_HYSTERESIS_C 5U
@@ -631,6 +669,9 @@ void show_menu_page(void) {
         if (!screen_changed) {
             return;
         }
+        /* Line 0 ALWAYS carries the enumerated fault name for the latched mask. On the bench, with
+           no harness attached, the LCD is the only read-out there is, so no trip may ever leave a
+           blank or unnamed screen. Each cause then adds its measurement on line 1. */
         lcd_set_cursor(0, 0);
         if (g_trip_reason & TRIP_REASON_TEMP) {
             lcd_write_text(LCD_TEXT_TEMP);
@@ -655,22 +696,24 @@ void show_menu_page(void) {
             lcd_write_text(LCD_TEXT_MAX);
             lcd_write_swr_right(11, (unsigned int)g_thresholds.swr2_trip_tenths * 10U);
         } else if (g_trip_reason & TRIP_REASON_CURRENT) {
-            lcd_write_text("AMPS ");
+            lcd_write_text("CURRENT ");
             lcd_write_unsigned(g_live_current_a);
             lcd_write_byte('/', true);
             lcd_write_unsigned(g_thresholds.current_trip_a);
             lcd_write_byte('A', true);
         } else if (g_trip_reason & TRIP_REASON_OVERDRIVE) {
-            lcd_write_text("OVDR ");
+            lcd_write_text("OVERDRIVE ");
             lcd_write_unsigned(g_live_overdrive_mw / 1000U);
             lcd_write_byte('/', true);
             lcd_write_unsigned((unsigned int)g_thresholds.overdrive_trip_tenths_w / 10U);
             lcd_write_byte('W', true);
         } else {
-            lcd_write_text("FAULT: TRIP");
+            /* HARDWARE, DRAIN, any combination the chain above does not name, or a zero mask:
+               `trip_reason_name()` always returns something printable. */
+            lcd_write_text("FAULT: ");
+            lcd_write_text(trip_reason_name(g_trip_reason));
             lcd_set_cursor(1, 0);
-            if (g_trip_reason & TRIP_REASON_HWFAULT) lcd_write_text("HARDWARE");
-            else if (g_trip_reason & TRIP_REASON_DRAIN) lcd_write_text("DRAIN");
+            lcd_write_text("TRIP LATCHED");
         }
         return;
     }

@@ -52,6 +52,23 @@ every annotation: a bare "stage 4" is unreadable, which is exactly the complaint
 table (user, 2026-09-25: *"It would be much more useful if you gave these 'stages' names. How can I
 know what stage 4 is ffs?"*).
 
+**Fault names (`g_trip_reason`, an enum of bit flags).** Same rule: never report the raw mask.
+`trip_reason_name()` in `main.c` maps a mask to the highest-priority cause, and the LCD trip screen
+always prints a name (`FAULT: <NAME>`) - on the bench, with no harness attached, the panel is the
+only read-out there is (user, 2026-09-25).
+
+| bit | firmware enum | name shown / harness `block_reason` |
+|---|---|---|
+| 0x01 | `TRIP_REASON_SWR1` | `SWR1` |
+| 0x02 | `TRIP_REASON_SWR2` | `SWR2` |
+| 0x04 | `TRIP_REASON_HWFAULT` | `HARDWARE` (`FAULT: HWFAULT` in the harness) |
+| 0x08 | `TRIP_REASON_CURRENT` | `CURRENT` |
+| 0x10 | `TRIP_REASON_TEMP` | `TEMPERATURE` |
+| 0x20 | `TRIP_REASON_OVERDRIVE` | `OVERDRIVE` |
+| 0x40 | `TRIP_REASON_DRAIN` | `DRAIN` |
+
+Mask 0, and any bit the table does not know, names as `UNKNOWN` - never blank.
+
 **Process traps re-hit the hard way on 2026-09-24 - read these before touching a run.**
 1. **The rule above was broken repeatedly and the terminal did wedge.** The damage is concrete: after
    one `grep` over a multi-megabyte MDB transcript, *every* later `run_in_terminal` call in that
