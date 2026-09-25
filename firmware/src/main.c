@@ -187,20 +187,46 @@ static volatile unsigned int g_ptt_complete_display_elapsed_ms = 0;
 static volatile bool g_menu_changed = true;
 static unsigned int g_sequence_elapsed_ms = 0;
 
-/* TX sequence stages. The NUMBERS are a contract with the simulator harnesses, which read
+/* TX sequence stages. The VALUES are a contract with the simulator harnesses, which read
    `g_sequence_stage` by number (tools/simulate/trace_ptt_sequence.py, test_first_dit.py), so keep
-   the values and the names aligned with `SEQ_STAGE_NAMES` in the build-test skill.
+   them aligned with `SEQ_STAGE_NAMES` in the build-test skill.
 
    Engage - PTT falls low (key down):  0 -> 1 -> 2 -> 3
    Release - PTT rises high (unkey):   3 or 2 -> 4 -> 5 -> 0 */
-#define SEQ_IDLE 0u            /* Not transmitting: TX path open, VCC and TX_BIAS off. */
-#define SEQ_TX_ON 1u           /* RELAYS closed (TX path connected); waiting tx_vcc_delay_ms. */
-#define SEQ_VCC_ON 2u          /* TX_VCC up; waiting tx_bias_delay_ms before the bias. */
-#define SEQ_BIAS_ON 3u         /* TX_BIAS up and sensed: transmitting, PTT COMPLETE displayed. */
-#define SEQ_RELEASE_RELAYS 4u  /* Unkey: RELAYS already opened, TX_VCC still up; waiting. */
-#define SEQ_RELEASE_VCC 5u     /* Unkey: TX_VCC removed, TX_BIAS still up; waiting, then -> IDLE. */
+typedef enum {
+    SEQ_IDLE = 0,           /* Not transmitting: TX path open, VCC and TX_BIAS off. */
+    SEQ_TX_ON = 1,          /* RELAYS closed (TX path connected); waiting tx_vcc_delay_ms. */
+    SEQ_VCC_ON = 2,         /* TX_VCC up; waiting tx_bias_delay_ms before the bias. */
+    SEQ_BIAS_ON = 3,        /* TX_BIAS up and sensed: transmitting, PTT COMPLETE displayed. */
+    SEQ_RELEASE_RELAYS = 4, /* Unkey: RELAYS already opened, TX_VCC still up; waiting. */
+    SEQ_RELEASE_VCC = 5     /* Unkey: TX_VCC removed, TX_BIAS still up; waiting, then -> IDLE. */
+} sequence_stage_t;
 
 static unsigned char g_sequence_stage = SEQ_IDLE;
+
+/* Text for a stage, for the LCD/debug read-out and for matching a trace line to the state machine.
+   Indexed directly by the enum value, so the two must stay in the same order. */
+static const char *const SEQUENCE_STAGE_NAMES[] = {
+    "IDLE",         /* SEQ_IDLE           */
+    "TX-ON",        /* SEQ_TX_ON          */
+    "VCC-ON",       /* SEQ_VCC_ON         */
+    "BIAS-ON",      /* SEQ_BIAS_ON        */
+    "UNKEY-RELAYS", /* SEQ_RELEASE_RELAYS */
+    "UNKEY-VCC"     /* SEQ_RELEASE_VCC    */
+};
+
+const char *sequence_stage_name(unsigned char stage) {
+    if (stage >= (unsigned char)(sizeof SEQUENCE_STAGE_NAMES / sizeof SEQUENCE_STAGE_NAMES[0])) {
+        return "?";
+    }
+    return SEQUENCE_STAGE_NAMES[stage];
+}
+
+/* Current stage as text. Refreshed once per main-loop pass so it can be used by the LCD debug
+   read-out and read by the simulator harnesses, which otherwise see only the number. Initialised
+   with a literal rather than SEQUENCE_STAGE_NAMES[SEQ_IDLE]: XC8 rejects a volatile pointer
+   initialised from a ROM array element ("(712) can't generate code for this expression"). */
+volatile const char *g_sequence_stage_text = "IDLE";
 static unsigned int g_post_fwd_rms_w = 0;
 static unsigned int g_post_fwd_pep_w = 0;
 static unsigned int g_swr1_live_hundredths = 100;
@@ -1773,6 +1799,10 @@ int main(void) {
         }
 
         poll_menu_inputs(elapsed_ms);
+
+        /* Publish the sequence stage as text: `sequence_stage_name()` is the one conversion and
+           this keeps the published copy in step with the state machine. */
+        g_sequence_stage_text = sequence_stage_name(g_sequence_stage);
 
         if (!g_boot_message_active &&
             (g_menu_page == MENU_PAGE_STATUS ||

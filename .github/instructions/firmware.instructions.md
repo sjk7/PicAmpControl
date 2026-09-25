@@ -43,3 +43,17 @@ build or a test, because XC8 is invoked directly and needs none of it.
   LCD init, page-clear and ADC-acquisition delays run at the wrong length. It now does.
 - Never guess a configuration word. Derive it from the DFP's cfgmap, and leave the pragma block at the
   top of `main.c` as the one place they are declared.
+
+## C dialect traps XC8 has actually hit
+
+- **A `volatile` pointer cannot be initialised from a ROM array element.** `volatile const char
+  *g = NAMES[0];` fails at the link with `(712) can't generate code for this expression`; initialise
+  it with the string literal instead (`volatile const char *g = "IDLE";`) and let the per-pass
+  update publish the real value. Cost a build on 2026-09-25.
+- **An unused `static` helper is a warning (`(520) function "_x" is never called`), not an error.**
+  Do not silence it by deleting the helper - actually call it. In `main.c` the stage-name helper is
+  consumed by the per-pass `g_sequence_stage_text` update, which is also what makes the sequence
+  stage readable as text in the traces.
+- Give state machines an `enum` **and** a name table, so a stage number in a trace or a report can
+  be turned into text in one call (`sequence_stage_name()`). A bare stage number is unreadable; see
+  the stage-name table in the build-test skill.
