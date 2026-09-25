@@ -58,9 +58,59 @@ STATE_VARS = [
     "g_band_verify_active", "g_band_verify_mismatch_ms",
     "g_band_cache_valid", "g_band_cache_band",
     "g_unkeyable", "g_lock_loss_ms",
+    # The firmware's own TX self-test verdict (main.c tx_selftest_run()): whether it flagged the
+    # undefined/unkeyable state during this key-down, and WHICH checks it failed on. This is the
+    # contract the harness asserts - the firmware decides, the harness only reads the verdict.
+    "g_selftest_failed", "g_selftest_reason",
 ]
 # STATE_BYPASS_SNOOP in firmware/src/main.c (appended last so existing numbering is stable).
 STATE_BYPASS_SNOOP = 6
+# TX self-test causes, mirroring the bit positions, the names and the ORDER in firmware/src/main.c
+# (`tx_selftest_reason_t` / `TX_SELFTEST_NAMES[]`). Keep the two in step: the harness NAMES the
+# firmware's own reason, it never decides it.
+SELFTEST_REASON_NAMES = [
+    (0x01, "NO_RF"),
+    (0x02, "BAD_BAND"),
+    (0x04, "LOCK_LOST"),
+    (0x08, "BAND_CHG"),
+    (0x10, "NO_LOCK"),
+    (0x20, "TX_SENSE"),
+    (0x40, "STALLED"),
+    (0x80, "NO_BAND"),
+]
+# The panel is 16 columns wide, and the firmware's tx_selftest_reason_text() is written against that.
+SELFTEST_PANEL_COLUMNS = 16
+
+
+def selftest_reason_text(mask) -> str:
+    """The firmware's own panel text for a `g_selftest_reason` mask.
+
+    Mirrors `tx_selftest_reason_text()` in firmware/src/main.c, including its three rules: every set
+    bit is named, joined with '+' in bit order; the text is never blank ("OK" for an empty mask,
+    "UNKNOWN" for a code the table does not know); and if the names do not all fit the panel the ones
+    that do are written with a trailing '+' so a truncated list is never mistaken for the whole
+    reason. The reconstructed panel and the bench panel therefore cannot disagree.
+    """
+    try:
+        value = int(str(mask).strip())
+    except (TypeError, ValueError):
+        return "UNKNOWN"
+    limit = SELFTEST_PANEL_COLUMNS - 2   # the last column is the truncation marker's
+    used = ""
+    for bit, name in SELFTEST_REASON_NAMES:
+        if not value & bit:
+            continue
+        if not used:
+            if len(name) > limit:
+                break
+            used = name
+        elif len(used) + 1 + len(name) > limit:
+            return used + "+"
+        else:
+            used += "+" + name
+    return used if used else ("OK" if value == 0 else "UNKNOWN")
+
+
 TRIP_REASON_BITS = [
     (0x01, "SWR1"),
     (0x02, "SWR2"),
@@ -147,10 +197,13 @@ SEQ_STAGE_NAMES = {
 
 BAND_PIN_FOR = {1: "RD2", 2: "RD3", 3: "RD4", 4: "RD5", 5: "RD6", 6: "RD7"}
 BAND_OUT_OF_SPEC = 7
-# How many times the FREQ_CTR band checks re-inject the count inside one 5 ms sample step. The
-# firmware RESETS TMR1 on every gate and nothing else clocks it in the model, so with one injection
-# per step the first gate consumes the count and every other gate reads the reset zero - which is
-# what made the first band check measure and the later ones read 0 (see `hold_band`).
+# How many times a band hold re-injects the count across one sample step, one write per simulated
+# millisecond. The firmware READS AND RESETS TMR1 on every 10 ms gate and nothing else clocks it in
+# the model, so a count has to be back in the register within a millisecond of every gate for a keyed
+# window to see it. Writing all of them BEFORE the step put them ahead of the chunk's first gate only
+# - which is why the same keyed window read the injected frequency in one band's phase and a hard 0
+# in another's (2026-09-25: 160m 52/99 non-zero, 80m 0/99, same ELF, same band each time it was run
+# alone). Position inside the step, not the number of writes, was the whole bug.
 INJECTIONS_PER_CHUNK = 5
 PINS = ["RC1", "RC0", "RC5", "RC6", "RC7"] + BAND_PINS
 PIN_LABELS = {
@@ -410,20 +463,14 @@ def build_script(trip_name=None) -> str:
             #     consecutive gates on the same band, and a frequency that never changes while
             #     keyed cannot move a relay under the keyed amplifier (the I5 hot switch).
             def hold_band(freq_khz, chunks):
-                # Re-inject several times per 5 ms step, not once. The firmware's gate reads and
-                # RESETS TMR1, and in the model nothing else clocks it, so a gate reads 0 whenever
-                # another gate has run since the last injection. Under a tick backlog (the main loop
-                # catching up after an LCD refresh) several gates can run inside one 5 ms step, so a
-                # single injection per step leaves most gates reading the reset zero - which is why
-                # the FIRST band check measured (52 of 99 keyed+locked samples non-zero on 160m) and
-                # the later ones did not (80m: 0 of 99), while the same band's UNKEYED samples read
-                # the injected frequency 68 times out of 93. Injecting repeatedly inside the step
-                # keeps a fresh count present whatever moment a gate fires, without changing the
-                # sample cadence or the length of any phase.
+                # Re-inject once per simulated MILLISECOND, inside the step (see
+                # INJECTIONS_PER_CHUNK). Same number of MDB writes and the same phase length as
+                # injecting them in one burst - only their position inside the step changed, and that
+                # is what puts a fresh count within a millisecond of every 10 ms gate.
                 for _ in range(chunks):
                     for _repeat in range(INJECTIONS_PER_CHUNK):
                         write_tmr1_count(freq_khz)
-                    lines.append(stepi(5))
+                        lines.append(stepi(1))
                     sample()
 
             # --- Phase A: establish the band while UNKEYED (all relay movement happens here) ---
@@ -883,26 +930,31 @@ def validate_band_outputs(samples, scenario_name="FREQ_CTR") -> None:
 
 
 def validate_freq_ctr(samples, scenario_name="FREQ_CTR") -> None:
+    """The FIRMWARE'S OWN VERDICT is the contract, for each band under test.
+
+    For every band: either the amplifier verified the band and keyed on it (a keyed stage-3 sample with
+    the band locked and `current_band` == expected), or the firmware flagged its undefined/unkeyable
+    state and NAMED a reason for it. What is deliberately NOT asserted any more is any KEYED
+    `g_fc_status.frequency_khz` reading: the firmware reads and resets TMR1 on every 10 ms gate and
+    nothing in this model clocks it, so a keyed window could read a hard 0 while the same band read the
+    injected frequency unkeyed (2026-09-25) - a property of the simulator's pacing, not of the firmware
+    (user instruction, 2026-09-25). The firmware now says what it thinks of itself; the harness reads
+    that verdict instead of re-deriving it from a model artefact.
+    """
     validate_band_coverage(samples, scenario_name)
     validate_band_outputs(samples, scenario_name)
+    flagged = [sample for sample in samples if sample[2].get("g_selftest_failed") == "true"]
     for band_name, freq_khz, expected_band in BAND_TESTS:
-        injected_freq_khz = injected_frequency_for(freq_khz)
-        # The property is "the lock holds while a DIFFERENT band's signal is injected", not "the
-        # counter reports the injected frequency exactly". Requiring an exact
-        # `frequency_khz == injected_freq_khz` sample made this fail on the Q10: the harness injects
-        # TMR1 via a register write, and the firmware resets TMR1 on its 10 ms tick, so the sampled
-        # value aliases (1740/1756/0 instead of exactly 1800) even though the lock never moves
-        # (measured 2026-09-22). Assert the lock instead: a keyed stage-3 sample on the expected
-        # band, band locked, whose live measurement is NOT the expected band (the injected one) and
-        # whose current_band is still the band under test.
-        locked_injection = [
+        verified_key = [
             sample for sample in samples
             if sample[2].get("g_ptt_active") == "true"
             and sample[2].get("g_sequence_stage") == "3"
             and sample[2].get("g_fc_status.band_locked") == "true"
             and sample[2].get("g_fc_status.current_band") == str(expected_band)
         ]
-        if not locked_injection:
+        if verified_key:
+            continue
+        if not flagged:
             # Emit the fold-back state of every sample around this band so the stall point is
             # visible in one shot: remembered band vs live band, whether the verify/settle/snoop
             # flags are held, and how far the sequence got. This is the same diagnostic idea as
@@ -924,29 +976,20 @@ def validate_freq_ctr(samples, scenario_name="FREQ_CTR") -> None:
             print(f"FREQ_DEBUG {band_name} lock_samples={stale}", flush=True)
             raise AssertionError(
                 f"{band_name} TX lock failed: no keyed stage-3 sample held "
-                f"current_band={expected_band} with the band locked"
-            )
-        # The amplifier must never STAY keyed on a band whose measurement has gone away: the firmware
-        # holds the lock for LOCK_LOSS_UNKEYABLE_MS and then drops out of TX into the undefined,
-        # unkeyable state (main.c, `g_unkeyable`; user instruction, 2026-09-25: *"The firmware should
-        # put us in an undefined, unkeyable state when the test fails."*). So a band whose keyed
-        # window contains no usable measurement must show that interlock, not a transmitting
-        # amplifier - which is the real contract, and it is checkable where the old "non-zero reading
-        # while keyed" check was not (that one measured the simulator's pacing).
-        if not any(sample[2].get("g_fc_status.frequency_khz") not in ("0", "", None)
-                   for sample in locked_injection):
-            unkeyable = [sample for sample in samples
-                         if sample[2].get("g_unkeyable") == "true"]
-            if not unkeyable:
-                raise AssertionError(
-                    f"{band_name}: the keyed band lock had no usable measurement for "
-                    f"{len(locked_injection)} samples and the amplifier stayed keyed - it must enter "
-                    f"the undefined/unkeyable state (LOCK_LOSS_UNKEYABLE_MS) instead"
-                )
-            print(f"{band_name}: lock lost with no usable measurement -> the firmware declared the "
-                  f"state unkeyable ({len(unkeyable)} samples)")
-    print("FREQ_CTR passed: all bands classified, band-select outputs matched, "
-          "and no keyed band was left without a verified measurement")
+                f"current_band={expected_band} with the band locked, and the firmware's self-test "
+                f"never flagged a reason for refusing to key")
+        # The amplifier refused to key on this band and said why. Two things have to hold: the
+        # firmware never declares that state without a name (the panel is the only read-out on the
+        # bench), and the flag is `LOCK_LOSS_UNKEYABLE_MS` of a HOLDING condition, not one sample.
+        reason = selftest_reason_text(flagged[0][2].get("g_selftest_reason"))
+        if reason in ("", "OK", "UNKNOWN"):
+            raise AssertionError(
+                f"{band_name}: the firmware flagged the undefined/unkeyable state without a usable "
+                f"reason ({reason!r}) - the panel must always name why it refused to key")
+        print(f"{band_name}: no verified key -> the firmware itself flagged the undefined state as "
+              f"{reason} ({len(flagged)} samples)")
+    print("FREQ_CTR passed: all bands classified, band-select outputs matched, and every band either "
+          "verified its lock or was flagged by the firmware's own self-test with a named reason")
 
 
 def validate_freq_ctr_failure(samples) -> None:
@@ -1219,10 +1262,13 @@ def _observed_summary(samples, scenario=None) -> str:
                       if s[2].get("g_sequence_stage") == "3"
                       and s[2].get("g_fc_status.band_locked") == "true"
                       and s[2].get("g_fc_status.current_band") == str(expected_band)]
-            live = [s for s in locked
-                    if s[2].get("g_fc_status.frequency_khz") not in ("0", "", None)]
-            parts.append(f"{band_name}: {len(locked)} keyed+locked+stage-3 samples, "
-                         f"{len(live)} of them reporting a non-zero frequency")
+            parts.append(f"{band_name}: a verified keyed band lock in {len(locked)} samples")
+    flagged = [s for s in samples if s[2].get("g_selftest_failed") == "true"]
+    if flagged:
+        parts.append(
+            f"the firmware's own self-test flagged the undefined/unkeyable state in {len(flagged)} "
+            f"samples, first as {selftest_reason_text(flagged[0][2].get('g_selftest_reason'))} "
+            f"at t={flagged[0][0] * SECONDS_PER_INSTRUCTION * 1000:.1f} ms")
     last = samples[-1][2]
     parts.append(f"last sample: stage={last.get('g_sequence_stage')} "
                  f"ptt={last.get('g_ptt_active')} latched={last.get('g_fault_latched')} "
@@ -1243,17 +1289,17 @@ def _argument_value(name):
 
 
 def truncate_at_unkeyable(samples):
-    """`samples` cut off right after the first sample that shows the unkeyable interlock.
+    """`samples` cut off right after the first sample that shows the flagged failure.
 
-    The firmware now DECLARES the undefined state (main.c `g_unkeyable`, held for
-    LOCK_LOSS_UNKEYABLE_MS after a keyed band lock loses its measurement), and the operator's rule is
-    that the test and its trace stop there rather than carrying on through hundreds of milliseconds
-    that can only be the aftermath (user instruction, 2026-09-25: *"The test and the scope tracing
-    needs to then stop right after the undefined state is flagged."*). A few samples of aftermath are
-    kept so the drop-out is visible as a transition, not as the last pixel of the trace.
+    The firmware DECLARES the state itself (main.c `g_unkeyable` / `g_selftest_failed`, set once a
+    self-test check has held for LOCK_LOSS_UNKEYABLE_MS), and the operator's rule is that the test and
+    its trace stop there rather than carrying on through hundreds of milliseconds that can only be the
+    aftermath (user instruction, 2026-09-25: *"The test and the scope tracing needs to then stop right
+    after the undefined state is flagged."*). A few samples of aftermath are kept so the drop-out is
+    visible as a transition, not as the last pixel of the trace.
     """
     for index, sample in enumerate(samples):
-        if sample[2].get("g_unkeyable") == "true":
+        if sample[2].get("g_unkeyable") == "true" or sample[2].get("g_selftest_failed") == "true":
             return samples[:index + 3] if index + 3 < len(samples) else samples
     return samples
 
@@ -1303,12 +1349,14 @@ def _scope_events(samples, scenario=None):
     """
     events = []
     ms = SECONDS_PER_INSTRUCTION * 1000
-    # Where the firmware gave up and declared the state undefined/unkeyable (main.c `g_unkeyable`).
-    # The operator's rule is that the test and its trace STOP here, so this is the last instant the
-    # trace should be read (user instruction, 2026-09-25).
+    # Where the firmware gave up and declared the state undefined/unkeyable (main.c `g_unkeyable`),
+    # named with the self-test's own reason rather than the raw mask. The operator's rule is that the
+    # test and its trace STOP here, so this is the last instant the trace should be read (user
+    # instruction, 2026-09-25).
     unkeyable = next((s for s in samples if s[2].get("g_unkeyable") == "true"), None)
     if unkeyable is not None:
-        events.append((unkeyable[0] * ms, "UNKEYABLE flagged"))
+        events.append((unkeyable[0] * ms,
+                       f"UNDEFINED: {selftest_reason_text(unkeyable[2].get('g_selftest_reason'))}"))
     trip = next((s for s in samples
                  if s[2].get("g_fault_latched") == "true"
                  and (scenario is None or block_reason(s[2]) == f"FAULT: {scenario}")), None)

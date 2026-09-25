@@ -73,7 +73,8 @@ def main():
         nonzero = [s for s in keyed_locked
                    if s[2].get("g_fc_status.frequency_khz") not in ("0", "", None)]
         print(f"{band_name}: keyed+locked+stage-3 samples={len(keyed_locked)}, "
-              f"of those with a non-zero frequency={len(nonzero)}")
+              f"of those with a non-zero frequency={len(nonzero)} (the simulator-pacing figure that "
+              f"used to be asserted; the firmware's own verdict is the contract now)")
         if nonzero:
             first = nonzero[0]
             print(f"  first non-zero: t={first[0] * ms:.2f}ms "
@@ -92,7 +93,8 @@ def main():
                                stimulus=harness.stimulus_spans(samples),
                                **_failure_context(samples, exc))
         raise
-    print("FREQ_CTR repro passed: every band classified, outputs matched, each stayed locked")
+    print("FREQ_CTR repro passed: every band classified, outputs matched, each band either verified "
+          "its keyed lock or was flagged by the firmware's own self-test")
 
 
 def _failure_context(samples, exc):
@@ -108,12 +110,20 @@ def _failure_context(samples, exc):
         live = [s for s in locked
                 if s[2].get("g_fc_status.frequency_khz") not in ("0", "", None)]
         counts.append(f"{band_name}: {len(locked)} keyed+locked+stage-3 samples, "
-                      f"{len(live)} with a non-zero frequency")
+                      f"{len(live)} of them reporting a non-zero frequency")
+    flagged = [s for s in samples if s[2].get("g_selftest_failed") == "true"]
+    if flagged:
+        counts.append(f"the firmware's own self-test flagged the undefined state as "
+                      f"{harness.selftest_reason_text(flagged[0][2].get('g_selftest_reason'))} "
+                      f"in {len(flagged)} samples")
     return {
-        "check": (f"Bands {bands}, RF injected every 5 ms: the band must classify, the band-select "
-                  "output must match current_band, and while a band is LOCKED and keyed the counter "
-                  "must keep reporting a NON-ZERO frequency - that reading is the evidence the lock "
-                  "holds against a different signal. 0 is correct only when there is no RF."),
+        "check": (f"Bands {bands}, RF injected once per millisecond while held: the band must "
+                  "classify, the band-select output must match current_band, and for each band the "
+                  "amplifier must either verify its keyed band lock (keyed, stage 3, band_locked, "
+                  "current_band == expected) or have been flagged by its OWN self-test, with a "
+                  "named reason. No keyed frequency reading is asserted: the firmware resets TMR1 "
+                  "on every 10 ms gate and nothing in the model clocks it, so that reading measures "
+                  "the simulator's pacing, not the firmware."),
         "observed": "; ".join(counts) + (
             f"; last sample: stage={samples[-1][2].get('g_sequence_stage')} "
             f"locked={samples[-1][2].get('g_fc_status.band_locked')} "

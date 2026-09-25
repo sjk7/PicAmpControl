@@ -1,7 +1,9 @@
 # Plan: firmware TX self-test -> undefined/unkeyable state, with the reason on the LCD
 
-Status: **not started** - written 2026-09-25 for the next session. Nothing in this plan has been
-implemented.
+Status: **IN PROGRESS (2026-09-25)** - see "Where this got to" at the end for the live position,
+what is verified, what is left, and where the implementation deliberately differs from the plan
+below. Phases 1-3 and the 80m stimulus fix are done and the 80m slice passes; the full suite, the
+forced-failure path and the docs/skill/notes are still open.
 
 ## Goal
 
@@ -176,5 +178,61 @@ that broke the FREQ_CTR check.
    listed, because each maps to a distinct bench action and each fits the 11-character LCD line.
 2. **`BAND_CHANGED` while keyed.** A separate hot-switch guard, or folded into the existing fold-back?
    The recommendation is to fold it in - the relay must never move while the amplifier is keyed.
+
+## Where this got to (live position, 2026-09-25)
+
+**Operator decisions taken before implementing** (they changed the plan; this is the record):
+- **Bit flags, not one code**: the panel reports every failing check at once, ORed, via
+  `tx_selftest_reason_text()` (names joined with `+`, 16-column truncation marked with a trailing
+  `+`, never blank).
+- **Granular and expressive**: eight checks, each mapping to a distinct bench action.
+- **80m must work**: a band may not be excluded from the self-test, so the 80m stimulus was FIXED
+  rather than tolerated (see below).
+- **Hold the last reason until the next key-down**: `g_selftest_reason` is cleared only in
+  `tx_selftest_reset()`, called from the key-down branch of `handle_ptt_transition()`.
+- **The self-test is the firmware's own knowledge of the keying process**: PTT, the stage, that
+  stage's outputs, and whether the band lock is still justified.
+- **Not in an interrupt** (asked and answered): `freq_counter_tick_10ms()` is where TMR1 is read and
+  reset, so no check can know more than that gate, and the action is far too heavy for ISR context.
+- **The harness stays minimal**: drive PTT low, supply a frequency, read the firmware's verdict.
+
+**Done**
+- `firmware/src/main.c`: `tx_selftest_reason_t` (NO_RF 0x01, BAD_BAND 0x02, LOCK_LOST 0x04,
+  BAND_CHG 0x08, NO_LOCK 0x10, TX_SENSE 0x20, STALLED 0x40, NO_BAND 0x80), `TX_SELFTEST_NAMES[]`,
+  `tx_selftest_reason_text()`, `g_selftest_failed`/`g_selftest_reason`/`g_selftest_hold[]`,
+  `tx_selftest_reset()`, `tx_selftest_run()`, the latch action, the `STATE: UNDEFINED` + reason panel.
+- Divergence from step 3: `tx_selftest_run()` is called at the TOP of `update_tx_sequence()`, before
+  the snoop block - that block returns early, so a call inside the `g_ptt_active` part would never see
+  the "keyed with no band decoded" window (NO_BAND) at all.
+- Divergence from steps 4/6: the action fires on the *latch* (a check holding for the whole window)
+  and re-arms through `g_unkeyable` (cleared by a fresh decode), while the REASON mask is held until
+  the next key-down. The old ad-hoc `g_lock_loss_ms >= 200` block is deleted; `g_lock_loss_ms` now
+  publishes the longest-holding failing check for the harness.
+- `tools/simulate/trace_ptt_sequence.py`: `SELFTEST_REASON_NAMES` + `selftest_reason_text()` mirror,
+  the two new `STATE_VARS`, the flag as a `truncate_at_unkeyable()` trigger, the flag+reason in the
+  failure prose and the `_scope_events` label, and the new `validate_freq_ctr()` contract (per band: a
+  verified keyed lock, or the firmware's own named reason - no keyed `frequency_khz` assertion).
+- `tools/simulate/scope_trace.py`: `lcd_screen()` shows `STATE: UNDEFINED` + the mirrored reason text
+  in the firmware's precedence slot.
+- `tools/simulate/check_freq_ctr_bands.py`: the same contract wording, so a slice and the suite agree.
+- **80m stimulus fix (new work, not in the plan):** `hold_band()` re-injects once per simulated
+  MILLISECOND inside the step instead of writing all five counts at the start of the 5 ms chunk. Same
+  number of MDB writes, same phase lengths; only the position changed - and that was the whole 80m
+  hard-zero cause, because the burst landed ahead of the chunk's first 10 ms gate and every later gate
+  in that chunk read the firmware's own TMR1 reset.
+
+**Verified so far**
+- Build: `cmake --build _build/My_Pic_Project/sim` clean; the ELF is newer than `main.c`. Flash
+  **15096/131072 bytes (11.5%)**, up 1210 B from 13886.
+- `run_suite_with_watchdog.py --test suite --only FREQ_CTR --bands 80m` -> `SUITE_EXIT:0`,
+  `TEST_END ... code=0`, 80m keyed run 1480..1940 ms on RD3 with the band locked, I1-I6 all PASS.
+
+**Still open**
+1. Full suite (~356 s on Windows) - the verdict run.
+2. The forced-failure path: confirm the latch, the truncated trace, the `STATE: UNDEFINED` panel and
+   the reason in the failure prose.
+3. `docs/tx-sequencer.md`, `Ai-Notes.md`, `TESTING.md` and the `build-test` skill (the new contract,
+   and the trap that one good sample must not clear the interlock).
+4. Bench: an out-of-band signal must show the undefined state with its reason and open the RF path.
 3. **Any direct keyed `g_fc_status` check left in the harness?** The recommendation is no: the firmware's
    reason code is the contract, and a simulator-pacing property is not a firmware property.

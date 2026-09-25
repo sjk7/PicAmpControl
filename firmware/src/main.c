@@ -163,6 +163,121 @@ const char *trip_reason_name(unsigned char reason) {
     return "UNKNOWN";
 }
 
+/* TX self-test causes. Bit flags, exactly like the trip causes above and for the same reason: more
+   than one check can fail at once, so the mask reports them all instead of picking a winner (user
+   instruction, 2026-09-25).
+
+   The mask is a RECORD of the current key-down, not a latch: it is held until the NEXT key-down, so
+   the operator can always read why the amplifier refused to key - the panel is the only read-out
+   there is with no harness attached (user instruction, 2026-09-25: *"Ensure we never abort keying
+   without a good reason why"*).
+
+   Every check is one question about where the firmware is: is PTT low, which stage of the sequencer
+   claims to be running, are that stage's outputs actually asserted on the pin, and is the band lock
+   still backed by a measurement. Nothing here re-tests the RF chain - the counter checks exist only
+   because the band lock is the sequencer's own justification for closing the T/R relay.
+
+   The VALUES are a contract with the simulator harnesses (SELFTEST_REASON_NAMES in
+   tools/simulate/trace_ptt_sequence.py) - keep the bit positions, the names and their ORDER aligned
+   with that table. */
+typedef enum {
+    TX_SELFTEST_OK = 0x00,
+    TX_SELFTEST_NO_RF = 0x01,
+    TX_SELFTEST_BAD_BAND = 0x02,
+    TX_SELFTEST_LOCK_LOST = 0x04,
+    TX_SELFTEST_BAND_CHG = 0x08,
+    TX_SELFTEST_NO_LOCK = 0x10,
+    TX_SELFTEST_TX_SENSE = 0x20,
+    TX_SELFTEST_STALLED = 0x40,
+    TX_SELFTEST_NO_BAND = 0x80
+} tx_selftest_reason_t;
+
+/* One name per cause, indexed by bit position, so this array and the enum must stay in the same
+   order. Deliberately short: the panel has ONE 16-column line for the WHOLE combined reason, and
+   with '+' separators two names have to fit in it. */
+#define TX_SELFTEST_NAME_MAX 11
+#define TX_SELFTEST_CHECK_COUNT 8
+static const char *const TX_SELFTEST_NAMES[] = {
+    "NO_RF",     /* TX_SELFTEST_NO_RF     0x01 */
+    "BAD_BAND",  /* TX_SELFTEST_BAD_BAND  0x02 */
+    "LOCK_LOST", /* TX_SELFTEST_LOCK_LOST 0x04 */
+    "BAND_CHG",  /* TX_SELFTEST_BAND_CHG  0x08 */
+    "NO_LOCK",   /* TX_SELFTEST_NO_LOCK   0x10 */
+    "TX_SENSE",  /* TX_SELFTEST_TX_SENSE  0x20 */
+    "STALLED",   /* TX_SELFTEST_STALLED   0x40 */
+    "NO_BAND"    /* TX_SELFTEST_NO_BAND   0x80 */
+};
+
+/* Append `text` to the NUL-terminated `buffer`, inserting a '+' first when it is not the first
+   name, and never writing more than `limit` characters (the truncation marker is the caller's). */
+static bool tx_selftest_text_append(char *buffer, unsigned char *used, unsigned char limit, const char *text) {
+    unsigned char length = 0;
+    while (text[length] != '\0') {
+        length++;
+    }
+    if (*used == 0) {
+        if (length > limit) {
+            return false;
+        }
+    } else {
+        if ((unsigned int)*used + 1U + length > limit) {
+            return false;
+        }
+        buffer[(*used)++] = '+';
+    }
+    while (*text != '\0') {
+        buffer[(*used)++] = *text++;
+    }
+    buffer[*used] = '\0';
+    return true;
+}
+
+/* The panel text for a self-test mask: EVERY set bit's name, joined with '+', in bit order, so two
+   checks failing together are both reported. Never blank - "OK" for an empty mask, "UNKNOWN" for a
+   code this table does not know. If the names do not all fit in `size` columns (the panel gives 16)
+   the ones that DO fit are written and the text ends with '+' so a truncated list can never be
+   mistaken for the whole reason. Returns the columns used.
+
+   Mirrored by selftest_reason_text() in tools/simulate/trace_ptt_sequence.py: keep the two in step,
+   including the truncation rule. */
+unsigned char tx_selftest_reason_text(unsigned char reason, char *buffer, unsigned char size) {
+    unsigned char used = 0;
+    unsigned char index;
+    unsigned char limit;
+    bool wrote = false;
+    bool truncated = false;
+
+    if (size == 0) {
+        return 0;
+    }
+    buffer[0] = '\0';
+    if (size < 3) {
+        return 0;   /* no room for even a one-character name plus the marker and the NUL */
+    }
+    limit = (unsigned char)(size - 2);   /* the last column is the truncation marker's */
+
+    for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
+        if ((reason & (unsigned char)(1u << index)) == 0) {
+            continue;
+        }
+        if (!tx_selftest_text_append(buffer, &used, limit, TX_SELFTEST_NAMES[index])) {
+            truncated = true;
+            break;
+        }
+        wrote = true;
+    }
+    if (!wrote) {
+        tx_selftest_text_append(buffer, &used, (unsigned char)(size - 1),
+                                reason == TX_SELFTEST_OK ? "OK" : "UNKNOWN");
+        return used;
+    }
+    if (truncated) {
+        buffer[used++] = '+';
+        buffer[used] = '\0';
+    }
+    return used;
+}
+
 #define MENU_IDLE_TIMEOUT_MS 8000
 #define TEMPERATURE_RECOVERY_HYSTERESIS_C 5U
 #define CURRENT_SENSOR_ZERO_RAW 512U
@@ -191,11 +306,13 @@ const char *trip_reason_name(unsigned char reason) {
    persist this long before the amplifier is folded back to bypass and re-engaged on the band
    actually being received. Confirm on the bench that this is short enough to be inaudible. */
 #define BAND_VERIFY_MS 20U
-/* How long a KEYED amplifier may hold a band lock whose measurement has gone away before the
-   firmware declares the state undefined and unkeyable. The lock's whole justification is the
-   measurement that established it, so a lock that can no longer be verified must not keep
-   transmitting. 200 ms is comfortably longer than a dit and far shorter than anything that could
-   damage the LDMOS; confirm on the bench. */
+/* How long a failing self-test check must HOLD before it is believed (tx_selftest_run()), and
+   therefore the longest a keyed amplifier can carry a condition it cannot vouch for. One window,
+   one code path: the self-test and the undefined/unkeyable action share it. A check's condition is
+   evaluated every 1 ms, so a single bad sample - a torn counter read, one empty gate window, one
+   1 ms tick with the driver still slewing - can never flag, while a condition that is real is
+   caught in 200 ms, comfortably longer than a dit and far shorter than anything that could damage
+   the LDMOS; confirm on the bench. */
 #define LOCK_LOSS_UNKEYABLE_MS 200U
 
 static volatile system_state_t g_state = STATE_STANDBY;
@@ -221,7 +338,34 @@ static volatile bool g_band_established = false;
 /* UNDEFINED/UNKEYABLE interlock: set when a keyed band lock lost its measurement. Read by the LCD
    so the bench sees why the amplifier is refusing to key, and cleared once a fresh decode exists. */
 static volatile bool g_unkeyable = false;
+/* The longest-holding failing self-test check, in ms: the window that decides when a check has held
+   long enough to be believed (tx_selftest_run()). Published for the simulator harnesses. */
 static unsigned int g_lock_loss_ms = 0;
+/* The self-test's verdict for the CURRENT key-down (tx_selftest_run()). `g_selftest_reason` is the
+   OR of every check that has held for LOCK_LOSS_UNKEYABLE_MS, and it is what the LCD prints - so
+   the amplifier never drops out of a transmission without saying why. Both are volatile because the
+   simulator/debugger reads them directly, and BOTH are cleared only by the next key-down
+   (tx_selftest_reset()), never by a recovery: that is what keeps the last reason readable on the
+   panel after the amplifier has gone back to working (user instruction, 2026-09-25). */
+static volatile bool g_selftest_failed = false;
+static volatile unsigned char g_selftest_reason = TX_SELFTEST_OK;
+/* Consecutive-ms counters, one per check bit, indexed by bit position: a check that passes resets
+   its own count, so only a condition that HOLDS for the whole window can flag. */
+static unsigned int g_selftest_hold[TX_SELFTEST_CHECK_COUNT] = { 0 };
+
+/* A new key-down starts a new verdict. This is the ONLY place the reason is cleared, which is what
+   keeps the previous reason on the panel until the operator keys again (tx_selftest_run() clears
+   the hold windows when the amplifier unkeys, but deliberately not the reason). */
+void tx_selftest_reset(void) {
+    unsigned char index;
+    g_selftest_failed = false;
+    g_selftest_reason = TX_SELFTEST_OK;
+    g_lock_loss_ms = 0;
+    for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
+        g_selftest_hold[index] = 0;
+    }
+}
+
 static volatile bool g_startup_inhibit = true;
 static volatile bool g_comparator_reset_active = false;
 static volatile unsigned char g_comparator_reset_elapsed_ms = 0;
@@ -751,13 +895,17 @@ void show_menu_page(void) {
         return;
     }
     if (g_unkeyable) {
-        /* The amplifier dropped out of a keyed transmission because its band lock could no longer be
-           verified. Line 0 names the state in the same shape as a fault so the bench reads it the
-           same way; line 1 says what it means. Cleared by a fresh decode. */
+        /* The amplifier dropped out of a keyed transmission because its own self-test could not
+           vouch for it. Line 0 names the state in the same shape as a latched fault so the bench
+           reads both the same way; line 1 is the self-test's OWN reason, with '+' when more than
+           one check failed, and never blank. Cleared by a fresh decode - the reason itself is held
+           until the next key-down, so it can still be read after the amplifier has recovered. */
+        static char selftest_reason_text[17];
         lcd_set_cursor(0, 0);
-        lcd_write_text("STATE: LOCK LOST");
+        lcd_write_text("STATE: UNDEFINED");
         lcd_set_cursor(1, 0);
-        lcd_write_text("UNKEYABLE");
+        tx_selftest_reason_text(g_selftest_reason, selftest_reason_text, sizeof selftest_reason_text);
+        lcd_write_text(selftest_reason_text);
         return;
     }
     if (g_ptt_complete_display_active) {
@@ -958,6 +1106,9 @@ void handle_ptt_transition(bool ptt_asserted) {
     if (ptt_asserted) {
         g_ptt_active = true;
         g_sequence_stage = 0;
+        /* A new key-down is a new verdict: the previous key-down's self-test reason is dropped here
+           and nowhere else, after it has been on the panel for as long as the operator needed. */
+        tx_selftest_reset();
         g_band_cache_idle_ms = 0;
         g_band_settle_active = false;
         g_band_settle_elapsed_ms = 0;
@@ -1407,6 +1558,119 @@ void update_current_peak(unsigned int current_a) {
     }
 }
 
+/* The keyed self-test: "is the firmware where the PTT and the sequencer say it should be?".
+
+   Runs once per 1 ms tick from update_tx_sequence() while PTT is down, and is the ONLY place that
+   decides the undefined/unkeyable state - one window, one code path, so a new check cannot invent a
+   second way to drop out of transmit.
+
+   Deliberately NOT in an interrupt: freq_counter_tick_10ms() is where TMR1 is read and reset, so no
+   check can have better information than that 10 ms gate, and the action this leads to (bypass, band
+   unlock, a state change) is far too heavy for interrupt context.
+
+   Returns true on the tick a check has held for LOCK_LOSS_UNKEYABLE_MS and the caller must act. A
+   passing check resets its own counter, so neither a single bad sample nor a single good one
+   decides anything, and the hold windows are restarted after an action so the same condition
+   cannot re-fire faster than the window itself. */
+bool tx_selftest_run(void) {
+    freq_counter_status_t status;
+    rf_band_t measured;
+    unsigned char failing = TX_SELFTEST_OK;
+    unsigned char index;
+    unsigned int longest = 0;
+    bool latched = false;
+
+    if (!g_ptt_active || g_sequence_stage > SEQ_BIAS_ON) {
+        /* Nothing is keyed (or the PTT-release ramp is unwinding), so there is nothing to verify and
+           no window may be carried into the next over. The REASON is deliberately left alone here:
+           it is held until the next key-down so the operator can still read it after unkeying. */
+        for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
+            g_selftest_hold[index] = 0;
+        }
+        g_lock_loss_ms = 0;
+        return false;
+    }
+
+    freq_counter_get_status(&status);
+    measured = freq_counter_measured_band();
+
+    /* Is the band lock still justified? It is the sequencer's own reason for closing the T/R relay,
+       so it is the first thing that has to hold. No pulses at all means the counter saw nothing in
+       the gate window; a frequency outside the classifier's own 1000-32000 kHz range means the count
+       is not a band; and with pulses present and in range, no stable measurement agreeing with the
+       frozen selection (BAND_OUT_OF_SPEC) means the lock has lost its measurement. A usable
+       measurement on a DIFFERENT band means the rig moved while the amplifier was keyed. */
+    if (status.raw_pulses == 0) {
+        failing |= TX_SELFTEST_NO_RF;
+    } else if (status.frequency_khz < 1000U || status.frequency_khz > 32000U) {
+        failing |= TX_SELFTEST_BAD_BAND;
+    } else if (status.band_locked) {
+        if (measured == BAND_OUT_OF_SPEC) {
+            failing |= TX_SELFTEST_LOCK_LOST;
+        } else if (measured != status.locked_band) {
+            failing |= TX_SELFTEST_BAND_CHG;
+        }
+    }
+    if (!status.band_locked) {
+        failing |= TX_SELFTEST_NO_LOCK;
+    }
+
+    /* Are the outputs the running stage claims actually asserted? SENSE_* reads the PIN, not the
+       latch (pin_map.h), so this catches a driver that never came up as well as a wrong command -
+       the same reason the PTT-COMPLETE check reads the pins. */
+    if (g_sequence_stage >= SEQ_TX_ON && g_sequence_stage <= SEQ_BIAS_ON) {
+        if (SENSE_TX != output_level(true, g_thresholds.tx_active_high) ||
+            (g_sequence_stage >= SEQ_VCC_ON &&
+             SENSE_TX_VCC != output_level(true, g_thresholds.tx_vcc_active_high)) ||
+            (g_sequence_stage >= SEQ_BIAS_ON &&
+             SENSE_TX_BIAS != output_level(true, g_thresholds.tx_bias_active_high))) {
+            failing |= TX_SELFTEST_TX_SENSE;
+        }
+    }
+
+    /* Is the sequence where it should be? Keyed and not at BIAS-ON for the whole window is either
+       a band that was never established (NO_BAND: nothing has been decoded yet, so the amplifier is
+       correctly still in bypass - but that is exactly a keyed amplifier that cannot say where it
+       is, so it is reported) or a band that IS established and whose engage is not completing
+       (STALLED: a relay settle or fold-back that never re-engaged, or a stage that never advanced). */
+    if (g_sequence_stage != SEQ_BIAS_ON) {
+        failing |= g_band_established ? TX_SELFTEST_STALLED : TX_SELFTEST_NO_BAND;
+    }
+
+    for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
+        unsigned char bit = (unsigned char)(1u << index);
+        if (failing & bit) {
+            if (g_selftest_hold[index] < LOCK_LOSS_UNKEYABLE_MS) {
+                g_selftest_hold[index]++;
+            }
+            if (g_selftest_hold[index] > longest) {
+                longest = g_selftest_hold[index];
+            }
+            if (g_selftest_hold[index] >= LOCK_LOSS_UNKEYABLE_MS) {
+                g_selftest_reason = (unsigned char)(g_selftest_reason | bit);
+                latched = true;
+            }
+        } else {
+            g_selftest_hold[index] = 0;
+        }
+    }
+    g_lock_loss_ms = longest;
+
+    if (g_selftest_reason != TX_SELFTEST_OK) {
+        g_selftest_failed = true;
+    }
+    if (latched) {
+        /* Restart every window: a condition that is still there must hold for another full window
+           before it acts again, so the action cannot repeat faster than the window and the panel's
+           reason mask is the only thing that accumulates. */
+        for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
+            g_selftest_hold[index] = 0;
+        }
+        g_lock_loss_ms = 0;
+    }
+    return latched;
+}
+
 void update_tx_sequence(void) {
     if (g_startup_inhibit || g_comparator_reset_active) {
         apply_bypass();
@@ -1415,6 +1679,25 @@ void update_tx_sequence(void) {
         return;
     }
     if (g_fault_latched) {
+        return;
+    }
+
+    /* THE SELF-TEST COMES FIRST, before the snoop/verify/engage chain: the conditions it reports
+       (keyed with no band established, for instance) are exactly the ones those blocks are holding
+       the amplifier in, so it cannot be evaluated after them - the snoop block returns early and the
+       self-test would never see the keyed window at all. When it flags, the amplifier must not stay
+       in a transmission it cannot vouch for: open the RF path, unlock the band so the selection can
+       follow live RF again, and require a fresh decode before keying (user instruction, 2026-09-25:
+       *"The firmware should put us in an undefined, unkeyable state when the test fails."*). The
+       reason stays on the panel - see tx_selftest_run() and the LCD's g_unkeyable branch. */
+    if (tx_selftest_run()) {
+        g_unkeyable = true;
+        apply_bypass();
+        freq_counter_unlock_band();
+        invalidate_established_band();
+        g_sequence_stage = SEQ_IDLE;
+        g_state = STATE_BYPASS_SNOOP;
+        g_snoop_active = true;
         return;
     }
 
@@ -1505,40 +1788,6 @@ void update_tx_sequence(void) {
     }
 
     if (g_ptt_active) {
-        /* UNDEFINED, UNKEYABLE STATE: a keyed amplifier whose band cannot be verified must not keep
-           transmitting. The band lock freezes the LPF selection for the whole transmission, and its
-           whole justification is the measurement that established it - so if that measurement stops
-           being available while the amplifier is keyed, the firmware is holding the RF path closed
-           on a band it can no longer vouch for. That is exactly the state the harness reports as
-           "the counter reported no non-zero frequency while the band was locked and keyed", and the
-           operator's rule is that it must not be left transmitting in it (user instruction,
-           2026-09-25: *"The firmware should put us in an undefined, unkeyable state when the test
-           fails."*). So: hold the interlock for LOCK_LOSS_UNKEYABLE_MS, then open the RF path,
-           unlock the band and require a fresh decode before keying again - and say so on the panel. */
-        freq_counter_status_t lock_status;
-        freq_counter_get_status(&lock_status);
-        if (g_sequence_stage >= SEQ_TX_ON && lock_status.band_locked) {
-            if (freq_counter_measured_band() == BAND_OUT_OF_SPEC) {
-                if (g_lock_loss_ms < LOCK_LOSS_UNKEYABLE_MS) {
-                    g_lock_loss_ms++;
-                }
-            } else {
-                g_lock_loss_ms = 0;
-                g_unkeyable = false;
-            }
-            if (g_lock_loss_ms >= LOCK_LOSS_UNKEYABLE_MS) {
-                g_unkeyable = true;
-                apply_bypass();
-                freq_counter_unlock_band();
-                invalidate_established_band();
-                g_sequence_stage = SEQ_IDLE;
-                g_state = STATE_BYPASS_SNOOP;
-                g_snoop_active = true;
-                return;
-            }
-        } else {
-            g_lock_loss_ms = 0;
-        }
         if (g_sequence_stage == SEQ_IDLE) {
             if (!g_band_established) {
                 /* The relay selection is not backed by any measurement for this transmission

@@ -235,6 +235,11 @@ def lcd_screen(state: dict) -> tuple:
         name = trip_reason_name(state.get("g_trip_reason"))
         evidence = "TRIP LATCHED" if name in ("HARDWARE", "DRAIN", "UNKNOWN") else "[value]/[limit]"
         return (name, evidence)
+    if state.get("g_unkeyable") == "true" or state.get("g_selftest_failed") == "true":
+        # STATE: UNDEFINED plus the firmware's OWN self-test reason (main.c, the g_unkeyable branch).
+        # The mask is named - '+'-joined when more than one check failed, never printed raw, never
+        # blank - by the same function the firmware's panel text is mirrored from.
+        return ("STATE: UNDEFINED", harness.selftest_reason_text(state.get("g_selftest_reason")))
     if state.get("g_ptt_complete_display_active") == "true":
         return ("PTT COMPLETE", f"TX {stage_word}")
     if state.get("g_ptt_active") == "true":

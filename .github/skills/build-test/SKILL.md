@@ -550,6 +550,38 @@ assertion (`keyed + stage 3 + band_locked + current_band == expected`) still sta
 instruments for this area are `--only <scenario>` and `--bands <name>` (`--test suite --only FREQ_CTR
 --bands 80m` is ~40 s), NOT the whole suite.
 
+**SOLVED, same day, and it was the harness all along - the injection has to be spread ACROSS the step,
+not written at its start (2026-09-25).** `hold_band()` used to write every count for a 5 ms sample step
+BEFORE stepping (`5 x write_tmr1_count; stepi(5)`), so all five writes landed ahead of the chunk's
+FIRST 10 ms gate; every later gate in that chunk read the firmware's own TMR1 reset (0). Whether the
+burst happened to straddle a gate depended on the phase the chunk started at, which is exactly why one
+band's keyed window read the injection (160m, 52/99) and another's read a hard 0 (80m, 0/99) *on the
+same ELF in the same session*, and why the same band passed when run alone. **Fix: inject once per
+simulated millisecond inside the step** (`for _ in range(5): write_tmr1_count(f); stepi(1)`) - the same
+number of MDB writes and the same phase length, only their position changed. `--only FREQ_CTR --bands
+80m` now passes with the 80m keyed run holding `RD3` and its band lock for the whole window. **The
+generalisable trap: when a stimulus has to be present at a moment the firmware polls, spread it inside
+the polling interval - do not bunch it at the interval's boundary.**
+
+**THE HARNESS NO LONGER ASSERTS ANY KEYED COUNTER READING - THE FIRMWARE'S OWN SELF-TEST VERDICT IS THE
+CONTRACT (2026-09-25, user instruction).** The firmware now tests itself while keyed (`main.c`
+`tx_selftest_run()`, once per 1 ms `update_tx_sequence()` tick, NOT in an ISR - `freq_counter_tick_10ms()`
+is where TMR1 is read and reset, so no check can know more than that 10 ms gate). It ORs every check
+that has held for `LOCK_LOSS_UNKEYABLE_MS` (200 ms) into `g_selftest_reason` - a bit mask, `+`-joined on
+the panel by `tx_selftest_reason_text()`, never blank - holds that reason until the NEXT key-down, and
+takes the undefined/unkeyable action (bypass, band unlock, snoop) when a check first latches. The
+harness `mirrors` the names (`SELFTEST_REASON_NAMES` / `selftest_reason_text()` in
+`trace_ptt_sequence.py`) and asserts: per band, either a verified keyed lock, or the firmware's own
+named reason. `--only`/`--bands` unchanged; `check_freq_ctr_bands.py` uses the same wording so a slice
+cannot pass where the suite fails. Two traps, both cost a wrong verdict if forgotten:
+- **One good sample must not clear the interlock, and one bad sample must not set it.** Each check owns
+  a consecutive-ms counter that only it resets, and the reason survives a recovery by design - so never
+  "simplify" either into a single boolean or a single-sample test.
+- **A held reason is not a held failure.** `g_selftest_failed` stays true for the rest of the key-down
+  after the amplifier has recovered and re-keyed, so a harness assertion of the form "nothing may be
+  keyed while the flag is set" is WRONG; the trace-stop rule (`truncate_at_unkeyable()` fires on the
+  flag) is what bounds it.
+
 **`release did not enter stage 4` is a SAMPLING ALIAS, not a firmware fault (2026-09-25).** Once the
 injection above was fixed the base (plain PTT) scenario moved to
 `AssertionError: release did not enter stage 4`, and its own trace shows stage 3 -> 5 -> 0 with RC5 and
