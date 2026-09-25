@@ -854,37 +854,40 @@ void handle_ptt_transition(bool ptt_asserted) {
             return;
         }
         if (g_band_cache_valid) {
-            /* The remembered band is a hint, never an override: the relay may be moved to it
-               (and the amplifier may key on it) ONLY when the live frequency already confirms
-               the SAME band. At keydown the radio has usually not started transmitting yet, so
-               there is normally nothing to confirm - in that case the first-dit snoop applies and
-               the relay selection is driven from the live measurement, not from memory.
-               Restoring a stale band blind only creates a transient where current_band, the
-               remembered band and the relay disagree (I4) and, worse, a hot-switch if the fold-
-               back lands after keying. */
+            /* First-dit: there is no usable live measurement yet (the radio has only just
+               been keyed), so use the band decoded from the previous transmission and engage
+               immediately. The remembered band is verified against the first measurement of
+               this transmission by update_tx_sequence(). */
+            /* Decisive guard: if the counter already holds a stable live measurement that
+               disagrees with the remembered band, the live RF wins. Restoring the stale band
+               would move the relay to the wrong position, then the verify step would fold it
+               back - a transient where current_band and the relay disagree (I4) and, worse,
+               a hot-switch if the fold-back happens after keying. Prefer the live band and let
+               the snoop path decode it cleanly. */
             rf_band_t live = freq_counter_measured_band();
-            if (live == g_band_cache_band) {
-                /* The live RF already confirms the remembered band: restore it, let the relay
-                   settle, and engage normally. */
-                if (freq_counter_restore_locked_band(g_band_cache_band)) {
-                    g_band_settle_active = true;
-                    g_band_settle_elapsed_ms = 0;
-                }
-                g_snoop_active = false;
+            if (live != BAND_OUT_OF_SPEC && live != g_band_cache_band) {
+                freq_counter_unlock_band();
+                g_snoop_active = true;
                 g_band_verify_active = false;
                 g_band_verify_mismatch_ms = 0;
-                g_band_established = true;
+                g_band_cache_valid = false;
+                g_state = STATE_BYPASS_SNOOP;
                 return;
             }
-            /* Live RF (if any) does not confirm the remembered band, or there is no usable
-               measurement yet: fall through to first-dit bypass-snoop, where the band is decoded
-               from live RF and the relay is driven from the measurement only. */
-            freq_counter_unlock_band();
-            g_snoop_active = true;
-            g_band_verify_active = false;
+            if (freq_counter_restore_locked_band(g_band_cache_band)) {
+                /* The remembered band differs from the one the LPF relays are sitting on, so
+                   they have just been commanded to move. The T/R relay must not close onto a
+                   moving relay, so hold bypass for the relay's switching time exactly as the
+                   decode path does after a snoop. When the selection does not move (the common
+                   warm re-key on the same band) there is nothing to wait for and the T/R relay
+                   is closed on the normal sequencer timing. */
+                g_band_settle_active = true;
+                g_band_settle_elapsed_ms = 0;
+            }
+            g_snoop_active = false;
+            g_band_verify_active = true;
             g_band_verify_mismatch_ms = 0;
-            g_band_cache_valid = false;
-            g_state = STATE_BYPASS_SNOOP;
+            g_band_established = true;
             return;
         }
         /* First-dit bypass snoop: no band is known yet, so hold the amplifier in bypass
