@@ -40,6 +40,18 @@ function writeReceipt(payload) {
   }
 }
 
+// Diagnostic: append one line to the follow trace so the harness can read back exactly what this
+// extension decided (which code is running, and every following flip / reveal choice). Never
+// affects the show; a missing/read-only temp dir must not break anything.
+const TRACE = "picampcontrol_follow.trace.log";
+function trace(msg) {
+  try {
+    fs.appendFileSync(path.join(os.tmpdir(), TRACE), `${Date.now()} ${msg}\n`, "utf8");
+  } catch (err) {
+    // trace is best-effort only
+  }
+}
+
 // The PID of THIS VS Code window's main process, or null. Every window is one main process; the
 // harness (run in a terminal) has its window's main process as an ancestor and tags its request
 // with that PID, so this extension must only act when the request PID is its own. Walk up the
@@ -113,7 +125,32 @@ function findOpenTab(uri) {
 // change. Following is done HERE, not by the Log Viewer extension: that extension needs a
 // workspace-relative watch glob, but the run log lives in the OS temp dir, so its glob never
 // resolves and the log stops following (user instruction, 2026-09-25).
-const followers = new Map(); // fsPath -> { editor, watcher, timer }
+const followers = new Map(); // fsPath -> { editor, watcher, timer, following }
+
+// The viewport belongs to this extension, not to VS Code's own default of tracking a file that is
+// edited underneath an open editor. One rule, stated plainly:
+//   * the pane must be FULL - while the whole file still fits on screen there is no overflow, so
+//     nothing is scrolled at all ("don't scroll until the pane is full");
+//   * and we must be FOLLOWING - `entry.following` is true only while the operator is parked on
+//     the tail, and flips false the moment they scroll up to read, so a reader is never yanked.
+// This is the ONE place that moves the view, so nothing can race against it.
+function followIfFull(entry) {
+  const editor = entry.editor;
+  if (!editor || !entry.following) {
+    return;
+  }
+  const lineCount = editor.document.lineCount;
+  const last = lineCount - 1;
+  const first = editor.visibleRanges[0];
+  const viewportLines = first ? first.end.line - first.start.line + 1 : 0;
+  if (lineCount <= viewportLines) {
+    return; // pane not full yet - nothing to follow
+  }
+  if (editor.visibleRanges.some((range) => range.end.line >= last)) {
+    return; // tail already on screen
+  }
+  editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.AtBottom);
+}
 
 function disposeFollower(key) {
   const entry = followers.get(key);
@@ -156,30 +193,13 @@ async function followLog(uri) {
     const watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(dir, path.basename(key))
     );
-    const revealTail = () => {
-      const editor = entry.editor;
-      // Only auto-scroll while FOLLOWING. `entry.following` is set by the visible-ranges listener
-      // in activate(): true while the tail is on screen, false the moment the operator scrolls up
-      // to read, true again when they scroll back. Revealing unconditionally (or "whenever the tail
-      // is not visible") yanks a reader who has scrolled away (2026-09-26).
-      if (!editor || !entry.following) {
-        return;
-      }
-      const last = editor.document.lineCount - 1;
-      if (editor.visibleRanges.some((range) => range.end.line >= last)) {
-        return; // already showing the tail
-      }
-      editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.Default);
-    };
-    // Reveal on a short throttle: a burst of writes scrolls once, not once per line. A run-start
-    // truncate lands here as one big change and scrolls back to the top correctly.
     const scheduleReveal = () => {
       if (entry.timer) {
         clearTimeout(entry.timer);
       }
       entry.timer = setTimeout(() => {
         entry.timer = null;
-        revealTail();
+        followIfFull(entry);
       }, 150);
     };
     watcher.onDidChange(scheduleReveal);
@@ -188,13 +208,9 @@ async function followLog(uri) {
     entry.watcher = watcher;
   }
 
-  // Reveal once now so an already-grown log shows its tail, not its top - and affirm we are
-  // following. The open sequence fires visible-range events (show at top, then reveal tail) in an
-  // order that is not guaranteed, so re-affirm following a tick later to win that race.
-  const last = doc.lineCount - 1;
+  // Park on the tail only when the pane is already full; an unfilled pane is left at the top.
   entry.following = true;
-  entry.editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.Default);
-  setTimeout(() => { entry.following = true; }, 100);
+  followIfFull(entry);
 }
 
 async function showRequestedLog() {
@@ -207,14 +223,18 @@ async function showRequestedLog() {
   if (!payload || !payload.path) {
     return;
   }
-  // Only the window that OWNS this log may open it. The precise identity is the main-process PID:
-  // the harness tags its request with its own window's PID, and every OTHER window must ignore it
-  // (user instruction, 2026-09-26: "only talk to your own pid"). The workspace `root` below is a
-  // coarser fallback for when the PID cannot be resolved - two windows on the SAME repo would both
-  // match the root, but only one matches the PID.
+  // Only the window that OWNS this log may open it. Two gates, because this Insiders install
+  // runs all windows under ONE shared main process (verified 2026-09-26: every window's extension
+  // host descends from the same `Code - Insiders.exe`), so a main-process-PID compare cannot tell
+  // two windows apart and the log used to follow in EVERY window (user: "duplicated on my other
+  // instance"). The reliable discriminator is which window is FOCUSED: the harness runs in the
+  // terminal of the window the operator is looking at, so only that window follows. The `root`
+  // gate is a coarse pre-filter (reject windows on a different repo); the PID is retained only as
+  // a cheap early-out that works on the rare single-main-per-window layout.
   if (payload.pid) {
     const mine = mainPid();
     if (mine !== null && mine !== payload.pid) {
+      trace(`gate: PID reject mine=${mine} theirs=${payload.pid}`);
       return; // not this window; leave the file for the owning window to handle
     }
   }
@@ -225,8 +245,13 @@ async function showRequestedLog() {
       path.resolve(folder.uri.fsPath).toLowerCase() === root
     );
     if (!owns) {
+      trace(`gate: ROOT reject root=${payload.root}`);
       return;
     }
+  }
+  if (vscode.window.state.focused === false) {
+    trace(`gate: FOCUS reject (another window owns the terminal)`);
+    return; // a different window is focused; this one must not follow the log
   }
   try {
     fs.unlinkSync(requestPath());
@@ -251,6 +276,7 @@ async function showRequestedLog() {
 }
 
 function activate(context) {
+  trace("activate: extension loaded (guard-removed build)");
   const dir = vscode.Uri.file(os.tmpdir());
   // Absolute path -> RelativePattern, so the watcher only watches this one file and not the whole
   // temp directory (which holds multi-megabyte simulator logs).
@@ -281,7 +307,13 @@ function activate(context) {
         return;
       }
       const last = editor.document.lineCount - 1;
-      entry.following = editor.visibleRanges.some((range) => range.end.line >= last);
+      const now = editor.visibleRanges.some((range) => range.end.line >= last);
+      const top = editor.visibleRanges[0] ? editor.visibleRanges[0].start.line : -1;
+      if (now !== entry.following || top !== entry.topLine) {
+        trace(`visible: following=${now} top=${top} last=${last}`);
+      }
+      entry.following = now;
+      entry.topLine = top;
     })
   );
   // If the operator highlights (selects) any text in a followed log, stop following that file for
