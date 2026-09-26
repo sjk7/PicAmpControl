@@ -2155,6 +2155,8 @@ def main():
                         lcd_state=flagged[0][2],
                         stimulus=stimulus_spans(scenario_samples, scenario_stimuli[scenario]),
                         lcd_caption="first self-test flagged sample",
+                        check=SCENARIO_CHECKS.get(scenario, SCENARIO_CHECKS[None]),
+                        observed=_observed_summary(scenario_samples, scenario),
                     )
                     scope_trace.show(panel_path)
         # Band-selection safety invariants (docs/first-dit-band-detection.md) over every
