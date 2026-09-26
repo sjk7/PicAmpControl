@@ -409,33 +409,61 @@ def _prose_lines(check, observed, why):
     return body
 
 
+def _text_h_fraction(fig, s, fontsize, linespacing=1.5):
+    """The TRUE rendered height of `s` (multi-line) as a figure-height fraction, measured from the
+    canvas renderer. Layout is computed from these measured extents so stacked blocks can never
+    overlap, whatever the figure size or font metrics (user instruction, 2026-09-26)."""
+    try:
+        renderer = fig.canvas.get_renderer()
+        probe = fig.text(0.5, 0.5, s, fontsize=fontsize, linespacing=linespacing)
+        bbox = probe.get_window_extent(renderer=renderer)
+        probe.remove()
+        # bbox is in display px at fig.dpi; -> inches -> figure-height fraction.
+        return (bbox.height / fig.dpi) / fig.get_size_inches()[1]
+    except Exception:
+        # Fall back to a per-line estimate if the renderer is unavailable.
+        line_h = fontsize * linespacing / 72.0
+        return len(str(s).splitlines()) * line_h / fig.get_size_inches()[1]
+
+
 def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=None,
                         key_pairs=(), band_fraction=0.28):
     """The prose + the reconstructed 16x2 panel, inside the band reserved for them.
 
-    Two non-overlapping columns share the band: the LCD panel (top) and the injected-shading key
-    (directly below it) live in the LEFT column, and the prose lives in the RIGHT column. The prose
-    starts right of the panel column and the key sits UNDER the panel - not beside the prose - so
-    neither can ever land on the other or on a waveform lane (user instruction, 2026-09-26: the
-    prose must never overlap).
+    Every block's height is MEASURED from the renderer and the blocks are stacked top-to-bottom, so
+    the panel, its caption, the injected-shading key and the prose can never overlap each other or
+    a waveform lane. Left column = panel + key; right column = prose (user instruction, 2026-09-26).
     """
     body = _prose_lines(check, observed, why)
+    pad = 0.006  # figure-fraction gap between stacked elements
 
+    # Right column: the prose, sized from its measured height and anchored to the top of the band.
+    if body:
+        prose_h = _text_h_fraction(fig, "\n".join(body), 8) + 2 * pad
+        note_ax = fig.add_axes([0.31, band_fraction - prose_h, 0.67, prose_h])
+        note_ax.axis("off")
+        note_ax.text(0.0, 1.0, "\n".join(body), fontsize=8, color="#263238", va="top",
+                     linespacing=1.5, transform=note_ax.transAxes)
+
+    # Left column: LCD panel (with its caption drawn inside it) then the injected key, stacked by
+    # measured height from the top of the band.
     if lcd_state is not None:
         line1, line2 = lcd_screen(lcd_state)
         # The panel's OWN aspect is fixed (16 characters wide by 2 rows in the LCD module's drawing
-        # space), so the axes height is derived from the figure size rather than picked - on a tall
-        # trace the first attempt produced a stretched panel that did not look like the hardware.
+        # space), so its axes height is derived from the figure size rather than picked - on a tall
+        # trace a stretched panel did not look like the hardware.
         fig_width, fig_height = fig.get_size_inches()
         width_fraction = 0.24
-        height_fraction = ((width_fraction * fig_width) / (7.6 / 3.1)) / fig_height
-        # The panel sits at the TOP of the reserved band, the injected-shading key BELOW it, so the
-        # two never overlap (the key sat under the panel and covered the screen - user, 2026-09-26).
-        panel_bottom = band_fraction - height_fraction - 0.012
-        panel_ax = fig.add_axes([0.03, panel_bottom, width_fraction, height_fraction])
+        panel_h = ((width_fraction * fig_width) / (7.6 / 3.1)) / fig_height
+        # 10 px breathing room under the bottom lane, then the panel below it (user, 2026-09-26).
+        top = band_fraction - 0.012 - (10.0 / 120.0) / fig_height
+        panel_bottom = top - panel_h
+        panel_ax = fig.add_axes([0.03, panel_bottom, width_fraction, panel_h])
         if key_pairs:
-            key_ax = fig.add_axes([0.03, 0.012, width_fraction,
-                                   max(0.02, panel_bottom - 0.022)])
+            # Key sits BELOW the panel, height measured from its title + one row per swatch.
+            key_h = (_text_h_fraction(fig, "injected (shaded):", 6.5, 1.0)
+                     + len(key_pairs) * _text_h_fraction(fig, "X kHz", 6.5, 1.0) + 2 * pad)
+            key_ax = fig.add_axes([0.03, panel_bottom - key_h - pad, width_fraction, key_h])
             key_ax.set_xlim(0, 1)
             key_ax.set_ylim(0, max(1, len(key_pairs)))
             key_ax.axis("off")
@@ -471,14 +499,6 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
         if lcd_state.get("g_fault_latched") == "true":
             caption += f"   g_trip_reason={trip_reason_detail(lcd_state.get('g_trip_reason'))}"
         panel_ax.text(3.8, 0.4, caption, ha="center", va="center", fontsize=7, color="#455a64")
-
-    if body:
-        # The prose fills the RIGHT column, full band height; it starts at x=0.31 so it is always
-        # clear of the left panel/key column (x=0.03-0.27).
-        note_ax = fig.add_axes([0.31, 0.012, 0.67, max(0.05, band_fraction - 0.025)])
-        note_ax.axis("off")
-        note_ax.text(0.0, 1.0, "\n".join(body), fontsize=8, color="#263238", va="top",
-                     linespacing=1.5, transform=note_ax.transAxes)
 
 
 def show(path):
