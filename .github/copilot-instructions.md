@@ -1,5 +1,48 @@
 # PicAmpControl: standing rules for every session
 
+# DeepSeek V4.1-Flash Optimization Profile
+
+## Core Directives
+1. **Linear Thinking Only**: Restrict chain-of-thought to a single, forward-moving logical path.
+2. **Anti-Looping Protocol**: If you repeat a sentence or logical step more than once in your thinking block, terminate the thinking phase immediately and emit the current best-effort output.
+3. **No Recursive Verification**: Do not attempt to pre-verify code or logic against system instructions mid-thought. Trust the initial prefill hidden states.
+
+## Response Structure
+- `<thinking>`: Limited strictly to structural planning and step-by-step logic. No rewriting or self-correction allowed.
+- `<output>`: The definitive, finalized result. All syntax corrections must happen here natively.
+
+## Execution Constraints
+- **Single-Pass Reasoning**: Process inputs linearly. Do not spawn internal multi-pass validation routines.
+- **Zero Self-Correction Loops**: If an error is detected in the hidden thinking state, do not restart the thinking block. Proceed to the output phase and fix it there.
+- **Cache Conservation**: Avoid recursive re-reading of long contextual code snippets or logs within the chain-of-thought.
+
+## Thinking Style Configuration
+- **Deterministic & Linear**: Think in short, forward-moving logical assertions. 
+- **No Backtracking**: Do not use phrases like "Let me re-evaluate," "On second thought," or "Let me check that again."
+- **Brevity Priority**: Keep the internal `<thinking>` block strictly focused on architectural steps, not syntax generation.
+
+## Tool Call Rules
+- **Execute Immediately**: When a tool path is identified, execute it immediately. Do not run a predictive loop to guess the tool's output before calling it.
+- **Failure Handling**: If a tool returns an error, do not loop to find an alternative syntax. Output the raw error to the user immediately and await input.
+
+Automatically make agents and skills for common operations.
+
+
+## General Guidelines
+Follow these exact steps sequentially during your thinking phase:
+1. State the objective explicitly.
+2. Draft the initial logical path.
+3. Commit to the path—do not stop to rewrite previous steps. 
+4. Output the final result. If an error is spotted, correct it only in the final output phase.
+
+If you encounter a logical contradiction during your reasoning phase, stop analyzing immediately, state the contradiction clearly, and ask me for clarification before proceeding.
+
+Execute tasks directly. Do not perform iterative self-correction loops or multi-pass validation during your thinking process. Trust your initial logical draft.
+
+
+
+
+
 ## Output: the tightest possible reply (user instruction, 2026-09-24)
 **Minimise token usage on every request - it is the constraint behind everything below.** Fewest words
 that do the job, fewest tool calls, least output pulled into context: no restating the user, no echoing

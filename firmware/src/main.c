@@ -65,6 +65,7 @@ typedef enum {
     MENU_PAGE_POWER_TEMPERATURE,
     MENU_PAGE_SWR_METER,
     MENU_PAGE_CURRENT_METER,
+    MENU_PAGE_SELF_TEST,
     MENU_PAGE_SWR1_TRIP,
     MENU_PAGE_SWR2_TRIP,
     MENU_PAGE_SWR1_FWD_FULL_SCALE,
@@ -291,6 +292,32 @@ unsigned char tx_selftest_reason_text(unsigned int reason, char *buffer, unsigne
     return used;
 }
 
+/* Firmware-only diagnostic self-test (docs/firmware-self-test-diagnostic.md).
+   Bit flags, one per check, reported on the LCD and read by the simulator as
+   `g_diag_result`. The firmware runs every check itself and decides PASS/FAIL; the
+   harness only reads the verdict mask. 0 = every check passed. */
+typedef enum {
+    DIAG_OK = 0x00,
+    DIAG_OUTPUTS = 0x01,    /* an output failed to reach/leave its commanded level */
+    DIAG_SEQUENCER = 0x02,  /* the 0->1->2->3->0 sequencer walk failed */
+    DIAG_LCD = 0x04,        /* LCD liveness not confirmed */
+    DIAG_EEPROM = 0x08      /* settings EEPROM record round-trip failed */
+} diag_check_t;
+
+#define DIAG_CHECK_COUNT 4
+static const char *const DIAG_CHECK_NAMES[] = {
+    "OUTPUT",    /* DIAG_OUTPUTS   0x01 */
+    "SEQ",       /* DIAG_SEQUENCER 0x02 */
+    "LCD",       /* DIAG_LCD       0x04 */
+    "EEPROM"     /* DIAG_EEPROM    0x08 */
+};
+/* How long each output is held asserted/deasserted before its SENSE_* read-back. */
+#define DIAG_HOLD_MS 5U
+/* Scratch EEPROM address for the round-trip, clear of the settings record (address 0). */
+#define DIAG_EEPROM_ADDR 0x80
+/* Number of outputs the assert-and-verify loop walks (TX, VCC, BIAS, fan, trip, 6 bands). */
+#define DIAG_OUTPUT_COUNT 11
+
 #define MENU_IDLE_TIMEOUT_MS 8000
 #define TEMPERATURE_RECOVERY_HYSTERESIS_C 5U
 #define CURRENT_SENSOR_ZERO_RAW 512U
@@ -375,6 +402,19 @@ static volatile unsigned int g_selftest_reason = TX_SELFTEST_OK;
 static unsigned int g_selftest_hold[TX_SELFTEST_CHECK_COUNT] = { 0 };
 /* How long the current unkey has been unwinding, in ms: TX_SELFTEST_REL_STUCK's window. */
 static unsigned int g_selftest_unkey_ms = 0;
+
+/* Diagnostic self-test state (docs/firmware-self-test-diagnostic.md). g_diag_request is set by
+   the SELF TEST menu page (or written by the simulator through the .sym address) and acted on by
+   the main loop only when the amplifier is cold; g_diag_running/done/result are volatile so the
+   simulator reads them directly, and g_diag_result is the PASS/FAIL mask it asserts. */
+static volatile bool g_diag_request = false;
+static volatile bool g_diag_running = false;
+static volatile bool g_diag_done = false;
+static volatile unsigned char g_diag_result = DIAG_OK;
+static unsigned char g_diag_phase = 0;   /* 0=outputs, 1=sequencer, 2=lcd, 3=eeprom, 4=done */
+static unsigned char g_diag_index = 0;   /* current output (0..10) or sequencer stage */
+static unsigned char g_diag_sub = 0;     /* 0=assert, 1=hold+verify-active, 2=deassert, 3=hold+verify-inactive */
+static unsigned int g_diag_elapsed_ms = 0;
 
 /* A new key-down starts a new verdict. This is the ONLY place the reason is cleared, which is what
    keeps the previous reason on the panel until the operator keys again (tx_selftest_run() clears
@@ -622,6 +662,181 @@ void release_band_if_cold(void) {
    band is no longer established and the amplifier must establish one before it may key. */
 void invalidate_established_band(void) {
     g_band_established = false;
+}
+
+/* ---- Firmware-only diagnostic self-test (docs/firmware-self-test-diagnostic.md) ---- */
+
+/* Drive output `idx` (0..4 = TX/VCC/BIAS/fan/trip, 5..10 = bands 160m..10m) via its LAT write. */
+static void diag_set_output(unsigned char idx, bool active) {
+    switch (idx) {
+        case 0: set_tx_output(active); break;
+        case 1: set_tx_vcc_output(active); break;
+        case 2: set_tx_bias_output(active); break;
+        case 3: set_fan_output(active); break;
+        case 4: set_trip_output(active); break;
+        case 5: OUTPUT_BAND_160M = active ? 1 : 0; break;
+        case 6: OUTPUT_BAND_80M  = active ? 1 : 0; break;
+        case 7: OUTPUT_BAND_40M  = active ? 1 : 0; break;
+        case 8: OUTPUT_BAND_20M  = active ? 1 : 0; break;
+        case 9: OUTPUT_BAND_15M  = active ? 1 : 0; break;
+        case 10: OUTPUT_BAND_10M = active ? 1 : 0; break;
+    }
+}
+
+/* True when output `idx` reads back ASSERTED at the pin (SENSE_* PORT read, not the latch). */
+static bool diag_sense_active(unsigned char idx) {
+    switch (idx) {
+        case 0: return SENSE_TX == output_level(true, g_thresholds.tx_active_high);
+        case 1: return SENSE_TX_VCC == output_level(true, g_thresholds.tx_vcc_active_high);
+        case 2: return SENSE_TX_BIAS == output_level(true, g_thresholds.tx_bias_active_high);
+        case 3: return SENSE_FAN == output_level(true, g_thresholds.fan_active_high);
+        case 4: return SENSE_TRIP == output_level(true, g_thresholds.trip_active_high);
+        case 5: return SENSE_BAND_160M == 1;
+        case 6: return SENSE_BAND_80M == 1;
+        case 7: return SENSE_BAND_40M == 1;
+        case 8: return SENSE_BAND_20M == 1;
+        case 9: return SENSE_BAND_15M == 1;
+        case 10: return SENSE_BAND_10M == 1;
+    }
+    return false;
+}
+
+/* The three TX outputs read back at the commanded stage level (0 = all off, 1 = TX, 2 = TX+VCC,
+   3 = TX+VCC+BIAS). Used by the sequencer walk. */
+static bool diag_sequencer_stage_ok(unsigned char stage) {
+    bool tx_ok = SENSE_TX == output_level(stage >= 1, g_thresholds.tx_active_high);
+    bool vcc_ok = SENSE_TX_VCC == output_level(stage >= 2, g_thresholds.tx_vcc_active_high);
+    bool bias_ok = SENSE_TX_BIAS == output_level(stage >= 3, g_thresholds.tx_bias_active_high);
+    return tx_ok && vcc_ok && bias_ok;
+}
+
+static void diag_sequencer_apply(unsigned char stage) {
+    set_tx_output(stage >= 1);
+    set_tx_vcc_output(stage >= 2);
+    set_tx_bias_output(stage >= 3);
+}
+
+/* Start a run only when the amplifier is cold; force bypass first and reset the verdict. Cold
+   means PTT not active and no latched fault: the startup inhibit (a valid cold/bypass state) does
+   not block it, and the outputs are re-forced to bypass before and after so a diagnostic can never
+   key the LDMOS. */
+void diag_selftest_request(void) {
+    if (g_diag_running || g_ptt_active || g_fault_latched) {
+        return;
+    }
+    apply_bypass();
+    g_diag_running = true;
+    g_diag_done = false;
+    g_diag_result = DIAG_OK;
+    g_diag_phase = 0;
+    g_diag_index = 0;
+    g_diag_sub = 0;
+    g_diag_elapsed_ms = 0;
+    g_menu_changed = true;
+}
+
+/* The LCD check is best-effort: the panel bus is not read back, so "liveness" is a known pattern
+   written for the operator to confirm. It cannot fail on a healthy board. */
+static void diag_lcd_pattern(void) {
+    lcd_write_byte_now(0x01, false);
+    __delay_ms(2);
+    lcd_set_cursor(0, 0);
+    lcd_write_text("0123456789ABCDEF");
+    lcd_set_cursor(1, 0);
+    lcd_write_text("SELF-TEST");
+}
+
+/* Settings-EEPROM round-trip: write a known pattern to a scratch address, read it back and
+   compare byte-for-byte. The settings record itself lives at address 0 and is not touched. */
+static void diag_eeprom_roundtrip(void) {
+    static const unsigned char pattern[8] = {0xA5, 0x5A, 0x00, 0xFF, 0x69, 0x96, 0x3C, 0xC3};
+    unsigned char buffer[8];
+    unsigned char index;
+    if (!internal_eeprom_write(DIAG_EEPROM_ADDR, pattern, sizeof pattern)) {
+        g_diag_result |= DIAG_EEPROM;
+        return;
+    }
+    if (!internal_eeprom_read(DIAG_EEPROM_ADDR, buffer, sizeof buffer)) {
+        g_diag_result |= DIAG_EEPROM;
+        return;
+    }
+    for (index = 0; index < sizeof buffer; index++) {
+        if (buffer[index] != pattern[index]) {
+            g_diag_result |= DIAG_EEPROM;
+            return;
+        }
+    }
+}
+
+/* Advance the diagnostic by `elapsed_ms` ticks. Called once per main-loop pass while
+   g_diag_running; every other subsystem is frozen, so nothing re-drives the outputs under test. */
+static void diag_selftest_tick(unsigned int elapsed_ms) {
+    if (g_diag_phase == 0) {
+        /* assert -> hold -> verify-active -> deassert -> hold -> verify-inactive, per output. */
+        unsigned char idx = g_diag_index;
+        g_diag_elapsed_ms += elapsed_ms;
+        if (g_diag_sub == 0) {
+            diag_set_output(idx, true);
+            g_diag_sub = 1;
+            g_diag_elapsed_ms = 0;
+            return;
+        }
+        if (g_diag_sub == 1) {
+            if (g_diag_elapsed_ms < DIAG_HOLD_MS) return;
+            if (!diag_sense_active(idx)) g_diag_result |= DIAG_OUTPUTS;
+            diag_set_output(idx, false);
+            g_diag_sub = 2;
+            g_diag_elapsed_ms = 0;
+            return;
+        }
+        if (g_diag_elapsed_ms < DIAG_HOLD_MS) return;
+        if (diag_sense_active(idx)) g_diag_result |= DIAG_OUTPUTS;
+        g_diag_index++;
+        if (g_diag_index >= DIAG_OUTPUT_COUNT) {
+            g_diag_phase = 1;
+            g_diag_index = 0;
+        }
+        g_diag_sub = 0;
+        g_diag_elapsed_ms = 0;
+        return;
+    }
+    if (g_diag_phase == 1) {
+        /* Sequencer walk 0 -> 1 -> 2 -> 3 -> 0: apply, hold, verify each stage's outputs. */
+        g_diag_elapsed_ms += elapsed_ms;
+        if (g_diag_sub == 0) {
+            diag_sequencer_apply(g_diag_index);   /* 0..3, then index 4 = back to idle */
+            g_diag_sub = 1;
+            g_diag_elapsed_ms = 0;
+            return;
+        }
+        if (g_diag_elapsed_ms < DIAG_HOLD_MS) return;
+        if (!diag_sequencer_stage_ok(g_diag_index & 0x03)) g_diag_result |= DIAG_SEQUENCER;
+        g_diag_index++;
+        if (g_diag_index >= 4) {
+            /* stage 4: walk back to idle and verify the amplifier is cold. */
+            diag_sequencer_apply(0);
+            g_diag_phase = 2;
+            g_diag_index = 0;
+        }
+        g_diag_sub = 0;
+        g_diag_elapsed_ms = 0;
+        return;
+    }
+    if (g_diag_phase == 2) {
+        diag_lcd_pattern();
+        g_diag_phase = 3;
+        return;
+    }
+    if (g_diag_phase == 3) {
+        diag_eeprom_roundtrip();
+        g_diag_phase = 4;
+        return;
+    }
+    /* Done: force bypass so the diagnostic can never leave an output asserted or key the LDMOS. */
+    apply_bypass();
+    g_diag_running = false;
+    g_diag_done = true;
+    g_menu_changed = true;
 }
 
 void __interrupt() timer0_isr(void) {
@@ -1018,6 +1233,36 @@ void show_menu_page(void) {
         lcd_write_power_bar(g_current_peak_a, g_thresholds.current_trip_a, 16);
         return;
     }
+    if (g_menu_page == MENU_PAGE_SELF_TEST) {
+        /* The diagnostic result screen: line 0 names the page, line 1 shows RUNNING, PASS, or the
+           '+' joined names of every check that failed. g_diag_result == 0 means every check passed. */
+        static char diag_text[17];
+        lcd_set_cursor(0, 0);
+        lcd_write_text("SELF TEST");
+        lcd_set_cursor(1, 0);
+        if (g_diag_running) {
+            lcd_write_text("RUNNING...");
+        } else if (!g_diag_done) {
+            lcd_write_text("PRESS TO RUN");
+        } else if (g_diag_result == DIAG_OK) {
+            lcd_write_text("PASS");
+        } else {
+            unsigned char used = 0;
+            unsigned char i;
+            diag_text[0] = '\0';
+            for (i = 0; i < DIAG_CHECK_COUNT; i++) {
+                if (g_diag_result & (unsigned char)(1u << i)) {
+                    const char *name = DIAG_CHECK_NAMES[i];
+                    if (used != 0 && used + 1 < sizeof diag_text) diag_text[used++] = '+';
+                    while (*name && used + 1 < sizeof diag_text) diag_text[used++] = *name++;
+                }
+            }
+            diag_text[used] = '\0';
+            lcd_write_text(diag_text);
+            lcd_write_spaces(16 - used);
+        }
+        return;
+    }
     lcd_set_cursor(0, 0);
     lcd_write_text(label);
     lcd_set_cursor(1, 0);
@@ -1362,7 +1607,7 @@ void step_home_page(bool clockwise) {
             g_menu_page = MENU_PAGE_STATUS;
         }
     } else if (g_menu_page == MENU_PAGE_STATUS) {
-        g_menu_page = MENU_PAGE_CURRENT_METER;
+        g_menu_page = MENU_PAGE_SELF_TEST;
     } else {
         g_menu_page = (menu_page_t)(g_menu_page - 1);
     }
@@ -1511,6 +1756,8 @@ void handle_encoder_short_press(void) {
     }
     if (g_ui_mode == UI_MODE_SETTINGS) {
         step_settings_page();
+    } else if (g_menu_page == MENU_PAGE_SELF_TEST) {
+        diag_selftest_request();
     } else {
         enter_settings();
     }
@@ -2192,6 +2439,29 @@ int main(void) {
     g_boot_message_active = true;
 
     while (1) {
+        if (g_diag_request && !g_diag_running) {
+            g_diag_request = false;
+            diag_selftest_request();
+        }
+        if (g_diag_running) {
+            /* The diagnostic owns every output while it runs: freeze protection, the sequencer,
+               the frequency counter and the TX self-test so none of them re-drive a pin under
+               test. The amplifier is already cold (forced bypass at start); just advance time,
+               step the diagnostic and keep the LCD fresh. */
+            unsigned int diag_ms = 0;
+            while (g_timer_ticks_pending != 0) {
+                g_timer_ticks_pending--;
+                diag_ms++;
+            }
+            diag_selftest_tick(diag_ms);
+            if (g_menu_changed) {
+                show_menu_page();
+                g_menu_changed = false;
+            }
+            lcd_service(2);
+            continue;
+        }
+
         swr1_fwd_raw = ADC_SAMPLE_SWR1_FWD;
         swr1_ref_raw = ADC_SAMPLE_SWR1_REF;
         swr2_fwd_raw = ADC_SAMPLE_SWR2_FWD;

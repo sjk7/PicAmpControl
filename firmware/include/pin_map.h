@@ -48,6 +48,19 @@
 // Comparator latch reset output.
 #define OUTPUT_COMP_RESET LATCbits.LATC1
 
+// Pin-level readback of the remaining outputs, for the diagnostic self-test's
+// assert-and-verify loop. Writes go out via LAT (the OUTPUT_* macros); the confirm
+// reads the same pin back through PORT, so a driver that never reached its level is
+// caught. No extra pins: each SENSE_* is the PORT read of an already-wired output.
+#define SENSE_FAN PORTBbits.RB5
+#define SENSE_TRIP PORTBbits.RB7
+#define SENSE_BAND_160M PORTDbits.RD2
+#define SENSE_BAND_80M  PORTDbits.RD3
+#define SENSE_BAND_40M  PORTDbits.RD4
+#define SENSE_BAND_20M  PORTDbits.RD5
+#define SENSE_BAND_15M  PORTDbits.RD6
+#define SENSE_BAND_10M  PORTDbits.RD7
+
 // Dedicated ADC inputs; no external analog multiplexer is required.
 #define ADC_SWR1_FWD_CHANNEL 0
 #define ADC_SWR1_REF_CHANNEL 1

@@ -64,6 +64,10 @@ STATE_VARS = [
     # undefined/unkeyable state during this key-down, and WHICH checks it failed on. This is the
     # contract the harness asserts - the firmware decides, the harness only reads the verdict.
     "g_selftest_failed", "g_selftest_reason",
+    # The firmware-only diagnostic self-test (docs/firmware-self-test-diagnostic.md): the firmware
+    # runs every check and reports PASS/FAIL in g_diag_result (0 = all passed); the harness reads
+    # the verdict, never re-derives it. g_diag_done marks the end of the run.
+    "g_diag_running", "g_diag_done", "g_diag_result",
 ]
 # The vars a sample of the UNKEY window needs: the pins prove the ordered unwind, and these carry the
 # state the release checks read. Deliberately a few instead of all of STATE_VARS (2026-09-25): the
@@ -302,6 +306,24 @@ def find_mdb() -> Path:
     per-platform plumbing rather than duplicated here.
     """
     return procutil.find_mdb()
+
+
+def symbol_address(name: str) -> int:
+    """Read a variable's data-space address from the linker symbol file.
+
+    This mdb build cannot write a C variable by name (`write g_x 1` fails with
+    `For input string: "<addr> "`), so fault injection / the diagnostic trigger has to go through
+    `write /r 0x<addr> <byte>` instead. Addresses move on every rebuild, so parse `.sym` at run
+    time (see the build-test skill and test_first_dit.py).
+    """
+    sym = IMAGE_DIR / "default.sym"
+    if not sym.exists():
+        sys.exit(f"error: {sym} not found - build the firmware first")
+    for line in sym.read_text().splitlines():
+        fields = line.split()
+        if fields and fields[0] == f"_{name}":
+            return int(fields[1], 16)
+    sys.exit(f"error: symbol {name} not found in {sym}")
 
 
 def record_stimulus(script: str) -> None:
@@ -557,6 +579,26 @@ def build_script(trip_name=None) -> str:
         lines.append("write pin RC0 5v")
         for _ in range(5):
             lines.append(stepi(10))
+            sample()
+        lines.append("quit")
+        return "\n".join(lines)
+
+    if trip_name == "SELF_TEST_DIAG":
+        # The firmware-only diagnostic (docs/firmware-self-test-diagnostic.md): boot far enough for
+        # the main loop to be established (the LCD/ADC init __delay_ms loops are slow in the model),
+        # then set g_diag_request. The diagnostic may run while the startup inhibit is still active
+        # (a valid cold/bypass state - see diag_selftest_request), so we do not need to wait out the
+        # whole inhibit, just enough for the main loop. The firmware runs every check itself and
+        # reports PASS/FAIL in g_diag_result; the harness only reads the verdict.
+        for _ in range(5):
+            lines.append(stepi(210))
+            sample()
+        lines.append("# Trigger the diagnostic via g_diag_request (written by .sym address)")
+        diag_addr = symbol_address("g_diag_request")
+        lines.append(f"write /r 0x{diag_addr:03X} 0x01")
+        # Output loop (11 outputs x 2 holds) + sequencer walk + LCD + EEPROM, with margin.
+        for _ in range(100):
+            lines.append(stepi(5))
             sample()
         lines.append("quit")
         return "\n".join(lines)
@@ -1157,6 +1199,38 @@ def validate_selftest(samples, scenario, expected_names) -> None:
           f"TX path open within {len(aftermath)} samples")
 
 
+def validate_diag(samples) -> None:
+    """The firmware-only diagnostic: the firmware runs every check and the harness reads the
+    verdict mask. The harness must NOT re-derive any pin level - the firmware decided, the harness
+    reads the answer.
+
+    The simulator proves the OUTPUTS and SEQUENCER checks (and the LCD pattern write) but NOT the
+    EEPROM round-trip: the model does not persist the data-EEPROM write (the WR bit clears but the
+    byte read back is unchanged), exactly like it does not model Timer1's external clock. So the
+    harness asserts the simulator-provable bits (OUTPUTS|SEQUENCER|LCD = 0x07) are clear and allows
+    the EEPROM bit (0x08) to be set in the simulator only - on hardware that check passes.
+    """
+    running = [s for s in samples if s[2].get("g_diag_running") == "true"]
+    if not running:
+        raise AssertionError("the diagnostic never started (g_diag_request was not acted on)")
+    done = [s for s in samples if s[2].get("g_diag_done") == "true"]
+    if not done:
+        raise AssertionError("the diagnostic never finished (g_diag_done never set)")
+    result = int(done[0][2].get("g_diag_result") or "0")
+    provable = result & 0x07   # DIAG_OUTPUTS | DIAG_SEQUENCER | DIAG_LCD
+    if provable != 0:
+        raise AssertionError(
+            f"the diagnostic reported FAIL mask 0x{provable:02X} on the simulator-provable checks "
+            f"(full mask 0x{result:02X})")
+    # Safety: the diagnostic must end cold - no TX output asserted, no keyed LDMOS.
+    for s in done:
+        if (s[1]["RC5"], s[1]["RC6"], s[1]["RC7"]) != (1, 1, 1):
+            raise AssertionError("the diagnostic finished with a TX output still asserted")
+    eeprom_note = "" if not (result & 0x08) else " (EEPROM bit set: hardware-only check, not modelled)"
+    print(f"SELF_TEST_DIAG passed: firmware verdict 0x{result:02X}{eeprom_note}, "
+          f"outputs/sequencer/LCD green, amplifier cold")
+
+
 # One unhappy-path scenario per self-test reason the model can actually drive the firmware into.
 # Deliberately NOT here: a band that changes under the amplifier (BAND_CHG) - a rig cannot QSY in
 # 200 ms, so a test that injects an instantaneous band swap is testing the model's pacing, not a
@@ -1433,6 +1507,11 @@ SCENARIO_CHECKS = {
     "SELFTEST_REL_STUCK": ("An unkey whose bias output stays asserted (a stuck driver) must make the "
                            "firmware declare the undefined/unkeyable state, keep the RF path open and "
                            "show STATE: UNDEFINED / REL_STUCK on the panel."),
+    "SELF_TEST_DIAG": ("The firmware-only diagnostic: on request the firmware asserts and verifies "
+                       "every output via its SENSE_* read-back, walks the sequencer 0->1->2->3->0, "
+                       "writes an LCD liveness pattern and round-trips the EEPROM, then reports "
+                       "PASS/FAIL in g_diag_result and ends cold. The harness reads the verdict "
+                       "mask, never re-derives a pin level."),
 }
 
 
@@ -1520,6 +1599,9 @@ def validate_scenario(scenario, samples) -> None:
         return
     if scenario in SELFTEST_SCENARIOS:
         validate_selftest(samples, scenario, SELFTEST_SCENARIOS[scenario])
+        return
+    if scenario == "SELF_TEST_DIAG":
+        validate_diag(samples)
         return
     validate_frequency_ready(samples, scenario)
     if scenario == "SWR1_1P5":
@@ -1911,7 +1993,7 @@ def main():
         scenario_names = [None, "TEMPERATURE", "SWR1", "SWR2", "HWFAULT",
                           "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5", "FREQ_CTR",
                           "FREQ_CTR_FAIL", "SELFTEST_BAD_BAND", "SELFTEST_TX_SENSE",
-                          "SELFTEST_REL_STUCK"]
+                          "SELFTEST_REL_STUCK", "SELF_TEST_DIAG"]
         if "--quick-bands" in sys.argv[1:]:
             scenario_names = [None, "FREQ_CTR", "FREQ_CTR_FAIL"]
         # Debugging shortcut: run ONLY the named scenarios, in the written order, through exactly
@@ -2019,12 +2101,14 @@ def main():
         # switched before the T/R relay closes (never hot-switch the band relay).
         for scenario, (_, scenario_samples) in zip(scenario_names, groups):
             label = _scenario_label(scenario)
-            if scenario == "SELFTEST_REL_STUCK":
-                # This scenario deliberately holds a TX pin asserted to simulate a stuck driver, so
-                # the pin-level "keyed" proxy the band invariants use reads keyed long after the
-                # firmware has unkeyed (the stuck bias IS the fault). The band-switching safety is
-                # proven by the base/FREQ_CTR scenarios; the fault handling is asserted by
-                # validate_selftest. The band invariants are meaningless over a deliberately-stuck pin.
+            if scenario in ("SELFTEST_REL_STUCK", "SELF_TEST_DIAG"):
+                # These scenarios deliberately assert TX/TX_VCC/TX_BIAS (or hold one stuck) while the
+                # amplifier is in fact cold, so the pin-level "keyed" proxy the band invariants use
+                # reads keyed at moments when no transmission exists. SELFTEST_REL_STUCK holds a bias
+                # pin stuck (the fault itself); SELF_TEST_DIAG walks the outputs and the sequencer on
+                # purpose with PTT never active. The band-switching safety is proven by the
+                # base/FREQ_CTR scenarios; the fault/diagnostic verdict is asserted by validate_selftest
+                # / validate_diag. The band invariants are meaningless over deliberately-driven pins.
                 continue
             for line in invariants.validate_keyed_band_invariants(scenario_samples, label):
                 print(line)
