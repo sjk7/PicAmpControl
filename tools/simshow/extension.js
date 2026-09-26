@@ -135,7 +135,7 @@ async function followLog(uri) {
 
   let entry = followers.get(key);
   if (!entry) {
-    entry = { editor: null, watcher: null, timer: null, following: true, revealing: false };
+    entry = { editor: null, watcher: null, timer: null, following: true };
     followers.set(key, entry);
   }
 
@@ -158,11 +158,10 @@ async function followLog(uri) {
     );
     const revealTail = () => {
       const editor = entry.editor;
-      // Only auto-scroll while FOLLOWING. `entry.following` is toggled by the visible-ranges
-      // listener in activate(): it is true while the tail is on screen and false the moment the
-      // operator scrolls up to read. Revealing unconditionally (or "whenever the tail is not
-      // visible") yanks a reader who has scrolled away (2026-09-26). `entry.revealing` stops our
-      // own reveal from being read back as a scroll-away by that listener.
+      // Only auto-scroll while FOLLOWING. `entry.following` is set by the visible-ranges listener
+      // in activate(): true while the tail is on screen, false the moment the operator scrolls up
+      // to read, true again when they scroll back. Revealing unconditionally (or "whenever the tail
+      // is not visible") yanks a reader who has scrolled away (2026-09-26).
       if (!editor || !entry.following) {
         return;
       }
@@ -170,9 +169,7 @@ async function followLog(uri) {
       if (editor.visibleRanges.some((range) => range.end.line >= last)) {
         return; // already showing the tail
       }
-      entry.revealing = true;
-      editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.AtBottom);
-      setTimeout(() => { entry.revealing = false; }, 150);
+      editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.Default);
     };
     // Reveal on a short throttle: a burst of writes scrolls once, not once per line. A run-start
     // truncate lands here as one big change and scrolls back to the top correctly.
@@ -192,12 +189,12 @@ async function followLog(uri) {
   }
 
   // Reveal once now so an already-grown log shows its tail, not its top - and affirm we are
-  // following (the open sequence's visible-range events can otherwise race and clear the flag).
+  // following. The open sequence fires visible-range events (show at top, then reveal tail) in an
+  // order that is not guaranteed, so re-affirm following a tick later to win that race.
   const last = doc.lineCount - 1;
   entry.following = true;
-  entry.revealing = true;
-  entry.editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.AtBottom);
-  setTimeout(() => { entry.revealing = false; }, 150);
+  entry.editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.Default);
+  setTimeout(() => { entry.following = true; }, 100);
 }
 
 async function showRequestedLog() {
@@ -280,7 +277,7 @@ function activate(context) {
       }
       const key = editor.document.uri.fsPath;
       const entry = followers.get(key);
-      if (!entry || entry.revealing) {
+      if (!entry) {
         return;
       }
       const last = editor.document.lineCount - 1;
