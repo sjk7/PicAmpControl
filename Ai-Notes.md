@@ -99,7 +99,7 @@ static, hand-captured design input. The user's words and the full list of what w
   command here - link to the skill.
 
 ## Date
-2026-09-25
+2026-09-26
 
 ## Session handoff (carry-over for a NEW session)
 - This is the ONLY AI carry-over file. `AI-HANDOFF.md` was deleted on 2026-09-21 (it duplicated
@@ -346,13 +346,15 @@ re-derive it.
 
 The open work is hardware validation: final sensor calibration, comparator thresholds and polarity, ADC transient protection, TX timing, fan implementation, LCD/menu/internal EEPROM persistence testing, final PCB review, and CI validation. First-dit specifics to confirm on the bench: BAND_CACHE_IDLE_TIMEOUT_MS (60 s) against real band-change habits, BAND_SETTLE_MS (20 ms) against the fitted LPF relay's operate time, and BAND_VERIFY_MS (20 ms) - i.e. how long a wrong remembered band may stay engaged before fold-back, which is the one figure that trades amplifier protection against nuisance drop-outs on a noisy first dit.
 
-- **DONE (2026-09-26): a firmware-only diagnostic self-test** - the `SELF TEST` live menu page runs,
-  only while cold, an assert-and-verify loop over every output (`SENSE_*` read-back), the 0->1->2->3->0
-  sequencer walk, an LCD pattern and an EEPROM round-trip, and reports PASS or the `+`-joined failed
-  check names on the LCD. `--test suite --only SELF_TEST_DIAG` passes (verdict `0x08` = EEPROM, the one
-  check the simulator cannot model; outputs/sequencer/LCD green, amplifier cold). Design and the one
-  open criterion (a fault-injection scenario to prove a stuck output fails the check) are in
-  `docs/firmware-self-test-diagnostic.md`.
+- **DONE (2026-09-26): a firmware-only diagnostic self-test, now menu-driven and per-check.**
+  Extracted to `firmware/src/self_test.c` + `self_test.h` (out of the 2400-line `main.c`), each check
+  is its own function (`diag_outputs_step` / `diag_sequencer_step` / `diag_lcd_check` /
+  `diag_eeprom_check`) and the `SELF TEST` menu page rotates ALL → OUTPUT → SEQ → LCD → EEPROM then
+  runs the selection (press) — so any one test or all of them run from the menu, only while cold.
+  The full 16-scenario suite is GREEN (2026-09-26, 376 s) including `SELF_TEST_DIAG` and the
+  fault-injection `SELF_TEST_DIAG_STUCK` (a pinned-wrong TX output flags `DIAG_OUTPUTS`). A passing
+  run's log now lists every scenario and what it tested. Remaining: split the rest of `main.c`
+  (~2190 lines) into ≤500-line modules — plan in `docs/firmware-refactor-plan.md`.
 
 If the simulator image is ever compiled `-Os` instead of `-O1` it would reclaim space, but it degrades
 mdb symbol/breakpoint resolution for the VS Code "Simulate PicAmpControl (Debug)" session - that needs
