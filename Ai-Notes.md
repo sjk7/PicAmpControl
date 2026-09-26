@@ -266,6 +266,18 @@ Measure them, never quote them from memory:
 
 ## Remaining work
 
+### PENDING (user asked 2026-09-26, NOT yet implemented): unkey-reset on the key line going low
+
+After every fail-on-purpose/fault test the amplifier must be left UNKEYED and ready for the next key
+event, and the reset of the state globals must happen ONLY when the key line (PTT) next goes LOW -
+not sooner, and not on the fault itself. The globals in question:
+`g_fc_status.band_locked`, `g_sequence_stage`, `g_fault_latched`, and the like. The user's words:
+*"ensure it leaves the system in an unkeyed state, ready for the next key event. Show this on the
+graphs. Our 'reset' point is when the key line next goes low. Only at that point should you reset the
+globals."* The graphs (scope traces) must make that reset moment visible. This is the one open
+firmware item from that session - everything else (scope-trace prose/panel layout, TX_VCC removal
+latency line) is done and committed.
+
 ### REMINDER: the MCU speed / oscillator question (flagged 2026-09-24, user asked to be reminded)
 
 Two "instruction rate" figures in this repo disagree by ~10x and neither has been re-measured against
