@@ -396,7 +396,26 @@
                 "firmware/include/settings.h",
                 "firmware/include/outputs.h",
                 "firmware/include/self_test.h",
-                "firmware/src/self_test.c"
+                "firmware/src/self_test.c",
+                "firmware/include/state.h",
+                "firmware/src/outputs.c",
+                "firmware/include/labels.h",
+                "firmware/src/labels.c",
+                "firmware/include/lcd_format.h",
+                "firmware/src/lcd_format.c",
+                "firmware/src/settings.c",
+                "firmware/include/protection.h",
+                "firmware/src/protection.c",
+                "firmware/include/tx_selftest.h",
+                "firmware/src/tx_selftest.c",
+                "firmware/include/menu.h",
+                "firmware/src/menu.c",
+                "firmware/include/sequencer.h",
+                "firmware/src/sequencer.c",
+                "firmware/src/state.c",
+                "firmware/include/init.h",
+                "firmware/src/init.c",
+                "firmware/src/main.c"
             ]
         }
     ]

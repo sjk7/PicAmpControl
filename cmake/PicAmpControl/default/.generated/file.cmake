@@ -20,10 +20,20 @@ set(PicAmpControl_default_default_XC8_FILE_TYPE_compile
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../docs/hardware/q10-bringup/q10_probe.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../docs/hardware/q10-bringup/temp_probe.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/freq_counter.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/init.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/labels.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/lcd_format.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/lcd_parallel.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/main.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/menu.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/nvm.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/self_test.c")
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/outputs.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/protection.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/self_test.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/sequencer.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/settings.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/state.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../firmware/src/tx_selftest.c")
 set_source_files_properties(${PicAmpControl_default_default_XC8_FILE_TYPE_compile} PROPERTIES LANGUAGE C)
 set(PicAmpControl_default_default_XC8_FILE_TYPE_link)
 set(PicAmpControl_default_image_name "default.elf")

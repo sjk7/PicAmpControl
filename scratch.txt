@@ -15,3 +15,5 @@ E:\hamcode\PicAmpControl\docs\firmware-refactor-plan.md
 --------------------------------------------------------------------
 How much code space is left in the MCU after all these changes?
 --------------------------------------------------------------------
+
+Ctrl+Shift+Right Click to open terminal in a folder with admin.
