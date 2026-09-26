@@ -148,6 +148,21 @@ async function showRequestedLog() {
   if (!payload || !payload.path) {
     return;
   }
+  // Only the window that OWNS this log may open it. Every Insiders window loads this extension
+  // and every one watches the SAME request file; without this check whichever watcher fires first
+  // opens the log in ITS window (2026-09-26 it landed in a second, unrelated window while the
+  // operator watched the right one). A request tagged with a `root` this window does not own is
+  // left alone - the owning window's watcher still sees the file and opens it there.
+  if (payload.root) {
+    const folders = vscode.workspace.workspaceFolders || [];
+    const root = path.resolve(String(payload.root)).toLowerCase();
+    const owns = folders.some((folder) =>
+      path.resolve(folder.uri.fsPath).toLowerCase() === root
+    );
+    if (!owns) {
+      return;
+    }
+  }
   try {
     fs.unlinkSync(requestPath());
   } catch (err) {

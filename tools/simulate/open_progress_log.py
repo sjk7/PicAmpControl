@@ -71,9 +71,16 @@ def request_show(paths, quiet: bool = False) -> bool:
     caller - or a human - can confirm it acted.
     """
     targets = [str(Path(p)) for p in paths]
+    # Tag the request with the workspace root so the RIGHT window opens it. Every Insiders
+    # window loads tools/simshow and every one watches the SAME request file, so an untagged
+    # request is a race: whichever window's watcher fires first opens the log (2026-09-26 it
+    # opened in a second, unrelated window - "MusicPlayer" - while the operator watched the
+    # PicAmpControl window). The extension ignores a request whose root it does not own.
+    root = Path(__file__).resolve().parents[2]
     try:
-        REQUEST_FILE.write_text(json.dumps({"path": targets[-1], "paths": targets}),
-                                encoding="utf-8")
+        REQUEST_FILE.write_text(
+            json.dumps({"path": targets[-1], "paths": targets, "root": str(root)}),
+            encoding="utf-8")
     except OSError as exc:
         if not quiet:
             print(f"open_progress_log: could not write {REQUEST_FILE}: {exc}")
