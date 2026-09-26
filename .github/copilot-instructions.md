@@ -95,9 +95,9 @@ cannot be made again.
   terminal panel is rendered too, so a whole-file dump costs CPU as well as tokens.
 
 ## Running builds and tests
-- **Never judge a run from terminal output, and never ask a running test for its terminal output** -
-  that wedges the terminal. Verdicts come from FILES: the run's own log, its appended exit-code line,
-  and the watchdog progress log.
+- **Never ask for or allow terminal output in the first place** - not just "don't judge a run by it".
+  The reason verdicts come from FILES (the run's own log, its appended exit-code line, the watchdog
+  progress log) and are watched live is that terminal output often BREAKS the terminal.
 - **Every simulator run goes through the watchdog wrapper. No exceptions**, not for a quick probe, a
   one-off measurement, a harness you are debugging, or a value you want sooner.
 - **The user watches a run by having its log open in a VS Code tab.** Opening it and keeping it live

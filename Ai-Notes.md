@@ -24,10 +24,11 @@ were all deleted. Concretely, that means:
 - EVERY SIMULATOR TEST RUNS THROUGH THE WATCHDOG - ALWAYS (user instruction, 2026-09-23: "ALL these
   tests should run through the watchdog -- always"). Wrapped entry points, why a bare run is useless
   and how a new test gets wrapped: `.github/skills/build-test/SKILL.md`.
-- TEST RUNS ARE NEVER OBSERVED THROUGH THE TERMINAL, AND NEVER ASK A RUN FOR ITS TERMINAL OUTPUT -
-  VERDICTS COME FROM FILES (user instruction, restated 2026-09-21 and again 2026-09-23: "we should
-  not ask for terminal output when running tests -- this breaks the terminal. We are using a
-  file-based approach instead."). The verdict method, the redirect/exit-code pattern and the two
+- NEVER ASK FOR OR ALLOW TERMINAL OUTPUT IN THE FIRST PLACE, not just "never judge a run by it"
+  (user instruction, 2026-09-26). The reason we use FILES and watch them instead is that terminal
+  output often BREAKS the terminal. Verdicts come from FILES (user instruction, restated 2026-09-21
+  and again 2026-09-23: "we should not ask for terminal output when running tests -- this breaks the
+  terminal. We are using a file-based approach instead."). The verdict method, the redirect/exit-code pattern and the two
   traps (a command that returns nothing says nothing about the run; a stale cached log read looks like
   "the run produced nothing") are in `.github/skills/build-test/SKILL.md`.
 - Keep this file (Ai-Notes.md) ALWAYS up to date; it's the launch point for a new session.

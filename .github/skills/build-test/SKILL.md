@@ -185,6 +185,7 @@ panel - it never opens or reclaims the text-editor tab, and never pulls focus, i
 another app. That focus-stealing is exactly why the in-repo `tools/logfollower` extension (Log
 Follower) and its `install_logfollower.sh`/`.ps1` installers were DELETED on 2026-09-24 - it kept
 raising VS Code above other windows while the user was elsewhere. **Install it once per machine:
+`code-insiders --install-extension berublan.vscode-log-viewer` on VS Code Insiders, else
 `code --install-extension berublan.vscode-log-viewer`** (its install is not automated - neither
 `run_tests.sh` nor `run_tests.ps1` touches it). To watch a run: open the Log Viewer panel and point
 it at the log (a `logViewer.watch` entry or the "Toggle log view" command).
