@@ -267,17 +267,19 @@ Measure them, never quote them from memory:
 
 ## Remaining work
 
-### PENDING (user asked 2026-09-26, NOT yet implemented): unkey-reset on the key line going low
+### DONE (2026-09-26): unkey-reset on the key line going low
 
-After every fail-on-purpose/fault test the amplifier must be left UNKEYED and ready for the next key
-event, and the reset of the state globals must happen ONLY when the key line (PTT) next goes LOW -
-not sooner, and not on the fault itself. The globals in question:
-`g_fc_status.band_locked`, `g_sequence_stage`, `g_fault_latched`, and the like. The user's words:
-*"ensure it leaves the system in an unkeyed state, ready for the next key event. Show this on the
-graphs. Our 'reset' point is when the key line next goes low. Only at that point should you reset the
-globals."* The graphs (scope traces) must make that reset moment visible. This is the one open
-firmware item from that session - everything else (scope-trace prose/panel layout, TX_VCC removal
-latency line) is done and committed.
+After a fault the amplifier is left unkeyed (all TX outputs off, RF path open), and every piece of
+transmission/fault state is reset at exactly one instant - the **next PTT-low (key-down) edge** - and
+nowhere earlier: not on the fault, not on release. `handle_ptt_transition()` in
+`firmware/src/sequencer.c` now carries an explicit "reset point" block that clears `g_fault_latched`
+/ `g_trip_reason` (via `clear_fault_latches()`), the self-test verdict (`tx_selftest_reset()`),
+`g_sequence_stage` (back to `SEQ_IDLE`), and - the one that was implicit - the band lock
+(`freq_counter_unlock_band()`). After a fault the release path never reaches `release_band_if_cold()`
+(`update_tx_sequence()` returns early while `g_fault_latched`), so unlocking on the key-low edge is
+the only thing that reliably lets the frozen LPF selection follow live RF again before the
+re-selection re-locks it. Full 16-scenario suite GREEN (`SUITE_EXIT:0`). Timing diagrams (mermaid +
+signal waveform) in `docs/tx-sequencer.md` §7.1.
 
 ### REMINDER: the MCU speed / oscillator question (flagged 2026-09-24, user asked to be reminded)
 

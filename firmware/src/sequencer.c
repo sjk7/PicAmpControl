@@ -17,10 +17,21 @@ void handle_ptt_transition(bool ptt_asserted) {
         return; // Ignore PTT changes until system settles (RC1 low)
     if (ptt_asserted) {
         g_ptt_active = true;
-        g_sequence_stage = 0;
+        /* THE RESET POINT. Every piece of transmission/fault state is cleared here, on the PTT-low
+           (key-down) edge, and nowhere earlier - not on the fault itself and not on release - so a
+           failed key-down's reason stays readable on the panel until the operator keys again
+           (user instruction, 2026-09-26: *"our reset point is when the key line next goes low; only
+           at that point should you reset the globals"*). */
+        g_sequence_stage = SEQ_IDLE;
         /* A new key-down is a new verdict: the previous key-down's self-test reason is dropped here
            and nowhere else, after it has been on the panel for as long as the operator needed. */
         tx_selftest_reset();
+        /* Release the band lock now, so the frozen LPF selection follows live RF again before the
+           branches below re-select (lock the confirmed/remembered band) or stay unlocked (snoop).
+           After a fault the release path never runs `release_band_if_cold()` (update_tx_sequence
+           returns early while `g_fault_latched`), so this is the one place the band is reliably
+           released after a fault. */
+        freq_counter_unlock_band();
         g_band_cache_idle_ms = 0;
         g_band_settle_active = false;
         g_band_settle_elapsed_ms = 0;

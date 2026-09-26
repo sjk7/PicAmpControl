@@ -224,6 +224,71 @@ Protection is evaluated every pass and can override the sequencer at any point.
   sequence is not idle. With no test harness attached the LCD is the only instrument you have, so a
   stall and a trip are both legible from it.
 
+### 7.1 The reset point: key-low (2026-09-26)
+
+Everything that a fault froze is released at exactly one instant - the **next PTT-low (key-down)
+edge** - and nowhere earlier. The fault itself opens the RF path and latches the reason; release
+leaves the latch and the frozen band alone; only the next key-down clears them. The reason stays
+readable on the panel for the whole time in between, which is the point of holding it.
+
+The globals reset at that edge, in `handle_ptt_transition()` (`firmware/src/sequencer.c`):
+`g_fault_latched` / `g_trip_reason` (via `clear_fault_latches()`), the self-test verdict
+(`tx_selftest_reset()`), `g_sequence_stage` (back to `SEQ_IDLE`), and - the one that used to be
+implicit - the band lock (`freq_counter_unlock_band()`). After a fault the normal release path never
+reaches `release_band_if_cold()` (`update_tx_sequence()` returns early while `g_fault_latched`), so
+unlocking the band on the key-low edge is the only thing that reliably lets the frozen LPF selection
+follow live RF again before the re-selection below re-locks it (or leaves it unlocked for the
+bypass snoop).
+
+```mermaid
+sequenceDiagram
+    participant Op as Operator (PTT)
+    participant FW as Firmware
+    participant Amp as Amplifier
+
+    Op->>FW: key down (PTT low)
+    FW->>Amp: engage TX → VCC → BIAS
+    Note over FW,Amp: transmitting (BIAS-ON)
+
+    Note over Amp: FAULT (e.g. SWR1 trip)
+    FW->>Amp: drop VCC now, T/R + bias 5 ms later
+    Note over FW: g_fault_latched = 1, reason held on panel
+
+    Op->>FW: key up (PTT high)
+    Note over FW: unkeyed; latch and band lock STILL held
+
+    Op->>FW: key down (PTT low) — THE RESET POINT
+    Note over FW: clear fault latch, stage=IDLE, unlock band
+    FW->>Amp: re-select band, re-engage
+```
+
+The same sequence as a signal timing diagram (the `↑` marks the single reset instant):
+
+```text
+                     keyed            fault          release           key again
+PTT (RC0)      ──────┐            ┌──────────────────────────────────────┐
+active-low           └────────────┘                                      └─────────
+TX   (RC5)     ──────┐       ┌──────────────────────────────────────────────┐
+                      └───────┘ (T/R opened 5 ms after fault)               └──────
+TX_VCC (RC6)   ───────┐      ┌───────────────────────────────────────────────┐
+                       └──────┘ (dropped immediately)                        └─────
+TX_BIAS(RC7)   ────────┐     ┌────────────────────────────────────────────────┐
+                        └─────┘ (dropped 5 ms after fault)                    └────
+g_fault_latched ───────┐     ┌────────────────────────────────────────────────┐
+                        └─────┘ = 1, held through release                     └─= 0
+band_locked     ────────┐    ┌─────────────────────────────────────────────────┐
+                         └────┘ = 1, frozen (release never unlocks it)         └─= 0, re-lock
+g_sequence_stage 3 ──────┐   ┌──────────────────────────────────────────────────┐
+                          └───┘                                                 └─= 0
+                                 ↑                                         ↑
+                           fault detected                           RESET POINT (PTT low)
+```
+
+The reset is asserted in the suite: the trip scenarios already re-arm to `SEQ_BIAS_ON` after the
+latch, and the self-test scenarios flag then reopen on the next key. The scope trace marks this edge
+as `PTT re-arm`; the band lock dropping on that same sample is the visible proof the reset happened
+there and not sooner.
+
 ## 8. Configuration, defaults and what is not implemented
 
 - `TX-VCC DLY`, `TX-BIAS DLY`: 0-1000 ms in 5 ms steps, default 20 ms. These set the length of

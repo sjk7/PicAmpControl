@@ -135,7 +135,7 @@ async function followLog(uri) {
 
   let entry = followers.get(key);
   if (!entry) {
-    entry = { editor: null, watcher: null, timer: null, following: true };
+    entry = { editor: null, watcher: null, timer: null, following: true, revealing: false };
     followers.set(key, entry);
   }
 
@@ -161,16 +161,18 @@ async function followLog(uri) {
       // Only auto-scroll while FOLLOWING. `entry.following` is toggled by the visible-ranges
       // listener in activate(): it is true while the tail is on screen and false the moment the
       // operator scrolls up to read. Revealing unconditionally (or "whenever the tail is not
-      // visible") yanks a reader who has scrolled away - the exact jitter the operator rejected
-      // (2026-09-26). The one-off reveal below still jumps an already-grown log to its tail on open.
+      // visible") yanks a reader who has scrolled away (2026-09-26). `entry.revealing` stops our
+      // own reveal from being read back as a scroll-away by that listener.
       if (!editor || !entry.following) {
         return;
       }
       const last = editor.document.lineCount - 1;
-      const tailVisible = editor.visibleRanges.some((range) => range.end.line >= last);
-      if (!tailVisible) {
-        editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.Default);
+      if (editor.visibleRanges.some((range) => range.end.line >= last)) {
+        return; // already showing the tail
       }
+      entry.revealing = true;
+      editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.AtBottom);
+      setTimeout(() => { entry.revealing = false; }, 150);
     };
     // Reveal on a short throttle: a burst of writes scrolls once, not once per line. A run-start
     // truncate lands here as one big change and scrolls back to the top correctly.
@@ -189,9 +191,13 @@ async function followLog(uri) {
     entry.watcher = watcher;
   }
 
-  // Reveal once now so an already-grown log shows its tail, not its top.
+  // Reveal once now so an already-grown log shows its tail, not its top - and affirm we are
+  // following (the open sequence's visible-range events can otherwise race and clear the flag).
   const last = doc.lineCount - 1;
-  entry.editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.Default);
+  entry.following = true;
+  entry.revealing = true;
+  entry.editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.AtBottom);
+  setTimeout(() => { entry.revealing = false; }, 150);
 }
 
 async function showRequestedLog() {
@@ -274,7 +280,7 @@ function activate(context) {
       }
       const key = editor.document.uri.fsPath;
       const entry = followers.get(key);
-      if (!entry) {
+      if (!entry || entry.revealing) {
         return;
       }
       const last = editor.document.lineCount - 1;
