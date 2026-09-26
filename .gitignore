@@ -24,3 +24,13 @@ node_modules/
 
 # CTest run artefacts (last-log/cost data) - never commit a run log
 Testing/
+
+.generated_files/
+dist/
+nbproject/
+Makefile*
+Package-*
+private/
+!cmake/**/user.cmake
+cmake/**/.generated/*
+cmake/**/CMake*

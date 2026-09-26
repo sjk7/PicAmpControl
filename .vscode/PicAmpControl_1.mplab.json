@@ -1,0 +1,43 @@
+{
+  "version": "1.9",
+  "importedFrom": "mplab\\PicAmpControl.X",
+  "configurations": [
+    {
+      "name": "default",
+      "id": "conf1",
+      "device": "PIC18F47Q10",
+      "imageType": "application",
+      "imagePath": "./out/PicAmpControl/default.elf",
+      "tool": "Simulator",
+      "packs": [
+        {
+          "name": "PIC18F-Q_DFP",
+          "vendor": "Microchip",
+          "version": "1.30.487"
+        }
+      ],
+      "fileSet": "Project files",
+      "toolchain": "default-XC8",
+      "includeLegacyMacros": true
+    }
+  ],
+  "propertyGroups": [
+    {
+      "name": "default-XC8",
+      "type": "toolchain",
+      "provider": "microchip.toolchains:xc8@4.00",
+      "properties": {}
+    }
+  ],
+  "fileSets": [
+    {
+      "name": "Project files",
+      "files": [
+        "mplab/PicAmpControl.X/Makefile",
+        "firmware/include/*",
+        "firmware/src/*"
+      ],
+      "encoding": "UTF-8"
+    }
+  ]
+}
