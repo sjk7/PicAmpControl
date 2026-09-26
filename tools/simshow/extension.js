@@ -127,28 +127,42 @@ function findOpenTab(uri) {
 // resolves and the log stops following (user instruction, 2026-09-25).
 const followers = new Map(); // fsPath -> { editor, watcher, timer, following }
 
-// The viewport belongs to this extension, not to VS Code's own default of tracking a file that is
-// edited underneath an open editor. One rule, stated plainly:
-//   * the pane must be FULL - while the whole file still fits on screen there is no overflow, so
-//     nothing is scrolled at all ("don't scroll until the pane is full");
-//   * and we must be FOLLOWING - `entry.following` is true only while the operator is parked on
-//     the tail, and flips false the moment they scroll up to read, so a reader is never yanked.
-// This is the ONE place that moves the view, so nothing can race against it.
+// The viewport belongs to this extension, not to VS Code's own habit of following a file that is
+// edited underneath an open editor (nor to any other log-follower - the marketplace Log Viewer and
+// log-follower extensions are NOT to be installed, 2026-09-26). One rule: scroll only once the pane
+// is FULL.
+//
+// "Full" is detected WITHOUT measuring the pane, because VS Code's `visibleRanges` reports the
+// span of lines that carry content, which is smaller than the pane whenever a view is scrolled past
+// the end of a short file - so it cannot be trusted as a height. The pane is full exactly when the
+// LAST line is not on screen while the view is still parked at the TOP: while the whole log fits it
+// stays put, and the moment it does not, the tail is kept on screen. Only while the operator is
+// parked on the tail too (`entry.following`, false the moment they scroll up to read).
 function followIfFull(entry) {
   const editor = entry.editor;
-  if (!editor || !entry.following) {
+  if (!editor) {
     return;
   }
   const lineCount = editor.document.lineCount;
+  if (lineCount < entry.lastLineCount) {
+    // The run truncated the log: the view is back at the top of a fresh file. Follow again.
+    entry.lastTop = 0;
+    entry.following = true;
+  }
+  entry.lastLineCount = lineCount;
+  if (!entry.following) {
+    trace(`full: SKIP following=false`);
+    return;
+  }
+  const ranges = editor.visibleRanges;
   const last = lineCount - 1;
-  const first = editor.visibleRanges[0];
-  const viewportLines = first ? first.end.line - first.start.line + 1 : 0;
-  if (lineCount <= viewportLines) {
-    return; // pane not full yet - nothing to follow
+  const top = ranges.length ? ranges[0].start.line : 0;
+  const tailVisible = ranges.some((range) => range.end.line >= last);
+  trace(`full: lineCount=${lineCount} top=${top} tail=${tailVisible}`);
+  if (top === 0 && tailVisible) {
+    return; // whole log on screen from the top: the pane is not full, so do not scroll
   }
-  if (editor.visibleRanges.some((range) => range.end.line >= last)) {
-    return; // tail already on screen
-  }
+  trace(`full: REVEAL tail`);
   editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.AtBottom);
 }
 
@@ -168,11 +182,12 @@ function disposeFollower(key) {
 
 async function followLog(uri) {
   const key = uri.fsPath;
+  trace(`followLog: ${key}`);
   const doc = await vscode.workspace.openTextDocument(uri);
 
   let entry = followers.get(key);
   if (!entry) {
-    entry = { editor: null, watcher: null, timer: null, following: true };
+    entry = { editor: null, watcher: null, timer: null, following: true, lastTop: 0, lastLineCount: 0 };
     followers.set(key, entry);
   }
 
@@ -210,6 +225,7 @@ async function followLog(uri) {
 
   // Park on the tail only when the pane is already full; an unfilled pane is left at the top.
   entry.following = true;
+  entry.lastTop = 0;
   followIfFull(entry);
 }
 
@@ -223,14 +239,13 @@ async function showRequestedLog() {
   if (!payload || !payload.path) {
     return;
   }
-  // Only the window that OWNS this log may open it. Two gates, because this Insiders install
-  // runs all windows under ONE shared main process (verified 2026-09-26: every window's extension
-  // host descends from the same `Code - Insiders.exe`), so a main-process-PID compare cannot tell
-  // two windows apart and the log used to follow in EVERY window (user: "duplicated on my other
-  // instance"). The reliable discriminator is which window is FOCUSED: the harness runs in the
-  // terminal of the window the operator is looking at, so only that window follows. The `root`
-  // gate is a coarse pre-filter (reject windows on a different repo); the PID is retained only as
-  // a cheap early-out that works on the rare single-main-per-window layout.
+  // Only the window that OWNS this log may open it: a request is ignored unless this window has the
+  // harness's workspace root open. A main-process-PID compare was tried and is USELESS here - this
+  // Insiders install runs every window under ONE shared `Code - Insiders.exe`, so all windows match.
+  // The "opened in the wrong window / duplicated" trouble of 2026-09-26 turned out to be the
+  // marketplace log-follower extensions (`berublan.vscode-log-viewer`, `log-follower.log-follower`),
+  // which are now uninstalled and must NOT be reinstalled. The PID tag is kept only as a cheap
+  // early-out for single-main-per-window layouts.
   if (payload.pid) {
     const mine = mainPid();
     if (mine !== null && mine !== payload.pid) {
@@ -248,10 +263,6 @@ async function showRequestedLog() {
       trace(`gate: ROOT reject root=${payload.root}`);
       return;
     }
-  }
-  if (vscode.window.state.focused === false) {
-    trace(`gate: FOCUS reject (another window owns the terminal)`);
-    return; // a different window is focused; this one must not follow the log
   }
   try {
     fs.unlinkSync(requestPath());
@@ -307,13 +318,22 @@ function activate(context) {
         return;
       }
       const last = editor.document.lineCount - 1;
-      const now = editor.visibleRanges.some((range) => range.end.line >= last);
-      const top = editor.visibleRanges[0] ? editor.visibleRanges[0].start.line : -1;
-      if (now !== entry.following || top !== entry.topLine) {
-        trace(`visible: following=${now} top=${top} last=${last}`);
+      const ranges = editor.visibleRanges;
+      const top = ranges.length ? ranges[0].start.line : 0;
+      const tailVisible = ranges.some((range) => range.end.line >= last);
+      // Following means "the operator has not scrolled away". The tail being on screen is one sign of
+      // that; the other is simply that the view has not moved UP. The log growing past the pane
+      // takes the tail off screen WITHOUT any scroll, and that must not switch following off (the
+      // old "tail visible" test alone did exactly that, so following never began). A view that
+      // moves UP is a deliberate scroll-away, so that - and only that - turns following off,
+      // including a scroll all the way to the top, which must not be yanked to the tail.
+      if (tailVisible) {
+        entry.following = true;
+      } else if (top < entry.lastTop) {
+        entry.following = false;
       }
-      entry.following = now;
-      entry.topLine = top;
+      entry.lastTop = top;
+      trace(`visible: last=${last} top=${top} tail=${tailVisible} -> following=${entry.following}`);
     })
   );
   // If the operator highlights (selects) any text in a followed log, stop following that file for
@@ -332,6 +352,7 @@ function activate(context) {
         return;
       }
       if (editor.selections.some((selection) => !selection.isEmpty)) {
+        trace(`selection: dispose follower (non-empty selection)`);
         disposeFollower(key);
       }
     })
