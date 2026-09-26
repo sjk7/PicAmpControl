@@ -340,6 +340,11 @@ re-derive it.
 
 The open work is hardware validation: final sensor calibration, comparator thresholds and polarity, ADC transient protection, TX timing, fan implementation, LCD/menu/internal EEPROM persistence testing, final PCB review, and CI validation. First-dit specifics to confirm on the bench: BAND_CACHE_IDLE_TIMEOUT_MS (60 s) against real band-change habits, BAND_SETTLE_MS (20 ms) against the fitted LPF relay's operate time, and BAND_VERIFY_MS (20 ms) - i.e. how long a wrong remembered band may stay engaged before fold-back, which is the one figure that trades amplifier protection against nuisance drop-outs on a noisy first dit.
 
+- **Planned (not started): a firmware-only diagnostic self-test** - as much of the board as the PIC
+  can verify with no simulator, harness or RF (output/`SENSE_*` assert-and-verify loop, the 0->1->2->3->0
+  sequencer walk, LCD liveness, EEPROM round-trip). The session setup, decisions and acceptance
+  criteria are in `docs/firmware-self-test-diagnostic.md`; read that file first when this is picked up.
+
 If the simulator image is ever compiled `-Os` instead of `-O1` it would reclaim space, but it degrades
 mdb symbol/breakpoint resolution for the VS Code "Simulate PicAmpControl (Debug)" session - that needs
 explicit user consent. If space ever does bind, the cheapest room is the LCD string literals
