@@ -313,7 +313,7 @@ def render_scope(samples, title, path, events=(), check=None, observed=None, why
     # (0.167 in per line at fontsize 8 / 1.5 line spacing) so the text can never overflow into the
     # lanes - not by tight_layout(rect=...): with many lanes matplotlib cannot honour the rect and
     # quietly lays the lanes OVER the text (the first attempt, reported 2026-09-25).
-    band = max(3.0, len(body) * 0.167 + 0.6) if body else (2.2 if lcd_state is not None else 0.0)
+    band = max(3.6, len(body) * 0.167 + 1.1) if body else (2.2 if lcd_state is not None else 0.0)
     fig, axes = plt.subplots(len(chosen), 1, sharex=True,
                              figsize=(12, max(4, 1.15 * len(chosen)) + band))
     axes = list(axes) if hasattr(axes, "__len__") else [axes]
@@ -352,11 +352,12 @@ def render_scope(samples, title, path, events=(), check=None, observed=None, why
 
     if prose:
         band_fraction = band / fig.get_size_inches()[1]
-        fig.subplots_adjust(left=0.16, right=0.98, top=0.94, bottom=band_fraction, hspace=0.25)
-        # The band is passed in so the prose and the panel live INSIDE it: placing them by absolute
-        # figure coordinates put them over the lower lanes the moment there were enough lanes to
-        # shrink the band (reported 2026-09-25: *"You are writing the image failure text ON TOP of
-        # the traces."*).
+        # The bottom lane's x tick labels and "time (ms, approx)" sit BELOW the lane; reserve their
+        # measured height so the prose band starts below them instead of over them (the prose used to
+        # overlap the bottom timebase numbers - user, 2026-09-26).
+        axis_h = _bottom_axis_height(fig, axes)
+        fig.subplots_adjust(left=0.16, right=0.98, top=0.94,
+                            bottom=band_fraction + axis_h, hspace=0.25)
         _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption,
                             stimulus_key(stimulus), band_fraction)
     else:
@@ -426,6 +427,18 @@ def _text_h_fraction(fig, s, fontsize, linespacing=1.5):
         return len(str(s).splitlines()) * line_h / fig.get_size_inches()[1]
 
 
+def _bottom_axis_height(fig, axes):
+    """Vertical space (figure fraction) the bottom lane's x tick labels + xlabel occupy BELOW the
+    lane, measured from the renderer. The prose band is placed below this so it can never overlap the
+    bottom timebase numbers (which it used to - user, 2026-09-26)."""
+    renderer = fig.canvas.get_renderer()
+    try:
+        bbox = axes[-1].xaxis.get_tightbbox(renderer)
+        return (bbox.height / fig.dpi) / fig.get_size_inches()[1]
+    except Exception:
+        return 0.055  # sensible fallback if the x-axis cannot be measured
+
+
 def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=None,
                         key_pairs=(), band_fraction=0.28):
     """The prose + the reconstructed 16x2 panel, inside the band reserved for them.
@@ -435,12 +448,13 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
     a waveform lane. Left column = panel + key; right column = prose (user instruction, 2026-09-26).
     """
     body = _prose_lines(check, observed, why)
-    pad = 0.006  # figure-fraction gap between stacked elements
+    pad = 0.016       # figure-fraction gap between stacked blocks
+    top_gap = 0.028   # figure-fraction gap below the bottom timebase, so prose/panel breathe
 
-    # Right column: the prose, sized from its measured height and anchored to the top of the band.
+    # Right column: the prose, sized from its measured height and anchored below the timebase.
     if body:
         prose_h = _text_h_fraction(fig, "\n".join(body), 8) + 2 * pad
-        note_ax = fig.add_axes([0.31, band_fraction - prose_h, 0.67, prose_h])
+        note_ax = fig.add_axes([0.32, band_fraction - top_gap - prose_h, 0.65, prose_h])
         note_ax.axis("off")
         note_ax.text(0.0, 1.0, "\n".join(body), fontsize=8, color="#263238", va="top",
                      linespacing=1.5, transform=note_ax.transAxes)
@@ -455,15 +469,15 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
         fig_width, fig_height = fig.get_size_inches()
         width_fraction = 0.24
         panel_h = ((width_fraction * fig_width) / (7.6 / 3.1)) / fig_height
-        # 10 px breathing room under the bottom lane, then the panel below it (user, 2026-09-26).
-        top = band_fraction - 0.012 - (10.0 / 120.0) / fig_height
+        # The panel sits below the timebase with a breathing gap, the injected key below it.
+        top = band_fraction - top_gap
         panel_bottom = top - panel_h
-        panel_ax = fig.add_axes([0.03, panel_bottom, width_fraction, panel_h])
+        panel_ax = fig.add_axes([0.04, panel_bottom, width_fraction, panel_h])
         if key_pairs:
             # Key sits BELOW the panel, height measured from its title + one row per swatch.
             key_h = (_text_h_fraction(fig, "injected (shaded):", 6.5, 1.0)
                      + len(key_pairs) * _text_h_fraction(fig, "X kHz", 6.5, 1.0) + 2 * pad)
-            key_ax = fig.add_axes([0.03, panel_bottom - key_h - pad, width_fraction, key_h])
+            key_ax = fig.add_axes([0.04, panel_bottom - key_h - pad, width_fraction, key_h])
             key_ax.set_xlim(0, 1)
             key_ax.set_ylim(0, max(1, len(key_pairs)))
             key_ax.axis("off")
