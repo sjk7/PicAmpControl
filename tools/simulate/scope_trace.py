@@ -429,15 +429,13 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
         fig_width, fig_height = fig.get_size_inches()
         width_fraction = 0.24
         height_fraction = ((width_fraction * fig_width) / (7.6 / 3.1)) / fig_height
-        # Inside the reserved band, clamped, so a tall trace cannot push it onto the lanes.
-        panel_bottom = min(0.04, max(0.005, band_fraction - height_fraction - 0.06))
+        # The panel sits at the TOP of the reserved band, the injected-shading key BELOW it, so the
+        # two never overlap (the key sat under the panel and covered the screen - user, 2026-09-26).
+        panel_bottom = band_fraction - height_fraction - 0.012
         panel_ax = fig.add_axes([0.03, panel_bottom, width_fraction, height_fraction])
         if key_pairs:
-            # The shading key sits directly UNDER the panel, in the same left column: the frequency
-            # lane is shaded to show what was injected, so the colour has to be decodable somewhere,
-            # and placing it beside the prose would cover the prose (the overlap the user flagged).
             key_ax = fig.add_axes([0.03, 0.012, width_fraction,
-                                   max(0.04, panel_bottom - 0.015)])
+                                   max(0.02, panel_bottom - 0.022)])
             key_ax.set_xlim(0, 1)
             key_ax.set_ylim(0, max(1, len(key_pairs)))
             key_ax.axis("off")
