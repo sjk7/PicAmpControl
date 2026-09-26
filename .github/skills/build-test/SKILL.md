@@ -159,26 +159,31 @@ in another window, and a `code -r <log>` call raises VS Code over what they are 
    it did not. **Highlighting (selecting) any text in a followed log stops following for that
    session** (the operator is reading something specific and must not be yanked to the tail); the
    next run re-follows, so it is a per-session pause, never a permanent disable (2026-09-26). The
-   same applies to scrolling: **auto-follow is driven off the editor's visible ranges** - it follows
-   the tail while the tail is on screen and stops the moment the operator scrolls up, resuming when
-   they scroll back. The earlier "reveal whenever the tail is not visible" read "scrolled away" and
-   "new content arrived" as the same thing and kept yanking the reader (fixed 2026-09-26 in
-   `tools/simshow/extension.js`; reinstall + reload after changing it).
+   same applies to scrolling, and the rule is now explicit: **the extension OWNS the viewport** - it is
+   the only thing that moves the view, and it moves it only when BOTH hold: (a) the operator is still
+   parked on the tail (`entry.following`, flipped false the moment they scroll up and true again when
+   they scroll back), and (b) the pane is FULL, i.e. the file holds more lines than the visible range
+   spans. While everything still fits on screen NOTHING is scrolled - an earlier version followed from
+   the first line, which the operator rejected flatly (*"only autoscroll when the pane is full"*,
+   2026-09-26). The one reveal is `followIfFull()` in `tools/simshow/extension.js`. **Autoscroll
+   changes only take effect after a reinstall + a window reload, so TEST AUTOSCROLL IN A NEW SESSION**
+   - a window still running the old copy shows the old behaviour and reads as "the fix failed".
+   (`tools/simulate/prove_autoscroll.py` appends a line every 0.5 s to a scratch log to exercise it.)
    helper is reinstalled with `tools/simshow/install.ps1` (reload the window once after).
    `AppendLog` in `platform_process.py` is the heartbeat helper.
-   **The helper is shared across EVERY Insiders window, so a request must be tagged with the
-   owning window's main-process PID.** The extension lives under `~/.vscode-insiders/extensions`, so
-   every window loads it and every one watches the SAME `%TEMP%/picampcontrol_show.request.json`. An
-   untagged request is a race: whichever window's watcher fires first opens the log (2026-09-26 it
-   opened in a second, unrelated window - "MusicPlayer" - while the operator watched the PicAmpControl
-   one). `open_progress_log.py` now resolves its own window's main PID (by walking the parent process
-   chain to the topmost `Code*` process) and writes `"pid": <pid>`; the extension computes its own main
-   PID the same way and ignores any request whose `pid` is not its own (user instruction, 2026-09-26:
-   *"only talk to your own pid"*). A `"root": <repo-root>` tag remains as a coarser fallback for when
-   the PID cannot be resolved - but the PID is the precise identity, since two windows on the SAME
-   repo would both match `root` while only one matches the PID. Reinstall with `install.ps1` + reload
-   EVERY window after changing the extension; a window that has not reloaded keeps its old copy and
-   keeps grabbing requests until it is.
+   **The helper is shared across EVERY Insiders window, so only ONE window may act on a request.**
+   Every window loads the extension and every one watches the SAME
+   `%TEMP%/picampcontrol_show.request.json`. **Verified 2026-09-26: on this Insiders install all
+   windows run under ONE shared main process** (every window's extension host, and the terminal, walk
+   up to the same topmost `Code - Insiders.exe`), so a main-process-PID compare CANNOT tell two
+   windows apart - it made the log follow in EVERY window (*"duplicated on my other instance"*). The
+   gate that works is **the focused window**: `open_progress_log.py` still writes `"pid"` and
+   `"root"`, and the extension rejects a request when its `root` does not match a workspace folder OR
+   when `vscode.window.state.focused` is false. The harness runs in the terminal of the window the
+   operator is looking at, so only that window follows. (The `pid` compare is kept only as a cheap
+   early-out for single-main-per-window layouts; do not rely on it here.) Reinstall with `install.ps1`
+   + reload EVERY window after changing the extension; a window that has not reloaded keeps its old
+   copy and keeps grabbing requests until it is.
 4. Which file is the moving one depends on how you launched it: **when you pass `--log <file>`, the
    heartbeat appends INTO that file** (verified 2026-09-23: the heartbeat process is spawned with
    `--log` pointing at the same path). Only when `--log` is
