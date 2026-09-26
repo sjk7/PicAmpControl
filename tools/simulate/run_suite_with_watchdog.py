@@ -297,7 +297,20 @@ def append_run_summary(log, since: float, code: int, test_name: str, path: Path)
     log.write("")
     if newest is None and code == 0:
         log.write(f"===== RUN PASSED name={test_name} elapsed={elapsed:.0f}s =====")
-        log.write("Every check in this run passed; no failure text to report.")
+        # Re-append what was tested (the suite writes suite_summary.txt) so the end of the log
+        # states the purpose, not just "no failure text to report" (user instruction, 2026-09-26).
+        summary = graphs / "suite_summary.txt"
+        summary_lines = []
+        try:
+            if summary.is_file() and summary.stat().st_mtime >= since - 1.0:
+                summary_lines = summary.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            summary_lines = []
+        if summary_lines:
+            for line in summary_lines:
+                log.write(line)
+        else:
+            log.write("Every check in this run passed; no failure text to report.")
         log.write("===== END RUN SUMMARY =====")
         return
     if newest is None:

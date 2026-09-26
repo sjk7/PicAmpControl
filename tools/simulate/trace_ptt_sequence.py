@@ -2184,11 +2184,21 @@ def main():
         # just "no failure text to report" (user instruction, 2026-09-26). The per-scenario observed
         # summaries are inline above; this is the readable block at the end of the log.
         print("===== SCENARIOS RUN (all passed) =====")
+        summary_lines = ["What was tested (all passed):"]
         for scenario in scenario_names:
             label = _scenario_label(scenario)
             check = SCENARIO_CHECKS.get(scenario, SCENARIO_CHECKS[None])
             print(f"  {label}: {check}")
+            summary_lines.append(f"  {label}: {check}")
         print("===== END SCENARIOS =====")
+        # Write the same words to a file the launcher re-appends into the final "RUN PASSED" block,
+        # so the END of the log states what was tested, not just "no failure text to report".
+        try:
+            summary_path = graph_dir / "suite_summary.txt"
+            summary_path.parent.mkdir(parents=True, exist_ok=True)
+            summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+        except OSError:
+            pass
         print(f"PTT suite passed: {len(scenario_names)} scenarios in one MDB session")
         return
     if not ELF_PATH.exists():
