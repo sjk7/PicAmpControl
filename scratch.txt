@@ -1,0 +1,17 @@
+PIC18F47Q1018
+
+I require the firmware tests to be run at any time through the use of the menu
+I want the firmware tests to be each in their own function because we should
+be able to call them all, or al the tests individually via the menu.
+
+What do you think about that?
+Tell me, then stop.
+
+-----------------------------------------------------------------------------------------------------
+Split the tests off into indiviual C file and split anything else from main.c, which has gotten rather huge. I don't like files longer than 500 lines, max. Preferably a lot less.
+-----------------------------------------------------------------------------------------------------
+
+E:\hamcode\PicAmpControl\docs\firmware-refactor-plan.md
+--------------------------------------------------------------------
+How much code space is left in the MCU after all these changes?
+--------------------------------------------------------------------
