@@ -595,7 +595,9 @@ CONTRACT (2026-09-25, user instruction).** The firmware now tests itself while k
 (`firmware/src/tx_selftest.c` `tx_selftest_run()`, once per 10 ms counter gate beside
 `freq_counter_tick_10ms()` - NOT in an ISR, and
 NOT on the 1 ms path, see the pass-length trap below). It ORs every check that has held for
-`LOCK_LOSS_UNKEYABLE_MS` (200 ms) into `g_selftest_reason` - a bit mask, `+`-joined on the panel by
+its per-check window (`tx_selftest_window()`: 0 ms `BAD_BAND`, 2 gates `TX_SENSE`, 1 gate
+`BIAS_PIN_STUCK_AFTER_TX`, 200 ms for the rest) into
+`g_selftest_reason` - a bit mask, `+`-joined on the panel by
 `tx_selftest_reason_text()`, never blank - holds that reason until the NEXT key-down, and takes the
 undefined/unkeyable action (bypass, band unlock, snoop) when a check first latches. The harness
 `mirrors` the names (`SELFTEST_REASON_NAMES` / `selftest_reason_text()` in `trace_ptt_sequence.py`) and

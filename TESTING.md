@@ -203,7 +203,8 @@ it must never be "fixed" into a passing trip.
 **The firmware's verdict is the contract, not a counter reading.** While keyed the firmware tests
 itself (`tx_selftest_run()`; `docs/tx-sequencer.md` §9), and every scenario reads that verdict from
 `g_selftest_failed` / `g_selftest_reason` instead of re-deriving it from the model. A check must hold
-for 200 ms to count, several failures are reported together as `+`-joined names, and the reason is
+for its per-check window to count (`BAD_BAND` 0 ms, `TX_SENSE` 2 gates, `BIAS_PIN_STUCK_AFTER_TX` 1
+gate, the rest 200 ms), several failures are reported together as `+`-joined names, and the reason is
 held on the panel until the next key-down. In particular no **keyed** `frequency_khz` reading is
 asserted: the firmware resets TMR1 on every 10 ms gate and nothing in the simulator clocks it, so such
 a reading measures the simulator's pacing rather than the firmware.

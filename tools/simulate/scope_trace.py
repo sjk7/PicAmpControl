@@ -210,6 +210,11 @@ def failure_lcd_state(samples):
     even if the harness kept stepping for another 400 ms afterwards; only when nothing latched is
     the last sample the right instant.
     """
+    # Imported locally: `render_scope` already does this to dodge the circular import with
+    # trace_ptt_sequence (which imports scope_trace at module level), and a module-level import
+    # here would see SECONDS_PER_INSTRUCTION before it is defined. This function is only called
+    # from on_failure() after trace_ptt_sequence has fully loaded, so the local import is safe.
+    from trace_ptt_sequence import SECONDS_PER_INSTRUCTION
     if not samples:
         return None, "no samples"
     latched = next((sample for sample in samples

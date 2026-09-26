@@ -220,7 +220,7 @@ band Y needs only ~MHz-scale resolution. The 10 ms gate is chosen for a stable i
 
 Consequence for the self-test: the frequency can only change once per gate, so `BAD_BAND`'s latency
 floor is the 10 ms gate itself, not the (per-check) debounce — see `tx_selftest_window()` in
-`main.c`.
+`firmware/src/tx_selftest.c`.
 
 ## Test coverage
 

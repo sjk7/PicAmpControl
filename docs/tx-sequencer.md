@@ -263,15 +263,24 @@ it should be?**
 | 0x20 | `TX_SENSE` | an output the stage claims is asserted is not reading back asserted |
 | 0x40 | `STALLED` | the band IS established, but the sequence has not reached BIAS-ON |
 | 0x80 | `NO_BAND` | keyed and nothing has decoded - correctly still in bypass, but it cannot say where it is |
-| 0x100 | `REL_STUCK` | the unkey did not finish in window, the bias was dropped while TX_VCC was still on, or an output is still asserted once the sequence reports idle |
+| 0x100 | `BIAS_PIN_STUCK_AFTER_TX` | the unkey did not finish in window, the bias was dropped while TX_VCC was still on, or an output is still asserted once the sequence reports idle |
 
 **A check must HOLD to count** - see the next subsection for the mechanism, the counters and the
 numbers.
 
-### The 200 ms hold, precisely
+### The per-check hold window, precisely
 
-The hold is `LOCK_LOSS_UNKEYABLE_MS` (200) in `firmware/src/main.c`. It is the only timing the
-self-test has, and it appears in exactly three places, all the same number on purpose:
+The hold is set per check by `tx_selftest_window()` in `firmware/src/tx_selftest.c`. Three checks act
+fast, the rest keep a long debounce:
+
+| bit | check | window | why |
+|---|---|---|---|
+| 0x02 | `BAD_BAND` | 0 ms | out-of-range frequency while keyed is LDMOS-damage - drop the drain now |
+| 0x20 | `TX_SENSE` | 2 gates | tolerate one slewing gate after `set_tx_output()` |
+| 0x100 | `BIAS_PIN_STUCK_AFTER_TX` | 1 gate | a pin stuck asserted is a hardware fault to remedy now (2026-09-26) |
+| rest | `NO_RF`/`LOCK_LOST`/`BAND_CHG`/`NO_LOCK`/`STALLED`/`NO_BAND` | 200 ms (`LOCK_LOSS_UNKEYABLE_MS`) | these can only tell "stuck" from "still ramping" over time |
+
+The mechanism, which is the same for every check:
 
 1. **The tick that counts it.** `tx_selftest_run()` is evaluated on the 10 ms counter gate
    (`TX_SELFTEST_TICK_MS`, beside `freq_counter_tick_10ms()`), so a check can never know more than the
@@ -280,8 +289,8 @@ self-test has, and it appears in exactly three places, all the same number on pu
 2. **The per-check counters.** `g_selftest_hold[TX_SELFTEST_CHECK_COUNT]` is one consecutive-ms counter
    per check, indexed by bit position, advanced by `TX_SELFTEST_TICK_MS`. For every bit set in
    `failing` the matching counter advances (capped at the window); for every bit clear that counter is
-   **reset to 0**. So a counter is not "how long since the last good gate" but "how long this condition
-   has held without a break", and each check resets only its own.
+   **reset to 0**. So a counter is "how long this condition has held without a break", and each check
+   resets only its own.
 3. **The expiry.** When a counter reaches its check's window, that check's bit is ORed into
    `g_selftest_reason`, `g_selftest_failed` is set, and `tx_selftest_run()` takes the action itself
    (bypass, band unlock, snoop - the sequencer picks it up on its next tick). Every counter is zeroed
@@ -290,20 +299,19 @@ self-test has, and it appears in exactly three places, all the same number on pu
 
 Consequences worth stating, because each one is a way to get this wrong:
 
-- A check that fails for 199 ms and then passes **never flags**; a check that passes for any length of
-  time **never clears a reason that has already latched**. The reason is held until the next key-down
-  (`tx_selftest_reset()`), not until the next good sample.
+- A check that fails for less than its window and then passes **never flags**; a check that passes for
+  any length of time **never clears a reason that has already latched**. The reason is held until the
+  next key-down (`tx_selftest_reset()`), not until the next good sample.
 - Nothing else in the self-test is timed. There is no second window, no per-check timeout and no
   delay between the expiry and the action.
 - `g_lock_loss_ms` only **publishes** the longest-holding failing check (milliseconds) for the test
   harness; it is not what makes the decision.
-- The hold is why a keyed amplifier does not drop out of transmit on one bad gate: a torn counter
-  read (`T1CON.nSYNC = 1` makes TMR1 genuinely asynchronous), one empty gate window, or one gate with
-  a relay driver still slewing can all happen legitimately. The window is **per-check**
-  (`tx_selftest_window()`): 200 ms by default (the recoverable checks, and STALLED/REL_STUCK which are
-  not LDMOS-damage conditions), **0 ms for `BAD_BAND`** (an out-of-range frequency while keyed can mean
-  the signal stepped past the LPF cutoff, so the drain drops on the first gate), and one extra gate for
-  `TX_SENSE` (so a driver still slewing on the gate after `set_tx_output()` is not a false trip).
+- The long `LOCK_LOSS_UNKEYABLE_MS` debounce exists so a keyed amplifier does not drop out of transmit
+  on one bad gate - a torn counter read (`T1CON.nSYNC = 1` makes TMR1 genuinely asynchronous), one
+  empty gate window, or one gate with a relay driver still slewing can all happen legitimately, and
+  `STALLED` in particular is TRUE during the normal 40 ms engage ramp (SEQ_TX_ON/SEQ_VCC_ON are not
+  yet BIAS-ON). The stuck-output check (`BIAS_PIN_STUCK_AFTER_TX`) is the one exception, kept at one
+  gate because a pin stuck asserted is a hardware fault to remedy now (2026-09-26).
 - **Do not move this onto the per-millisecond path.** Measured 2026-09-25: evaluating the self-test
   every 1 ms lengthened each main-loop pass enough that the SWR1 scenario's trip window was missed
   (the amplifier sat keyed at BIAS-ON with the bridge deliberately over-threshold and never tripped);
@@ -316,7 +324,7 @@ Consequences worth stating, because each one is a way to get this wrong:
 
 **The action, and the panel.** When a check first latches, the amplifier is in a transmission it cannot
 vouch for. The remedy is split by cause (user instruction, 2026-09-25):
-- a **fatal** check (`BAD_BAND`, `TX_SENSE`, `STALLED`, `REL_STUCK`) latches the undefined/unkeyable
+- a **fatal** check (`BAD_BAND`, `TX_SENSE`, `STALLED`, `BIAS_PIN_STUCK_AFTER_TX`) latches the undefined/unkeyable
   state: an out-of-spec measurement or an output that did not obey its command must not be re-keyed
   into, because re-keying would re-engage the same fault - the one case that can damage the LDMOS. The
   amplifier stays in bypass until the operator keys again.

@@ -93,7 +93,7 @@ SELFTEST_REASON_NAMES = [
     (0x20, "TX_SENSE"),
     (0x40, "STALLED"),
     (0x80, "NO_BAND"),
-    (0x100, "REL_STUCK"),
+    (0x100, "BIAS_STUCK"),
 ]
 # The panel is 16 columns wide, and the firmware's tx_selftest_reason_text() is written against that.
 SELFTEST_PANEL_COLUMNS = 16
@@ -658,10 +658,10 @@ def build_script(trip_name=None) -> str:
             lines.append("write TRISC 0x25")
             lines.append("write pin RC5 5v")
             hold(7000, 80)    # 400 ms
-        else:  # SELFTEST_REL_STUCK
+        else:  # SELFTEST_BIAS_PIN_STUCK_AFTER_TX
             # A bias driver that sticks asserted after unkey: make RC7 an input (TRISC bit 7 set) and
             # hold it low, then release. The firmware commands the bias off, but the pin stays
-            # asserted -> the idle output check raises REL_STUCK.
+            # asserted -> the idle output check raises BIAS_PIN_STUCK_AFTER_TX.
             lines.append("write TRISC 0x85")
             lines.append("write pin RC7 0v")
             lines.append("write pin RC0 5v")
@@ -1204,9 +1204,9 @@ def validate_selftest(samples, scenario, expected_names) -> None:
     index = samples.index(first)
     aftermath = samples[index:index + 4]
     # The T/R relay (RC5) and TX_VCC (RC6) must always open. The bias (RC7) must too, EXCEPT in
-    # REL_STUCK, where the stuck bias IS the fault being proven - the firmware cannot open a pin a
+    # BIAS_PIN_STUCK_AFTER_TX, where the stuck bias IS the fault being proven - the firmware cannot open a pin a
     # dead driver is holding asserted, and the protection is opening the RF path and latching.
-    must_open = ["RC5", "RC6"] if scenario == "SELFTEST_REL_STUCK" else ["RC5", "RC6", "RC7"]
+    must_open = ["RC5", "RC6"] if scenario == "SELFTEST_BIAS_PIN_STUCK_AFTER_TX" else ["RC5", "RC6", "RC7"]
     protected = [s for s in aftermath
                  if all(s[1].get(p) == 1 for p in must_open)
                  and s[2].get("g_sequence_stage") != "3"]
@@ -1279,7 +1279,7 @@ def validate_diag_stuck(samples) -> None:
 SELFTEST_SCENARIOS = {
     "SELFTEST_BAD_BAND": ["BAD_BAND"],
     "SELFTEST_TX_SENSE": ["TX_SENSE"],
-    "SELFTEST_REL_STUCK": ["REL_STUCK"],
+    "SELFTEST_BIAS_PIN_STUCK_AFTER_TX": ["BIAS_STUCK"],
 }
 
 
@@ -1544,9 +1544,9 @@ SCENARIO_CHECKS = {
     "SELFTEST_TX_SENSE": ("A TX output that does not reach the level its stage commands (a stuck "
                           "driver) must make the firmware declare the undefined/unkeyable state, open "
                           "the RF path and show STATE: UNDEFINED / TX_SENSE on the panel."),
-    "SELFTEST_REL_STUCK": ("An unkey whose bias output stays asserted (a stuck driver) must make the "
+    "SELFTEST_BIAS_PIN_STUCK_AFTER_TX": ("An unkey whose bias output stays asserted (a stuck driver) must make the "
                            "firmware declare the undefined/unkeyable state, keep the RF path open and "
-                           "show STATE: UNDEFINED / REL_STUCK on the panel."),
+                           "show STATE: UNDEFINED / BIAS_STUCK on the panel."),
     "SELF_TEST_DIAG": ("The firmware-only diagnostic: on request the firmware asserts and verifies "
                        "every output via its SENSE_* read-back, walks the sequencer 0->1->2->3->0, "
                        "writes an LCD liveness pattern and round-trips the EEPROM, then reports "
@@ -2067,7 +2067,7 @@ def main():
         scenario_names = [None, "TEMPERATURE", "SWR1", "SWR2", "HWFAULT",
                           "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5", "FREQ_CTR",
                           "FREQ_CTR_FAIL", "SELFTEST_BAD_BAND", "SELFTEST_TX_SENSE",
-                          "SELFTEST_REL_STUCK", "SELF_TEST_DIAG", "SELF_TEST_DIAG_STUCK"]
+                          "SELFTEST_BIAS_PIN_STUCK_AFTER_TX", "SELF_TEST_DIAG", "SELF_TEST_DIAG_STUCK"]
         if "--quick-bands" in sys.argv[1:]:
             scenario_names = [None, "FREQ_CTR", "FREQ_CTR_FAIL"]
         # Debugging shortcut: run ONLY the named scenarios, in the written order, through exactly
@@ -2178,10 +2178,10 @@ def main():
         # switched before the T/R relay closes (never hot-switch the band relay).
         for scenario, (_, scenario_samples) in zip(scenario_names, groups):
             label = _scenario_label(scenario)
-            if scenario in ("SELFTEST_REL_STUCK", "SELF_TEST_DIAG", "SELF_TEST_DIAG_STUCK"):
+            if scenario in ("SELFTEST_BIAS_PIN_STUCK_AFTER_TX", "SELF_TEST_DIAG", "SELF_TEST_DIAG_STUCK"):
                 # These scenarios deliberately assert TX/TX_VCC/TX_BIAS (or hold one stuck) while the
                 # amplifier is in fact cold, so the pin-level "keyed" proxy the band invariants use
-                # reads keyed at moments when no transmission exists. SELFTEST_REL_STUCK holds a bias
+                # reads keyed at moments when no transmission exists. SELFTEST_BIAS_PIN_STUCK_AFTER_TX holds a bias
                 # pin stuck (the fault itself); SELF_TEST_DIAG walks the outputs and the sequencer on
                 # purpose with PTT never active. The band-switching safety is proven by the
                 # base/FREQ_CTR scenarios; the fault/diagnostic verdict is asserted by validate_selftest

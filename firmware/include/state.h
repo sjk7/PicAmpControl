@@ -103,13 +103,13 @@ typedef enum {
     TX_SELFTEST_TX_SENSE = 0x0020,
     TX_SELFTEST_STALLED = 0x0040,
     TX_SELFTEST_NO_BAND = 0x0080,
-    TX_SELFTEST_REL_STUCK = 0x0100
+    TX_SELFTEST_BIAS_PIN_STUCK_AFTER_TX = 0x0100
 } tx_selftest_reason_t;
 
 /* The two remedies, split by cause (see tx_selftest.c). A FATAL check latches the
    undefined/unkeyable state; every other check folds back. */
 #define TX_SELFTEST_LATCH_MASK \
-    (TX_SELFTEST_BAD_BAND | TX_SELFTEST_TX_SENSE | TX_SELFTEST_STALLED | TX_SELFTEST_REL_STUCK)
+    (TX_SELFTEST_BAD_BAND | TX_SELFTEST_TX_SENSE | TX_SELFTEST_STALLED | TX_SELFTEST_BIAS_PIN_STUCK_AFTER_TX)
 #define TX_SELFTEST_CHECK_COUNT 9
 #define TRIP_REASON_NAME_MAX 11
 #define TX_SELFTEST_NAME_MAX 11

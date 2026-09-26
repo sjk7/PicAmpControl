@@ -29,7 +29,7 @@ static const char *const TX_SELFTEST_NAMES[] = {
     "TX_SENSE",  /* TX_SELFTEST_TX_SENSE   0x0020 */
     "STALLED",   /* TX_SELFTEST_STALLED    0x0040 */
     "NO_BAND",   /* TX_SELFTEST_NO_BAND    0x0080 */
-    "REL_STUCK"  /* TX_SELFTEST_REL_STUCK  0x0100 */
+    "BIAS_STUCK" /* TX_SELFTEST_BIAS_PIN_STUCK_AFTER_TX 0x0100 */
 };
 
 /* Append `text` to the NUL-terminated `buffer`, inserting a '+' first when it is not the first
@@ -115,21 +115,25 @@ static unsigned int tx_selftest_unkey_window(void) {
     return ((unsigned int)g_thresholds.tx_vcc_delay_ms + g_thresholds.tx_bias_delay_ms) * 2U + 20U;
 }
 
-/* The hold window per check bit, in ms. Indexed by bit position (same order as the enum). BAD_BAND
-   (bit 1) latches on the first gate; TX_SENSE (bit 5) gets one extra gate so a relay driver still
-   slewing on the gate after set_tx_output() is not a false trip. Everything else keeps the long
-   LOCK_LOSS_UNKEYABLE_MS debounce. */
+/* The hold window per check bit, in ms, indexed by bit position (same order as the enum). BAD_BAND
+   (bit 1) acts on the first gate (out-of-range frequency while keyed is LDMOS-damage); TX_SENSE
+   (bit 5) gets one extra gate so a relay driver still slewing on the gate is not a false trip;
+   BIAS_PIN_STUCK_AFTER_TX (bit 8) acts on one gate - a stuck TX output must be remedied fast, not
+   after a 200 ms wait (user instruction, 2026-09-26). The time-based checks (everything else) keep
+   the long LOCK_LOSS_UNKEYABLE_MS debounce: they can only tell "stuck" from "still ramping" over
+   time, and a single gate would flag every normal engage. */
 static unsigned int tx_selftest_window(unsigned char index) {
     switch (index) {
         case 1: return 0U;                        /* TX_SELFTEST_BAD_BAND: act immediately */
         case 5: return TX_SELFTEST_TICK_MS * 2U;  /* TX_SELFTEST_TX_SENSE: tolerate one slewing gate */
-        default: return LOCK_LOSS_UNKEYABLE_MS;
+        case 8: return TX_SELFTEST_TICK_MS;       /* TX_SELFTEST_BIAS_PIN_STUCK_AFTER_TX: one gate */
+        default: return LOCK_LOSS_UNKEYABLE_MS;   /* time-based checks: 200 ms */
     }
 }
 
 /* Advance the hold counters for the checks failing on this evaluation, latch the ones that have held
-   for LOCK_LOSS_UNKEYABLE_MS, and take the remedy. Shared by the keyed checks and the unkey check,
-   so there is exactly one window, one latch and one action no matter which half noticed the fault. */
+   for their window, and take the remedy. Shared by the keyed checks and the unkey check, so there is
+   exactly one window, one latch and one action no matter which half noticed the fault. */
 static void tx_selftest_apply(unsigned int failing) {
     unsigned char index;
     unsigned int longest = 0;
@@ -167,7 +171,8 @@ static void tx_selftest_apply(unsigned int failing) {
 
     /* THE ACTION, split by cause (user instruction, 2026-09-25):
        * a FATAL check latches the undefined/unkeyable state - an unknown/out-of-spec measurement
-         (BAD_BAND) or an output that did not obey its command (TX_SENSE, STALLED, REL_STUCK) must
+         (BAD_BAND) or an output that did not obey its command (TX_SENSE, STALLED,
+         BIAS_PIN_STUCK_AFTER_TX) must
          not be re-keyed into, because re-keying would re-engage the same fault, the one case that can
          damage the LDMOS. The amplifier stays in bypass until the operator keys again.
        * a recoverable check folds back: open the RF path, unlock the band so the selection can follow
@@ -219,7 +224,7 @@ void tx_selftest_run(void) {
 
     if (!g_ptt_active) {
         /* THE UNKEY. A release is the half the operator can least afford to be lied to about: the
-           amplifier must unwind in order and end cold. REL_STUCK is raised when the unwind does not
+           amplifier must unwind in order and end cold. BIAS_PIN_STUCK_AFTER_TX is raised when the unwind does not
            finish in the window, when the bias is dropped while TX_VCC is still asserted, or when the
            sequence reports idle with an output still asserted on the pin. */
         if (g_sequence_stage == SEQ_RELEASE_RELAYS || g_sequence_stage == SEQ_RELEASE_VCC) {
@@ -227,11 +232,11 @@ void tx_selftest_run(void) {
                 g_selftest_unkey_ms += TX_SELFTEST_TICK_MS;
             }
             if (g_selftest_unkey_ms > tx_selftest_unkey_window()) {
-                failing |= TX_SELFTEST_REL_STUCK;
+                failing |= TX_SELFTEST_BIAS_PIN_STUCK_AFTER_TX;
             }
             if (SENSE_TX_VCC == output_level(false, g_thresholds.tx_vcc_active_high) &&
                 SENSE_TX_BIAS != output_level(false, g_thresholds.tx_bias_active_high)) {
-                failing |= TX_SELFTEST_REL_STUCK;
+                failing |= TX_SELFTEST_BIAS_PIN_STUCK_AFTER_TX;
             }
         } else {
             g_selftest_unkey_ms = 0;
@@ -239,7 +244,7 @@ void tx_selftest_run(void) {
                 (SENSE_TX != output_level(false, g_thresholds.tx_active_high) ||
                  SENSE_TX_VCC != output_level(false, g_thresholds.tx_vcc_active_high) ||
                  SENSE_TX_BIAS != output_level(false, g_thresholds.tx_bias_active_high))) {
-                failing |= TX_SELFTEST_REL_STUCK;
+                failing |= TX_SELFTEST_BIAS_PIN_STUCK_AFTER_TX;
             }
         }
         tx_selftest_apply(failing);

@@ -44,7 +44,7 @@ volatile bool g_selftest_failed = false;
 volatile unsigned int g_selftest_reason = TX_SELFTEST_OK;
 /* Consecutive-ms counters, one per check bit, indexed by bit position. */
 unsigned int g_selftest_hold[TX_SELFTEST_CHECK_COUNT] = { 0 };
-/* How long the current unkey has been unwinding, in ms: TX_SELFTEST_REL_STUCK's window. */
+/* How long the current unkey has been unwinding, in ms: TX_SELFTEST_BIAS_PIN_STUCK_AFTER_TX's window. */
 unsigned int g_selftest_unkey_ms = 0;
 
 volatile bool g_startup_inhibit = true;

@@ -139,9 +139,10 @@ static, hand-captured design input. The user's words and the full list of what w
   `docs/tx-self-test-plan.md`, design in `docs/tx-sequencer.md` §9)**: while keyed, on the 10 ms
   counter gate (never the 1 ms path - that starved the trip chain and broke SWR1), the firmware checks
   PTT, the running stage, that stage's outputs (via `SENSE_*`) and the measurement behind the band
-  lock, ORs every check that has held for 200 ms into `g_selftest_reason` (bit flags). The remedy is
+  lock, ORs every check that has held for its per-check window into `g_selftest_reason` (bit flags).
+  The remedy is
   split by cause (user instruction, 2026-09-25): a FATAL check (BAD_BAND, TX_SENSE, STALLED,
-  REL_STUCK) latches the undefined/unkeyable state until the operator keys again, while a recoverable
+  BIAS_PIN_STUCK_AFTER_TX) latches the undefined/unkeyable state until the operator keys again, while a recoverable
   check (NO_RF, LOCK_LOST, BAND_CHG, NO_LOCK, NO_BAND) folds back (open the RF path, re-select from
   the next valid measurement, key once more). The panel reads `FAULT:` plus the `+`-joined reason,
   never a PWR/SWR page. The HARNESS asserts that verdict instead of any keyed `frequency_khz` reading.
@@ -181,10 +182,10 @@ static, hand-captured design input. The user's words and the full list of what w
 This repository is the active PIC18F47Q10-I/P linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
 
 ## Firmware
-- **The keyed TX self-test is implemented**: what it checks, the 200 ms hold, the reason mask and the
+- **The keyed TX self-test is implemented**: what it checks, the per-check hold window, the reason mask and the
   action are in docs/tx-sequencer.md §9; the plan and its live position are in
   docs/tx-self-test-plan.md. The panel shows `FAULT:` plus the `+`-joined reason; fatal checks
-  (BAD_BAND, TX_SENSE, STALLED, REL_STUCK) latch, recoverable checks fold back and re-key.
+  (BAD_BAND, TX_SENSE, STALLED, BIAS_PIN_STUCK_AFTER_TX) latch, recoverable checks fold back and re-key.
 - **First-dit band switching is implemented.** The model, its guards and its bench unknowns are in
   docs/first-dit-band-detection.md; the firmware API is freq_counter_restore_locked_band(),
   freq_counter_band_confirmed() and freq_counter_measured_band(). Bench-confirm BAND_SETTLE_MS (20 ms),
