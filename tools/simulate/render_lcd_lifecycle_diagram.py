@@ -39,6 +39,7 @@ NORMAL_PANELS = [
     ("PEP / TEMPERATURE", "P=1125W ||||||..", "TEMP  50C       ", "Peak hold and decay are user settings saved in EEPROM"),
     ("SWR METER", "SWR1   SWR=1.74", "SWR2   SWR=1.23", "SWR readouts use the firmware's two-decimal display resolution"),
     ("CURRENT METER", "A= 30A PK= 30A  ", "||||||||||||....", "Peak holds for 1.2 s, then decays smoothly with the configured peak interval"),
+    ("SELF TEST", "SELF TEST       ", "PRESS TO RUN    ", "Diagnostic: asserts/verifies each output, walks the sequencer, LCD pattern, EEPROM round-trip"),
     ("PTT_COMPLETE", "PTT COMPLETE    ", "TX BIAS-ON      ", "Transient normal TX confirmation; no trip is latched"),
 ]
 SETTINGS_PANELS = [

@@ -1,9 +1,16 @@
 # Firmware self-test diagnostic (session setup)
 
-Date: 2026-09-26 · Status: PLAN — not started
+Date: 2026-09-26 · Status: IMPLEMENTED (verified in the simulator 2026-09-26)
 
 This file is the launch point for the session that adds a **firmware-only diagnostic self-test**:
 as much of the board as the PIC can verify on its own, with no simulator, no harness and no RF.
+
+The diagnostic is now implemented and wired end-to-end: `diag_selftest_request()` / `diag_selftest_tick()`
+in `firmware/src/main.c`, the `MENU_PAGE_SELF_TEST` live menu page (encoder short-press runs it, only
+while cold), the `SELF_TEST_DIAG` suite scenario in `tools/simulate/trace_ptt_sequence.py` (which reads
+the firmware's own `g_diag_result` verdict, never re-derives it), and the `g_diag_*` globals published
+for the simulator. Verified 2026-09-26: `--test suite --only SELF_TEST_DIAG` passes — verdict `0x08`
+(EEPROM bit, the one check the simulator cannot model), outputs/sequencer/LCD green, amplifier cold.
 
 ## Why this exists
 
@@ -57,15 +64,22 @@ fault — out-of-spec RF, a genuinely stuck relay, a shorted sensor. Those are s
 
 ## Acceptance criteria
 
-- Firmware-only: with just the PIC and the board, the operator can trigger the diagnostic and read
-  each check's PASS/FAIL on the LCD.
-- The output/`SENSE_*` loop and the sequencer walk both prove a real defect fails them (assert one
-  output, read it back wrong → FAIL), not just pass on a healthy board.
-- A diagnostic can never leave an output asserted or key the amplifier when it finishes.
-- The simulator proves it: build green, and the new scenario(s) pass through the watchdog wrapper
-  (see `.github/skills/build-test/SKILL.md`).
-- Docs updated: this file's status, `docs/tx-sequencer.md` §9 if the runtime self-test changes,
-  `Ai-Notes.md`.
+- ✅ Firmware-only: with just the PIC and the board, the operator can trigger the diagnostic and read
+  each check's PASS/FAIL on the LCD. (Menu `SELF TEST` page → encoder short-press → `RUNNING...` →
+  `PASS` or the `+`-joined failed check names.)
+- ✅ A diagnostic can never leave an output asserted or key the amplifier when it finishes.
+  (`diag_selftest_request()` forces bypass first and requires cold; `diag_selftest_tick()` re-forces
+  bypass at the end.)
+- ✅ The simulator proves it: build green, and `--test suite --only SELF_TEST_DIAG` passes through the
+  watchdog wrapper (see `.github/skills/build-test/SKILL.md`).
+- ⏳ OPEN: the output/`SENSE_*` loop and the sequencer walk prove a real defect fails them (assert one
+  output, read it back wrong → FAIL), not just pass on a healthy board. The code already flags a wrong
+  `SENSE_*` read-back (`DIAG_OUTPUTS` / `DIAG_SEQUENCER`), but no harness scenario injects a stuck
+  output yet — the happy path is proven, the unhappy path is not. To close it, add a fault-injection
+  scenario modelled on `SELFTEST_TX_SENSE` (make a TX/band pin an input, drive it wrong, trigger the
+  diagnostic, assert `g_diag_result & DIAG_OUTPUTS`).
+- ✅ Docs updated: this file's status, `Ai-Notes.md`. (`docs/tx-sequencer.md` §9 is untouched — the
+  runtime self-test did not change.)
 
 ## References
 
