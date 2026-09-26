@@ -307,12 +307,13 @@ def render_scope(samples, title, path, events=(), check=None, observed=None, why
     if not chosen:
         return None
 
-    prose = bool(check or observed or why or lcd_state is not None)
-    # The prose/key/panel band is reserved by arithmetic (a quarter of the figure), not by
-    # tight_layout(rect=...): with many lanes matplotlib cannot honour the rect and quietly lays the
-    # lanes OVER the text - which is exactly what the first attempt did (the block printed on top of
-    # the RD2-RD4 lanes).
-    band = 4.2 if prose else 0.0
+    body = _prose_lines(check, observed, why)
+    prose = bool(body or lcd_state is not None)
+    # The prose/key/panel band is reserved by arithmetic, sized from the ACTUAL prose line count
+    # (0.167 in per line at fontsize 8 / 1.5 line spacing) so the text can never overflow into the
+    # lanes - not by tight_layout(rect=...): with many lanes matplotlib cannot honour the rect and
+    # quietly lays the lanes OVER the text (the first attempt, reported 2026-09-25).
+    band = max(3.0, len(body) * 0.167 + 0.6) if body else (2.2 if lcd_state is not None else 0.0)
     fig, axes = plt.subplots(len(chosen), 1, sharex=True,
                              figsize=(12, max(4, 1.15 * len(chosen)) + band))
     axes = list(axes) if hasattr(axes, "__len__") else [axes]
@@ -390,13 +391,9 @@ def failure_prose(check, observed, why):
     return "\n\n".join(blocks)
 
 
-def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=None,
-                        key_pairs=(), band_fraction=0.28):
-    """The prose + the reconstructed 16x2 panel, inside the band reserved for them.
-
-    Every axes here is positioned from `band_fraction`, the bottom fraction the lanes were stopped
-    short of, so the text can never land on a waveform.
-    """
+def _prose_lines(check, observed, why):
+    """The prose as a list of display lines (headers + wrapped text), shared by the band sizing in
+    `render_scope` and the drawing here, so the reserved band always matches what is actually drawn."""
     import textwrap
 
     body = []
@@ -409,16 +406,20 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
     if why:
         body += ["WHY THAT IS A FAILURE",
                  *textwrap.wrap(str(why), 104)]
-    if body:
-        # The prose block is shifted right a fixed 50 px from the lanes' y-labels so it can never
-        # overlap them, whatever the figure width: the figure is saved at 120 dpi, so 50 px is
-        # 50 / (width_in * 120) as a figure-width fraction (user instruction, 2026-09-26).
-        shift = 50 / (fig.get_size_inches()[0] * 120)
-        note_ax = fig.add_axes([0.29 + shift, 0.012, 0.69 - shift,
-                                max(0.05, band_fraction - 0.025)])
-        note_ax.axis("off")
-        note_ax.text(0.0, 1.0, "\n".join(body), fontsize=8, color="#263238", va="top",
-                     linespacing=1.5, transform=note_ax.transAxes)
+    return body
+
+
+def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=None,
+                        key_pairs=(), band_fraction=0.28):
+    """The prose + the reconstructed 16x2 panel, inside the band reserved for them.
+
+    Two non-overlapping columns share the band: the LCD panel (top) and the injected-shading key
+    (directly below it) live in the LEFT column, and the prose lives in the RIGHT column. The prose
+    starts right of the panel column and the key sits UNDER the panel - not beside the prose - so
+    neither can ever land on the other or on a waveform lane (user instruction, 2026-09-26: the
+    prose must never overlap).
+    """
+    body = _prose_lines(check, observed, why)
 
     if lcd_state is not None:
         line1, line2 = lcd_screen(lcd_state)
@@ -432,11 +433,11 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
         panel_bottom = min(0.04, max(0.005, band_fraction - height_fraction - 0.06))
         panel_ax = fig.add_axes([0.03, panel_bottom, width_fraction, height_fraction])
         if key_pairs:
-            # The shading key, drawn as swatches in the same band as the panel: the frequency lane is
-            # shaded to show what was injected, so the colour has to be decodable somewhere, and
-            # under the lane is where the lanes are - it would cover the next waveform.
-            key_ax = fig.add_axes([0.03 + width_fraction + 0.02, 0.04,
-                                   0.22, max(height_fraction, 0.05)])
+            # The shading key sits directly UNDER the panel, in the same left column: the frequency
+            # lane is shaded to show what was injected, so the colour has to be decodable somewhere,
+            # and placing it beside the prose would cover the prose (the overlap the user flagged).
+            key_ax = fig.add_axes([0.03, 0.012, width_fraction,
+                                   max(0.04, panel_bottom - 0.015)])
             key_ax.set_xlim(0, 1)
             key_ax.set_ylim(0, max(1, len(key_pairs)))
             key_ax.axis("off")
@@ -472,6 +473,14 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
         if lcd_state.get("g_fault_latched") == "true":
             caption += f"   g_trip_reason={trip_reason_detail(lcd_state.get('g_trip_reason'))}"
         panel_ax.text(3.8, 0.4, caption, ha="center", va="center", fontsize=7, color="#455a64")
+
+    if body:
+        # The prose fills the RIGHT column, full band height; it starts at x=0.31 so it is always
+        # clear of the left panel/key column (x=0.03-0.27).
+        note_ax = fig.add_axes([0.31, 0.012, 0.67, max(0.05, band_fraction - 0.025)])
+        note_ax.axis("off")
+        note_ax.text(0.0, 1.0, "\n".join(body), fontsize=8, color="#263238", va="top",
+                     linespacing=1.5, transform=note_ax.transAxes)
 
 
 def show(path):
