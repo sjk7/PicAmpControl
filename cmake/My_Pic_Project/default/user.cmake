@@ -1,9 +1,17 @@
 set_property(TARGET My_Pic_Project_default_default_XC8_compile PROPERTY SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/main.c"
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/lcd_parallel.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/lcd_format.c"
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/freq_counter.c"
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/nvm.c"
-    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/self_test.c")
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/self_test.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/outputs.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/labels.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/settings.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/protection.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/tx_selftest.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/menu.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/sequencer.c")
 
 # Include paths for the LANGUAGE SERVERS, not for the build.
 #

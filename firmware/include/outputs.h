@@ -24,4 +24,10 @@ void release_band_if_cold(void);
 /* The relay selection may follow live RF again: drop the established-band claim. */
 void invalidate_established_band(void);
 
+/* Clear the trip latch (fault flag, trip reason, shutdown counters, trip output). */
+void clear_fault_latches(void);
+
+/* Begin the comparator-reset window: hold OUTPUT_COMP_RESET low, arm the 10 ms timer. */
+void start_comparator_reset(void);
+
 #endif

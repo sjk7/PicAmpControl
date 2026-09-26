@@ -2,10 +2,11 @@
 #define SETTINGS_H
 
 #include <stdbool.h>
+#include "state.h"
 
 /* User-configurable protection thresholds and display options. The single instance is
    `g_thresholds` (defined in main.c); the menu edits it in place and it round-trips through the
-   versioned, checksummed EEPROM settings record (see main.c load_settings/save_settings). */
+   versioned, checksummed EEPROM settings record (settings.c load_settings/save_settings). */
 typedef struct {
     unsigned char swr1_trip_tenths;
     unsigned char swr2_trip_tenths;
@@ -30,5 +31,15 @@ typedef struct {
 } protection_thresholds_t;
 
 extern protection_thresholds_t g_thresholds;
+
+#define SETTINGS_MAGIC 0xA5
+#define SETTINGS_VERSION 9
+
+/* Settings record load/save/checksum/dirty/service (settings.c). */
+unsigned char settings_checksum(menu_page_t page, const protection_thresholds_t *settings);
+void load_settings(void);
+void save_settings(void);
+void mark_settings_dirty(void);
+void service_settings_save(void);
 
 #endif

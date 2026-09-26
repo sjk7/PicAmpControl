@@ -29,21 +29,24 @@ Goals (from the operator, `scratch.txt` + this session):
       selection; result shown on the LCD.
 
 ## Phase 3 — split the rest of `main.c` into ≤500-line modules
-- [ ] `outputs.c/h` — `output_level`, `set_tx/vcc/bias/fan/trip_output`, `apply_bypass`,
-      `release_band_if_cold`, `invalidate_established_band`.
-- [ ] `tx_selftest.c/h` — `tx_selftest_*` (reason text, reset, apply, run).
-- [ ] `labels.c/h` — `trip_reason_name`, `sequence_stage_name`, `band_name`, name tables.
-- [ ] `lcd_format.c/h` — `lcd_write_spaces/_unsigned_padded/_power_bar/_swr_right/_swr_value`.
-- [ ] `settings.c/h` — settings record load/save/checksum/dirty/service.
-- [ ] `menu.c/h` — `show_menu_page`, `show_boot_message`, encoder/page/step handlers,
-      `poll_menu_inputs`.
-- [ ] `protection.c/h` — SWR/measurement maths, `update_post_filter_power`, `update_peak_decay`,
+- [x] `outputs.c/h` — `output_level`, `set_tx/vcc/bias/fan/trip_output`, `apply_bypass`,
+      `release_band_if_cold`, `invalidate_established_band`, plus `clear_fault_latches`,
+      `start_comparator_reset`.
+- [x] `tx_selftest.c/h` — `tx_selftest_*` (reason text, reset, apply, run).
+- [x] `labels.c/h` — `trip_reason_name`, `sequence_stage_name`, `band_name`, name tables.
+- [x] `lcd_format.c/h` — `lcd_write_spaces/_unsigned_padded/_power_bar/_swr_right/_swr_value`.
+- [x] `settings.c/h` — settings record load/save/checksum/dirty/service.
+- [x] `menu.c/h` — `show_menu_page`, `show_boot_message`, encoder/page/step handlers,
+      `poll_menu_inputs`, `is_live_menu_page`.
+- [x] `protection.c/h` — SWR/measurement maths, `update_post_filter_power`, `update_peak_decay`,
       `update_protection_state`, `swr_trip`, `isqrt32`.
-- [ ] `sequencer.c/h` — `handle_ptt_transition`, `update_tx_sequence`.
-- [ ] `main.c` left as init + ISR + main loop + the `volatile` state globals, ≤500 lines.
+- [x] `sequencer.c/h` — `handle_ptt_transition`, `update_tx_sequence`.
+- [x] `main.c` left as init + ISR + main loop + the `volatile` state globals, ≤500 lines.
+- [x] `state.h` — the shared enums + `extern` state globals; definitions stay in `main.c`
+      (one per symbol, names unchanged for the .sym-address harness contract).
 
 ## Phase 4 — verify + docs + commit
-- [ ] Build green (Release + sim).
-- [ ] Full 14-scenario suite (now 15 with `SELF_TEST_DIAG_STUCK`) green through the watchdog.
+- [x] Build green (Release + sim).
+- [x] Full suite green through the watchdog (16 scenarios incl. `SELF_TEST_DIAG_STUCK`).
 - [ ] Update `docs/firmware-self-test-diagnostic.md`, `Ai-Notes.md`, `bugfixes.md` as needed.
 - [ ] Commit + push each verified increment.
