@@ -205,6 +205,23 @@ points were added in [firmware/include/freq_counter.h](../firmware/include/freq_
 These are internal firmware interfaces; the external pin contract is unchanged
 (see [docs/hardware/PIC18F47Q10_pin_map_and_setup.md](hardware/PIC18F47Q10_pin_map_and_setup.md)).
 
+### Frequency-counter gate and resolution
+
+The counter measures frequency by counting Timer1 increments over a fixed gate, so its resolution
+is set by that window, not by a configurable divider:
+
+- Gate = 10 ms, Timer1 prescaler = 1:4 → one Timer1 increment per 4 input pulses.
+- Δf = prescaler / gate = 4 / 0.01 s = **400 Hz** (`frequency_khz = pulses · 2 / 5`).
+
+That is ~4000× finer than band classification needs. The six LPF bands sit 1.7–7 MHz apart
+(160 m ≈ 1.8, 80 m ≈ 3.5, 40 m ≈ 7.0, 20 m ≈ 14, 15 m ≈ 21, 10 m ≈ 28 MHz), so telling band X from
+band Y needs only ~MHz-scale resolution. The 10 ms gate is chosen for a stable integer-kHz readout,
+**not** for band separation — a much shorter gate would still classify bands correctly.
+
+Consequence for the self-test: the frequency can only change once per gate, so `BAD_BAND`'s latency
+floor is the 10 ms gate itself, not the (per-check) debounce — see `tx_selftest_window()` in
+`main.c`.
+
 ## Test coverage
 
 Two CTest tests cover this model:

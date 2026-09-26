@@ -282,11 +282,11 @@ self-test has, and it appears in exactly three places, all the same number on pu
    `failing` the matching counter advances (capped at the window); for every bit clear that counter is
    **reset to 0**. So a counter is not "how long since the last good gate" but "how long this condition
    has held without a break", and each check resets only its own.
-3. **The expiry.** When a counter reaches 200, that check's bit is ORed into `g_selftest_reason`,
-   `g_selftest_failed` is set, and `tx_selftest_run()` takes the action itself (bypass, band unlock,
-   snoop - the sequencer picks it up on its next tick). Every counter is zeroed on the way out, so a
-   condition that is still present must hold for another full 200 ms before it acts again - and
-   re-acting is harmless, because the amplifier is already in bypass by then.
+3. **The expiry.** When a counter reaches its check's window, that check's bit is ORed into
+   `g_selftest_reason`, `g_selftest_failed` is set, and `tx_selftest_run()` takes the action itself
+   (bypass, band unlock, snoop - the sequencer picks it up on its next tick). Every counter is zeroed
+   on the way out, so a condition that is still present must hold for another full window before it
+   acts again - and re-acting is harmless, because the amplifier is already in bypass by then.
 
 Consequences worth stating, because each one is a way to get this wrong:
 
@@ -299,10 +299,11 @@ Consequences worth stating, because each one is a way to get this wrong:
   harness; it is not what makes the decision.
 - The hold is why a keyed amplifier does not drop out of transmit on one bad gate: a torn counter
   read (`T1CON.nSYNC = 1` makes TMR1 genuinely asynchronous), one empty gate window, or one gate with
-  a relay driver still slewing can all happen legitimately. 200 ms is the other side of the same
-  trade - longer than a dit, far shorter than anything that could damage the LDMOS - and it is the
-  same window the undefined/unkeyable state used before the self-test existed, so the bench figure
-  still applies.
+  a relay driver still slewing can all happen legitimately. The window is **per-check**
+  (`tx_selftest_window()`): 200 ms by default (the recoverable checks, and STALLED/REL_STUCK which are
+  not LDMOS-damage conditions), **0 ms for `BAD_BAND`** (an out-of-range frequency while keyed can mean
+  the signal stepped past the LPF cutoff, so the drain drops on the first gate), and one extra gate for
+  `TX_SENSE` (so a driver still slewing on the gate after `set_tx_output()` is not a false trip).
 - **Do not move this onto the per-millisecond path.** Measured 2026-09-25: evaluating the self-test
   every 1 ms lengthened each main-loop pass enough that the SWR1 scenario's trip window was missed
   (the amplifier sat keyed at BIAS-ON with the bridge deliberately over-threshold and never tripped);

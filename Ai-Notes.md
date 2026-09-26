@@ -167,6 +167,15 @@ static, hand-captured design input. The user's words and the full list of what w
   count (14000 kHz / `0x88B8` read back as `0x00B8` = 73 kHz), which is the real cause of the "20m
   never classified" blocker, not injection aliasing. Proved with
   `tools/simulate/repro_first_dit_20m.py`.
+- **The frequency-counter gate sets the measurement resolution, and it is far finer than band
+  classification needs.** The counter counts Timer1 increments (one per 4 input pulses, 1:4 prescaler)
+  over a 10 ms gate, so Δf = prescaler/gate = 4/0.01 s = 400 Hz (`frequency_khz = pulses·2/5`). The six
+  LPF bands sit 1.7–7 MHz apart (160m ≈ 1.8, 80m ≈ 3.5, 40m ≈ 7.0, 20m ≈ 14, 15m ≈ 21, 10m ≈ 28 MHz),
+  so telling band X from band Y needs only ~MHz-scale resolution — the 10 ms gate is ~4000× finer than
+  the coarsest distinction (160m vs 80m, 1.7 MHz), and is chosen for a stable integer-kHz readout, not
+  for band separation. A shorter gate would still classify bands. Consequence: the self-test's BAD_BAND
+  latency floor is the 10 ms gate itself, not the (now per-check) debounce — see `tx_selftest_window()`
+  in main.c.
 
 ## Current design
 This repository is the active PIC18F47Q10-I/P linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.

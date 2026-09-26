@@ -308,13 +308,13 @@ unsigned char tx_selftest_reason_text(unsigned int reason, char *buffer, unsigne
    deliberately over-threshold and never tripped, and compiling the call out made the scenario pass
    again. 1 ms was never needed: the counter it reads only changes every 10 ms. */
 #define TX_SELFTEST_TICK_MS 10U
-/* How long a failing self-test check must HOLD before it is believed, and therefore the longest a
-   keyed amplifier can carry a condition it cannot vouch for. One window, one code path: the self-test
-   and the undefined/unkeyable action share it. Per-check consecutive counters (g_selftest_hold[]) do
-   the counting in TX_SELFTEST_TICK_MS steps, so a single bad gate - a torn counter read, one empty
-   gate window, one gate with the driver still slewing - can never flag, while a condition that is real
-   is caught in 200 ms, comfortably longer than a dit and far shorter than anything that could damage
-   the LDMOS; confirm on the bench. */
+/* The DEFAULT hold window for a failing self-test check (see tx_selftest_window()): how long a
+   condition must HOLD before it is believed, and therefore the longest a keyed amplifier can carry a
+   condition it cannot vouch for. Per-check consecutive counters (g_selftest_hold[]) count in
+   TX_SELFTEST_TICK_MS steps, so a single bad gate - a torn counter read, one empty gate window, one
+   gate with the driver still slewing - can never flag. BAD_BAND and TX_SENSE use shorter windows
+   (tx_selftest_window) because they are LDMOS-damage-relevant, not nuisance checks; confirm the
+   remainder on the bench. */
 #define LOCK_LOSS_UNKEYABLE_MS 200U
 
 static volatile system_state_t g_state = STATE_STANDBY;
@@ -1612,6 +1612,21 @@ static unsigned int tx_selftest_unkey_window(void) {
     return ((unsigned int)g_thresholds.tx_vcc_delay_ms + g_thresholds.tx_bias_delay_ms) * 2U + 20U;
 }
 
+/* The hold window per check bit, in ms. Indexed by bit position (same order as the enum). BAD_BAND
+   (bit 1) latches on the first gate - an out-of-range frequency while the LDMOS is keyed can mean
+   the signal stepped past the LPF cutoff, so the drain must drop with no extra window beyond the
+   frequency counter's own 10 ms gate (user instruction, 2026-09-26). TX_SENSE (bit 5) gets one
+   extra gate so a relay driver still slewing on the gate after set_tx_output() is not a false trip.
+   Everything else keeps the long LOCK_LOSS_UNKEYABLE_MS debounce: the recoverable checks are
+   nuisance-avoidance, and STALLED/REL_STUCK are not LDMOS-damage conditions (no bias = no gain). */
+static unsigned int tx_selftest_window(unsigned char index) {
+    switch (index) {
+        case 1: return 0U;                        /* TX_SELFTEST_BAD_BAND: act immediately */
+        case 5: return TX_SELFTEST_TICK_MS * 2U;  /* TX_SELFTEST_TX_SENSE: tolerate one slewing gate */
+        default: return LOCK_LOSS_UNKEYABLE_MS;
+    }
+}
+
 /* Advance the hold counters for the checks failing on this evaluation, latch the ones that have held
    for LOCK_LOSS_UNKEYABLE_MS, and take the remedy. Shared by the keyed checks and the unkey check,
    so there is exactly one window, one latch and one action no matter which half noticed the fault. */
@@ -1622,17 +1637,18 @@ static void tx_selftest_apply(unsigned int failing) {
 
     for (index = 0; index < TX_SELFTEST_CHECK_COUNT; index++) {
         unsigned int bit = (unsigned int)(1u << index);
+        unsigned int window = tx_selftest_window(index);
         if (failing & bit) {
-            if (g_selftest_hold[index] < LOCK_LOSS_UNKEYABLE_MS) {
+            if (g_selftest_hold[index] < window) {
                 g_selftest_hold[index] += TX_SELFTEST_TICK_MS;
-                if (g_selftest_hold[index] > LOCK_LOSS_UNKEYABLE_MS) {
-                    g_selftest_hold[index] = LOCK_LOSS_UNKEYABLE_MS;
+                if (g_selftest_hold[index] > window) {
+                    g_selftest_hold[index] = window;
                 }
             }
             if (g_selftest_hold[index] > longest) {
                 longest = g_selftest_hold[index];
             }
-            if (g_selftest_hold[index] >= LOCK_LOSS_UNKEYABLE_MS) {
+            if (g_selftest_hold[index] >= window) {
                 g_selftest_reason |= bit;
                 latched_now |= bit;
             }
@@ -1694,8 +1710,9 @@ static void tx_selftest_apply(unsigned int failing) {
    is far too heavy for interrupt context.
 
    A passing check resets its own counter, so neither one bad gate nor one good one decides anything;
-   a check whose condition has held for LOCK_LOSS_UNKEYABLE_MS latches its bit, takes the action below,
-   and starts every window again, so the same condition cannot act faster than the window itself. */
+   a check whose condition has held for its window (tx_selftest_window) latches its bit, takes the
+   action below, and starts every window again, so the same condition cannot act faster than its
+   window. */
 void tx_selftest_run(void) {
     freq_counter_status_t status;
     rf_band_t measured;
