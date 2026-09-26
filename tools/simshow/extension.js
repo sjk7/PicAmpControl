@@ -81,7 +81,7 @@ async function followLog(uri) {
 
   let entry = followers.get(key);
   if (!entry) {
-    entry = { editor: null, watcher: null, timer: null };
+    entry = { editor: null, watcher: null, timer: null, following: true };
     followers.set(key, entry);
   }
 
@@ -104,12 +104,14 @@ async function followLog(uri) {
     );
     const revealTail = () => {
       const editor = entry.editor;
-      if (!editor) {
+      // Only auto-scroll while FOLLOWING. `entry.following` is toggled by the visible-ranges
+      // listener in activate(): it is true while the tail is on screen and false the moment the
+      // operator scrolls up to read. Revealing unconditionally (or "whenever the tail is not
+      // visible") yanks a reader who has scrolled away - the exact jitter the operator rejected
+      // (2026-09-26). The one-off reveal below still jumps an already-grown log to its tail on open.
+      if (!editor || !entry.following) {
         return;
       }
-      // Scroll only when the last line is NOT already visible: revealing on every change makes the
-      // tab jitter and fights the reader's own scroll (user instruction, 2026-09-26). The one-off
-      // reveal below still jumps an already-grown log to its tail once, on open.
       const last = editor.document.lineCount - 1;
       const tailVisible = editor.visibleRanges.some((range) => range.end.line >= last);
       if (!tailVisible) {
@@ -197,6 +199,27 @@ function activate(context) {
   context.subscriptions.push(watcher.onDidChange(showRequestedLog));
   context.subscriptions.push(
     vscode.commands.registerCommand("picampcontrol.showLog", showRequestedLog)
+  );
+  // Auto-follow is driven off the VISIBLE RANGES, not off file changes: `entry.following` is true
+  // while the tail line is on screen and flips false the moment the operator scrolls away, then
+  // true again if they scroll back. This is what stops the yank - a plain mouse-wheel scroll away
+  // from the tail must stop the auto-scroll, and scrolling back must resume it. The earlier
+  // "reveal whenever the tail is not visible" read "scrolled away" and "new content arrived" as
+  // the same thing and fought the reader's own scroll (user instruction, 2026-09-26).
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorVisibleRanges((event) => {
+      const editor = event.textEditor;
+      if (!editor) {
+        return;
+      }
+      const key = editor.document.uri.fsPath;
+      const entry = followers.get(key);
+      if (!entry) {
+        return;
+      }
+      const last = editor.document.lineCount - 1;
+      entry.following = editor.visibleRanges.some((range) => range.end.line >= last);
+    })
   );
   // If the operator highlights (selects) any text in a followed log, stop following that file for
   // the session: they are reading something specific and the view must not be yanked back to the

@@ -159,6 +159,11 @@ in another window, and a `code -r <log>` call raises VS Code over what they are 
    it did not. **Highlighting (selecting) any text in a followed log stops following for that
    session** (the operator is reading something specific and must not be yanked to the tail); the
    next run re-follows, so it is a per-session pause, never a permanent disable (2026-09-26). The
+   same applies to scrolling: **auto-follow is driven off the editor's visible ranges** - it follows
+   the tail while the tail is on screen and stops the moment the operator scrolls up, resuming when
+   they scroll back. The earlier "reveal whenever the tail is not visible" read "scrolled away" and
+   "new content arrived" as the same thing and kept yanking the reader (fixed 2026-09-26 in
+   `tools/simshow/extension.js`; reinstall + reload after changing it).
    helper is reinstalled with `tools/simshow/install.ps1` (reload the window once after).
    `AppendLog` in `platform_process.py` is the heartbeat helper.
    **The helper is shared across EVERY Insiders window, so a request must be tagged with the
