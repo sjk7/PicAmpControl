@@ -410,7 +410,12 @@ def _draw_failure_notes(fig, plt, check, observed, why, lcd_state, lcd_caption=N
         body += ["WHY THAT IS A FAILURE",
                  *textwrap.wrap(str(why), 104)]
     if body:
-        note_ax = fig.add_axes([0.29, 0.012, 0.69, max(0.05, band_fraction - 0.025)])
+        # The prose block is shifted right a fixed 50 px from the lanes' y-labels so it can never
+        # overlap them, whatever the figure width: the figure is saved at 120 dpi, so 50 px is
+        # 50 / (width_in * 120) as a figure-width fraction (user instruction, 2026-09-26).
+        shift = 50 / (fig.get_size_inches()[0] * 120)
+        note_ax = fig.add_axes([0.29 + shift, 0.012, 0.69 - shift,
+                                max(0.05, band_fraction - 0.025)])
         note_ax.axis("off")
         note_ax.text(0.0, 1.0, "\n".join(body), fontsize=8, color="#263238", va="top",
                      linespacing=1.5, transform=note_ax.transAxes)
