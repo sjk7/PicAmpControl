@@ -179,6 +179,26 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand("picampcontrol.showLog", showRequestedLog)
   );
+  // If the operator highlights (selects) any text in a followed log, stop following that file for
+  // the session: they are reading something specific and the view must not be yanked back to the
+  // tail. The next run re-creates the follower (the receipt is reset at run start), so this only
+  // pauses the current session, never disables following permanently (user instruction,
+  // 2026-09-26).
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorSelection((event) => {
+      const editor = event.textEditor;
+      if (!editor) {
+        return;
+      }
+      const key = editor.document.uri.fsPath;
+      if (!followers.has(key)) {
+        return;
+      }
+      if (editor.selections.some((selection) => !selection.isEmpty)) {
+        disposeFollower(key);
+      }
+    })
+  );
   context.subscriptions.push({
     dispose() {
       for (const key of [...followers.keys()]) {

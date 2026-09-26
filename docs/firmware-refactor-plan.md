@@ -19,12 +19,14 @@ Goals (from the operator, `scratch.txt` + this session):
 - [x] Append a per-scenario "what was tested / expected / observed" block to the log on PASS.
 
 ## Phase 2 — diagnostic self-test: own file + per-check functions + menu
-- [ ] Move the diagnostic self-test out of `main.c` into `firmware/src/self_test.c` + `self_test.h`.
-- [ ] Split the four checks into their own functions: `diag_outputs_check()`,
-      `diag_sequencer_check()`, `diag_lcd_check()`, `diag_eeprom_check()` — each returns its own
-      pass/fail bit and carries its own label.
-- [ ] A driver that runs all four, plus a way to run one by index — both driven from the menu.
-- [ ] Menu: reachable from `MENU_PAGE_SELF_TEST`, run all or step through individual tests.
+- [x] Move the diagnostic self-test out of `main.c` into `firmware/src/self_test.c` + `self_test.h`.
+- [x] Split the four checks into their own functions: `diag_outputs_step()`,
+      `diag_sequencer_step()`, `diag_lcd_check()`, `diag_eeprom_check()` — each returns its own
+      pass/fail bit via `g_diag_result`.
+- [x] A driver that runs all four, plus a way to run one by index — both driven from the menu
+      (`diag_start()` + `diag_select_cycle()` / `diag_selected_name()`).
+- [x] Menu: `MENU_PAGE_SELF_TEST` rotate cycles ALL → OUTPUT → SEQ → LCD → EEPROM, press runs the
+      selection; result shown on the LCD.
 
 ## Phase 3 — split the rest of `main.c` into ≤500-line modules
 - [ ] `outputs.c/h` — `output_level`, `set_tx/vcc/bias/fan/trip_output`, `apply_bypass`,

@@ -156,7 +156,11 @@ in another window, and a `code -r <log>` call raises VS Code over what they are 
    extension's cwd, not the workspace) and the tab silently never opened - `open_progress_log.py` now
    `.resolve()`s the path (2026-09-26). Confirm a run opened its tab by reading
    `<tmp>/picampcontrol_show.done.json`: `"followed": true` means it worked, an `"error"` field means
-   it did not. `AppendLog` in `platform_process.py` is the heartbeat helper.
+   it did not. **Highlighting (selecting) any text in a followed log stops following for that
+   session** (the operator is reading something specific and must not be yanked to the tail); the
+   next run re-follows, so it is a per-session pause, never a permanent disable (2026-09-26). The
+   helper is reinstalled with `tools/simshow/install.ps1` (reload the window once after).
+   `AppendLog` in `platform_process.py` is the heartbeat helper.
 4. Which file is the moving one depends on how you launched it: **when you pass `--log <file>`, the
    heartbeat appends INTO that file** (verified 2026-09-23: the heartbeat process is spawned with
    `--log` pointing at the same path). Only when `--log` is

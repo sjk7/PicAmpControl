@@ -2177,6 +2177,15 @@ def main():
             for line in invariants.validate_t_r_closes_only_after_band_settle(
                     scenario_samples, label):
                 print(line)
+        # A passing run still has to say WHICH scenarios ran and what each was testing for, not
+        # just "no failure text to report" (user instruction, 2026-09-26). The per-scenario observed
+        # summaries are inline above; this is the readable block at the end of the log.
+        print("===== SCENARIOS RUN (all passed) =====")
+        for scenario in scenario_names:
+            label = _scenario_label(scenario)
+            check = SCENARIO_CHECKS.get(scenario, SCENARIO_CHECKS[None])
+            print(f"  {label}: {check}")
+        print("===== END SCENARIOS =====")
         print(f"PTT suite passed: {len(scenario_names)} scenarios in one MDB session")
         return
     if not ELF_PATH.exists():
