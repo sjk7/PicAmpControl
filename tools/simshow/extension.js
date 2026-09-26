@@ -107,10 +107,14 @@ async function followLog(uri) {
       if (!editor) {
         return;
       }
-      // Reveal the last line: this SCROLLS the tab to follow the output without moving the focus
-      // or the cursor - the only thing a "follow" is supposed to do.
+      // Scroll only when the last line is NOT already visible: revealing on every change makes the
+      // tab jitter and fights the reader's own scroll (user instruction, 2026-09-26). The one-off
+      // reveal below still jumps an already-grown log to its tail once, on open.
       const last = editor.document.lineCount - 1;
-      editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.Default);
+      const tailVisible = editor.visibleRanges.some((range) => range.end.line >= last);
+      if (!tailVisible) {
+        editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.Default);
+      }
     };
     // Reveal on a short throttle: a burst of writes scrolls once, not once per line. A run-start
     // truncate lands here as one big change and scrolls back to the top correctly.
