@@ -60,6 +60,15 @@ def stimulus_key(stimulus):
     return list(stimulus_colours(stimulus).items())
 
 
+def stimulus_transitions(stimulus):
+    """The `time_ms` instants where the injected frequency CHANGES, for the light guide lines drawn
+    through every lane (user instruction, 2026-09-26): a reader lines the stimulus up against the
+    firmware's response by eye. One instant per span whose frequency differs from the previous span.
+    """
+    return [span[0] for index, span in enumerate(stimulus)
+            if index > 0 and stimulus[index - 1][2] != span[2]]
+
+
 def draw_stimulus(ax, stimulus):
     """Show the injected frequency ON the frequency lane, as a light overlay with a key.
 
@@ -315,6 +324,8 @@ def render_scope(samples, title, path, events=(), check=None, observed=None, why
             draw_stimulus(ax, stimulus)
         for event_time, _label in events:
             ax.axvline(event_time, color="red", linestyle=":", alpha=0.5)
+        for stim_time in stimulus_transitions(stimulus):
+            ax.axvline(stim_time, color="tab:blue", linestyle="--", alpha=0.35, linewidth=1.0)
     # Event labels are staggered in vertical bands and drawn INSIDE the top lane: the top time
     # axis owns the space just above it, and label text sitting up there collides with the ms
     # tick labels (user instruction, 2026-09-25: the timebase must be readable across the top).
