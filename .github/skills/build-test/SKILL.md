@@ -167,14 +167,18 @@ in another window, and a `code -r <log>` call raises VS Code over what they are 
    helper is reinstalled with `tools/simshow/install.ps1` (reload the window once after).
    `AppendLog` in `platform_process.py` is the heartbeat helper.
    **The helper is shared across EVERY Insiders window, so a request must be tagged with the
-   workspace root.** The extension lives under `~/.vscode-insiders/extensions`, so every window
-   loads it and every one watches the SAME `%TEMP%/picampcontrol_show.request.json`. An untagged
-   request is a race: whichever window's watcher fires first opens the log (2026-09-26 it opened in
-   a second, unrelated window - "MusicPlayer" - while the operator watched the PicAmpControl one).
-   `open_progress_log.py` now writes `"root": <repo-root>` into the request and the extension ignores
-   any request whose `root` does not match one of its `workspaceFolders`, so only the window that
-   owns the repo opens the log. Reinstall with `install.ps1` + reload BOTH windows after changing
-   the extension; the old copy keeps the race until reloaded.
+   owning window's main-process PID.** The extension lives under `~/.vscode-insiders/extensions`, so
+   every window loads it and every one watches the SAME `%TEMP%/picampcontrol_show.request.json`. An
+   untagged request is a race: whichever window's watcher fires first opens the log (2026-09-26 it
+   opened in a second, unrelated window - "MusicPlayer" - while the operator watched the PicAmpControl
+   one). `open_progress_log.py` now resolves its own window's main PID (by walking the parent process
+   chain to the topmost `Code*` process) and writes `"pid": <pid>`; the extension computes its own main
+   PID the same way and ignores any request whose `pid` is not its own (user instruction, 2026-09-26:
+   *"only talk to your own pid"*). A `"root": <repo-root>` tag remains as a coarser fallback for when
+   the PID cannot be resolved - but the PID is the precise identity, since two windows on the SAME
+   repo would both match `root` while only one matches the PID. Reinstall with `install.ps1` + reload
+   EVERY window after changing the extension; a window that has not reloaded keeps its old copy and
+   keeps grabbing requests until it is.
 4. Which file is the moving one depends on how you launched it: **when you pass `--log <file>`, the
    heartbeat appends INTO that file** (verified 2026-09-23: the heartbeat process is spawned with
    `--log` pointing at the same path). Only when `--log` is

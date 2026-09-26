@@ -62,6 +62,59 @@ def show_extension_installed() -> bool:
     return False
 
 
+def _vscode_main_pid():
+    """The PID of the VS Code window this harness is running inside, or None.
+
+    This is the precise per-instance identity: every VS Code window is one main process, and the
+    harness (run in a terminal) has that main process as an ancestor. The extension compares its
+    own main PID against this, so only the window the harness actually belongs to opens the file -
+    the workspace-root tag is a coarser fallback that two windows on the SAME repo would both
+    match (user instruction, 2026-09-26: *"only talk to your own pid"*).
+    """
+    if sys.platform != "win32":
+        return None  # macOS opens via `open -g`; PID targeting is Windows-only
+    try:
+        out = subprocess.run(
+            ["wmic", "process", "get", "ProcessId,ParentProcessId,Name", "/format:list"],
+            capture_output=True, text=True, timeout=15,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    procs = {}  # pid -> (ppid, name)
+    # wmic /format:list emits `Name=`, `ParentProcessId=`, `ProcessId=` in that order per process,
+    # with stray blank lines between them (and `\r\r\n` quirk), so walk line-by-line and record a
+    # process when its `ProcessId=` line arrives - never rely on blank-line block boundaries.
+    name = ppid = None
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("Name="):
+            name = line[5:]
+        elif line.startswith("ParentProcessId="):
+            ppid = line[16:]
+        elif line.startswith("ProcessId="):
+            pid = line[10:]
+            if pid.isdigit():
+                procs[int(pid)] = (int(ppid) if ppid and ppid.isdigit() else 0, name or "")
+            name = ppid = None
+
+    def is_code(name):
+        low = name.lower()
+        return low.startswith("code")  # "Code - Insiders.exe", "Code.exe"
+
+    pid = os.getpid()
+    last_code = None
+    while pid in procs:
+        _, name = procs[pid]
+        if is_code(name):
+            last_code = pid
+        parent = procs[pid][0]
+        if not parent:
+            break
+        pid = parent
+    return last_code
+
+
 def request_show(paths, quiet: bool = False) -> bool:
     """Ask the editor-side helper (tools/simshow) to show `paths`, focus untouched.
 
@@ -71,16 +124,16 @@ def request_show(paths, quiet: bool = False) -> bool:
     caller - or a human - can confirm it acted.
     """
     targets = [str(Path(p)) for p in paths]
-    # Tag the request with the workspace root so the RIGHT window opens it. Every Insiders
-    # window loads tools/simshow and every one watches the SAME request file, so an untagged
-    # request is a race: whichever window's watcher fires first opens the log (2026-09-26 it
-    # opened in a second, unrelated window - "MusicPlayer" - while the operator watched the
-    # PicAmpControl window). The extension ignores a request whose root it does not own.
+    # Tag the request with BOTH the owning window's main PID and the workspace root. The PID is
+    # the precise identity ("only talk to your own pid"); the root is a coarser fallback for when
+    # the PID cannot be resolved. The extension ignores a request whose PID it does not own.
     root = Path(__file__).resolve().parents[2]
+    payload = {"path": targets[-1], "paths": targets, "root": str(root)}
+    pid = _vscode_main_pid()
+    if pid is not None:
+        payload["pid"] = pid
     try:
-        REQUEST_FILE.write_text(
-            json.dumps({"path": targets[-1], "paths": targets, "root": str(root)}),
-            encoding="utf-8")
+        REQUEST_FILE.write_text(json.dumps(payload), encoding="utf-8")
     except OSError as exc:
         if not quiet:
             print(f"open_progress_log: could not write {REQUEST_FILE}: {exc}")

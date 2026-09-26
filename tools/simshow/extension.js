@@ -19,6 +19,7 @@ const vscode = require("vscode");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { execSync } = require("child_process");
 
 const REQUEST = "picampcontrol_show.request.json";
 const RECEIPT = "picampcontrol_show.done.json";
@@ -36,6 +37,59 @@ function writeReceipt(payload) {
     fs.writeFileSync(receiptPath(), JSON.stringify({ at: Date.now(), ...payload }));
   } catch (err) {
     // A missing receipt must never break the show itself.
+  }
+}
+
+// The PID of THIS VS Code window's main process, or null. Every window is one main process; the
+// harness (run in a terminal) has its window's main process as an ancestor and tags its request
+// with that PID, so this extension must only act when the request PID is its own. Walk up the
+// parent chain from this extension host until we leave the `Code*` process group; the topmost
+// Code process is the window main. (user instruction, 2026-09-26: *"only talk to your own pid"*).
+let cachedMainPid = null;
+function mainPid() {
+  if (cachedMainPid !== null) {
+    return cachedMainPid;
+  }
+  try {
+    const out = execSync(
+      "wmic process get ProcessId,ParentProcessId,Name /format:list",
+      { windowsHide: true, timeout: 15000, encoding: "utf8" }
+    );
+    const procs = new Map(); // pid -> { ppid, name }
+    // wmic /format:list emits Name=, ParentProcessId=, ProcessId= in that order per process with
+    // stray blank lines between, so walk line-by-line and record on ProcessId= - never on blocks.
+    let name = null;
+    let ppid = null;
+    for (const raw of out.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (line.startsWith("Name=")) name = line.slice(5);
+      else if (line.startsWith("ParentProcessId=")) ppid = line.slice(16);
+      else if (line.startsWith("ProcessId=")) {
+        const pidStr = line.slice(10);
+        if (/^\d+$/.test(pidStr)) {
+          procs.set(parseInt(pidStr, 10), {
+            ppid: ppid && /^\d+$/.test(ppid) ? parseInt(ppid, 10) : 0,
+            name: name || "",
+          });
+        }
+        name = null;
+        ppid = null;
+      }
+    }
+    const isCode = (n) => n.toLowerCase().startsWith("code");
+    let pid = process.pid;
+    let lastCode = null;
+    while (procs.has(pid)) {
+      const rec = procs.get(pid);
+      if (isCode(rec.name)) lastCode = pid;
+      if (!rec.ppid) break;
+      pid = rec.ppid;
+    }
+    cachedMainPid = lastCode;
+    return lastCode;
+  } catch (err) {
+    cachedMainPid = null;
+    return null;
   }
 }
 
@@ -150,11 +204,17 @@ async function showRequestedLog() {
   if (!payload || !payload.path) {
     return;
   }
-  // Only the window that OWNS this log may open it. Every Insiders window loads this extension
-  // and every one watches the SAME request file; without this check whichever watcher fires first
-  // opens the log in ITS window (2026-09-26 it landed in a second, unrelated window while the
-  // operator watched the right one). A request tagged with a `root` this window does not own is
-  // left alone - the owning window's watcher still sees the file and opens it there.
+  // Only the window that OWNS this log may open it. The precise identity is the main-process PID:
+  // the harness tags its request with its own window's PID, and every OTHER window must ignore it
+  // (user instruction, 2026-09-26: "only talk to your own pid"). The workspace `root` below is a
+  // coarser fallback for when the PID cannot be resolved - two windows on the SAME repo would both
+  // match the root, but only one matches the PID.
+  if (payload.pid) {
+    const mine = mainPid();
+    if (mine !== null && mine !== payload.pid) {
+      return; // not this window; leave the file for the owning window to handle
+    }
+  }
   if (payload.root) {
     const folders = vscode.workspace.workspaceFolders || [];
     const root = path.resolve(String(payload.root)).toLowerCase();
