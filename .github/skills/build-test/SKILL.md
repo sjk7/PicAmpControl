@@ -33,9 +33,9 @@ key-down path, and do NOT re-derive it. When a trace looks wrong, check the pola
 "PTT never latched" or "release never keyed" conclusion is usually RC0 read the wrong way round.
 
 **`g_sequence_stage` names (2026-09-25) - use these, never "stage 4" alone.** The numbers are the
-harness contract (traces and assertions read `g_sequence_stage` by number); `firmware/src/main.c`
-now carries the same names as `#define`s. Engage runs 0->1->2->3 on key-down; unkey runs 3 or 2 ->
-4 -> 5 -> 0.
+harness contract (traces and assertions read `g_sequence_stage` by number); the enum lives in
+`firmware/include/state.h` and the name table in `firmware/src/labels.c` (`sequence_stage_name()`).
+Engage runs 0->1->2->3 on key-down; unkey runs 3 or 2 -> 4 -> 5 -> 0.
 
 | # | firmware name | harness trace label | what the outputs are doing |
 |---|---|---|---|
@@ -53,7 +53,7 @@ table (user, 2026-09-25: *"It would be much more useful if you gave these 'stage
 know what stage 4 is ffs?"*).
 
 **Fault names (`g_trip_reason`, an enum of bit flags).** Same rule: never report the raw mask.
-`trip_reason_name()` in `main.c` maps a mask to the highest-priority cause (**TEMPERATURE, SWR1,
+`trip_reason_name()` in `firmware/src/labels.c` maps a mask to the highest-priority cause (**TEMPERATURE, SWR1,
 SWR2, CURRENT, OVERDRIVE, HARDWARE, DRAIN** - that is the firmware's own order, highest first, and it
 is NOT the bit order), and the LCD trip screen now writes that name on **line 0, always**, with the
 evidence on line 1 (`TRIP LATCHED` for HARDWARE/DRAIN/unknown, measured/limit for the rest) - on the
@@ -586,8 +586,9 @@ generalisable trap: when a stimulus has to be present at a moment the firmware p
 the polling interval - do not bunch it at the interval's boundary.**
 
 **THE HARNESS NO LONGER ASSERTS ANY KEYED COUNTER READING - THE FIRMWARE'S OWN SELF-TEST VERDICT IS THE
-CONTRACT (2026-09-25, user instruction).** The firmware now tests itself while keyed (`main.c`
-`tx_selftest_run()`, once per 10 ms counter gate beside `freq_counter_tick_10ms()` - NOT in an ISR, and
+CONTRACT (2026-09-25, user instruction).** The firmware now tests itself while keyed
+(`firmware/src/tx_selftest.c` `tx_selftest_run()`, once per 10 ms counter gate beside
+`freq_counter_tick_10ms()` - NOT in an ISR, and
 NOT on the 1 ms path, see the pass-length trap below). It ORs every check that has held for
 `LOCK_LOSS_UNKEYABLE_MS` (200 ms) into `g_selftest_reason` - a bit mask, `+`-joined on the panel by
 `tx_selftest_reason_text()`, never blank - holds that reason until the NEXT key-down, and takes the

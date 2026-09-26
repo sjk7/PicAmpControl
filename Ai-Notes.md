@@ -175,7 +175,7 @@ static, hand-captured design input. The user's words and the full list of what w
   the coarsest distinction (160m vs 80m, 1.7 MHz), and is chosen for a stable integer-kHz readout, not
   for band separation. A shorter gate would still classify bands. Consequence: the self-test's BAD_BAND
   latency floor is the 10 ms gate itself, not the (now per-check) debounce — see `tx_selftest_window()`
-  in main.c.
+  in `firmware/src/tx_selftest.c`.
 
 ## Current design
 This repository is the active PIC18F47Q10-I/P linear-amplifier protection controller. Obsolete prototype source files have been removed so they cannot enter the production build.
@@ -213,7 +213,7 @@ This repository is the active PIC18F47Q10-I/P linear-amplifier protection contro
   docs/first-dit-band-detection.md.
 - Direct ADC inputs monitor two forward/reflected SWR pairs, temperature, WCS1700 current, input power, and drain voltage. Which channel is which lives ONLY in docs/hardware/PIC18F47Q10_pin_map_and_setup.md - never restate that list here.
 - ADC configuration (firmware/src/main.c adc_init): 10-bit, right-justified legacy format, VDD-referenced with the internal FVR off. Raw values are consumed directly as plain 0-1023 counts, so at a 5 V rail one count is about 4.88 mV.
-- Current-sensor scaling (firmware/src/main.c): zero at raw 512 (2.5 V mid-rail), +511 counts = +70 A, 0 counts = -70 A. The default positive current trip is 40 A (g_thresholds initialiser).
+- Current-sensor scaling (firmware/src/protection.c current_amperes): zero at raw 512 (2.5 V mid-rail), +511 counts = +70 A, 0 counts = -70 A. The default positive current trip is 40 A (g_thresholds initialiser).
 - On PTT release the sequencer unwinds in order - TX off immediately, TX_VCC after the VCC delay, then TX_BIAS - and the band is released only once every TX output is confirmed inactive (release_band_if_cold()). An engage still in progress when PTT releases is therefore unwound, not completed; the old "engages complete, then unsequence" description is obsolete (see bugfixes.md 2026-09-21).
 - SWR trips, power scales, drain/input thresholds, 10 kOhm NTC B-value profile, sequencer timing, and output polarities are user-configurable from the 1602 LCD menu.
 - Outputs are written through the `LAT` registers and inputs are read from `PORT`
@@ -376,6 +376,19 @@ The open work is hardware validation: final sensor calibration, comparator thres
   fault-injection `SELF_TEST_DIAG_STUCK` (a pinned-wrong TX output flags `DIAG_OUTPUTS`). A passing
   run's log now lists every scenario and what it tested. Remaining: split the rest of `main.c`
   (~2190 lines) into ≤500-line modules — plan in `docs/firmware-refactor-plan.md`.
+- **DONE (2026-09-26): `main.c` split into per-concern modules, ≤500 lines each.** `main.c` is now
+  just the config words, the state-global *definitions*, the ISR, `timer0_init`/`adc_init`/
+  `apply_startup_inhibit` and `main()`. The rest moved to `firmware/src/` + matching
+  `firmware/include/` headers: `outputs.{c,h}` (output drives + `apply_bypass`/
+  `release_band_if_cold`/`invalidate_established_band`/`clear_fault_latches`/
+  `start_comparator_reset`), `tx_selftest.{c,h}`, `labels.{c,h}` (`trip_reason_name`/
+  `sequence_stage_name`/`band_name` + name tables), `lcd_format.{c,h}`, `settings.{c,h}`,
+  `menu.{c,h}`, `protection.{c,h}` (SWR/measurement maths + `update_protection_state`),
+  `sequencer.{c,h}`. Shared enums, constants and `extern` state globals live in
+  `firmware/include/state.h`; the globals are **defined once, in `main.c`**, and every name/type is
+  unchanged (the simulator harnesses read them by `.sym` address). Source list in
+  `cmake/My_Pic_Project/default/user.cmake`. Full 16-scenario suite GREEN on the split (2026-09-26,
+  `SUITE_EXIT:0`).
 
 If the simulator image is ever compiled `-Os` instead of `-O1` it would reclaim space, but it degrades
 mdb symbol/breakpoint resolution for the VS Code "Simulate PicAmpControl (Debug)" session - that needs
