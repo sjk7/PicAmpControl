@@ -1587,6 +1587,20 @@ def _observed_summary(samples, scenario=None) -> str:
             f"the firmware's own self-test flagged the undefined/unkeyable state in {len(flagged)} "
             f"samples, first as {selftest_reason_text(flagged[0][2].get('g_selftest_reason'))} "
             f"at t={flagged[0][0] * SECONDS_PER_INSTRUCTION * 1000:.1f} ms")
+    # How long the drain took to be removed after a fault was flagged (user instruction,
+    # 2026-09-26). Default polarity is active-low, so "removed" = RC6 reads 1 (inactive).
+    faulted = [s for s in samples
+               if s[2].get("g_selftest_failed") == "true"
+               or s[2].get("g_unkeyable") == "true"
+               or s[2].get("g_fault_latched") == "true"]
+    if faulted:
+        fault_ms = faulted[0][0] * SECONDS_PER_INSTRUCTION * 1000
+        txvcc_off = next((s for s in samples
+                          if s[0] >= faulted[0][0] and s[1].get("RC6") == 1), None)
+        if txvcc_off is not None:
+            off_ms = txvcc_off[0] * SECONDS_PER_INSTRUCTION * 1000
+            parts.append(f"TX_VCC (drain) removed at t={off_ms:.0f} ms "
+                         f"({off_ms - fault_ms:.0f} ms after the fault was flagged)")
     last = samples[-1][2]
     parts.append(f"last sample: stage={last.get('g_sequence_stage')} "
                  f"ptt={last.get('g_ptt_active')} latched={last.get('g_fault_latched')} "
