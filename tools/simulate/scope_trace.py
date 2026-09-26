@@ -27,14 +27,13 @@ import open_progress_log  # noqa: E402
 # running, latched or released.
 ALWAYS = ["RC0", "g_ptt_active", "g_fault_latched", "g_sequence_stage"]
 # The rest of the candidate set, in the order they read best on a page.
-CANDIDATES = ["RC5", "RC6",
-              "g_fc_status.frequency_khz",
-              "RA0", "RA1", "RA2", "RA3", "RA5", "RB1", "RB2", "RB3",
-              "RC7", "RC1", "g_trip_reason", "g_state", "g_trip_shutdown_active",
+CANDIDATES = ["RC5", "RC7", "RC1", "g_trip_reason", "g_state", "g_trip_shutdown_active",
               "g_snoop_active", "g_band_settle_active", "g_band_verify_active",
               "g_band_established", "g_band_cache_valid",
               "g_fc_status.current_band", "g_fc_status.band_locked",
-              "RD2", "RD3", "RD4", "RD5", "RD6", "RD7"]
+              "RD2", "RD3", "RD4", "RD5", "RD6", "RD7",
+              "RC6", "g_fc_status.frequency_khz",
+              "RA0", "RA1", "RA2", "RA3", "RA5", "RB1", "RB2", "RB3"]
 LABELS = {"RC0": "PTT (RC0, 0=keyed)", "RC1": "SETTLE (RC1)", "RC5": "RELAYS (RC5)",
           "RC6": "TX_VCC (RC6)", "RC7": "TX_BIAS (RC7)",
           "RD2": "BAND 160m (RD2)", "RD3": "BAND 80m (RD3)", "RD4": "BAND 40m (RD4)",

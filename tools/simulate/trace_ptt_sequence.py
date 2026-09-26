@@ -1919,10 +1919,9 @@ def write_trace_graph(samples, trip_name, trace_name, graph_dir, stimulus=()):
         return None
     times = [sample[0] * SECONDS_PER_INSTRUCTION * 1000 for sample in samples]
     graph_adc_pins = TRIP_ADC_PINS.get(trip_name, []) if trip_name else []
-    graph_rows = ([("digital", "RC1"), ("digital", "RC0"), ("digital", "RC5"), ("digital", "RC6"),
-                   ("freq", None)] + [("adc", pin) for pin in graph_adc_pins] +
-                  [("digital", "RC7")] + [("digital", pin) for pin in BAND_PINS] +
-                  [("stage", None)])
+    graph_rows = ([("digital", "RC1"), ("digital", "RC0"), ("digital", "RC5"), ("digital", "RC7")] +
+                  [("digital", pin) for pin in BAND_PINS] + [("stage", None)] +
+                  [("digital", "RC6"), ("freq", None)] + [("adc", pin) for pin in graph_adc_pins])
     fig, axes = plt.subplots(len(graph_rows), 1, sharex=True,
                              figsize=(10, max(6, len(graph_rows) * 1.25)))
     axes = list(axes) if hasattr(axes, "__len__") else [axes]
@@ -2276,10 +2275,9 @@ def main():
         block_spans.append((span_start, times[-1], span_reason))
 
     graph_adc_pins = TRIP_ADC_PINS.get(trip_name, []) if trip_name else []
-    graph_rows = ([("digital", "RC1"), ("digital", "RC0"), ("digital", "RC5"), ("digital", "RC6")] +
-                  [("adc", pin) for pin in graph_adc_pins] +
-                  [("digital", "RC7")] + [("digital", pin) for pin in BAND_PINS] +
-                  [("stage", None)])
+    graph_rows = ([("digital", "RC1"), ("digital", "RC0"), ("digital", "RC5"), ("digital", "RC7")] +
+                  [("digital", pin) for pin in BAND_PINS] + [("stage", None)] +
+                  [("digital", "RC6")] + [("adc", pin) for pin in graph_adc_pins])
     fig, axes = plt.subplots(len(graph_rows), 1, sharex=True,
                              figsize=(10, max(6, len(graph_rows) * 1.25)))
     axes = list(axes) if hasattr(axes, "__len__") else [axes]
