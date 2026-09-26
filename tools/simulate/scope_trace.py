@@ -120,6 +120,11 @@ def add_top_time_axis(axes, times):
         return
     top = axes[0]
     top.tick_params(axis="x", which="both", top=True, labeltop=True, labelsize=7)
+    # A fine 50 ms minor ruler under sparser 250 ms major labels, so latency is readable by eye
+    # without the labels crowding (user instruction, 2026-09-26).
+    from matplotlib.ticker import MultipleLocator
+    top.xaxis.set_major_locator(MultipleLocator(250))
+    top.xaxis.set_minor_locator(MultipleLocator(50))
     note = "time (ms)"
     if len(times) > 1:
         deltas = sorted(times[index + 1] - times[index] for index in range(len(times) - 1))
@@ -320,6 +325,7 @@ def render_scope(samples, title, path, events=(), check=None, observed=None, why
                 ax.set_yticks([0, 1])
         ax.set_ylabel(LABELS.get(key, key), rotation=0, labelpad=58, va="center", fontsize=8)
         ax.grid(True, alpha=0.3)
+        ax.grid(True, which="minor", alpha=0.15)
         if key == "g_fc_status.frequency_khz":
             draw_stimulus(ax, stimulus)
         for event_time, _label in events:
