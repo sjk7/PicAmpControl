@@ -377,15 +377,16 @@ The open work is hardware validation: final sensor calibration, comparator thres
   run's log now lists every scenario and what it tested. Remaining: split the rest of `main.c`
   (~2190 lines) into ≤500-line modules — plan in `docs/firmware-refactor-plan.md`.
 - **DONE (2026-09-26): `main.c` split into per-concern modules, ≤500 lines each.** `main.c` is now
-  just the config words, the state-global *definitions*, the ISR, `timer0_init`/`adc_init`/
-  `apply_startup_inhibit` and `main()`. The rest moved to `firmware/src/` + matching
+  just the config words, the ISR and `main()` (~355 lines). The state-global *definitions* (and
+  `g_thresholds`) moved to `firmware/src/state.c`, and board bring-up (`timer0_init`/`adc_init`/
+  `apply_startup_inhibit`) to `firmware/src/init.c`. The rest moved to `firmware/src/` + matching
   `firmware/include/` headers: `outputs.{c,h}` (output drives + `apply_bypass`/
   `release_band_if_cold`/`invalidate_established_band`/`clear_fault_latches`/
   `start_comparator_reset`), `tx_selftest.{c,h}`, `labels.{c,h}` (`trip_reason_name`/
   `sequence_stage_name`/`band_name` + name tables), `lcd_format.{c,h}`, `settings.{c,h}`,
   `menu.{c,h}`, `protection.{c,h}` (SWR/measurement maths + `update_protection_state`),
   `sequencer.{c,h}`. Shared enums, constants and `extern` state globals live in
-  `firmware/include/state.h`; the globals are **defined once, in `main.c`**, and every name/type is
+  `firmware/include/state.h`; the globals are **defined once, in `state.c`**, and every name/type is
   unchanged (the simulator harnesses read them by `.sym` address). Source list in
   `cmake/My_Pic_Project/default/user.cmake`. Full 16-scenario suite GREEN on the split (2026-09-26,
   `SUITE_EXIT:0`).

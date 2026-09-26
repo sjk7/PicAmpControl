@@ -12,6 +12,7 @@
 #include "../include/menu.h"
 #include "../include/tx_selftest.h"
 #include "../include/labels.h"
+#include "../include/init.h"
 
 #pragma config FEXTOSC = OFF
 
@@ -47,114 +48,8 @@
 
 #pragma config BORV = VBOR_190
 
-#define TX_ACTIVE_HIGH_DEFAULT false
-#define TX_VCC_ACTIVE_HIGH_DEFAULT false
-#define TX_BIAS_ACTIVE_HIGH_DEFAULT false
-#define FAN_ACTIVE_HIGH_DEFAULT false
-#define TRIP_ACTIVE_HIGH_DEFAULT false
-
-/* Minimum sample-and-hold settling time after switching ADC channel, before
-   starting a conversion; confirm against the datasheet's acquisition-time
-   formula for each detector's actual source impedance during bench validation. */
-#define ADC_ACQUISITION_US 5
-
-/* --- State globals. The DEFINITIONS live here (one per symbol); every other module declares
-   them `extern` through state.h. The simulator harnesses read these by .sym address, so the
-   names, the types and the single-definition discipline must not change. --- */
-
-volatile system_state_t g_state = STATE_STANDBY;
-volatile bool g_fault_latched = false;
-volatile unsigned char g_trip_reason = 0;
-volatile bool g_trip_shutdown_active = false;
-volatile unsigned char g_trip_shutdown_elapsed_ms = 0;
-volatile bool g_ptt_active = false;
-/* First-dit band memory (see docs/first-dit-band-detection.md). Declared volatile so the
-   simulator/debugger can read and drive the cache state directly. */
-volatile bool g_band_cache_valid = false;
-volatile rf_band_t g_band_cache_band = BAND_UNKNOWN;
-volatile bool g_snoop_active = false;
-unsigned int g_band_cache_idle_ms = 0;
-volatile bool g_band_settle_active = false;
-unsigned int g_band_settle_elapsed_ms = 0;
-volatile bool g_band_verify_active = false;
-unsigned int g_band_verify_mismatch_ms = 0;
-/* A band is "established" for the current transmission when it is backed by a real measurement
-   or by the first-dit memory. This is what gates keying: with no RF the classifier reports its
-   160m no-signal default, and the amplifier must never key on a band that was never measured. */
-volatile bool g_band_established = false;
-/* UNDEFINED/UNKEYABLE interlock: set when a keyed band lock lost its measurement. Read by the LCD
-   so the bench sees why the amplifier is refusing to key, and cleared once a fresh decode exists. */
-volatile bool g_unkeyable = false;
-/* The longest-holding failing self-test check, in ms. Published for the simulator harnesses. */
-unsigned int g_lock_loss_ms = 0;
-/* The self-test's verdict for the CURRENT key-down (tx_selftest_run()). */
-volatile bool g_selftest_failed = false;
-volatile unsigned int g_selftest_reason = TX_SELFTEST_OK;
-/* Consecutive-ms counters, one per check bit, indexed by bit position. */
-unsigned int g_selftest_hold[TX_SELFTEST_CHECK_COUNT] = { 0 };
-/* How long the current unkey has been unwinding, in ms: TX_SELFTEST_REL_STUCK's window. */
-unsigned int g_selftest_unkey_ms = 0;
-
-volatile bool g_startup_inhibit = true;
-volatile bool g_comparator_reset_active = false;
-volatile unsigned char g_comparator_reset_elapsed_ms = 0;
-volatile menu_page_t g_menu_page = MENU_PAGE_POWER_TEMPERATURE;
-volatile menu_page_t g_saved_user_menu_page = MENU_PAGE_POWER_TEMPERATURE;
-ui_mode_t g_ui_mode = UI_MODE_HOME;
-volatile bool g_transient_menu_display = false;
-volatile bool g_boot_message_active = false;
-volatile bool g_ptt_complete_display_active = false;
-volatile unsigned int g_ptt_complete_display_elapsed_ms = 0;
-volatile bool g_menu_changed = true;
-unsigned int g_sequence_elapsed_ms = 0;
-unsigned char g_sequence_stage = SEQ_IDLE;
-/* Current stage as text. Refreshed once per main-loop pass so it can be used by the LCD debug
-   read-out and read by the simulator harnesses. Initialised with a literal rather than
-   SEQUENCE_STAGE_NAMES[SEQ_IDLE]: XC8 rejects a volatile pointer initialised from a ROM array
-   element ("(712) can't generate code for this expression"). */
-volatile const char *g_sequence_stage_text = "IDLE";
-unsigned int g_post_fwd_rms_w = 0;
-unsigned int g_post_fwd_pep_w = 0;
-unsigned int g_swr1_live_hundredths = 100;
-unsigned int g_swr2_live_hundredths = 100;
-unsigned int g_live_temperature_c = 0;
-unsigned int g_live_current_a = 0;
-unsigned int g_current_peak_a = 0;
-unsigned int g_live_overdrive_mw = 0;
-unsigned int g_pep_decay_elapsed_ms = 0;
-unsigned int g_current_peak_decay_elapsed_ms = 0;
-unsigned int g_status_refresh_ms = 0;
-unsigned int g_startup_elapsed_ms = 0;
-volatile unsigned char g_timer_ticks_pending = 0;
-menu_page_t g_lcd_drawn_page = MENU_PAGE_COUNT;
-system_state_t g_lcd_drawn_state = STATE_RESET_WAIT;
-unsigned char g_lcd_drawn_trip_reason = 0;
-unsigned int g_menu_idle_ms = 0;
-volatile bool g_settings_dirty = false;
-unsigned int g_settings_save_delay_ms = 0;
-volatile unsigned char g_adc_scan_index = 0;
-volatile unsigned char g_adc_active_index = 0;
-/* Defaults until the first real ADC scan completes for each channel: 0 (idle,
-   no fault) for power/current/overdrive/drain, and a mid-scale ~2.5V reading
-   for temp (raw 0 would otherwise map to a false 150C thermal trip). */
-volatile unsigned int g_adc_samples[8] = {0, 0, 0, 0, 511, 0, 0, 0};
+/* The ADC scan channel order, driven by the ISR. Static because only the ISR reads it. */
 static const unsigned char g_adc_scan_channels[8] = {0, 1, 2, 3, 5, 9, 10, 11};
-
-protection_thresholds_t g_thresholds = {
-    30, 20,
-    1500, 1500,
-    1, 100,
-    100,
-    150,
-    40,
-    20, 20,
-    TX_ACTIVE_HIGH_DEFAULT,
-    TX_VCC_ACTIVE_HIGH_DEFAULT,
-    TX_BIAS_ACTIVE_HIGH_DEFAULT,
-    FAN_ACTIVE_HIGH_DEFAULT,
-    TRIP_ACTIVE_HIGH_DEFAULT,
-    true, false, PEAK_HOLD_DEFAULT_MS, PEAK_DECAY_DEFAULT_MS
-};
 
 void __interrupt() timer0_isr(void) {
     freq_counter_isr();
@@ -200,78 +95,6 @@ void __interrupt() timer0_isr(void) {
         ADCON0bits.GO_nDONE = 1;
     }
 
-}
-
-void timer0_init(void) {
-    /* Timer2 (not Timer0) drives the ~1ms system tick: TMR0's Fosc/4 overflow model
-       stalls under MDB after the first interrupt, and Timer2's simpler compare-based
-       architecture doesn't hit that issue on either real hardware or the simulator.
-
-       Timer2 is clocked so that (clock / prescale / (PR2+1)) = 1 kHz:
-         PIC18F47Q10: 64 MHz core, Fosc/8 = 8 MHz, 1:64, PR2 = 124 -> 8e6/64/125   = 1.000 kHz
-       T2CLK is a code, not a divisor: 0x01 = Fosc/4, 0x02 = Fosc/8 (per the DFP). */
-    T2CLK = 0x02;         /* Fosc/8: 64 MHz core -> 8 MHz Timer2 input */
-    T2CONbits.CKPS = 6;   /* 1:64 prescale */
-    T2CONbits.OUTPS = 0;  /* 1:1 postscale */
-    PR2 = 124;            /* (124+1) * 64 / 8MHz = 1.000ms */
-    TMR2 = 0;
-    PIR4bits.TMR2IF = 0;
-    PIE4bits.TMR2IE = 1;
-
-    /* This family needs its priority mechanism armed before anything is dispatched. Measured on
-       the simulator: with IPEN = 0 no interrupt ever reaches the ISR, even though TMR2IF sets and
-       the peripheral enable is set. IPEN = 1, the source's IPRx priority bit, and the matching
-       global (GIE/GIEH) make it run at once. */
-    INTCONbits.IPEN = 1;
-    IPR4bits.TMR2IP = 1;    /* system tick at high priority */
-
-    T2CONbits.ON = 1;
-
-    freq_counter_init();
-
-    INTCONbits.GIE = 1;
-}
-
-void adc_init(void) {
-    FVRCON = 0x00;
-    ANSELA = 0x2F;
-    ANSELA &= ~0x10; /* RA4 must stay digital: it drives OUTPUT_LCD_RS */
-    ANSELB = 0x0E;
-    ADCON1 = 0x20;
-    ADPCH = 0;
-    // The result must be a plain right-justified 0-1023 count: temperature_c(),
-    // drain_voltage() and overdrive_power_mw() all treat the raw ADC value as 0-1023.
-    //
-    // ADCC ADFM is a SINGLE bit, ADCON0<2>, and 0 means LEFT-justified. The 10-bit result then
-    // sits in ADRES<15:6>, so a 2.5V temperature input (raw 512) reads as 512<<6 = 32768 and
-    // temperature_c() returns its 150C fault sentinel, which is exactly the spurious TEMPERATURE
-    // trip the bring-up hit (probe_q10_ptt_path.py, 2026-09-22).
-    ADCON0 = 0x88;
-    ADCON0bits.ADFM = 1;
-    PIR1bits.ADIF = 0;
-    PIE1bits.ADIE = 1;
-    INTCONbits.PEIE = 1;
-    __delay_us(ADC_ACQUISITION_US);
-    ADCON0bits.GO_nDONE = 1;
-}
-
-void apply_startup_inhibit(void) {
-    apply_bypass();
-    set_fan_output(false);
-    set_trip_output(false);
-    OUTPUT_COMP_RESET = 0; // SETTLE held low for the startup-inhibit window
-    g_startup_inhibit = true;
-    /* Power-up has no idea which band the operator is on: drop any remembered band and
-       require a fresh first-dit measurement before the amplifier may key. */
-    g_band_cache_valid = false;
-    g_band_cache_band = BAND_UNKNOWN;
-    g_band_cache_idle_ms = 0;
-    g_snoop_active = false;
-    g_band_settle_active = false;
-    g_band_settle_elapsed_ms = 0;
-    g_band_verify_active = false;
-    g_band_verify_mismatch_ms = 0;
-    g_band_established = false;
 }
 
 int main(void) {

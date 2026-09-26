@@ -41,9 +41,11 @@ Goals (from the operator, `scratch.txt` + this session):
 - [x] `protection.c/h` — SWR/measurement maths, `update_post_filter_power`, `update_peak_decay`,
       `update_protection_state`, `swr_trip`, `isqrt32`.
 - [x] `sequencer.c/h` — `handle_ptt_transition`, `update_tx_sequence`.
-- [x] `main.c` left as init + ISR + main loop + the `volatile` state globals, ≤500 lines.
-- [x] `state.h` — the shared enums + `extern` state globals; definitions stay in `main.c`
-      (one per symbol, names unchanged for the .sym-address harness contract).
+- [x] `state.c` + `state.h` — the shared enums + `extern` state globals live in `state.h`; the
+      globals are DEFINED once in `state.c` (one per symbol, names unchanged for the .sym-address
+      harness contract), and `g_thresholds` too.
+- [x] `init.c/h` — `timer0_init`, `adc_init`, `apply_startup_inhibit` (board bring-up).
+- [x] `main.c` left as config words + ISR + `main()` (~355 lines).
 
 ## Phase 4 — verify + docs + commit
 - [x] Build green (Release + sim).

@@ -1,5 +1,7 @@
 set_property(TARGET My_Pic_Project_default_default_XC8_compile PROPERTY SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/main.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/state.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/init.c"
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/lcd_parallel.c"
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/lcd_format.c"
     "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/src/freq_counter.c"
