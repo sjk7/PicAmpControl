@@ -107,7 +107,11 @@ def open_in_editor(paths, quiet: bool = False) -> bool:
                   + "\n  ".join(str(Path(p)) for p in paths))
         return False
     cli, how = resolve_cli()
-    targets = [str(Path(p)) for p in paths]
+    # Resolve to absolute: the simshow helper turns the path into a vscode.Uri, and a relative
+    # path resolves against the extension's working directory, not the workspace root - so a
+    # `--log _build/...` handed to the watchdog produced a broken `file:///_build/...` URI and the
+    # tab never opened (2026-09-26). Absolute here, for macOS `open -g` and Windows alike.
+    targets = [str(Path(p).resolve()) for p in paths]
     if sys.platform == "darwin":
         if cli is None:
             if not quiet:

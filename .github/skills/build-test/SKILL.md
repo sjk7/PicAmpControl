@@ -144,19 +144,19 @@ in another window, and a `code -r <log>` call raises VS Code over what they are 
    deleting a file a watcher holds open kills the watcher.
 2. Launch the run with its output redirected into that log. `run_suite_with_watchdog.py` /
    `run_logged.py` write a `RUN_BEGIN` header and append the exit-code line at the end.
-3. **On Windows, NOTHING is opened automatically, and that is the settled answer** (2026-09-25). Both
-   automatic routes are ruled out by the operator: putting the log in the ACTIVE tab makes it the tab
-   their next keystrokes land in (*"my typing went in the tab and fucked up the run"*), and putting it
-   in a SECOND editor group is a split screen (*"it's the second editor group that I DO NOT WANT.
-   That's what I meant by 'split-screen'"*), while `code -r` after a later request to show it took the
-   focus again (*"focus just got set to the log tab -- AGAIN!!! ... DO NOT set focus to it"*). So:
-   the launcher writes `LOG_TO_WATCH <path>` into the run log and prints `watch: <path>` to stdout,
-   the failure prose is printed INTO the log (see the scope-trace rule below), and `tools/simshow`
-   (the in-repo VS Code helper, `tools/simshow/install.ps1`) only ever raises a **non-modal
-   notification** with an `Open` button - once per file per session - and opens with `preserveFocus`
-   even then. The operator's click is their choice; the tool never takes the focus itself. Do NOT
-   "improve" this by opening a tab, reusing a group, or `code -r`: every one of those has been tried
-   and each one interrupted the operator. `AppendLog` in `platform_process.py` is the heartbeat helper.
+3. **The log tab OPENS on every run - a hard REQUIREMENT (2026-09-26), and it may be the current tab.**
+   The only thing forbidden is SNATCHING FOCUS: `code -r <log>` makes the log the active tab AND raises
+   VS Code over whatever the operator is doing (it damaged a run on 2026-09-25). The earlier "never
+   open a tab on Windows" answer is superseded - the operator restated it on 2026-09-26: *"OPEN the
+   tab. You can even make it the current tab. Just do not let it snatch focus!"*. The mechanism is
+   `tools/simshow` (in-repo VS Code helper, `tools/simshow/install.ps1`): `open_progress_log.py` writes
+   a request file, the helper opens the log with the API's `preserveFocus` (tab appears and can be
+   active, focus stays put), and writes a receipt. **The helper needs an ABSOLUTE path**: a relative
+   `--log _build/...` was turned into a broken `file:///_build/...` URI (resolved against the
+   extension's cwd, not the workspace) and the tab silently never opened - `open_progress_log.py` now
+   `.resolve()`s the path (2026-09-26). Confirm a run opened its tab by reading
+   `<tmp>/picampcontrol_show.done.json`: `"followed": true` means it worked, an `"error"` field means
+   it did not. `AppendLog` in `platform_process.py` is the heartbeat helper.
 4. Which file is the moving one depends on how you launched it: **when you pass `--log <file>`, the
    heartbeat appends INTO that file** (verified 2026-09-23: the heartbeat process is spawned with
    `--log` pointing at the same path). Only when `--log` is

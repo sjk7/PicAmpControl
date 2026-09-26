@@ -603,6 +603,26 @@ def build_script(trip_name=None) -> str:
         lines.append("quit")
         return "\n".join(lines)
 
+    if trip_name == "SELF_TEST_DIAG_STUCK":
+        # Fault-injection companion to SELF_TEST_DIAG: pin the TX output (RC5) to the wrong level
+        # BEFORE triggering, so the diagnostic's own assert-and-verify loop reads it back wrong and
+        # must flag DIAG_OUTPUTS. The model reads an output pin from its LAT, so make RC5 an input
+        # (TRISC bit 5 set; RC0/RC2 stay inputs) and drive it high: active-low TX then reads
+        # "not asserted" while the firmware holds it asserted. The amplifier is cold throughout.
+        for _ in range(5):
+            lines.append(stepi(210))
+            sample()
+        lines.append("# Pin TX (RC5) to the wrong level, then trigger the diagnostic")
+        lines.append("write TRISC 0x25")
+        lines.append("write pin RC5 5v")
+        diag_addr = symbol_address("g_diag_request")
+        lines.append(f"write /r 0x{diag_addr:03X} 0x01")
+        for _ in range(100):
+            lines.append(stepi(5))
+            sample()
+        lines.append("quit")
+        return "\n".join(lines)
+
     if trip_name in SELFTEST_SCENARIOS:
         # The UNHAPPY paths: establish a valid 40m measurement, key on it, then force the failure
         # the scenario is named after. The firmware's own self-test must flag it, open the RF path
@@ -1231,6 +1251,26 @@ def validate_diag(samples) -> None:
           f"outputs/sequencer/LCD green, amplifier cold")
 
 
+def validate_diag_stuck(samples) -> None:
+    """Fault-injection companion to SELF_TEST_DIAG: a TX output pinned to the wrong level must make
+    the firmware's own assert-and-verify loop flag DIAG_OUTPUTS. The harness reads g_diag_result and
+    asserts the OUTPUTS bit (0x01) is set - it does not re-derive the pin level. The amplifier must
+    still end cold (bypass is re-forced when the run finishes)."""
+    done = [s for s in samples if s[2].get("g_diag_done") == "true"]
+    if not done:
+        raise AssertionError("the diagnostic never finished (g_diag_done never set)")
+    result = int(done[0][2].get("g_diag_result") or "0")
+    if not (result & 0x01):  # DIAG_OUTPUTS
+        raise AssertionError(
+            f"a pinned-wrong TX output was not flagged: g_diag_result=0x{result:02X} "
+            f"(DIAG_OUTPUTS 0x01 expected)")
+    for s in done:
+        if (s[1]["RC5"], s[1]["RC6"], s[1]["RC7"]) != (1, 1, 1):
+            raise AssertionError("the diagnostic finished with a TX output still asserted")
+    print(f"SELF_TEST_DIAG_STUCK: firmware verdict 0x{result:02X} (DIAG_OUTPUTS flagged - the "
+          f"expected fault), amplifier cold")
+
+
 # One unhappy-path scenario per self-test reason the model can actually drive the firmware into.
 # Deliberately NOT here: a band that changes under the amplifier (BAND_CHG) - a rig cannot QSY in
 # 200 ms, so a test that injects an instantaneous band swap is testing the model's pacing, not a
@@ -1512,6 +1552,11 @@ SCENARIO_CHECKS = {
                        "writes an LCD liveness pattern and round-trips the EEPROM, then reports "
                        "PASS/FAIL in g_diag_result and ends cold. The harness reads the verdict "
                        "mask, never re-derives a pin level."),
+    "SELF_TEST_DIAG_STUCK": ("The fault-injection companion to SELF_TEST_DIAG: a TX output pinned to "
+                              "the wrong level must make the diagnostic's assert-and-verify loop flag "
+                              "DIAG_OUTPUTS in g_diag_result - the diagnostic is EXPECTED to report "
+                              "the fault here (that is the pass condition), proving a real defect is "
+                              "caught rather than just a healthy board passing."),
 }
 
 
@@ -1603,6 +1648,9 @@ def validate_scenario(scenario, samples) -> None:
     if scenario == "SELF_TEST_DIAG":
         validate_diag(samples)
         return
+    if scenario == "SELF_TEST_DIAG_STUCK":
+        validate_diag_stuck(samples)
+        return
     validate_frequency_ready(samples, scenario)
     if scenario == "SWR1_1P5":
         validate_swr1_1p5(samples)
@@ -1619,6 +1667,17 @@ def _failure_context(samples, scenario, exc) -> dict:
         "observed": _observed_summary(samples, scenario),
         "why": str(exc),
     }
+
+
+def _describe_scenario_pass(scenario, samples) -> None:
+    """Append, for a PASSING scenario, the same prose a failure trace carries: what the test is for
+    (SCENARIO_CHECKS) and what the firmware actually did (_observed_summary). A passing run must say
+    what it proved, not just "no failure text to report" (user instruction, 2026-09-26)."""
+    label = _scenario_label(scenario)
+    check = SCENARIO_CHECKS.get(scenario, SCENARIO_CHECKS[None])
+    observed = _observed_summary(samples, scenario)
+    print(f"PASS {label}: {check}", flush=True)
+    print(f"  observed: {observed}", flush=True)
 
 
 def _scope_events(samples, scenario=None):
@@ -1993,7 +2052,7 @@ def main():
         scenario_names = [None, "TEMPERATURE", "SWR1", "SWR2", "HWFAULT",
                           "CURRENT", "OVERDRIVE", "DRAIN", "SWR1_1P5", "FREQ_CTR",
                           "FREQ_CTR_FAIL", "SELFTEST_BAD_BAND", "SELFTEST_TX_SENSE",
-                          "SELFTEST_REL_STUCK", "SELF_TEST_DIAG"]
+                          "SELFTEST_REL_STUCK", "SELF_TEST_DIAG", "SELF_TEST_DIAG_STUCK"]
         if "--quick-bands" in sys.argv[1:]:
             scenario_names = [None, "FREQ_CTR", "FREQ_CTR_FAIL"]
         # Debugging shortcut: run ONLY the named scenarios, in the written order, through exactly
@@ -2079,6 +2138,7 @@ def main():
                                   stimulus=stimulus_spans(scenario_samples,
                                                           scenario_stimuli[scenario]))
             print(f"SUITE_SCENARIO_PASS {_scenario_label(scenario)}", flush=True)
+            _describe_scenario_pass(scenario, full_samples)
             if scenario in SELFTEST_SCENARIOS:
                 # A fatal fault: render the scope trace WITH the reconstructed FAULT: panel and open
                 # it, so the operator sees both what happened and what the LCD would be showing when
@@ -2101,7 +2161,7 @@ def main():
         # switched before the T/R relay closes (never hot-switch the band relay).
         for scenario, (_, scenario_samples) in zip(scenario_names, groups):
             label = _scenario_label(scenario)
-            if scenario in ("SELFTEST_REL_STUCK", "SELF_TEST_DIAG"):
+            if scenario in ("SELFTEST_REL_STUCK", "SELF_TEST_DIAG", "SELF_TEST_DIAG_STUCK"):
                 # These scenarios deliberately assert TX/TX_VCC/TX_BIAS (or hold one stuck) while the
                 # amplifier is in fact cold, so the pin-level "keyed" proxy the band invariants use
                 # reads keyed at moments when no transmission exists. SELFTEST_REL_STUCK holds a bias

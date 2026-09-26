@@ -72,12 +72,12 @@ fault — out-of-spec RF, a genuinely stuck relay, a shorted sensor. Those are s
   bypass at the end.)
 - ✅ The simulator proves it: build green, and `--test suite --only SELF_TEST_DIAG` passes through the
   watchdog wrapper (see `.github/skills/build-test/SKILL.md`).
-- ⏳ OPEN: the output/`SENSE_*` loop and the sequencer walk prove a real defect fails them (assert one
-  output, read it back wrong → FAIL), not just pass on a healthy board. The code already flags a wrong
-  `SENSE_*` read-back (`DIAG_OUTPUTS` / `DIAG_SEQUENCER`), but no harness scenario injects a stuck
-  output yet — the happy path is proven, the unhappy path is not. To close it, add a fault-injection
-  scenario modelled on `SELFTEST_TX_SENSE` (make a TX/band pin an input, drive it wrong, trigger the
-  diagnostic, assert `g_diag_result & DIAG_OUTPUTS`).
+- ✅ The output/`SENSE_*` loop and the sequencer walk prove a real defect fails them: the
+  `SELF_TEST_DIAG_STUCK` scenario pins the TX output (RC5) to the wrong level, triggers the diagnostic,
+  and asserts `g_diag_result & DIAG_OUTPUTS` — it reads back `0x0B` (`DIAG_OUTPUTS` | `DIAG_SEQUENCER`
+  | `DIAG_EEPROM`), so a stuck output is flagged, not just a healthy board passing. The amplifier still
+  ends cold. Run it via `--test suite --only SELF_TEST_DIAG_STUCK`. (Named without "fail": the
+  diagnostic reporting a fault is the PASS condition here, not an error.)
 - ✅ Docs updated: this file's status, `Ai-Notes.md`. (`docs/tx-sequencer.md` §9 is untouched — the
   runtime self-test did not change.)
 

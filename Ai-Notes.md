@@ -42,8 +42,12 @@ were all deleted. Concretely, that means:
 - FILE FOLLOWING AND LOG WATCHING: method in `.github/skills/build-test/SKILL.md` (`open_progress_log.py`,
   `run_detached.py`, the Log Viewer extension, the FileTail cost finding, the console-tail trap). The
   in-repo `tools/logfollower` follower was DELETED 2026-09-24 (it stole window focus); the marketplace
-  `berublan.vscode-log-viewer` replaces it. **Never steal focus: run paths (watchdog, run_logged) must
-  NOT call `open_in_editor()` - `code -r` raises VS Code over the user's current work (2026-09-24).**
+  `berublan.vscode-log-viewer` replaces it. **OPEN THE LOG TAB ON EVERY RUN - it is a REQUIREMENT
+  (2026-09-26), and it may be the current/active tab. The only thing forbidden is SNATCHING FOCUS:
+  never `code -r` (raises VS Code over the user's current work). The watchdog opens the log via
+  `open_progress_log.open_in_editor()` -> the `tools/simshow/` helper, which opens with
+  `preserveFocus` (tab appears, focus stays put). A relative `--log` path broke this (the helper
+  made a `file:///_build/...` URI from the wrong cwd) - fixed 2026-09-26 by resolving to absolute.**
 - DO NOT HEDGE (2026-09-24): no "I can fix it -> actually -> wait -> or even..."; no "maybe/perhaps/
   I think". State what you know and the next action, and act. Also: go with first instinct and prove it
   with a quick test rather than re-deriving the same deduction in circles. Detail in the build-test skill.
@@ -110,13 +114,14 @@ static, hand-captured design input. The user's words and the full list of what w
   MDB is ~2.4x slower on Windows: the merged suite is ~356 s there against ~150 s on macOS. All
   platform-specific harness code lives in `tools/simulate/platform_process.py`. Build/test procedure,
   the Windows gotchas and the timeout policy are in the skill - do not restate them here.
-- **Windows: the launcher never opens a tab for the run log, by design.** `code -r` makes the log the
-  ACTIVE editor tab (the operator's keystrokes then land in the log - that damaged a run on
-  2026-09-25) and un-minimises the window. `tools/simshow/` is a small in-repo VS Code helper that
-  shows the log in a NON-active editor group using the API's `preserveFocus`, driven by a request file
-  that `open_progress_log.py` writes; install it once (`tools/simshow/install.ps1`) and reload the
-  window. `LOG_TO_WATCH <path>` in the run log names the file to follow. Do not reintroduce a
-  CLI-based open, and see the skill's "How a run is watched".
+- **The log tab opens on every run - a REQUIREMENT (2026-09-26), and it may be the current tab.**
+  The one thing forbidden is snatching focus: `code -r` makes the log the ACTIVE tab AND raises VS Code
+  over whatever the operator is doing (it damaged a run on 2026-09-25). `tools/simshow/` is the small
+  in-repo VS Code helper that opens the log with the API's `preserveFocus` (tab appears, focus stays),
+  driven by a request file that `open_progress_log.py` writes; install once (`tools/simshow/install.ps1`)
+  and reload the window. `LOG_TO_WATCH <path>` in the run log names the file. The helper needs an
+  ABSOLUTE path - a relative `--log` produced a broken URI and the tab silently never opened
+  (fixed 2026-09-26 in `open_progress_log.py`). See the skill's "How a run is watched".
 - **Every suite scenario can be run on its own through the suite's own code path:**
   `run_suite_with_watchdog.py --test suite --only FREQ_CTR` (~40 s) or `--only base,SWR1`. The full
   suite is the verdict, never the debugging instrument.
